@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini · Maxi · Tournée — Annexe</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--cream:#fcfbf8;--warm:#fff;--line:#e5d8c3;--bordeaux:#993556;--ink:#2b2118;
+    --soft:#6b5c4c;--mute:#9a8b7a;--ok:#5c7a3f;--okbg:#EAF3DE;--rouge:#b03a3a;--or:#b58f3c;--orbg:#FBF3DF}
+  *{box-sizing:border-box}
+  body{margin:0;background:#efeae1;color:var(--ink);font-family:Geist,system-ui,sans-serif;
+       padding:14px 10px 40px;font-size:14px}
+  .wrap{max-width:720px;margin:0 auto}
+  h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:23px;margin:0 0 4px}
+  .intro{font-size:12.5px;color:var(--soft);line-height:1.5;margin:0 0 12px}
+
+  .barre{position:sticky;top:0;z-index:5;background:#efeae1;padding:8px 0 10px;margin-bottom:4px}
+  .barre input.q{width:100%;height:44px;border:1px solid var(--line);border-radius:12px;padding:0 14px;
+    font-family:inherit;font-size:15px;background:var(--warm);outline:none}
+  .barre input.q:focus{border-color:var(--bordeaux)}
+  .stats{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .stats b{font-size:13px}
+  .rail{flex:1;min-width:120px;height:8px;border-radius:99px;background:#e2dacb;overflow:hidden}
+  .rail i{display:block;height:100%;background:var(--ok);width:0}
+  .f{border:1px solid var(--line);background:var(--warm);border-radius:99px;padding:6px 11px;
+     font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--soft)}
+  .f.on{background:var(--bordeaux);color:#fff;border-color:var(--bordeaux)}
+
+  .c{background:var(--warm);border:1px solid var(--line);border-radius:14px;margin-bottom:8px;overflow:hidden}
+  .c.fait{border-color:#bcd3a4;background:#fcfdfa}
+  .h{display:flex;align-items:baseline;gap:8px;padding:9px 12px 6px}
+  .h .n{flex:1;min-width:0;font-size:14.5px;font-weight:700;line-height:1.25}
+  .h .u{font-size:11.5px;color:var(--mute);white-space:nowrap}
+  .m{padding:0 12px 8px;font-size:11.5px;color:var(--mute);display:flex;gap:10px;flex-wrap:wrap}
+  .m b{color:var(--soft)}
+  .m .rec{color:var(--or);font-weight:700}
+  .g{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:7px;padding:0 12px 11px}
+  .g label{display:block;font-size:10.5px;font-weight:800;text-transform:uppercase;
+           letter-spacing:.3px;color:var(--mute);margin-bottom:3px}
+  .g input{width:100%;height:44px;border:1px solid var(--line);border-radius:10px;text-align:center;
+    font-family:inherit;font-size:16px;font-weight:700;background:var(--cream);outline:none;color:var(--ink)}
+  .g input:focus{border-color:var(--bordeaux);background:#fff}
+  .g .t input{border-color:var(--or);background:var(--orbg)}
+  .vide{text-align:center;color:var(--mute);padding:40px 10px;font-size:13px}
+
+  .pied{position:sticky;bottom:0;background:#efeae1;padding:10px 0 0;margin-top:10px}
+  .pied button{width:100%;height:50px;border:0;border-radius:14px;background:var(--bordeaux);color:#fff;
+    font-family:inherit;font-size:15px;font-weight:800;cursor:pointer}
+  .pied .sec{background:var(--warm);color:var(--soft);border:1px solid var(--line);margin-top:7px;height:42px;font-size:13px}
+  .out{width:100%;height:190px;margin-top:9px;border:1px solid var(--line);border-radius:12px;padding:10px;
+       font-family:ui-monospace,monospace;font-size:11px;background:#fff;display:none;white-space:pre}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Mini · Maxi · Tournée</h1>
+  <p class="intro">
+    Les <b>219 articles</b> qui se fabriquent à l'annexe, les plus fabriqués en premier.
+    Remplis ce que tu veux suivre dans <b>Fabrication Annexe 2</b> — un article sans mini n'apparaîtra
+    jamais à l'écran, donc rien ne presse : tu peux n'en faire que quelques-uns.
+    <br><b>Ça se sauvegarde tout seul</b> dans ce navigateur. Quand tu as fini, appuie sur « Copier »
+    et colle-moi le résultat.
+  </p>
+
+  <div class="barre">
+    <input class="q" id="q" placeholder="Chercher un article…">
+    <div class="stats">
+      <b id="cpt">0 rempli</b>
+      <span class="rail"><i id="jauge"></i></span>
+      <button class="f on" data-f="tous">tous</button>
+      <button class="f" data-f="reste">à remplir</button>
+      <button class="f" data-f="faits">remplis</button>
+    </div>
+  </div>
+
+  <div id="liste"></div>
+
+  <div class="pied">
+    <button id="copier">Copier ce que j'ai rempli</button>
+    <button class="sec" id="vider">tout effacer</button>
+    <textarea class="out" id="out" readonly></textarea>
+  </div>
+</div>
+
+<script>
+const ARTICLES = [{"nom":"SM- flan vanille 20 cm","unite":"u","ordres":119,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- base flan vanille 20 cm","unite":"u","ordres":116,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Chantilly à la Rose","unite":"g","ordres":101,"stock":-278,"recette":1050,"recetteUnite":"g"},{"nom":"SM. Genoise Vanille KG commun","unite":"g","ordres":85,"stock":3998422,"recette":1,"recetteUnite":"Tournée (3 kg)"},{"nom":"SM. Biscuit amande gingembre","unite":"g","ordres":80,"stock":3300,"recette":4400,"recetteUnite":"g"},{"nom":"SM. Crème légère vanille citron","unite":"g","ordres":62,"stock":250,"recette":5492,"recetteUnite":"g"},{"nom":"SM. mousse meringue citron (kg)","unite":"kg","ordres":59,"stock":0,"recette":445,"recetteUnite":"kg"},{"nom":"SM. mousse meringue citron indiv","unite":"u","ordres":58,"stock":3,"recette":100,"recetteUnite":"u"},{"nom":"SM. creme patissiere vitrine Production","unite":"g","ordres":49,"stock":0,"recette":2150,"recetteUnite":"g"},{"nom":"SM. Creme au beurre praline production","unite":"g","ordres":45,"stock":0,"recette":7052,"recetteUnite":"g"},{"nom":"Sm- PR Le Citron Framboise (10)","unite":"u","ordres":44,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Creme au beurre nature production","unite":"g","ordres":43,"stock":0,"recette":5425,"recetteUnite":"g"},{"nom":"SM. Creme au beurre citron Production","unite":"g","ordres":43,"stock":0,"recette":9425,"recetteUnite":"g"},{"nom":"Sm- PR Le Citron Framboise (5)","unite":"u","ordres":39,"stock":3,"recette":1,"recetteUnite":"u"},{"nom":"SM. Biscuit chocolat Gianduja 10 pers","unite":"u","ordres":35,"stock":0,"recette":6,"recetteUnite":"u"},{"nom":"SM- Gianduja 10 pers","unite":"u","ordres":35,"stock":3,"recette":1,"recetteUnite":"u"},{"nom":"SM. Biscuit chocolat Gianduja Indiv","unite":"u","ordres":29,"stock":227,"recette":123,"recetteUnite":"u"},{"nom":"SM-Pr  Pistache fleur d'oranger indiv","unite":"u","ordres":29,"stock":36,"recette":1,"recetteUnite":"u"},{"nom":"SM- Pr Cheesecake Exotique indiv","unite":"u","ordres":29,"stock":49,"recette":1,"recetteUnite":"u"},{"nom":"SM. Ganache Gold","unite":"g","ordres":28,"stock":0,"recette":900,"recetteUnite":"g"},{"nom":"SM- Gianduja indiv","unite":"u","ordres":27,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Voile mangue passion","unite":"g","ordres":26,"stock":1256,"recette":745,"recetteUnite":"g"},{"nom":"Sm- Le Citron Framboise (10)","unite":"u","ordres":26,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Creme au beurre Vanille Production vitrine","unite":"g","ordres":25,"stock":0,"recette":5575,"recetteUnite":"g"},{"nom":"SM. Biscuit vieniess cacao","unite":"u","ordres":25,"stock":2,"recette":8,"recetteUnite":"u"},{"nom":"SM- Pr Pistache fleur d'oranger 10 pers","unite":"u","ordres":24,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. caramel beurre sale production","unite":"g","ordres":24,"stock":1196,"recette":4356,"recetteUnite":"g"},{"nom":"Sm- PR Le Citron Framboise (1)","unite":"u","ordres":24,"stock":1,"recette":1,"recetteUnite":"u"},{"nom":"RA- Chocolat sellou (1)","unite":"u","ordres":23,"stock":210,"recette":1,"recetteUnite":"u"},{"nom":"SM. sirop Imbibage production KG","unite":"kg","ordres":23,"stock":15,"recette":5.55,"recetteUnite":"kg"},{"nom":"SM- Pr Cheesecake Exotique 10 pers","unite":"u","ordres":23,"stock":4,"recette":1,"recetteUnite":"u"},{"nom":"SM. Mousse pistache","unite":"g","ordres":22,"stock":0,"recette":1018.5,"recetteUnite":"g"},{"nom":"SM. Craquant Royal","unite":"g","ordres":22,"stock":0,"recette":1925,"recetteUnite":"g"},{"nom":"SM. Biscuit pistache  10 pers","unite":"u","ordres":21,"stock":15,"recette":9,"recetteUnite":"u"},{"nom":"SM- Pistache fleur d'oranger 10 pers","unite":"u","ordres":21,"stock":4,"recette":1,"recetteUnite":"u"},{"nom":"SM. gélée mangue ananas pistache","unite":"g","ordres":21,"stock":1015,"recette":500,"recetteUnite":"g"},{"nom":"SM. Subleme fleur d'oranger pistache","unite":"g","ordres":21,"stock":0,"recette":552.06,"recetteUnite":"g"},{"nom":"Sm- Le Citron Framboise (5)","unite":"u","ordres":21,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Subleme fromage  passion","unite":"g","ordres":20,"stock":1065,"recette":286.8,"recetteUnite":"g"},{"nom":"SM. creme citron Production","unite":"g","ordres":20,"stock":66,"recette":5930,"recetteUnite":"g"},{"nom":"SM. chantilly mascarpone Production","unite":"g","ordres":19,"stock":0,"recette":550,"recetteUnite":"g"},{"nom":"SM. Ganache Chocolat Foret noir","unite":"g","ordres":19,"stock":0,"recette":1750,"recetteUnite":"g"},{"nom":"SM- cadre foret noir grand Production","unite":"u","ordres":19,"stock":352,"recette":88,"recetteUnite":"u"},{"nom":"SM. Biscuit pistache Indiv","unite":"u","ordres":19,"stock":58,"recette":96,"recetteUnite":"u"},{"nom":"SM- Pistache fleur d'oranger indiv","unite":"u","ordres":19,"stock":24,"recette":1,"recetteUnite":"u"},{"nom":"RA- Chocolat Nougat (1)","unite":"u","ordres":18,"stock":269,"recette":1,"recetteUnite":"u"},{"nom":"SM- Tatin 20cm","unite":"u","ordres":18,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Amandes Caramelisees Production","unite":"g","ordres":18,"stock":3308,"recette":2654,"recetteUnite":"g"},{"nom":"SM. gélée mangue ananas pistache 10 pers","unite":"u","ordres":18,"stock":2,"recette":1,"recetteUnite":"u"},{"nom":"SM. gélée mangue ananas pistache indiv","unite":"u","ordres":17,"stock":56,"recette":1,"recetteUnite":"u"},{"nom":"SM. Biscuit a la cuillere Indiv","unite":"u","ordres":17,"stock":10,"recette":70,"recetteUnite":"u"},{"nom":"SM Genoise Chocolat KG CD","unite":"g","ordres":17,"stock":6000,"recette":1,"recetteUnite":"Tournée (3 kg)"},{"nom":"SM. Mousse cheese passion","unite":"kg","ordres":17,"stock":0,"recette":0.66,"recetteUnite":"kg"},{"nom":"SM. creme amande","unite":"g","ordres":16,"stock":1334,"recette":1000,"recetteUnite":"g"},{"nom":"SM. Crémeux pistache","unite":"g","ordres":16,"stock":0,"recette":529,"recetteUnite":"g"},{"nom":"Sm- Le Citron Framboise (1)","unite":"u","ordres":16,"stock":11,"recette":1,"recetteUnite":"u"},{"nom":"SM. pate sable (Tarte)","unite":"g","ordres":15,"stock":6017,"recette":3167,"recetteUnite":"g"},{"nom":"SM- Tiramisu indiv","unite":"u","ordres":15,"stock":224,"recette":1,"recetteUnite":"u"},{"nom":"SM. Confit de framboise prod","unite":"g","ordres":15,"stock":3045,"recette":568,"recetteUnite":"g"},{"nom":"SM. Sirop d'imbibage cafe Tiramisu","unite":"g","ordres":14,"stock":970,"recette":2950,"recetteUnite":"g"},{"nom":"Sm- Pr tarte cbs 18 cm","unite":"u","ordres":14,"stock":2,"recette":1,"recetteUnite":"u"},{"nom":"SM- Cheesecake nature","unite":"u","ordres":14,"stock":23,"recette":20,"recetteUnite":"u"},{"nom":"SM. Pate a Croissant","unite":"g","ordres":13,"stock":-2265,"recette":1000,"recetteUnite":"g"},{"nom":"SM- 20 cm Vitrine (Citron)","unite":"u","ordres":13,"stock":18,"recette":1,"recetteUnite":"u"},{"nom":"SM- Cheesecake Exotique indiv","unite":"u","ordres":13,"stock":36,"recette":1,"recetteUnite":"u"},{"nom":"SM- Croissant","unite":"u","ordres":13,"stock":71,"recette":1,"recetteUnite":"u"},{"nom":"SM- Royal Chocolat 15 cm","unite":"u","ordres":13,"stock":0,"recette":11,"recetteUnite":"u"},{"nom":"SM- 15 cm Vitrine (Praliné Amandes caramélisées)","unite":"u","ordres":13,"stock":14,"recette":1,"recetteUnite":"u"},{"nom":"SM. Glacage pistache Finition","unite":"g","ordres":13,"stock":7700,"recette":5458,"recetteUnite":"g"},{"nom":"Sm.crunchy pistache  10 pers","unite":"u","ordres":12,"stock":10,"recette":1,"recetteUnite":"u"},{"nom":"SM. Biscuit chocolat Gianduja","unite":"g","ordres":12,"stock":3600,"recette":3600,"recetteUnite":"g"},{"nom":"SM. Biscuit a la cuillere (plaque)","unite":"u","ordres":12,"stock":1,"recette":1,"recetteUnite":"u"},{"nom":"SM- Pain Suisse","unite":"u","ordres":12,"stock":50,"recette":1,"recetteUnite":"u"},{"nom":"SM- Tarte citron gin Indiv","unite":"u","ordres":12,"stock":0,"recette":112,"recetteUnite":"u"},{"nom":"SM Amaretti orange Tiramisu","unite":"g","ordres":12,"stock":1331,"recette":3780,"recetteUnite":"g"},{"nom":"SM. Biscuit a la cuillere 5 pers","unite":"u","ordres":12,"stock":0,"recette":9,"recetteUnite":"u"},{"nom":"SM- Tiramisu 15cm","unite":"u","ordres":12,"stock":3,"recette":1,"recetteUnite":"u"},{"nom":"SM- cadre citron meringuée Production","unite":"u","ordres":12,"stock":126,"recette":46,"recetteUnite":"u"},{"nom":"SM. Glacage Rose Finition","unite":"g","ordres":12,"stock":4900,"recette":5458,"recetteUnite":"g"},{"nom":"SM. Biscuit a la cuillere 10 pers","unite":"u","ordres":12,"stock":3,"recette":6,"recetteUnite":"u"},{"nom":"SM- Tiramisu 20cm","unite":"u","ordres":12,"stock":20,"recette":1,"recetteUnite":"u"},{"nom":"SM- Cookies ch B","unite":"u","ordres":12,"stock":0,"recette":156,"recetteUnite":"u"},{"nom":"SM. Sirop Imbibage cake citron production","unite":"g","ordres":12,"stock":0,"recette":550,"recetteUnite":"g"},{"nom":"SM- 15 cm Vitrine (Citron)","unite":"u","ordres":11,"stock":20,"recette":1,"recetteUnite":"u"},{"nom":"Sm- Pr tarte cbs indiv","unite":"u","ordres":11,"stock":11,"recette":1,"recetteUnite":"u"},{"nom":"SM- Pain au Chocolat","unite":"u","ordres":11,"stock":14,"recette":1,"recetteUnite":"u"},{"nom":"GS- Ghriba Chocolat","unite":"u","ordres":11,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Confit de framboise finition","unite":"g","ordres":10,"stock":4750,"recette":1000,"recetteUnite":"g"},{"nom":"SM. Cremeux pistache indiv Production","unite":"u","ordres":10,"stock":67,"recette":1,"recetteUnite":"u"},{"nom":"SM. Pécan caramélise flan Production","unite":"g","ordres":10,"stock":897,"recette":1500,"recetteUnite":"g"},{"nom":"SM. Ganache Montée Sapin","unite":"g","ordres":10,"stock":0,"recette":3568,"recetteUnite":"g"},{"nom":"SM. Sable Crispy","unite":"g","ordres":10,"stock":4896,"recette":5598,"recetteUnite":"g"},{"nom":"SM- Base Tarte CBS indiv","unite":"u","ordres":10,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- Cake Orange","unite":"u","ordres":10,"stock":14,"recette":1,"recetteUnite":"u"},{"nom":"SM- 20 cm Vitrine (Praliné Amandes caramélisées)","unite":"u","ordres":10,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- Cake citron","unite":"u","ordres":10,"stock":18,"recette":9,"recetteUnite":"u"},{"nom":"SM- cadre supreme amande production","unite":"u","ordres":9,"stock":138,"recette":46,"recetteUnite":"u"},{"nom":"SM-Daquoise Individuelle","unite":"u","ordres":9,"stock":0,"recette":96,"recetteUnite":"u"},{"nom":"Sm. crunchy Pistache indiv pers","unite":"u","ordres":9,"stock":375,"recette":1,"recetteUnite":"u"},{"nom":"SM. crunchy citron passion","unite":"kg","ordres":9,"stock":4,"recette":5.62,"recetteUnite":"kg"},{"nom":"SM. Crumble pistache +cheese exotique nv","unite":"kg","ordres":8,"stock":9,"recette":4.8,"recetteUnite":"kg"},{"nom":"SM. Biscuit brownie 10 pers","unite":"u","ordres":8,"stock":0,"recette":6,"recetteUnite":"u"},{"nom":"SM. crunchy pistache","unite":"g","ordres":8,"stock":1800,"recette":385,"recetteUnite":"g"},{"nom":"SM- Base CBS 23 cm","unite":"u","ordres":8,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- Dark Choco","unite":"u","ordres":8,"stock":20,"recette":20,"recetteUnite":"u"},{"nom":"SM- Royal Chocolat 20 cm","unite":"u","ordres":8,"stock":6,"recette":6,"recetteUnite":"u"},{"nom":"SM. glacage mirroir Finition","unite":"g","ordres":8,"stock":0,"recette":4060,"recetteUnite":"g"},{"nom":"SM. Plaque mini cheese cake nature","unite":"u","ordres":8,"stock":2,"recette":1,"recetteUnite":"u"},{"nom":"SM. Genoise Vanille KG Production","unite":"kg","ordres":8,"stock":3,"recette":1,"recetteUnite":"Tournée (3 kg)"},{"nom":"SM.Pate donuts","unite":"g","ordres":7,"stock":5512,"recette":5200,"recetteUnite":"g"},{"nom":"SM-Pain raisin","unite":"u","ordres":7,"stock":18,"recette":1,"recetteUnite":"u"},{"nom":"SM- Base Tarte CBS 18 cm","unite":"u","ordres":7,"stock":1,"recette":1,"recetteUnite":"u"},{"nom":"SM- Tarte citron gin 23 cm","unite":"u","ordres":7,"stock":5,"recette":10,"recetteUnite":"u"},{"nom":"SM- Tatin Indiv","unite":"u","ordres":7,"stock":102,"recette":1,"recetteUnite":"u"},{"nom":"SM. Cremeux pistache 10 pers Production","unite":"u","ordres":7,"stock":15,"recette":1,"recetteUnite":"u"},{"nom":"SM- mini Fond de tarte nature","unite":"u","ordres":7,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Biscuit brownie 5 pers","unite":"u","ordres":6,"stock":0,"recette":11,"recetteUnite":"u"},{"nom":"SM. Marmelade passion mangue","unite":"kg","ordres":6,"stock":3,"recette":1.3,"recetteUnite":"kg"},{"nom":"SM. Cremeux gianduja 10 pers Production","unite":"u","ordres":6,"stock":1,"recette":1,"recetteUnite":"u"},{"nom":"Sm- Pr tarte cbs 23 cm","unite":"u","ordres":6,"stock":2,"recette":1,"recetteUnite":"u"},{"nom":"SM. Pate a choux au kg","unite":"g","ordres":6,"stock":0,"recette":4053,"recetteUnite":"g"},{"nom":"SM- Donuts Maison 2026","unite":"u","ordres":5,"stock":137,"recette":1,"recetteUnite":"u"},{"nom":"SM. Cremeux a la vanille 10 pers Production","unite":"u","ordres":5,"stock":1,"recette":1,"recetteUnite":"u"},{"nom":"RA- Collection Cannage (Coffret (1000g))","unite":"u","ordres":5,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- Tarte citron gin 18 cm","unite":"u","ordres":5,"stock":16,"recette":10,"recetteUnite":"u"},{"nom":"SM- Sirop Imbibage mini cake chocolat Kg","unite":"kg","ordres":5,"stock":1,"recette":3,"recetteUnite":"kg"},{"nom":"SM. Pate a choux unite","unite":"u","ordres":5,"stock":882,"recette":681,"recetteUnite":"u"},{"nom":"Sm. crunchy gianduja indiv pers/ U","unite":"u","ordres":5,"stock":134,"recette":119,"recetteUnite":"u"},{"nom":"SM- Cake chocolat","unite":"u","ordres":5,"stock":18,"recette":9,"recetteUnite":"u"},{"nom":"RA- Sucette Guimauve","unite":"u","ordres":4,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- Fond de tarte nature 8 cm","unite":"u","ordres":4,"stock":228,"recette":1,"recetteUnite":"u"},{"nom":"SM. sirop tatin","unite":"g","ordres":4,"stock":1000,"recette":2481,"recetteUnite":"g"},{"nom":"Sm.crunchy gianduja 10 pers/ U","unite":"u","ordres":4,"stock":10,"recette":1,"recetteUnite":"u"},{"nom":"SM. mini cheese cake aromatisé (Fruits Rouges)","unite":"u","ordres":4,"stock":3,"recette":135,"recetteUnite":"u"},{"nom":"SM-mini Daquoise","unite":"u","ordres":4,"stock":0,"recette":264,"recetteUnite":"u"},{"nom":"SM- Cheesecake Exotique 10 pers","unite":"u","ordres":4,"stock":17,"recette":1,"recetteUnite":"u"},{"nom":"SM. Creme patissiere Angelo production","unite":"g","ordres":4,"stock":0,"recette":428,"recetteUnite":"g"},{"nom":"SM CD* Crème au beurre Tagatesse","unite":"kg","ordres":4,"stock":1,"recette":4.65,"recetteUnite":"kg"},{"nom":"[115] GS- Biscotti Dulcey Noix de Pecan","unite":"u","ordres":4,"stock":0,"recette":11,"recetteUnite":"u"},{"nom":"SM. crunchy GIANDUJA","unite":"kg","ordres":3,"stock":0,"recette":3.58,"recetteUnite":"kg"},{"nom":"SM. Cremeux gianduja indiv Production","unite":"u","ordres":3,"stock":151,"recette":255,"recetteUnite":"u"},{"nom":"SM. Cremeux a la vanille indiv Gianduja Production","unite":"u","ordres":3,"stock":151,"recette":255,"recetteUnite":"u"},{"nom":"SM. Biscuit pistache plaque","unite":"u","ordres":3,"stock":0,"recette":3,"recetteUnite":"u"},{"nom":"SM. caramel tatin KG","unite":"kg","ordres":3,"stock":1,"recette":1.9,"recetteUnite":"kg"},{"nom":"SM. Mini pain Chocolat","unite":"u","ordres":3,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- 30 cm Vitrine (Citron)","unite":"u","ordres":3,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- Cookies CH N","unite":"u","ordres":3,"stock":151,"recette":156,"recetteUnite":"u"},{"nom":"SM- Cookies ch L","unite":"u","ordres":3,"stock":150,"recette":156,"recetteUnite":"u"},{"nom":"SM- 30 cm Vitrine (Praliné Amandes caramélisées)","unite":"u","ordres":3,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- 25 cm Vitrine (Praliné Amandes caramélisées)","unite":"u","ordres":3,"stock":4,"recette":1,"recetteUnite":"u"},{"nom":"Sm- Biscuit Tagatesse","unite":"kg","ordres":3,"stock":1,"recette":8.6,"recetteUnite":"kg"},{"nom":"[113] GS- Biscotti multigrains","unite":"u","ordres":3,"stock":0,"recette":11,"recetteUnite":"u"},{"nom":"SM- cadre chocolat  triangle production","unite":"u","ordres":2,"stock":0,"recette":243,"recetteUnite":"u"},{"nom":"SM. Mini Cookies","unite":"u","ordres":2,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM/ Cookies","unite":"u","ordres":2,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"RA- Plateau Doré","unite":"u","ordres":2,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"GM- Boite signature Sellou/Nougat (Boite de 20, Mixte)","unite":"u","ordres":2,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"GM- Boite signature Sellou/Nougat (Boite de 8, Mixte)","unite":"u","ordres":2,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Mini Croissant","unite":"u","ordres":2,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. mini cheese cake aromatisé (Ananas)","unite":"u","ordres":2,"stock":0,"recette":135,"recetteUnite":"u"},{"nom":"SM. pate de vanille maison","unite":"g","ordres":2,"stock":500,"recette":0.24,"recetteUnite":"kg"},{"nom":"SM. craquelin","unite":"g","ordres":2,"stock":0,"recette":3100,"recetteUnite":"g"},{"nom":"SM. Chips de coco","unite":"g","ordres":2,"stock":0,"recette":226,"recetteUnite":"g"},{"nom":"SM- 25 cm Vitrine (Citron)","unite":"u","ordres":2,"stock":1,"recette":1,"recetteUnite":"u"},{"nom":"SM. ganache chocolat ivoire sapin","unite":"g","ordres":2,"stock":0,"recette":2408.4,"recetteUnite":"g"},{"nom":"SMPr- Boite Biscotti Citron Gingembre","unite":"u","ordres":2,"stock":0,"recette":11,"recetteUnite":"u"},{"nom":"CD- Cakedesign 60 cm (90 pers) CD* (Vanille)","unite":"u","ordres":2,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"CD- Cakedesign 60 cm (90 pers) CD* (Praliné Amandes caramélisées)","unite":"u","ordres":2,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"GS- Mini sablés thym Fromage","unite":"u","ordres":2,"stock":0,"recette":10,"recetteUnite":"u"},{"nom":"[112] GS- Biscotti Chocolat à l'orange","unite":"u","ordres":2,"stock":0,"recette":11,"recetteUnite":"u"},{"nom":"SM- Brioche FEUILLETE","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Farce Kunafa Bueno","unite":"g","ordres":1,"stock":0,"recette":40,"recetteUnite":"g"},{"nom":"SM- Madeleine","unite":"u","ordres":1,"stock":0,"recette":108,"recetteUnite":"u"},{"nom":"SM- cadre citron  triangle production","unite":"u","ordres":1,"stock":0,"recette":243,"recetteUnite":"u"},{"nom":"SM- cadre supreme amande triangle production","unite":"u","ordres":1,"stock":0,"recette":243,"recetteUnite":"u"},{"nom":"RA- Cigares au Miel (500g) (Mixte)","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"RA- Chebbakia Mhencha aux Amandes (500g)","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Mini cakes PRALINE","unite":"cl","ordres":1,"stock":44,"recette":43,"recetteUnite":"cl"},{"nom":"SM. creme patissiere citron finition","unite":"g","ordres":1,"stock":0,"recette":200,"recetteUnite":"g"},{"nom":"SM- mini  Pain Suisse","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. creme patissiere cbs finition","unite":"g","ordres":1,"stock":0,"recette":300,"recetteUnite":"g"},{"nom":"SM. mini cheese cake aromatisé (Mangue/Passion)","unite":"u","ordres":1,"stock":0,"recette":135,"recetteUnite":"u"},{"nom":"SMT. creme patissiere cbs","unite":"g","ordres":1,"stock":0,"recette":300,"recetteUnite":"g"},{"nom":"SMT. creme patissiere citron ","unite":"g","ordres":1,"stock":0,"recette":200,"recetteUnite":"g"},{"nom":"SMT. creme patissiere praline","unite":"g","ordres":1,"stock":0,"recette":300,"recetteUnite":"g"},{"nom":"SM Fourrage nougat CD","unite":"g","ordres":1,"stock":0,"recette":1081,"recetteUnite":"g"},{"nom":"SM. Mini cakes CITRON","unite":"cl","ordres":1,"stock":40,"recette":234,"recetteUnite":"cl"},{"nom":"SM. Mini cakes CHOCOLAT","unite":"cl","ordres":1,"stock":20,"recette":26,"recetteUnite":"cl"},{"nom":"SM- Paris brest crue production","unite":"u","ordres":1,"stock":135,"recette":1,"recetteUnite":"u"},{"nom":"SM- Fond de tarte nature 23 cm","unite":"u","ordres":1,"stock":9,"recette":1,"recetteUnite":"u"},{"nom":"SM- Fond de tarte nature 18 cm","unite":"u","ordres":1,"stock":8,"recette":1,"recetteUnite":"u"},{"nom":"SM. Glacage chocolat GIANDUJA Finition","unite":"g","ordres":1,"stock":0,"recette":5458,"recetteUnite":"g"},{"nom":"SM- Paris brest cuits  production","unite":"u","ordres":1,"stock":34,"recette":1,"recetteUnite":"u"},{"nom":"SM- Cake citron Individuel","unite":"u","ordres":1,"stock":54,"recette":132,"recetteUnite":"u"},{"nom":"SM. crumble gianduja","unite":"g","ordres":1,"stock":0,"recette":1900,"recetteUnite":"g"},{"nom":"SMPR - Boite Biscotti Dulcey Pécan","unite":"u","ordres":1,"stock":0,"recette":11,"recetteUnite":"u"},{"nom":"SMPr- Boite Biscotti Multigrains","unite":"u","ordres":1,"stock":0,"recette":11,"recetteUnite":"u"},{"nom":"SM CD* Crème pâtissière","unite":"kg","ordres":1,"stock":0,"recette":2.04,"recetteUnite":"kg"},{"nom":"30 cm cakedesign (Praliné Amandes caramélisées)","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"30 cm cakedesign (Vanille)","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM CD* Crème au beurre Nature","unite":"kg","ordres":1,"stock":0,"recette":5.43,"recetteUnite":"kg"},{"nom":"CD- Cakedesign 45 cm (60 pers) CD* (Praliné Amandes caramélisées)","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"30 cm CD* (Praliné Amandes caramélisées)","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"CD- Cakedesign 45 cm (60 pers) CD* (Vanille)","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"30 cm CD* (Vanille)","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. creme patissiere vitrine Finition","unite":"g","ordres":1,"stock":0,"recette":2150,"recetteUnite":"g"},{"nom":"SM CD* Crème au beurre Praliné","unite":"kg","ordres":1,"stock":0,"recette":7,"recetteUnite":"kg"},{"nom":"GS- Biscuit citron","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"[411] GS- Ghriba Citron confit","unite":"u","ordres":1,"stock":0,"recette":17,"recetteUnite":"u"},{"nom":"SM- 35 cm Vitrine (Praliné Amandes caramélisées)","unite":"u","ordres":1,"stock":1,"recette":1,"recetteUnite":"u"},{"nom":"GS- Mini sablés aux amandes","unite":"u","ordres":1,"stock":0,"recette":10,"recetteUnite":"u"},{"nom":"GS- Roulé au fromage multigrains","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM- mini Fond de tarte cacao","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"SM. Namlaka Pistache","unite":"g","ordres":1,"stock":0,"recette":1025,"recetteUnite":"g"},{"nom":"[111] GS- Biscotti Citron Gingembre","unite":"u","ordres":1,"stock":0,"recette":11,"recetteUnite":"u"},{"nom":"SM. Confit exotique Production","unite":"kg","ordres":1,"stock":2580,"recette":2.49,"recetteUnite":"kg"},{"nom":"GS- Biscuit canelle","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"GS- Biscuit café","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"},{"nom":"GS- Ghriba Behla","unite":"u","ordres":1,"stock":0,"recette":1,"recetteUnite":"u"}]
+const CLE = 'minmax-annexe'
+let vals = {}
+try { vals = JSON.parse(localStorage.getItem(CLE) || '{}') } catch { vals = {} }
+
+const nb = n => Number(n||0).toLocaleString('fr-FR',{maximumFractionDigits:0})
+const rempli = a => { const v = vals[a.nom]; return !!(v && v.mini !== '' && v.mini != null) }
+
+let filtre = 'tous', cherche = ''
+
+function dessiner() {
+  const q = cherche.trim().toLowerCase()
+  const vus = ARTICLES.filter(a => {
+    if (q && !a.nom.toLowerCase().includes(q)) return false
+    if (filtre === 'reste' && rempli(a)) return false
+    if (filtre === 'faits' && !rempli(a)) return false
+    return true
+  })
+  document.getElementById('liste').innerHTML = vus.length ? vus.map(a => {
+    const v = vals[a.nom] || {}
+    const rec = a.recette ? `recette Odoo : <span class="rec">${nb(a.recette)} ${a.recetteUnite}</span>` : ''
+    return `<div class="c ${rempli(a)?'fait':''}" data-n="${esc(a.nom)}">
+      <div class="h"><span class="n">${esc(a.nom)}</span><span class="u">${a.unite}</span></div>
+      <div class="m"><span>fabriqué <b>${a.ordres}×</b> en 120 j</span>
+        <span>stock <b>${nb(a.stock)}</b></span>${rec?'<span>'+rec+'</span>':''}</div>
+      <div class="g">
+        <div><label>mini</label><input inputmode="decimal" data-k="mini" value="${v.mini??''}"></div>
+        <div><label>maxi</label><input inputmode="decimal" data-k="maxi" value="${v.maxi??''}"></div>
+        <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="${v.tournee??''}"></div>
+      </div></div>`
+  }).join('') : '<div class="vide">Rien ici.</div>'
+  const n = ARTICLES.filter(rempli).length
+  document.getElementById('cpt').textContent = n + ' rempli' + (n>1?'s':'') + ' / ' + ARTICLES.length
+  document.getElementById('jauge').style.width = (n/ARTICLES.length*100) + '%'
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+document.getElementById('liste').addEventListener('input', e => {
+  const inp = e.target.closest('input[data-k]'); if (!inp) return
+  const nom = e.target.closest('.c').dataset.n
+  const v = vals[nom] || {}
+  v[inp.dataset.k] = inp.value.replace(',', '.')
+  vals[nom] = v
+  try { localStorage.setItem(CLE, JSON.stringify(vals)) } catch {}
+  const a = ARTICLES.find(x => x.nom === nom)
+  e.target.closest('.c').classList.toggle('fait', rempli(a))
+  const n = ARTICLES.filter(rempli).length
+  document.getElementById('cpt').textContent = n + ' rempli' + (n>1?'s':'') + ' / ' + ARTICLES.length
+  document.getElementById('jauge').style.width = (n/ARTICLES.length*100) + '%'
+})
+document.getElementById('q').addEventListener('input', e => { cherche = e.target.value; dessiner() })
+document.querySelectorAll('.f').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.f').forEach(x => x.classList.remove('on'))
+  b.classList.add('on'); filtre = b.dataset.f; dessiner()
+}))
+document.getElementById('copier').addEventListener('click', async () => {
+  const lignes = ARTICLES.filter(rempli).map(a => {
+    const v = vals[a.nom]
+    return `${a.nom} | mini ${v.mini} | maxi ${v.maxi||''} | tournée ${v.tournee||''} | ${a.unite}`
+  })
+  const txt = lignes.length ? lignes.join('\n') : '(rien de rempli)'
+  const out = document.getElementById('out')
+  out.style.display = 'block'; out.value = txt
+  try { await navigator.clipboard.writeText(txt); alert(lignes.length + ' article(s) copiés. Colle-les dans la conversation.') }
+  catch { out.select(); alert('Copie automatique refusée : sélectionne le texte en bas et copie-le à la main.') }
+})
+document.getElementById('vider').addEventListener('click', () => {
+  if (!confirm('Effacer tout ce que tu as rempli ?')) return
+  vals = {}; try { localStorage.removeItem(CLE) } catch {}; dessiner()
+})
+dessiner()
+</script>
+</body>
+</html>

@@ -14,7 +14,11 @@ const CLE = 'mode-test-odoo'
 let actif = false
 try {
   actif = sessionStorage.getItem(CLE) === '1'
-  const p = new URLSearchParams(window.location.search).get('test')
+  // L'adresse porte déjà « ?view=… » quand on est dans un onglet : y coller
+  // « ?test=1 » fait DEUX points d'interrogation, et URLSearchParams ne voit
+  // plus rien. On cherche donc le réglage dans l'adresse entière.
+  const m = window.location.search.match(/[?&]test=([01])\b/)
+  const p = m ? m[1] : null
   if (p === '1') { sessionStorage.setItem(CLE, '1'); actif = true }
   if (p === '0') { sessionStorage.removeItem(CLE); actif = false }
 } catch { actif = false }

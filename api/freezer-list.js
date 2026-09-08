@@ -734,16 +734,32 @@ const enG = (q, u) => (/^kg$/i.test(String(u)) ? Math.round(q * 1000000) / 1000 
 
 // Retrouve l'article (par son numéro, puis par son nom en secours) et sa recette,
 // quel que soit son nom du moment.
+/**
+ * Les lignes de recette qui concernent VRAIMENT cette variante.
+ *
+ * Une recette à parfums est posée sur le MODÈLE et porte les lignes de tous
+ * les parfums, chacune marquée « pour Citron », « pour Praliné »… Sans ce tri,
+ * un ordre de suprême amandes embarque aussi la crème citron et les fonds des
+ * autres parfums. Une ligne sans marque sert à tous.
+ */
+function lignesDuParfum(lignes, prod) {
+  const siens = new Set(prod?.product_template_attribute_value_ids || [])
+  return (lignes || []).filter(l => {
+    const pour = l.bom_product_template_attribute_value_ids || []
+    return !pour.length || pour.some(v => siens.has(v))
+  })
+}
+
 async function produitPrepa(uid, cle) {
   return await memo('prepa:' + cle, () => _produitPrepa(uid, cle))
 }
 async function _produitPrepa(uid, cle) {
   const conf = prepaDe(cle)
-  let prod = (await odooSearchRead(uid, 'product.product', [['id', '=', conf.id]],
-    ['id', 'display_name', 'uom_id', 'product_tmpl_id']))[0]
+  const champsP = ['id', 'display_name', 'uom_id', 'product_tmpl_id',
+    'product_template_attribute_value_ids']
+  let prod = (await odooSearchRead(uid, 'product.product', [['id', '=', conf.id]], champsP))[0]
   if (!prod) {
-    prod = (await odooSearchRead(uid, 'product.product', [['name', 'in', conf.noms]],
-      ['id', 'display_name', 'uom_id', 'product_tmpl_id']))[0]
+    prod = (await odooSearchRead(uid, 'product.product', [['name', 'in', conf.noms]], champsP))[0]
   }
   if (!prod) return { conf }
   const bom = (await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id', '=', prod.product_tmpl_id[0]]],
@@ -763,11 +779,12 @@ async function fetchPrepa(uid, cle) {
   const { prod, bom, conf } = await produitPrepa(uid, cle)
   if (!prod) return { erreur: `article « ${conf.titre} » introuvable dans Odoo` }
   if (!bom) return { erreur: 'recette introuvable dans Odoo pour ' + prod.display_name }
-  const [lignes, modele] = await Promise.all([
+  const [toutesLignesP, modele] = await Promise.all([
     memo('bomlines:' + bom.id, () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
-      ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })),
+      ['product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'], { limit: 50 })),
     modeleWhlvp(uid),
   ])
+  const lignes = lignesDuParfum(toutesLignesP, prod)
   const lieu = modele && Array.isArray(modele.location_src_id) ? modele.location_src_id[0] : null
 
   const ids = [prod.id, ...lignes.map(l => l.product_id[0])]
@@ -1089,11 +1106,12 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
   // Créé par programme, Odoo ne déroule PAS la nomenclature (les composants ne
   // sont ajoutés que par l'interface) : on crée nous-mêmes les lignes, sinon
   // l'ordre arrive vide — cas vécu avec WHLVP/MO/199870.
-  const [lignes, lieuProd] = await Promise.all([
+  const [toutesLignesO, lieuProd] = await Promise.all([
     memo('bomlines:' + bom.id, () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
-      ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })),
+      ['product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'], { limit: 50 })),
     lieuProduction(uid),
   ])
+  const lignes = lignesDuParfum(toutesLignesO, prod)
   const facteur = bom.product_qty ? qty / bom.product_qty : 1
   const choix = colorants || {}
   for (const l of lignes) {
@@ -1594,7 +1612,7 @@ async function transfertAnnexeVente(uid, prod, qty, uomId, origine) {
 async function produireGsAnnexe(uid, { tmplId, nom, qty }) {
   const domaine = tmplId ? [['product_tmpl_id', '=', Number(tmplId)]] : [['name', '=', nom]]
   const prod = (await odooSearchRead(uid, 'product.product', domaine,
-    ['id', 'display_name', 'product_tmpl_id'], { limit: 1 }))[0]
+    ['id', 'display_name', 'product_tmpl_id', 'product_template_attribute_value_ids'], { limit: 1 }))[0]
   if (!prod) return { ignore: true, message: 'article introuvable dans Odoo' }
 
   const bom = (await odooSearchRead(uid, 'mrp.bom', [['product_tmpl_id', '=', prod.product_tmpl_id[0]]],
@@ -1638,8 +1656,9 @@ async function produireGsAnnexe(uid, { tmplId, nom, qty }) {
     company_id: modele.company_id[0],
   }])
   // Odoo ne déroule pas la nomenclature quand l'ordre est créé par programme.
-  const lignes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
-    ['product_id', 'product_qty', 'product_uom_id'], { limit: 50 })
+  const toutes = await odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
+    ['product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'], { limit: 50 })
+  const lignes = lignesDuParfum(toutes, prod)
   const lieuProd = await lieuProduction(uid)
   const facteur = bom.product_qty ? qty / bom.product_qty : 1
   for (const l of lignes) {

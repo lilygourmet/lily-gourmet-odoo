@@ -1,0 +1,560 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Articles annexe — à régler</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+ :root{--cream:#fcfbf8;--line:#e5d8c3;--bordeaux:#993556;--ink:#2b2118;--soft:#6b5c4c;
+   --mute:#9a8b7a;--ok:#5c7a3f;--okbg:#EAF3DE;--rouge:#b03a3a;--or:#b58f3c;--orbg:#FBF3DF}
+ *{box-sizing:border-box}
+ body{margin:0;background:#efeae1;color:var(--ink);font-family:Geist,system-ui,sans-serif;padding:16px 10px 40px;font-size:14px}
+ .w{max-width:640px;margin:0 auto}
+ h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:23px;margin:0 0 5px}
+ .intro{font-size:12.5px;color:var(--soft);line-height:1.55;margin:0 0 14px}
+ .bar{position:sticky;top:0;z-index:5;background:#efeae1;padding:7px 0 9px;margin-bottom:4px}
+ .bar input{width:100%;height:42px;border:1px solid var(--line);border-radius:11px;padding:0 13px;font-family:inherit;font-size:15px;background:#fff;outline:none}
+ .st{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:12.5px}
+ .rail{flex:1;height:7px;border-radius:99px;background:#e2dacb;overflow:hidden}
+ .rail i{display:block;height:100%;background:var(--ok);width:0}
+ .c{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:9px;overflow:hidden;padding-bottom:2px}
+ .c.fait{border-color:#bcd3a4;background:#fcfdfa}
+ .c.deja{opacity:.6}
+ .c.off{opacity:.4}
+ .h{display:flex;align-items:baseline;gap:8px;padding:10px 12px 5px}
+ .h .n{flex:1;min-width:0;font-size:14.5px;font-weight:700;line-height:1.25}
+ .h .u{font-size:11.5px;color:var(--mute)}
+ .m{padding:0 12px 6px;font-size:11.5px;color:var(--mute);display:flex;gap:10px;flex-wrap:wrap}
+ .m b{color:var(--soft)} .m .rec{color:var(--or);font-weight:700}
+ .pour{padding:0 12px 6px;font-size:11.5px;color:var(--soft)}
+ .note{margin:0 12px 9px;background:#fffdf6;border:1px solid #e8dcbb;border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.5;color:var(--soft)}
+ .g{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:7px;padding:0 12px 9px}
+ .g label{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--mute);margin-bottom:3px}
+ .g input{width:100%;height:44px;border:1px solid var(--line);border-radius:10px;text-align:center;font-family:inherit;font-size:16px;font-weight:700;background:var(--cream);outline:none;color:var(--ink)}
+ .g input:focus{border-color:var(--bordeaux);background:#fff}
+ .g .t input{border-color:var(--or);background:var(--orbg)}
+ .cm{padding:0 12px 9px}
+ .cm label{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--mute);margin-bottom:3px}
+ .cm textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-family:inherit;font-size:13.5px;background:var(--cream);outline:none;resize:vertical;color:var(--ink)}
+ .cm textarea:focus{border-color:var(--bordeaux);background:#fff}
+ .act{padding:0 12px 10px}
+ .act .ig{border:1px solid var(--line);background:#fff;color:var(--mute);border-radius:9px;padding:7px 11px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer}
+ .c.off .ig{background:var(--ink);color:#fff;border-color:var(--ink)}
+ .ok2{margin:0 12px 11px;background:var(--okbg);color:var(--ok);border-radius:10px;padding:8px 10px;font-size:12px;font-weight:700}
+ .pied{position:sticky;bottom:0;background:#efeae1;padding:9px 0 0;margin-top:10px}
+ .pied button{width:100%;height:50px;border:0;border-radius:13px;background:var(--bordeaux);color:#fff;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer}
+ .out{width:100%;height:170px;margin-top:8px;border:1px solid var(--line);border-radius:11px;padding:10px;font-family:ui-monospace,monospace;font-size:11px;background:#fff;display:none;white-space:pre}
+</style></head><body><div class="w">
+<h1>Articles annexe — à régler</h1>
+<p class="intro">Les <b>22 articles fabriqués À L'ANNEXE</b> qui composent tes 7 plus gros gâteaux
+(vérifié sur les vrais ordres de fabrication : ce qui part à la boutique n'est pas ici).
+Les plus fabriqués en premier. <b>Remplis, commente, ou écarte</b> — tout se sauvegarde tout seul.
+Puis « Copier » et colle-moi le résultat.</p>
+
+<div class="bar"><input id="q" placeholder="Chercher…">
+  <div class="st"><b id="cpt">0</b><span class="rail"><i id="j"></i></span></div></div>
+<div id="liste"><div class="c " data-n="SM. Genoise Vanille KG commun">
+    <div class="h"><span class="n">SM. Genoise Vanille KG commun</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>57×</b> en 120 j</span>
+      <span>stock <b>4 004 422</b></span>
+      <span class="rec">recette Odoo : 1 Tournée (3 kg)</span>
+    </div>
+    <div class="pour">sert à : <b>Fraisier · Framboisier · Citron meringué · Suprême amandes</b></div>
+    <div class="note">Elle sert PARTOUT. ⚠️ Son stock dit 4 004 422 g (4 tonnes) — sûrement faux. Et la recette parle de « SM. Genoise Vanille KG Production », qui n'est JAMAIS fabriquée : c'est celle-ci qui l'est.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="1"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. Chantilly à la Rose">
+    <div class="h"><span class="n">SM. Chantilly à la Rose</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>54×</b> en 120 j</span>
+      <span>stock <b>-278</b></span>
+      <span class="rec">recette Odoo : 1 050 g</span>
+    </div>
+    <div class="pour">sert à : <b>Le Citron Framboise</b></div>
+    <div class="note">⚠️ Stock NÉGATIF (−278 g). Fabriquée 54 fois en 120 j.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="1050"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. creme patissiere vitrine Production">
+    <div class="h"><span class="n">SM. creme patissiere vitrine Production</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>36×</b> en 120 j</span>
+      <span>stock <b>0</b></span>
+      <span class="rec">recette Odoo : 2 150 g</span>
+    </div>
+    <div class="pour">sert à : <b>Fraisier (dans la crème vanille)</b></div>
+    <div class="note">Entre dans la crème au beurre vanille.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="2150"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. Creme au beurre nature production">
+    <div class="h"><span class="n">SM. Creme au beurre nature production</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>29×</b> en 120 j</span>
+      <span>stock <b>0</b></span>
+      <span class="rec">recette Odoo : 5 425 g</span>
+    </div>
+    <div class="pour">sert à : <b>base du praliné ET du citron</b></div>
+    <div class="note">La base de tout : 5 425 g donnent soit 7 052 g de praliné, soit 9 425 g de citron. Déjà connue.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="5425"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="Sm- PR Le Citron Framboise (10)">
+    <div class="h"><span class="n">Sm- PR Le Citron Framboise (10)</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>25×</b> en 120 j</span>
+      <span>stock <b>0</b></span>
+      <span class="rec">recette Odoo : 1 u</span>
+    </div>
+    <div class="pour">sert à : <b>Le Citron Framboise</b></div>
+    <div class="note">Le montage final (chantilly rose + glaçage) par-dessus le précédent. Deux étapes, toutes deux à l'annexe.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="1"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. Creme au beurre Vanille Production vitrine">
+    <div class="h"><span class="n">SM. Creme au beurre Vanille Production vitrine</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>24×</b> en 120 j</span>
+      <span>stock <b>0</b></span>
+      <span class="rec">recette Odoo : 5 575 g</span>
+    </div>
+    <div class="pour">sert à : <b>Fraisier</b></div>
+    <div class="note">⚠️ Il n'existe AUCUN article « fraisier » : le gâteau est monté à la commande. C'est donc CETTE crème qu'on suit.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="5575"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. Creme au beurre citron Production">
+    <div class="h"><span class="n">SM. Creme au beurre citron Production</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>23×</b> en 120 j</span>
+      <span>stock <b>0</b></span>
+      <span class="rec">recette Odoo : 9 425 g</span>
+    </div>
+    <div class="pour">sert à : <b>Citron meringué · Vitrine citron</b></div>
+    <div class="note">Déjà utilisée par les vitrines citron en place.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="9425"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM- Gianduja 10 pers">
+    <div class="h"><span class="n">SM- Gianduja 10 pers</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>19×</b> en 120 j</span>
+      <span>stock <b>3</b></span>
+      <span class="rec">recette Odoo : 1 u</span>
+    </div>
+    <div class="pour">sert à : <b>Gianduja</b></div>
+    <div class="note">Le gâteau monté. Sa recette dit 1 pièce — combien en montez-vous d'un coup ?</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="1"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. Biscuit chocolat Gianduja 10 pers">
+    <div class="h"><span class="n">SM. Biscuit chocolat Gianduja 10 pers</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>19×</b> en 120 j</span>
+      <span>stock <b>0</b></span>
+      <span class="rec">recette Odoo : 6 u</span>
+    </div>
+    <div class="pour">sert à : <b>Gianduja</b></div>
+    <div class="note">6 par recette.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="6"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="Sm- Le Citron Framboise (10)">
+    <div class="h"><span class="n">Sm- Le Citron Framboise (10)</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>16×</b> en 120 j</span>
+      <span>stock <b>0</b></span>
+      <span class="rec">recette Odoo : 1 u</span>
+    </div>
+    <div class="pour">sert à : <b>Le Citron Framboise</b></div>
+    <div class="note">Le gâteau de base, monté à la pièce.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="1"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c deja" data-n="SM. caramel beurre sale production">
+    <div class="h"><span class="n">SM. caramel beurre sale production</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>14×</b> en 120 j</span>
+      <span>stock <b>5 116</b></span>
+      <span class="rec">recette Odoo : 3 920 g</span>
+    </div>
+    <div class="pour">sert à : <b>Cheese Caramel</b></div>
+    <div class="note">✅ DÉJÀ EN PLACE (0 / 3920 / 3920).</div>
+    <div class="ok2">Déjà réglé — rien à faire</div>
+  </div><div class="c " data-n="SM. sirop Imbibage production KG">
+    <div class="h"><span class="n">SM. sirop Imbibage production KG</span><span class="u">kg</span></div>
+    <div class="m">
+      <span>fabriqué <b>13×</b> en 120 j</span>
+      <span>stock <b>14,73</b></span>
+      <span class="rec">recette Odoo : 5,55 kg</span>
+    </div>
+    <div class="pour">sert à : <b>Vitrine citron · Suprême amandes</b></div>
+    <div class="note">Sert dans toutes les vitrines.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="5.55"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. creme citron Production">
+    <div class="h"><span class="n">SM. creme citron Production</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>10×</b> en 120 j</span>
+      <span>stock <b>66</b></span>
+      <span class="rec">recette Odoo : 5 930 g</span>
+    </div>
+    <div class="pour">sert à : <b>Citron meringué · Vitrine citron</b></div>
+    <div class="note">Entre dans la crème au beurre citron ET directement dans le gâteau.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="5930"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM- cadre foret noir grand Production">
+    <div class="h"><span class="n">SM- cadre foret noir grand Production</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>7×</b> en 120 j</span>
+      <span>stock <b>352</b></span>
+      <span class="rec">recette Odoo : 88 u</span>
+    </div>
+    <div class="pour">sert à : <b>Black Forest</b></div>
+    <div class="note">⚠️ Le « Sm- Pr Black forest » est fabriqué à la BOUTIQUE, pas ici. À l'annexe, c'est le CADRE — et sa recette en sort 88 d'un coup, pas 8.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="88"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. Confit de framboise finition">
+    <div class="h"><span class="n">SM. Confit de framboise finition</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>7×</b> en 120 j</span>
+      <span>stock <b>4 750</b></span>
+      <span class="rec">recette Odoo : 1 000 g</span>
+    </div>
+    <div class="pour">sert à : <b>Framboisier</b></div>
+    <div class="note">⚠️ La crème diplomate du framboisier est fabriquée à la BOUTIQUE (334 fois). À l'annexe, il n'y a que ce confit.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="1000"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c deja" data-n="SM- 20 cm Vitrine (Citron)">
+    <div class="h"><span class="n">SM- 20 cm Vitrine (Citron)</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>7×</b> en 120 j</span>
+      <span>stock <b>18</b></span>
+      <span class="rec">recette Odoo : 1 u</span>
+    </div>
+    <div class="pour">sert à : <b>Citron meringué · Vitrine citron</b></div>
+    <div class="note">✅ DÉJÀ EN PLACE (11 / 29 / 29).</div>
+    <div class="ok2">Déjà réglé — rien à faire</div>
+  </div><div class="c " data-n="SM- Cheesecake nature">
+    <div class="h"><span class="n">SM- Cheesecake nature</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>7×</b> en 120 j</span>
+      <span>stock <b>23</b></span>
+      <span class="rec">recette Odoo : 20 u</span>
+    </div>
+    <div class="pour">sert à : <b>Cheese Caramel Beurre Salé</b></div>
+    <div class="note">Le plus simple : une recette sort 20 cheesecakes, directement depuis les MP.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="20"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. Glacage Rose Finition">
+    <div class="h"><span class="n">SM. Glacage Rose Finition</span><span class="u">g</span></div>
+    <div class="m">
+      <span>fabriqué <b>6×</b> en 120 j</span>
+      <span>stock <b>4 900</b></span>
+      <span class="rec">recette Odoo : 5 458 g</span>
+    </div>
+    <div class="pour">sert à : <b>Le Citron Framboise</b></div>
+    <div class="note">Malgré son nom « Finition », c'est bien à l'annexe.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="5458"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. Cremeux gianduja 10 pers Production">
+    <div class="h"><span class="n">SM. Cremeux gianduja 10 pers Production</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>4×</b> en 120 j</span>
+      <span>stock <b>1</b></span>
+      <span class="rec">recette Odoo : 1 u</span>
+    </div>
+    <div class="pour">sert à : <b>Gianduja</b></div>
+    
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="1"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. Cremeux a la vanille 10 pers Production">
+    <div class="h"><span class="n">SM. Cremeux a la vanille 10 pers Production</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>3×</b> en 120 j</span>
+      <span>stock <b>1</b></span>
+      <span class="rec">recette Odoo : 1 u</span>
+    </div>
+    <div class="pour">sert à : <b>Gianduja</b></div>
+    
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="1"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="Sm.crunchy gianduja 10 pers/ U">
+    <div class="h"><span class="n">Sm.crunchy gianduja 10 pers/ U</span><span class="u">u</span></div>
+    <div class="m">
+      <span>fabriqué <b>3×</b> en 120 j</span>
+      <span>stock <b>10</b></span>
+      <span class="rec">recette Odoo : 1 u</span>
+    </div>
+    <div class="pour">sert à : <b>Gianduja</b></div>
+    
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="1"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div><div class="c " data-n="SM. crunchy GIANDUJA">
+    <div class="h"><span class="n">SM. crunchy GIANDUJA</span><span class="u">kg</span></div>
+    <div class="m">
+      <span>fabriqué <b>2×</b> en 120 j</span>
+      <span>stock <b>0</b></span>
+      <span class="rec">recette Odoo : 3,58 kg</span>
+    </div>
+    <div class="pour">sert à : <b>Gianduja</b></div>
+    <div class="note">En kg.</div>
+    
+    <div class="g">
+      <div><label>mini</label><input inputmode="decimal" data-k="mini"></div>
+      <div><label>maxi</label><input inputmode="decimal" data-k="maxi"></div>
+      <div class="t"><label>tournée</label><input inputmode="decimal" data-k="tournee" value="3.58"></div>
+    </div>
+    <div class="cm">
+      <label>ta réponse / remarque</label>
+      <textarea data-k="txt" rows="2" placeholder="ex : on en fait 2 cadres à la fois · ne pas suivre celui-là · la tournée c'est plutôt…"></textarea>
+    </div>
+    <div class="act">
+      <button class="ig" data-a="ignorer">je ne suis pas cet article</button>
+    </div>
+  </div></div>
+<div class="pied"><button id="cp">Copier mes réponses</button><textarea class="out" id="out" readonly></textarea></div>
+</div>
+<script>
+const CLE='annexe-articles-v1'
+let v={}; try{v=JSON.parse(localStorage.getItem(CLE)||'{}')}catch{v={}}
+const cartes=[...document.querySelectorAll('.c')]
+const rempli=n=>{const x=v[n];return !!(x&&(x.ignore||(x.mini!==undefined&&x.mini!=='')||(x.txt||'').trim()))}
+function restaure(){
+  for(const c of cartes){const n=c.dataset.n,x=v[n]||{}
+    for(const i of c.querySelectorAll('[data-k]')) if(x[i.dataset.k]!==undefined) i.value=x[i.dataset.k]
+    c.classList.toggle('off',!!x.ignore); c.classList.toggle('fait',rempli(n))}
+  maj()}
+function maj(){const n=cartes.filter(c=>rempli(c.dataset.n)).length
+  document.getElementById('cpt').textContent=n+' / '+cartes.length
+  document.getElementById('j').style.width=(n/cartes.length*100)+'%'}
+document.getElementById('liste').addEventListener('input',e=>{
+  const i=e.target.closest('[data-k]'); if(!i)return
+  const c=e.target.closest('.c'),n=c.dataset.n
+  v[n]=v[n]||{}; v[n][i.dataset.k]=i.value.replace(',','.')
+  try{localStorage.setItem(CLE,JSON.stringify(v))}catch{}
+  c.classList.toggle('fait',rempli(n)); maj()})
+document.getElementById('liste').addEventListener('click',e=>{
+  const b=e.target.closest('[data-a=ignorer]'); if(!b)return
+  const c=e.target.closest('.c'),n=c.dataset.n
+  v[n]=v[n]||{}; v[n].ignore=!v[n].ignore
+  try{localStorage.setItem(CLE,JSON.stringify(v))}catch{}
+  c.classList.toggle('off',v[n].ignore); c.classList.toggle('fait',rempli(n)); maj()})
+document.getElementById('q').addEventListener('input',e=>{
+  const q=e.target.value.trim().toLowerCase()
+  for(const c of cartes) c.style.display=(!q||c.dataset.n.toLowerCase().includes(q))?'':'none'})
+document.getElementById('cp').addEventListener('click',async()=>{
+  const L=[]
+  for(const c of cartes){const n=c.dataset.n,x=v[n]; if(!x)continue
+    if(x.ignore){L.push(n+' | NE PAS SUIVRE');continue}
+    const p=[]
+    if(x.mini!==undefined&&x.mini!=='')p.push('mini '+x.mini)
+    if(x.maxi!==undefined&&x.maxi!=='')p.push('maxi '+x.maxi)
+    if(x.tournee!==undefined&&x.tournee!=='')p.push('tournée '+x.tournee)
+    if((x.txt||'').trim())p.push('→ '+x.txt.trim())
+    if(p.length)L.push(n+' | '+p.join(' | '))}
+  const t=L.length?L.join('\n'):'(rien de rempli)'
+  const o=document.getElementById('out'); o.style.display='block'; o.value=t
+  try{await navigator.clipboard.writeText(t);alert(L.length+' article(s) copiés. Colle-les dans la conversation.')}
+  catch{o.select();alert('Copie refusée : sélectionne le texte en bas et copie-le à la main.')}})
+restaure()
+</script></body></html>

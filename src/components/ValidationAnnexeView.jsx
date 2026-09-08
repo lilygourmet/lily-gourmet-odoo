@@ -448,6 +448,16 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                 )}
               </div>
 
+              {/* Refuser la production : visible tout de suite. Le bouton était
+                  caché dans le repli « noter ce qui a été consommé », et
+                  n'existait même pas pour un ordre sans ingrédient listé. */}
+              <div className="border-t border-line px-3.5 py-2 flex">
+                <button onClick={() => annuler(l)}
+                  className="ml-auto rounded-lg px-3 py-2 text-[12.5px] font-bold border border-danger bg-white text-danger">
+                  refuser · annuler l'ordre
+                </button>
+              </div>
+
               {/* Noter ce qui a vraiment été consommé, avant de valider */}
               {(l.lignes || []).length > 0 && (
                 <div className="border-t border-line">
@@ -506,10 +516,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                           className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-soft">
                           fermer sans changer
                         </button>
-                        <button onClick={() => annuler(l)}
-                          className="ml-auto rounded-lg px-3 py-2 text-[12.5px] font-bold border border-danger bg-white text-danger">
-                          annuler l'ordre
-                        </button>
+                        <span className="ml-auto" />
                         {(notes[l.name] || ajouts[l.name]) && (
                           <button onClick={() => {
                             setNotes(n => { const s2 = { ...n }; delete s2[l.name]; return s2 })

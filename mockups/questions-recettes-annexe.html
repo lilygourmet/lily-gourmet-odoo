@@ -1,0 +1,714 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Questions sur les recettes</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+ :root{--cream:#fcfbf8;--line:#e5d8c3;--bordeaux:#993556;--ink:#2b2118;--soft:#5b4d40;
+   --mute:#9a8b7a;--ok:#5c7a3f;--okbg:#EAF3DE;--rouge:#b03a3a;--or:#b58f3c;--orbg:#FBF3DF}
+ *{box-sizing:border-box}
+ body{margin:0;background:#efeae1;color:var(--ink);font-family:Geist,system-ui,sans-serif;padding:16px 10px 40px;font-size:14px}
+ .w{max-width:660px;margin:0 auto}
+ h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:23px;margin:0 0 5px}
+ .intro{font-size:13px;color:var(--soft);line-height:1.6;margin:0 0 14px}
+ .bar{position:sticky;top:0;z-index:5;background:#efeae1;padding:7px 0 9px}
+ .bar input{width:100%;height:42px;border:1px solid var(--line);border-radius:11px;padding:0 13px;font-family:inherit;font-size:15px;background:#fff;outline:none}
+ .st{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:12.5px}
+ .rail{flex:1;height:7px;border-radius:99px;background:#e2dacb;overflow:hidden}
+ .rail i{display:block;height:100%;background:var(--ok);width:0}
+ .c{background:#fff;border:1px solid var(--line);border-radius:15px;margin-bottom:11px;overflow:hidden}
+ .c.fait{border-color:#bcd3a4;background:#fcfdfa} .c.deja{opacity:.55} .c.off{opacity:.4}
+ .h{display:flex;align-items:baseline;gap:8px;padding:12px 13px 5px}
+ .h .n{flex:1;min-width:0;font-size:15.5px;font-weight:800;line-height:1.25}
+ .h .u{font-size:11.5px;color:var(--mute)}
+ .m{padding:0 13px 11px;font-size:11.5px;color:var(--mute);display:flex;gap:11px;flex-wrap:wrap}
+ .m b{color:var(--soft)}
+ .qb{border-top:1px solid #f2ebde;padding:12px 13px}
+ .qb.sp{background:#fffdf6}
+ .qt{font-family:Fraunces,Georgia,serif;font-style:italic;font-size:16px;color:var(--bordeaux);margin-bottom:9px}
+ .bl{font-size:13px;line-height:1.6;color:var(--soft);margin-bottom:8px}
+ .bl b{color:var(--ink)} .bl b.or{color:var(--or);font-size:14px}
+ .et{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--mute);margin-bottom:2px}
+ .bl.q{background:var(--cream);border-left:3px solid var(--bordeaux);border-radius:0 9px 9px 0;
+   padding:8px 11px;color:var(--ink);font-weight:600;margin-bottom:10px}
+ .ch{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+ .ch button{border:1px solid var(--line);background:var(--cream);color:var(--soft);border-radius:9px;
+   padding:10px 14px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer}
+ .ch button.on{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+ .ch input{flex:1;min-width:130px;height:40px;border:1px solid var(--line);border-radius:9px;padding:0 11px;
+   font-family:inherit;font-size:13.5px;background:var(--cream);outline:none;color:var(--ink)}
+ .ch input.lg{min-width:100%} .ch input:focus{border-color:var(--bordeaux);background:#fff}
+ .cm{padding:11px 13px 0}
+ .cm textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-family:inherit;
+   font-size:13.5px;background:var(--cream);outline:none;resize:vertical;color:var(--ink)}
+ .cm textarea:focus{border-color:var(--bordeaux);background:#fff}
+ .act{padding:9px 13px 12px}
+ .act .ig{border:1px solid var(--line);background:#fff;color:var(--mute);border-radius:9px;padding:8px 12px;
+   font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer}
+ .c.off .ig{background:var(--ink);color:#fff;border-color:var(--ink)}
+ .ok2{margin:0 13px 12px;background:var(--okbg);color:var(--ok);border-radius:10px;padding:9px 11px;font-size:12.5px;font-weight:700}
+ .pied{position:sticky;bottom:0;background:#efeae1;padding:9px 0 0;margin-top:10px}
+ .pied button{width:100%;height:50px;border:0;border-radius:13px;background:var(--bordeaux);color:#fff;
+   font-family:inherit;font-size:15px;font-weight:800;cursor:pointer}
+ .out{width:100%;height:170px;margin-top:8px;border:1px solid var(--line);border-radius:11px;padding:10px;
+   font-family:ui-monospace,monospace;font-size:11px;background:#fff;display:none;white-space:pre}
+</style></head><body><div class="w">
+<h1>Questions sur les recettes</h1>
+<p class="intro">Les <b>22 articles fabriqués à l'annexe</b> qui composent tes 7 plus gros gâteaux.
+Pour chacun je t'explique <b>ce que j'ai trouvé dans Odoo</b>, <b>pourquoi ça compte</b> pour l'écran du
+pâtissier, puis je pose <b>ma question</b>.<br>
+Pas de mini/maxi ici — on les verra après. Tout se sauvegarde tout seul.</p>
+<div class="bar"><input id="q" placeholder="Chercher un article…">
+  <div class="st"><b id="cpt">0</b><span class="rail"><i id="j"></i></span></div></div>
+<div id="liste"><div class="c" data-n="SM. Genoise Vanille KG commun">
+    <div class="h"><span class="n">SM. Genoise Vanille KG commun</span><span class="u">g</span></div>
+    <div class="m"><span>fabriqué <b>57×</b> en 4 mois</span><span>stock <b>4 004 422</b></span>
+      <span>sert à : <b>Fraisier · Framboisier · Citron meringué · Suprême amandes</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">1 Tournée (3 kg)</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 1 Tournée (3 kg) qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Deux génoises pour une seule ?</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>Tes recettes de gâteaux demandent « SM. Genoise Vanille KG <b>Production</b> ». Or cet article n'a <b>jamais été fabriqué</b> : zéro ordre en 4 mois. Celle qui est vraiment faite, c'est « SM. Genoise Vanille KG <b>commun</b> » — 57 fois.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app irait dire au pâtissier « fabrique de la génoise <i>Production</i> » — un article que personne ne fait. Il ne saurait pas quoi faire. Et son stock resterait à zéro pour toujours, donc l'écran la réclamerait sans fin.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ces deux génoises, c'est la même chose ? Laquelle est la vraie ? Faut-il supprimer l'autre des recettes ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. Chantilly à la Rose">
+    <div class="h"><span class="n">SM. Chantilly à la Rose</span><span class="u">g</span></div>
+    <div class="m"><span>fabriqué <b>54×</b> en 4 mois</span><span>stock <b>-278</b></span>
+      <span>sert à : <b>Le Citron Framboise</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">1 050 g</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 1 050 g qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Un stock négatif qui ne remonte jamais</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>Son stock est à <b>−278 g</b> alors qu'elle est fabriquée 54 fois en 4 mois. Un stock négatif veut dire qu'on en a sorti plus qu'on en a déclaré.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Une chantilly ne se garde pas : si elle se fait à la demande et se consomme dans la journée, la suivre en stock n'a aucun sens — l'app la réclamerait tous les jours sans raison.</div>
+      <div class="bl q"><span class="et">Ma question</span>Elle se fait au moment du montage, ou elle se stocke vraiment ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. creme patissiere vitrine Production">
+    <div class="h"><span class="n">SM. creme patissiere vitrine Production</span><span class="u">g</span></div>
+    <div class="m"><span>fabriqué <b>36×</b> en 4 mois</span><span>stock <b>0</b></span>
+      <span>sert à : <b>entre dans la crème au beurre vanille</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">2 150 g</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 2 150 g qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. Creme au beurre nature production">
+    <div class="h"><span class="n">SM. Creme au beurre nature production</span><span class="u">g</span></div>
+    <div class="m"><span>fabriqué <b>29×</b> en 4 mois</span><span>stock <b>0</b></span>
+      <span>sert à : <b>base du praliné ET du citron</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">5 425 g</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 5 425 g qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Une seule base pour deux crèmes ?</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>Une tournée fait <b>5 425 g</b>. Ensuite, soit tu ajoutes 1 800 g de praliné (→ 7 052 g), soit 3 850 g de crème citron (→ 9 425 g).</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si c'est bien une base commune, le pâtissier fait <b>une seule crème nature</b> puis la sépare. L'app doit alors la traiter comme un article à part, réclamé par les deux. Sinon il en referait une pour chaque parfum.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien une seule tournée de base qu'on aromatise après coup ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="Sm- PR Le Citron Framboise (10)">
+    <div class="h"><span class="n">Sm- PR Le Citron Framboise (10)</span><span class="u">u</span></div>
+    <div class="m"><span>fabriqué <b>25×</b> en 4 mois</span><span>stock <b>0</b></span>
+      <span>sert à : <b>Le Citron Framboise</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">1 u</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 1 u qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">(c'est la 2ᵉ étape — voir la question ci-dessus)</div>
+      
+      
+      
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. Creme au beurre Vanille Production vitrine">
+    <div class="h"><span class="n">SM. Creme au beurre Vanille Production vitrine</span><span class="u">g</span></div>
+    <div class="m"><span>fabriqué <b>24×</b> en 4 mois</span><span>stock <b>0</b></span>
+      <span>sert à : <b>Fraisier</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">5 575 g</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 5 575 g qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Le fraisier n'existe pas comme article</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>J'ai cherché : il n'y a <b>aucun article « fraisier »</b> à fabriquer dans Odoo. Le gâteau est monté à la commande, directement depuis la génoise, cette crème et le sirop.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Ça veut dire qu'on <b>ne peut pas</b> mettre « Fraisier » dans l'onglet — il n'y a rien à suivre, rien qui ait un stock. Ce qu'on peut suivre, ce sont ses <b>préparations</b> : cette crème vanille (5 575 g la tournée), la génoise, le sirop.</div>
+      <div class="bl q"><span class="et">Ma question</span>On suit bien les préparations plutôt que le gâteau ? Ou faudrait-il créer un article « fraisier » dans Odoo ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. Creme au beurre citron Production">
+    <div class="h"><span class="n">SM. Creme au beurre citron Production</span><span class="u">g</span></div>
+    <div class="m"><span>fabriqué <b>23×</b> en 4 mois</span><span>stock <b>0</b></span>
+      <span>sert à : <b>Citron meringué · Vitrine citron</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">9 425 g</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 9 425 g qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM- Gianduja 10 pers">
+    <div class="h"><span class="n">SM- Gianduja 10 pers</span><span class="u">u</span></div>
+    <div class="m"><span>fabriqué <b>19×</b> en 4 mois</span><span>stock <b>3</b></span>
+      <span>sert à : <b>Gianduja</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">1 u</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 1 u qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Combien de gianduja d'un coup ?</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>Sa recette dit <b>1 pièce</b> — donc Odoo pense qu'on les monte un par un. Il a été fabriqué 19 fois en 4 mois.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Toute la logique de l'onglet repose sur la tournée : « on ne fabrique jamais ce qui manque, on fait une tournée entière ». Si la tournée vaut 1, l'app dira juste « fais-en 4 » — ce qui marche, mais on perd le garde-fou.</div>
+      <div class="bl q"><span class="et">Ma question</span>Vous en montez combien à la fois ? (si c'est vraiment au cas par cas, dis-le, c'est une réponse valable)</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. Biscuit chocolat Gianduja 10 pers">
+    <div class="h"><span class="n">SM. Biscuit chocolat Gianduja 10 pers</span><span class="u">u</span></div>
+    <div class="m"><span>fabriqué <b>19×</b> en 4 mois</span><span>stock <b>0</b></span>
+      <span>sert à : <b>Gianduja</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">6 u</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 6 u qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      
+      
+      
+      <div class="bl q"><span class="et">Ma question</span>Sa recette en sort 6 d'un coup — c'est juste ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="Sm- Le Citron Framboise (10)">
+    <div class="h"><span class="n">Sm- Le Citron Framboise (10)</span><span class="u">u</span></div>
+    <div class="m"><span>fabriqué <b>16×</b> en 4 mois</span><span>stock <b>0</b></span>
+      <span>sert à : <b>Le Citron Framboise</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">1 u</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 1 u qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Deux étapes, deux articles</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>À l'annexe, ce gâteau se fait en <b>deux temps</b> : d'abord ce gâteau de base (16 fois), puis un second article « PR » qui ajoute la chantilly rose et le glaçage (25 fois).</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si on met les deux dans l'onglet, le pâtissier verra deux lignes pour un seul gâteau — avec le risque qu'il fabrique la base sans finir, ou l'inverse. Si on n'en met qu'un, l'autre étape n'est jamais suivie.</div>
+      <div class="bl q"><span class="et">Ma question</span>On suit les deux étapes séparément, ou seulement la finale ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c deja"><div class="h"><span class="n">SM. caramel beurre sale production</span></div>
+    <div class="ok2">✅ Déjà réglé — rien à répondre</div></div><div class="c" data-n="SM. sirop Imbibage production KG">
+    <div class="h"><span class="n">SM. sirop Imbibage production KG</span><span class="u">kg</span></div>
+    <div class="m"><span>fabriqué <b>13×</b> en 4 mois</span><span>stock <b>14,73</b></span>
+      <span>sert à : <b>toutes les vitrines</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">5,55 kg</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 5,55 kg qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. creme citron Production">
+    <div class="h"><span class="n">SM. creme citron Production</span><span class="u">g</span></div>
+    <div class="m"><span>fabriqué <b>10×</b> en 4 mois</span><span>stock <b>66</b></span>
+      <span>sert à : <b>Citron meringué · Vitrine citron</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">5 930 g</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 5 930 g qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Elle sert à deux endroits en même temps</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>Cette crème entre <b>dans la crème au beurre citron</b> (3 850 g par tournée) <b>et</b> directement dans le gâteau (120 g par 20 cm).</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Quand le pâtissier en fabrique, l'app doit savoir qu'elle sera mangée par les deux. Sinon elle en réclamera trop peu, et il se retrouvera à court en plein montage.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien le même bac qui sert aux deux usages ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM- cadre foret noir grand Production">
+    <div class="h"><span class="n">SM- cadre foret noir grand Production</span><span class="u">u</span></div>
+    <div class="m"><span>fabriqué <b>7×</b> en 4 mois</span><span>stock <b>352</b></span>
+      <span>sert à : <b>Black Forest</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">88 u</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 88 u qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Un cadre, ça fait 88 gâteaux ?</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>Le « Sm- Pr Black forest », celui qui ressemble au gâteau, est fabriqué <b>à la BOUTIQUE</b> (20 fois en 4 mois) — il n'a rien à faire dans l'onglet de l'annexe. Ce que l'annexe fabrique, c'est <b>ce cadre</b>, et sa recette dit qu'un cadre donne <b>88 pièces</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>C'est le chiffre qui décide de tout : si l'app croit qu'un cadre fait 88 alors qu'il en fait 8, elle fera fabriquer <b>onze fois trop peu</b> — ou l'inverse.</div>
+      <div class="bl q"><span class="et">Ma question</span>Un cadre de forêt noire, ça donne combien de gâteaux au final ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. Confit de framboise finition">
+    <div class="h"><span class="n">SM. Confit de framboise finition</span><span class="u">g</span></div>
+    <div class="m"><span>fabriqué <b>7×</b> en 4 mois</span><span>stock <b>4 750</b></span>
+      <span>sert à : <b>Framboisier</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">1 000 g</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 1 000 g qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Du framboisier, l'annexe ne fait que ça ?</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>J'ai regardé où chaque morceau du framboisier est fabriqué : la <b>crème diplomate</b> est faite à la BOUTIQUE (334 fois en 4 mois), le <b>sirop framboise</b> aussi. À l'annexe, il n'y a que ce confit (7 fois).</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si c'est vrai, le framboisier n'apparaîtra dans l'onglet que par son confit. Le pâtissier de l'annexe ne verra jamais « framboisier » — ce qui est normal, il ne le monte pas.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien la réalité ? Ou la crème diplomate se fait parfois ici aussi ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c deja"><div class="h"><span class="n">SM- 20 cm Vitrine (Citron)</span></div>
+    <div class="ok2">✅ Déjà réglé — rien à répondre</div></div><div class="c" data-n="SM- Cheesecake nature">
+    <div class="h"><span class="n">SM- Cheesecake nature</span><span class="u">u</span></div>
+    <div class="m"><span>fabriqué <b>7×</b> en 4 mois</span><span>stock <b>23</b></span>
+      <span>sert à : <b>Cheese Caramel</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">20 u</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 20 u qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      <div class="qt">Faut-il figer ses matières premières ?</div>
+      <div class="bl"><span class="et">Ce que j'ai trouvé</span>Une seule recette sort <b>20 cheesecakes</b>, directement depuis les matières premières : 14 kg de fromage, 5,8 kg de sucre, 3,2 kg de crème… Il n'y a aucune préparation intermédiaire.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>C'est exactement le cas de la mousse du tiramisu. Si tu déclares 18 cheesecakes au lieu de 20, deux choix : soit Odoo baisse le fromage à 12,6 kg — alors qu'on a bien vidé les 14 kg ; soit on <b>fige</b> et les 14 kg sortent quoi qu'il arrive.</div>
+      <div class="bl q"><span class="et">Ma question</span>On fige (14 kg sortent toujours), ou on laisse descendre avec le nombre réel ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. Glacage Rose Finition">
+    <div class="h"><span class="n">SM. Glacage Rose Finition</span><span class="u">g</span></div>
+    <div class="m"><span>fabriqué <b>6×</b> en 4 mois</span><span>stock <b>4 900</b></span>
+      <span>sert à : <b>Le Citron Framboise</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">5 458 g</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 5 458 g qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. Cremeux gianduja 10 pers Production">
+    <div class="h"><span class="n">SM. Cremeux gianduja 10 pers Production</span><span class="u">u</span></div>
+    <div class="m"><span>fabriqué <b>4×</b> en 4 mois</span><span>stock <b>1</b></span>
+      <span>sert à : <b>Gianduja</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">1 u</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 1 u qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      
+      
+      
+      <div class="bl q"><span class="et">Ma question</span>Recette pour 1 pièce — vous en faites combien à la fois ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. Cremeux a la vanille 10 pers Production">
+    <div class="h"><span class="n">SM. Cremeux a la vanille 10 pers Production</span><span class="u">u</span></div>
+    <div class="m"><span>fabriqué <b>3×</b> en 4 mois</span><span>stock <b>1</b></span>
+      <span>sert à : <b>Gianduja</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">1 u</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 1 u qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    <div class="qb sp">
+      
+      
+      
+      <div class="bl q"><span class="et">Ma question</span>Recette pour 1 pièce — vous en faites combien à la fois ?</div>
+      <div class="ch"><input data-k="q3v" class="lg" placeholder="ta réponse…"></div>
+    </div>
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="Sm.crunchy gianduja 10 pers/ U">
+    <div class="h"><span class="n">Sm.crunchy gianduja 10 pers/ U</span><span class="u">u</span></div>
+    <div class="m"><span>fabriqué <b>3×</b> en 4 mois</span><span>stock <b>10</b></span>
+      <span>sert à : <b>Gianduja</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">1 u</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 1 u qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div><div class="c" data-n="SM. crunchy GIANDUJA">
+    <div class="h"><span class="n">SM. crunchy GIANDUJA</span><span class="u">kg</span></div>
+    <div class="m"><span>fabriqué <b>2×</b> en 4 mois</span><span>stock <b>0</b></span>
+      <span>sert à : <b>Gianduja</b></span></div>
+
+    <div class="qb">
+      <div class="qt">La taille d'une tournée</div>
+      <div class="bl"><span class="et">Ce que dit Odoo</span>Quand on en fait, il en sort <b class="or">3,58 kg</b> d'un coup.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>L'app ne proposera <b>jamais</b> « fais-en 2 000 g ». Elle dira toujours « fais une tournée », ou deux, ou une demie. Si le vrai bac ne fait pas ça, tout ce que l'écran affiche sera faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>C'est bien 3,58 kg qui sort d'une fournée ?</div>
+      <div class="ch"><button data-k="q1" data-v="oui">oui, c'est ça</button><button data-k="q1" data-v="non">non →</button>
+        <input data-k="q1v" placeholder="c'est plutôt…"></div>
+    </div>
+
+    <div class="qb">
+      <div class="qt">Un ingrédient qui ne bouge pas</div>
+      <div class="bl"><span class="et">L'idée</span>Pour le tiramisu, on vide <b>une cuve entière de mousse</b>, qu'il en sorte 128 ou 150. La mousse ne suit pas le nombre de gâteaux : on dit qu'elle est <b>figée</b>.</div>
+      <div class="bl"><span class="et">Pourquoi ça compte</span>Si rien n'est figé, Odoo fait descendre <b>tous</b> les ingrédients proportionnellement à ce qui sort vraiment. Un ingrédient qu'on utilise en entier serait alors compté en moins, et son stock deviendrait faux.</div>
+      <div class="bl q"><span class="et">Ma question</span>Ici, y a-t-il un ingrédient qu'on utilise en entier, quoi qu'il sorte ?</div>
+      <div class="ch"><button data-k="q2" data-v="aucun">non, tout suit</button><button data-k="q2" data-v="oui">oui →</button>
+        <input data-k="q2v" placeholder="lequel…"></div>
+    </div>
+
+    
+    <div class="cm"><textarea data-k="txt" rows="2" placeholder="autre chose à me dire sur cette recette…"></textarea></div>
+    <div class="act"><button class="ig" data-a="ignorer">on ne suit pas cet article</button></div>
+  </div></div>
+<div class="pied"><button id="cp">Copier mes réponses</button><textarea class="out" id="out" readonly></textarea></div>
+</div>
+<script>
+const CLE='annexe-recettes-v2'
+let v={}; try{v=JSON.parse(localStorage.getItem(CLE)||'{}')}catch{v={}}
+const cartes=[...document.querySelectorAll('.c:not(.deja)')]
+const rempli=n=>{const x=v[n]||{}; return !!(x.ignore||x.q1||x.q2||(x.q3v||'').trim()||(x.txt||'').trim())}
+const sauve=()=>{try{localStorage.setItem(CLE,JSON.stringify(v))}catch{}}
+function maj(){const n=cartes.filter(c=>rempli(c.dataset.n)).length
+  document.getElementById('cpt').textContent=n+' / '+cartes.length
+  document.getElementById('j').style.width=(n/cartes.length*100)+'%'}
+function restaure(){for(const c of cartes){const n=c.dataset.n,x=v[n]||{}
+  for(const i of c.querySelectorAll('input,textarea')) if(x[i.dataset.k]!==undefined) i.value=x[i.dataset.k]
+  for(const b of c.querySelectorAll('button[data-k]')) b.classList.toggle('on',x[b.dataset.k]===b.dataset.v)
+  c.classList.toggle('off',!!x.ignore); c.classList.toggle('fait',rempli(n))} maj()}
+document.getElementById('liste').addEventListener('input',e=>{
+  const i=e.target.closest('[data-k]'); if(!i||i.tagName==='BUTTON')return
+  const c=e.target.closest('.c'),n=c.dataset.n; v[n]=v[n]||{}; v[n][i.dataset.k]=i.value
+  sauve(); c.classList.toggle('fait',rempli(n)); maj()})
+document.getElementById('liste').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-k]')
+  if(b){const c=b.closest('.c'),n=c.dataset.n; v[n]=v[n]||{}
+    v[n][b.dataset.k]=v[n][b.dataset.k]===b.dataset.v?undefined:b.dataset.v
+    for(const o of c.querySelectorAll('button[data-k="'+b.dataset.k+'"]')) o.classList.toggle('on',v[n][b.dataset.k]===o.dataset.v)
+    sauve(); c.classList.toggle('fait',rempli(n)); maj(); return}
+  const g=e.target.closest('[data-a=ignorer]'); if(!g)return
+  const c=g.closest('.c'),n=c.dataset.n; v[n]=v[n]||{}; v[n].ignore=!v[n].ignore
+  sauve(); c.classList.toggle('off',v[n].ignore); c.classList.toggle('fait',rempli(n)); maj()})
+document.getElementById('q').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase()
+  for(const c of document.querySelectorAll('.c')) c.style.display=(!q||(c.dataset.n||'').toLowerCase().includes(q))?'':'none'})
+document.getElementById('cp').addEventListener('click',async()=>{const L=[]
+  for(const c of cartes){const n=c.dataset.n,x=v[n]; if(!x)continue
+    if(x.ignore){L.push(n+' | ON NE SUIT PAS');continue}
+    const p=[]
+    if(x.q1==='oui')p.push('tournée OK')
+    if(x.q1==='non')p.push('tournée = '+((x.q1v||'?').trim()))
+    if(x.q2==='aucun')p.push('rien de figé')
+    if(x.q2==='oui')p.push('figé : '+((x.q2v||'?').trim()))
+    if((x.q3v||'').trim())p.push('→ '+x.q3v.trim())
+    if((x.txt||'').trim())p.push('note : '+x.txt.trim())
+    if(p.length)L.push(n+' | '+p.join(' | '))}
+  const t=L.length?L.join('\n'):'(rien de rempli)'
+  const o=document.getElementById('out'); o.style.display='block'; o.value=t
+  try{await navigator.clipboard.writeText(t);alert(L.length+' réponse(s) copiées. Colle-les dans la conversation.')}
+  catch{o.select();alert('Copie refusée : sélectionne le texte en bas et copie-le.')}})
+restaure()
+</script></body></html>

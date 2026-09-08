@@ -1,0 +1,536 @@
+import { useState, useEffect } from 'react'
+import AppHeader from './AppHeader'
+import Skeleton from './Skeleton'
+import { toast } from '../lib/toast'
+import { loadFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe, bloquants, noeudAu,
+  declarer, envoyerAValider, tourneesSuggerees, pourFois } from '../lib/fabAnnexe'
+import { estModeTest } from '../lib/modeTest'
+
+// ============================================================
+// « Fabrication Annexe 2 » — la refonte, article par article.
+//
+// Trois idées, et rien d'autre :
+//   1. L'écran ne montre QUE le travail. Au-dessus du mini, l'article
+//      disparaît. Écran vide = rien à faire.
+//   2. On ne fabrique jamais « ce qui manque » : toujours une tournée
+//      entière. Qu'il reste 6 tiramisus ou 60, c'est la tournée de 140.
+//   3. Impossible de dire « c'est fait » tant qu'un composant fabriqué
+//      manque — à N'IMPORTE QUEL niveau. Pour valider le biscuit indiv il
+//      faut la plaque ; si la plaque manque aussi, il la fait d'abord.
+//      (Demande de Layla, 2026-09-07.)
+//
+// D'où un seul écran, qui se rappelle lui-même : l'article, son composant,
+// le composant de son composant… Tous se comportent pareil.
+// ============================================================
+
+const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
+// À l'atelier on ne pèse pas 201,04 g : grammes et pièces en entiers, seuls
+// les kg gardent leurs décimales.
+const qte = (v, u) => {
+  const n = Number(v) || 0
+  if (!/^kg$/i.test(String(u || '').trim())) return `${nb(Math.round(n))} ${u || ''}`.trim()
+  // Personne ne pèse « 0,06 kg » de gélatine : sous le kilo, on dit 57 g.
+  return n < 1 ? `${nb(Math.round(n * 1000))} g` : `${nb(Math.round(n * 100) / 100)} kg`
+}
+const propre = n => String(n || '')
+  .replace(/^(SM[.\- ]?|MP[.\- ]?|E-)\s*/i, '').replace(/\s{2,}/g, ' ').trim()
+
+// Vert = on l'a, orange = à fabriquer, beige = figé (la mousse).
+const Pastille = ({ etat }) => (
+  <span className={`w-7 h-7 rounded-lg shrink-0 grid place-items-center text-white text-[13px] font-extrabold
+    ${etat === 'ok' ? 'bg-success' : etat === 'fige' ? 'bg-ink-mute' : 'bg-gold'}`}>
+    {etat === 'ok' ? '✓' : etat === 'fige' ? '∞' : '!'}
+  </span>
+)
+
+// ------------------------------------------------------------
+// Ce que le pâtissier pèse n'est pas toujours ce qu'Odoo compte. La gélatine
+// se travaille en « masse gélatine » : une part de poudre pour six d'eau. La
+// recette Odoo ne connaît que la poudre — l'eau n'y figure pas — alors qu'à
+// l'atelier on pèse la masse. On affiche donc la masse (× 7), sous son nom.
+// (Layla, 2026-09-07.) Odoo, lui, continue de ne déduire que la poudre.
+// ------------------------------------------------------------
+const REGLES_ATELIER = [
+  { quand: /gelatine en poudre/i, nom: 'Masse gélatine', facteur: 7 },
+]
+const regleAtelier = produit => REGLES_ATELIER.find(r => r.quand.test(produit || ''))
+const nomAtelier = produit => regleAtelier(produit)?.nom || propre(produit)
+const facteurAtelier = produit => regleAtelier(produit)?.facteur || 1
+
+function Vignette({ photo, libelle, taille = 'w-14 h-14' }) {
+  const [rate, setRate] = useState(false)
+  if (!photo || rate) {
+    return (
+      <div className={`${taille} rounded-xl shrink-0 bg-cream-deep grid place-items-center
+                       font-serif italic text-[22px] text-ink-mute`}>
+        {String(libelle || '?').trim().charAt(0).toUpperCase()}
+      </div>
+    )
+  }
+  return <img src={photoFabAnnexe(photo)} alt="" onError={() => setRate(true)}
+    className={`${taille} rounded-xl object-cover bg-cream-deep shrink-0`} />
+}
+
+const Titre = ({ children }) => (
+  <div className="px-4 pt-3 pb-1 text-[11.5px] font-extrabold uppercase tracking-wide text-ink-mute">{children}</div>
+)
+
+// ------------------------------------------------------------
+// Une quantité qu'on peut retaper. Toute la recette se remet à l'échelle
+// autour (choix de Layla, « version A ») : mettre 1,5 kg de sucre là où la
+// recette en veut 1,2, c'est faire une recette et demie — pas forcer sur le
+// sucre.
+// ------------------------------------------------------------
+function LigneQte({ nom, valeur, unite, onValeur, gras }) {
+  const affiche = qte(valeur, unite).replace(new RegExp(`\\s*${unite}$`), '')
+  const [txt, setTxt] = useState(affiche)
+  const [vu, setVu] = useState(affiche)
+  if (affiche !== vu) { setVu(affiche); setTxt(affiche) }
+
+  const valider = () => {
+    const v = Number(String(txt).replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'))
+    if (!(v > 0)) { setTxt(affiche); return }
+    onValeur(v)
+  }
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5">
+      <span className={`flex-1 min-w-0 text-[14px] ${gras ? 'font-extrabold' : ''}`}>{nom}</span>
+      <input value={txt} inputMode="decimal" aria-label={'Quantité de ' + nom}
+        onChange={e => setTxt(e.target.value)} onBlur={valider}
+        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        className={`w-[86px] h-10 text-right px-2 rounded-lg border bg-cream-warm text-ink
+          text-[15px] font-bold focus:outline-none focus:border-bordeaux
+          ${gras ? 'border-gold border-2' : 'border-cream-deep'}`} />
+      <span className="text-[12px] text-ink-mute w-5">{unite}</span>
+    </div>
+  )
+}
+
+function Recette({ noeud, fois, onFois }) {
+  const parRecette = noeud.tourneeTaille || 1
+  return (
+    <div className="divide-y divide-cream-deep/50">
+      {(noeud.recette || []).map((l, i) => {
+        const f = facteurAtelier(l.produit)
+        return (
+          <LigneQte key={i} nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
+            onValeur={v => onFois(v / f / l.qty)} />
+        )
+      })}
+      <div className="bg-gold/10">
+        <LigneQte gras nom={`${propre(noeud.produit)} obtenu`}
+          valeur={parRecette * fois} unite={noeud.unite}
+          onValeur={v => onFois(v / parRecette)} />
+      </div>
+    </div>
+  )
+}
+
+export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView }) {
+  const [articles, setArticles] = useState(null)
+  const [erreur, setErreur] = useState(null)
+  const [tour, setTour] = useState(0)
+  // Où on est : [] = la liste, ['Tiramisu'] = l'article, ['Tiramisu', 'Biscuit
+  // indiv', 'Biscuit plaque'] = on est descendu deux fois.
+  const [chemin, setChemin] = useState([])
+  // Ce que le pâtissier a déclaré dans cette séance : { produit: { fois } }
+  const [faits, setFaits] = useState({})
+  const [sortie, setSortie] = useState(null)
+  // Verrou contre le double appui : une création d'ordre Odoo prend
+  // plusieurs secondes, et deux appuis feraient deux ordres.
+  const [envoi, setEnvoi] = useState(false)
+  // Combien de tournées le pâtissier a décidé de faire, par article.
+  const [foisPar, setFoisPar] = useState({})
+  // Le détail d'un article (sa cascade) n'arrive qu'à son ouverture.
+  const [details, setDetails] = useState({})
+  const ouvert = chemin[0] || null
+
+  const recharger = () => setTour(t => t + 1)
+  useEffect(() => {
+    let vivant = true
+    loadFabAnnexe()
+      .then(l => { if (vivant) { setArticles(l); setErreur(null) } })
+      .catch(e => { if (vivant) { setErreur(e.message || String(e)); setArticles([]) } })
+    return () => { vivant = false }
+  }, [tour])
+
+  useEffect(() => {
+    if (!ouvert || details[ouvert]) return
+    let vivant = true
+    loadArticleFabAnnexe(ouvert)
+      .then(a => { if (vivant && a) setDetails(d => ({ ...d, [ouvert]: a })) })
+      .catch(e => { if (vivant) setErreur(e.message || String(e)) })
+    return () => { vivant = false }
+  }, [ouvert, details])
+
+  const nav = { user, onLogout, onNavigate, activeView }
+
+  // ---------- la liste ----------
+  if (chemin.length === 0) {
+    return (
+      <div className="min-h-screen bg-cream">
+        <AppHeader {...nav} />
+        <div className="max-w-[640px] mx-auto px-4 py-5 pb-28">
+          <h1 className="font-serif italic text-[26px] leading-tight">Fabrication Annexe 2</h1>
+          <p className="text-[12.5px] text-ink-mute mb-4">
+            Seul ce qui est sous le mini apparaît. Stock du Stock Prod annexe.
+          </p>
+
+          {erreur && (
+            <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-[13px] text-danger">
+              {erreur}
+              <button onClick={recharger} className="ml-3 underline font-bold">Réessayer</button>
+            </div>
+          )}
+          {!articles && !erreur && <Skeleton rows={3} />}
+
+          {!erreur && articles?.length === 0 && (
+            <div className="rounded-2xl border border-cream-deep bg-cream-warm py-14 text-center">
+              <div className="text-[40px] mb-2">✨</div>
+              <div className="font-bold text-[16px]">Tout est au niveau</div>
+              <div className="text-[12.5px] text-ink-mute">Rien à fabriquer</div>
+            </div>
+          )}
+
+          {articles?.map(a => (
+            <CarteArticle key={a.produit} a={a} faits={faits} onOuvrir={() => setChemin([a.produit])} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const brut = details[ouvert]
+  if (!brut) {
+    return (
+      <div className="min-h-screen bg-cream">
+        <AppHeader {...nav} />
+        <div className="max-w-[640px] mx-auto px-4 py-5 pb-28">
+          <button onClick={() => setChemin([])} className="text-[13px] text-ink-mute font-bold mb-3">← Retour</button>
+          <Skeleton rows={4} />
+        </div>
+      </div>
+    )
+  }
+  const foisArticle = foisPar[brut.produit] ?? tourneesSuggerees(brut)
+  const { article, noeud, parent } = noeudAu([pourFois(brut, foisArticle)], chemin)
+  if (!noeud) { setChemin([]); return null }
+
+  const racine = chemin.length === 1
+  const enfants = racine ? noeud.composants : noeud.enfants
+  const bloque = bloquants(noeud, Object.keys(faits))
+  // Un figé qui se FABRIQUE reste un composant à part entière : on peut
+  // l'ouvrir, et il bloque tant qu'il n'est pas fait (la crème au beurre
+  // praliné). Seuls les figés achetés se lisent en liste — c'est la mousse.
+  const figes = (enfants || []).filter(c => c.fige && !c.fabrique)
+  const autres = (enfants || []).filter(c => c.fabrique)
+  // Les matières premières achetées : rien à fabriquer, rien à cliquer, mais
+  // elles font partie de la recette — sans l'eau du robinet, on ne la fait pas.
+  const achetes = (enfants || []).filter(c => !c.fige && !c.fabrique)
+  const fois = faits[noeud.produit]?.fois ?? noeud.tournees ?? 1
+  const majFois = f => setFaits(x => ({ ...x, [noeud.produit]: { fois: Math.max(0.01, Math.round(f * 10000) / 10000), brouillon: true } }))
+
+  // ---------- « combien elle t'en a sorti ? » ----------
+  if (sortie !== null) {
+    const n = Number(String(sortie).replace(',', '.')) || 0
+    const ecart = n - article.tournee
+    return (
+      <Cadre {...nav} onRetour={() => setSortie(null)} photo={article.photo}
+        titre={article.libelle} sous="Tournée montée">
+        <div className="px-4 py-6 text-center">
+          <div className="text-[15px] font-bold">Combien de {propre(article.libelle).toLowerCase()} sont sortis ?</div>
+          <div className="text-[12px] text-ink-mute mb-4">La tournée en fait environ {nb(article.tournee)}</div>
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <button onClick={() => setSortie(String(Math.max(0, n - 1)))}
+              className="px-4 py-4 rounded-xl border border-cream-deep bg-cream-warm
+                         text-[26px] font-extrabold text-bordeaux leading-none">−</button>
+            <input value={sortie} inputMode="numeric" aria-label="Quantité sortie"
+              onChange={e => setSortie(e.target.value)}
+              className="w-[112px] h-[60px] rounded-xl border-2 border-bordeaux bg-cream-warm
+                         text-center font-serif text-[32px] text-ink focus:outline-none" />
+            <button onClick={() => setSortie(String(n + 1))}
+              className="px-4 py-4 rounded-xl border border-cream-deep bg-cream-warm
+                         text-[26px] font-extrabold text-bordeaux leading-none">+</button>
+          </div>
+          <div className="text-[12.5px] text-ink-mute mb-4 min-h-[18px]">
+            {n === 0 ? '' : ecart === 0 ? 'Pile la tournée.'
+              : <><b className="text-gold">{nb(Math.abs(ecart))} de {ecart > 0 ? 'plus' : 'moins'}</b> que prévu.</>}
+          </div>
+          <button disabled={!(n > 0) || envoi}
+            onClick={async () => {
+              setEnvoi(true)
+              try {
+                const r = await envoyerAValider(article, n, user?.id)
+                toast(r.erreur
+                  ? `Enregistré, mais Odoo a refusé : ${r.erreur}`
+                  : `${article.libelle} : en attente dans « À valider Annexe »`)
+                setFaits({}); setSortie(null); setChemin([]); setDetails({}); recharger()
+              } catch (e) {
+                toast('Échec : ' + (e.message || e))
+              } finally { setEnvoi(false) }
+            }}
+            className="w-full rounded-xl py-4 text-[15px] font-extrabold bg-success text-cream disabled:opacity-40">
+            {envoi ? 'Envoi en cours…' : estModeTest() ? 'Envoyer (mode test)' : 'Envoyer à « À valider »'}
+          </button>
+        </div>
+      </Cadre>
+    )
+  }
+
+  // ---------- un nœud : l'article, ou n'importe quel composant ----------
+  return (
+    <Cadre {...nav} onRetour={() => setChemin(chemin.slice(0, -1))}
+      photo={racine ? article.photo : null}
+      titre={racine ? article.libelle : propre(noeud.produit)}
+      sous={racine
+        ? `Tournée de ${qte(article.tournee, article.unite)}`
+        : noeud.besoin > noeud.stock
+          ? `Il en faut ${qte(noeud.besoin - noeud.stock, noeud.unite)} pour ${propre(parent)}`
+          : `Tu en as ${qte(noeud.stock, noeud.unite)} — pour prendre de l'avance`}>
+
+      {racine && (
+        <>
+          <div className="flex items-center gap-2 px-4 pb-3 flex-wrap">
+            <span className="text-[12px] text-ink-mute mr-1">Je fais</span>
+            {[0.5, 1, 1.5, 2, 3].map(f => {
+              const on = foisArticle === f
+              const pieces = Math.round(brut.tournee * f)
+              return (
+                <button key={f} onClick={() => setFoisPar(x => ({ ...x, [brut.produit]: f }))}
+                  className={`rounded-xl px-3 py-2 text-[12.5px] font-extrabold border
+                    ${on ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-cream-warm text-ink-soft border-cream-deep'}`}>
+                  {f === 0.5 ? '½' : f === 1.5 ? '1½' : f} tournée{f > 1 ? 's' : ''}
+                  <span className={`block text-[11px] font-bold ${on ? 'text-cream/80' : 'text-ink-mute'}`}>
+                    {pieces} {brut.unite}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        <div className="px-4 pb-3">
+          <div className="h-2.5 rounded-full bg-cream-deep relative overflow-hidden">
+            <div className={`h-full rounded-full ${article.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}`}
+              style={{ width: `${Math.min(100, Math.round((article.stock / article.maxi) * 100))}%` }} />
+          </div>
+          <div className="flex justify-between text-[11px] text-ink-mute mt-1.5">
+            <span>En stock : <b className="text-ink">{qte(article.stock, article.unite)}</b></span>
+            <span>mini {nb(article.mini)}</span><span>maxi {nb(article.maxi)}</span>
+          </div>
+        </div>
+        </>
+      )}
+
+      {/* Un composant se fabrique : combien de fois, et sa recette qu'on peut
+          retaper. Le « ×2 » est là parce que doubler une recette est le geste
+          le plus courant de l'atelier (Layla, 2026-09-08). */}
+      {!racine && (
+        <>
+          <div className="flex items-center gap-2 px-4 py-3 border-t border-cream-deep/60">
+            <button onClick={() => majFois(Math.max(0.5, fois - 0.5))} disabled={fois <= 0.5}
+              className="w-11 h-11 rounded-xl border border-cream-deep bg-cream-warm
+                         text-[22px] font-extrabold text-bordeaux leading-none disabled:opacity-35">−</button>
+            <div className="flex-1 text-center">
+              <div className="text-[15px] font-extrabold">
+                {fois === 0.5 ? '½' : nb(fois)} tournée{fois > 1 ? 's' : ''}
+              </div>
+              <div className="text-[11.5px] text-ink-mute">
+                {qte((noeud.tourneeTaille || 1) * fois, noeud.unite)}
+                {fois !== noeud.tournees && noeud.tournees
+                  ? ` · conseillé : ${nb(noeud.tournees)}` : ''}
+              </div>
+            </div>
+            <button onClick={() => majFois(fois + 0.5)}
+              className="w-11 h-11 rounded-xl border border-cream-deep bg-cream-warm
+                         text-[22px] font-extrabold text-bordeaux leading-none">+</button>
+            <button onClick={() => majFois(fois * 2)}
+              className="h-11 px-3 rounded-xl border border-gold bg-gold/10
+                         text-[13px] font-extrabold text-gold">×2</button>
+          </div>
+          <Recette noeud={noeud} fois={fois} onFois={majFois} />
+        </>
+      )}
+
+      {figes.length > 0 && (
+        <>
+          <Titre>{article.figesNom} — quantité figée</Titre>
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-cream-deep/25">
+            <Pastille etat="fige" />
+            <div className="flex-1 min-w-0 text-[14px]">
+              {article.figesNom}
+              <div className="text-[11.5px] text-ink-mute mt-0.5">
+                Pour la tournée entière — ne bouge pas avec la sortie réelle
+              </div>
+            </div>
+          </div>
+          {/* Sa recette, dépliée : c'est lui qui la monte, il lui faut les
+              quantités. Un même ingrédient cité deux fois dans la nomenclature
+              (le sucre) est additionné : on le pèse une seule fois. */}
+          {figes.map((f, i) => (
+            <div key={f.produit + i}
+              className="flex items-baseline gap-3 pl-14 pr-4 py-2 bg-cream-deep/10 border-t border-cream-deep/30">
+              <span className="flex-1 min-w-0 text-[13.5px]">{nomAtelier(f.produit)}</span>
+              <span className="text-[14px] font-extrabold">
+                {qte(f.besoin * facteurAtelier(f.produit), f.unite)}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
+
+      {autres.length > 0 && <Titre>{racine ? 'Les composants' : "Ce qu'il faut avoir"}</Titre>}
+      {autres.map(c => {
+        const fait = !!faits[c.produit] && !faits[c.produit].brouillon
+        const ok = c.ok || fait
+        return (
+          <button key={c.produit}
+            onClick={() => setChemin([...chemin, c.produit])}
+            className="w-full flex items-center gap-3 px-4 py-3 border-t border-cream-deep/60 text-left
+                       hover:bg-cream-deep/20">
+            <Pastille etat={ok ? 'ok' : 'manque'} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[14px]">{propre(c.produit)}</div>
+              <div className="text-[11.5px] text-ink-mute mt-0.5">
+                {fait
+                  ? <span className="text-success font-bold">fait · en attente de validation</span>
+                  : <>stock {qte(c.stock, c.unite)} · il en faut {qte(c.besoin, c.unite)}
+                    {c.fige && <span className="text-ink-mute"> · quantité figée</span>}</>}
+              </div>
+            </div>
+            {ok
+              ? <span className="text-[11.5px] text-ink-mute shrink-0">recette</span>
+              : (
+                <div className="text-right shrink-0">
+                  <div className="text-[13px] font-extrabold">{c.tournees} tournée{c.tournees > 1 ? 's' : ''}</div>
+                  <div className="text-[11px] text-ink-mute">= {qte(c.produira, c.unite)}</div>
+                </div>
+              )}
+            <span className={`text-[17px] ${ok ? 'text-ink-mute/50' : 'text-ink-mute'}`}>›</span>
+          </button>
+        )
+      })}
+
+      {achetes.length > 0 && (
+        <>
+          <Titre>Aussi dans la recette</Titre>
+          {achetes.map((f, i) => (
+            <div key={f.produit + i}
+              className="flex items-baseline gap-3 px-4 py-2 border-t border-cream-deep/40">
+              <span className="flex-1 min-w-0 text-[13.5px]">{nomAtelier(f.produit)}</span>
+              <span className="text-[14px] font-extrabold">
+                {qte(f.besoin * facteurAtelier(f.produit), f.unite)}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
+
+      {bloque.length > 0 ? (
+        <div className="flex items-center gap-3 px-4 py-3 bg-cream-deep/40 border-t border-cream-deep">
+          <div className="flex-1 text-[13px] font-bold text-ink-mute">
+            Fais d'abord : {bloque.map(propre).join(', ')}
+          </div>
+          <button disabled className="rounded-xl px-4 py-3 text-[13.5px] font-extrabold
+                                      bg-ink-mute/30 text-ink-mute cursor-not-allowed">
+            🔒 C'est fait
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 px-4 py-3 bg-gold/10 border-t border-gold/30">
+          <div className="flex-1 text-[13px]">
+            {racine ? 'Tout y est'
+              : fois === noeud.tournees ? "Recette d'origine" : `Recette × ${nb(fois)}`}
+            {!racine && noeud.besoin <= noeud.stock && (
+              <div className="text-[11.5px] text-ink-mute mt-0.5">Tu n'en as pas besoin maintenant</div>
+            )}
+          </div>
+          <button disabled={envoi}
+            onClick={async () => {
+              if (racine) { setSortie(String(article.tournee)); return }
+              setEnvoi(true)
+              try {
+                const r = await declarer({
+                  produit: noeud.produit, unite: noeud.unite, fois,
+                  qty: (noeud.tourneeTaille || 1) * fois,
+                }, user?.id)
+                setFaits(f => ({ ...f, [noeud.produit]: { fois } }))
+                toast(r.erreur
+                  ? `Enregistré, mais Odoo a refusé : ${r.erreur}`
+                  : `${propre(noeud.produit)} : en attente dans « À valider Annexe »`)
+                setChemin(chemin.slice(0, -1))
+              } catch (e) {
+                toast('Échec : ' + (e.message || e))
+              } finally { setEnvoi(false) }
+            }}
+            className="rounded-xl px-4 py-3 text-[13.5px] font-extrabold bg-bordeaux text-cream disabled:opacity-50">
+            {envoi ? 'Envoi…' : "C'est fait →"}
+          </button>
+        </div>
+      )}
+    </Cadre>
+  )
+}
+
+// ------------------------------------------------------------
+function CarteArticle({ a, faits, onOuvrir }) {
+  const bloque = bloquants(a, Object.keys(faits))
+  // Ce qu'il faudrait pour remonter au maxi — une suggestion, modifiable
+  // une fois l'article ouvert.
+  const sug = tourneesSuggerees(a)
+  return (
+    <div className="rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden mb-3 shadow-sm">
+      <div className="flex items-center gap-3 p-3">
+        <Vignette photo={a.photo} libelle={a.libelle} />
+        <div className="flex-1 min-w-0">
+          <div className="text-[16px] font-extrabold leading-tight">{a.libelle}</div>
+          <div className="text-[12px] text-ink-mute mt-0.5">{a.produit}</div>
+        </div>
+        <span className={`rounded-full px-3 py-1.5 text-[12px] font-extrabold shrink-0
+          ${a.etat === 'rupture' ? 'bg-danger/10 text-danger' : 'bg-gold/15 text-gold'}`}>
+          {a.etat === 'rupture' ? 'Rupture' : 'À refaire'}
+        </span>
+      </div>
+      <div className="px-3 pb-3">
+        <div className="h-2.5 rounded-full bg-cream-deep relative overflow-hidden">
+          <div className={`h-full rounded-full ${a.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}`}
+            style={{ width: `${Math.min(100, Math.round((a.stock / a.maxi) * 100))}%` }} />
+        </div>
+        <div className="flex justify-between text-[11px] text-ink-mute mt-1.5">
+          <span>En stock : <b className="text-ink">{qte(a.stock, a.unite)}</b></span>
+          <span>mini {nb(a.mini)}</span><span>maxi {nb(a.maxi)}</span>
+        </div>
+      </div>
+      <button onClick={onOuvrir}
+        className="w-full flex items-center gap-3 px-3 py-3 bg-gold/10 border-t border-gold/25 text-left">
+        <div className="flex-1">
+          <div className="text-[12.5px] text-ink-soft">À fabriquer</div>
+          <div className="font-serif italic text-[19px] font-bold text-gold leading-tight">
+            {sug === 0.5 ? '½' : sug === 1.5 ? '1½' : sug} tournée{sug > 1 ? 's' : ''} · {qte(a.tournee * sug, a.unite)}
+          </div>
+        </div>
+        {bloque.length > 0 && <span className="text-[12px] text-ink-mute">🔒 {bloque.length}</span>}
+        <span className="rounded-xl px-4 py-2.5 text-[13.5px] font-extrabold bg-bordeaux text-cream">Voir →</span>
+      </button>
+    </div>
+  )
+}
+
+function Cadre({ children, onRetour, photo, titre, sous, user, onLogout, onNavigate, activeView }) {
+  return (
+    <div className="min-h-screen bg-cream">
+      <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
+      <div className="max-w-[640px] mx-auto px-4 py-5 pb-28">
+        <button onClick={onRetour} className="text-[13px] text-ink-mute font-bold mb-3">← Retour</button>
+        <div className="rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden shadow-sm">
+          <div className="flex items-center gap-3 p-3">
+            {titre && <Vignette photo={photo} libelle={titre} />}
+            <div className="flex-1 min-w-0">
+              <div className="text-[16px] font-extrabold leading-tight">{titre}</div>
+              <div className="text-[12px] text-ink-mute mt-0.5">{sous}</div>
+            </div>
+          </div>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}

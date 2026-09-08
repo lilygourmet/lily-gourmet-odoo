@@ -1,0 +1,520 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Le Citron Framboise — la recette refaite</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+ :root{--cream:#fcfbf8;--line:#e5d8c3;--bordeaux:#993556;--ink:#2b2118;--soft:#5b4d40;
+   --mute:#9a8b7a;--ok:#5c7a3f;--okbg:#EAF3DE;--rouge:#b03a3a;--or:#b58f3c;--orbg:#FBF3DF}
+ *{box-sizing:border-box}
+ body{margin:0;background:#efeae1;color:var(--ink);font-family:Geist,system-ui,sans-serif;padding:18px 11px 50px;font-size:14px}
+ .w{max-width:660px;margin:0 auto}
+ h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:24px;margin:0 0 5px}
+ .intro{font-size:13px;color:var(--soft);line-height:1.6;margin:0 0 16px}
+ .tabs{display:flex;gap:7px;margin-bottom:14px}
+ .tb{flex:1;border:1.5px solid var(--line);background:#fff;color:var(--soft);border-radius:12px;
+   padding:12px;font-size:14.5px;font-weight:800;font-family:inherit;cursor:pointer}
+ .tb.on{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+ .vue{display:none} .vue.on{display:block}
+ .et{background:#fff;border:1px solid var(--line);border-radius:15px;padding:13px 14px;margin-bottom:11px}
+ .et .t{font-family:Fraunces,Georgia,serif;font-style:italic;font-size:17px;color:var(--bordeaux);margin-bottom:4px}
+ .et .d{font-size:12.5px;color:var(--soft);line-height:1.55}
+ .et .d b{color:var(--ink)}
+ .arbre{background:#fff;border:1px solid var(--line);border-radius:15px;overflow:hidden;margin-bottom:14px}
+ .n{}
+ .li{display:flex;align-items:center;gap:9px;padding:9px 13px;border-top:1px solid #f6f1e7}
+ .e1>.li{border-top:0;background:#f7f2ea;font-weight:800}
+ .e2>.li{padding-left:26px;background:#fdfbf7}
+ .e3>.li{padding-left:42px}
+ .n.mp>.li{padding-left:58px}
+ .pt{width:9px;height:9px;border-radius:99px;flex:none}
+ .pt.v{background:var(--ok)} .pt.o{background:var(--or)} .pt.m{background:#d6cbb8}
+ .nm{flex:1;min-width:0;font-size:13.5px}
+ .nm i{color:var(--mute);font-size:11.5px;font-style:normal}
+ .qt{font-size:13px;font-weight:800;white-space:nowrap}
+ .sk{font-size:11px;color:var(--mute);white-space:nowrap;min-width:74px;text-align:right}
+ .sk.bas{color:var(--rouge);font-weight:700}
+ .mps{padding:5px 13px 8px 58px;font-size:11px;color:var(--mute);line-height:1.6;background:#fdfcfa;border-top:1px solid #faf6ee}
+ .mps b{color:var(--soft)}
+ .lg{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 13px;font-size:12.5px;color:var(--soft);line-height:1.7}
+ .lg b{color:var(--ink)}
+ .p{display:inline-block;width:9px;height:9px;border-radius:99px;margin-right:4px}
+</style></head><body><div class="w">
+<h1>Le Citron Framboise</h1>
+<p class="intro">La recette telle qu'elle est <b>maintenant dans Odoo</b>, après la refonte.
+Trois étapes qui se stockent chacune séparément — le pâtissier peut prendre de l'avance sur n'importe laquelle.
+Choisis une taille :</p>
+<div class="tabs"><button class="tb on" data-t="1">1 pers</button><button class="tb " data-t="5">5 pers</button><button class="tb " data-t="10">10 pers</button></div>
+
+<div class="vue on" data-t="1"><div class="n e1">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">PR Le Citron Framboise (1)</span>
+      <span class="qt">1 gâteau</span>
+      <span class="sk ">stock 1</span>
+    </div>
+    
+    <div class="n e2">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Le Citron Framboise (1)</span>
+      <span class="qt">1 u</span>
+      <span class="sk ">stock 11</span>
+    </div>
+    
+    <div class="n e3">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Fond Citron Framboise (1)</span>
+      <span class="qt">1 u</span>
+      <span class="sk bas">stock 0</span>
+    </div>
+    
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Biscuit amande gingembre</span>
+      <span class="qt">22 g</span>
+      <span class="sk ">stock 3 300</span>
+    </div>
+    <div class="mps">Oeufs blanc <b>400 g</b> · Sucre Granule <b>400 g</b> · Oeufs entier <b>611 g</b> · Oeufs jaune <b>266 g</b> · Sucre Granule <b>877 g</b> · Amandes Poudre <b>1 117 g</b> · Farine <b>266 g</b> · Gingembre <b>532 g</b> · Beurre entremets <b>505 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron zest</span>
+      <span class="qt">12 g</span>
+      <span class="sk ">stock 1 493,28</span>
+    </div>
+    
+    
+  </div>
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Confit de framboise prod</span>
+      <span class="qt">15 g</span>
+      <span class="sk ">stock 3 045</span>
+    </div>
+    <div class="mps">Framboise Congelée <b>300 g</b> · Purée de Framboise <b>100 g</b> · Glucose <b>50 g</b> · Sucre Granule <b>60 g</b> · Pectine NH <b>8 g</b> · Sucre Granule <b>20 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron liquide</span>
+      <span class="qt">30 g</span>
+      <span class="sk ">stock 3 579,05</span>
+    </div>
+    
+    
+  </div>
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">crunchy citron passion</span>
+      <span class="qt">15 g</span>
+      <span class="sk bas">stock 3,5</span>
+    </div>
+    <div class="mps">Beurre de cacao <b>240 g</b> · Feuilletine <b>1 200 g</b> · Chocolat Valrhona Ivoire 35% <b>960 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Crumble pistache +cheese exotique nv</span>
+      <span class="qt">2 400 g</span>
+      <span class="sk bas">stock 9,37</span>
+    </div>
+    
+    
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">/ beurre clarifie</span>
+      <span class="qt">720 g</span>
+      <span class="sk bas">stock 512</span>
+    </div>
+    
+    
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron zest</span>
+      <span class="qt">100 g</span>
+      <span class="sk ">stock 1 493,28</span>
+    </div>
+    
+    
+  </div>
+  </div>
+  </div><div class="n e3">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Crème légère vanille citron</span>
+      <span class="qt">91 g</span>
+      <span class="sk ">stock 250</span>
+    </div>
+    <div class="mps">Lait UHT <b>1 800 g</b> · Vanille Gousse Bourbon <b>36 g</b> · Oeufs jaune <b>300 g</b> · Maizena <b>240 g</b> · Sucre Granule <b>600 g</b> · Beurre entremets <b>900 g</b> · Mascarpone <b>600 g</b> · Masse gélatine <b>126 g</b> · Crème whipping <b>900 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron zest</span>
+      <span class="qt">12 g</span>
+      <span class="sk ">stock 1 493,28</span>
+    </div>
+    <div class="mps">Citron fruit <b>71 687 g</b></div>
+    
+  </div>
+  </div>
+  </div><div class="n e2">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Glacage Rose Finition</span>
+      <span class="qt">38 g</span>
+      <span class="sk ">stock 4 900</span>
+    </div>
+    <div class="mps">Masse gélatine <b>5,6 kg</b> · Sucre Granule <b>1,2 kg</b> · Purisima <b>0,74 kg</b> · Glucose <b>1,2 kg</b> · Eau robinet <b>560 g</b> · Eau robinet <b>480 g</b> · Chocolat Callebaut Couverture Blanc <b>1,2 kg</b></div>
+    
+  </div><div class="n e2">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Chantilly rose pipée (1)</span>
+      <span class="qt">1 u</span>
+      <span class="sk bas">stock 0</span>
+    </div>
+    
+    <div class="n e3">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Chantilly à la Rose</span>
+      <span class="qt">13 g</span>
+      <span class="sk bas">stock -278</span>
+    </div>
+    <div class="mps">Crème whipping <b>170 g</b> · Boutons de roses séchées <b>10 g</b> · Chocolat Valrhona Ivoire 35% <b>220 g</b> · Masse gélatine <b>29,96 g</b> · Crème whipping <b>600 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">pate de vanille maison</span>
+      <span class="qt">20 g</span>
+      <span class="sk ">stock 500</span>
+    </div>
+    <div class="mps">Vanille Gousse Bourbon <b>40 g</b> · Sucre Cassonade <b>100 g</b> · Eau robinet <b>100 g</b></div>
+    
+  </div>
+  </div>
+  </div>
+  </div></div><div class="vue " data-t="5"><div class="n e1">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">PR Le Citron Framboise (5)</span>
+      <span class="qt">1 gâteau</span>
+      <span class="sk ">stock 3</span>
+    </div>
+    
+    <div class="n e2">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Le Citron Framboise (5)</span>
+      <span class="qt">1 u</span>
+      <span class="sk bas">stock 0</span>
+    </div>
+    
+    <div class="n e3">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Crème légère vanille citron</span>
+      <span class="qt">391 g</span>
+      <span class="sk bas">stock 250</span>
+    </div>
+    <div class="mps">Lait UHT <b>1 800 g</b> · Vanille Gousse Bourbon <b>36 g</b> · Oeufs jaune <b>300 g</b> · Maizena <b>240 g</b> · Sucre Granule <b>600 g</b> · Beurre entremets <b>900 g</b> · Mascarpone <b>600 g</b> · Masse gélatine <b>126 g</b> · Crème whipping <b>900 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron zest</span>
+      <span class="qt">12 g</span>
+      <span class="sk ">stock 1 493,28</span>
+    </div>
+    <div class="mps">Citron fruit <b>71 687 g</b></div>
+    
+  </div>
+  </div><div class="n e3">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Fond Citron Framboise (5)</span>
+      <span class="qt">1 u</span>
+      <span class="sk bas">stock 0</span>
+    </div>
+    
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Biscuit amande gingembre</span>
+      <span class="qt">140 g</span>
+      <span class="sk ">stock 3 300</span>
+    </div>
+    <div class="mps">Oeufs blanc <b>400 g</b> · Sucre Granule <b>400 g</b> · Oeufs entier <b>611 g</b> · Oeufs jaune <b>266 g</b> · Sucre Granule <b>877 g</b> · Amandes Poudre <b>1 117 g</b> · Farine <b>266 g</b> · Gingembre <b>532 g</b> · Beurre entremets <b>505 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron zest</span>
+      <span class="qt">12 g</span>
+      <span class="sk ">stock 1 493,28</span>
+    </div>
+    
+    
+  </div>
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Confit de framboise prod</span>
+      <span class="qt">151 g</span>
+      <span class="sk ">stock 3 045</span>
+    </div>
+    <div class="mps">Framboise Congelée <b>300 g</b> · Purée de Framboise <b>100 g</b> · Glucose <b>50 g</b> · Sucre Granule <b>60 g</b> · Pectine NH <b>8 g</b> · Sucre Granule <b>20 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron liquide</span>
+      <span class="qt">30 g</span>
+      <span class="sk ">stock 3 579,05</span>
+    </div>
+    
+    
+  </div>
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">crunchy citron passion</span>
+      <span class="qt">80 g</span>
+      <span class="sk bas">stock 3,5</span>
+    </div>
+    <div class="mps">Beurre de cacao <b>240 g</b> · Feuilletine <b>1 200 g</b> · Chocolat Valrhona Ivoire 35% <b>960 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Crumble pistache +cheese exotique nv</span>
+      <span class="qt">2 400 g</span>
+      <span class="sk bas">stock 9,37</span>
+    </div>
+    
+    
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">/ beurre clarifie</span>
+      <span class="qt">720 g</span>
+      <span class="sk bas">stock 512</span>
+    </div>
+    
+    
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron zest</span>
+      <span class="qt">100 g</span>
+      <span class="sk ">stock 1 493,28</span>
+    </div>
+    
+    
+  </div>
+  </div>
+  </div>
+  </div><div class="n e2">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Glacage Rose Finition</span>
+      <span class="qt">110 g</span>
+      <span class="sk ">stock 4 900</span>
+    </div>
+    <div class="mps">Masse gélatine <b>5,6 kg</b> · Sucre Granule <b>1,2 kg</b> · Purisima <b>0,74 kg</b> · Glucose <b>1,2 kg</b> · Eau robinet <b>560 g</b> · Eau robinet <b>480 g</b> · Chocolat Callebaut Couverture Blanc <b>1,2 kg</b></div>
+    
+  </div><div class="n e2">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Chantilly rose pipée (5)</span>
+      <span class="qt">1 u</span>
+      <span class="sk bas">stock 0</span>
+    </div>
+    
+    <div class="n e3">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Chantilly à la Rose</span>
+      <span class="qt">62 g</span>
+      <span class="sk bas">stock -278</span>
+    </div>
+    <div class="mps">Crème whipping <b>170 g</b> · Boutons de roses séchées <b>10 g</b> · Chocolat Valrhona Ivoire 35% <b>220 g</b> · Masse gélatine <b>29,96 g</b> · Crème whipping <b>600 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">pate de vanille maison</span>
+      <span class="qt">20 g</span>
+      <span class="sk ">stock 500</span>
+    </div>
+    <div class="mps">Vanille Gousse Bourbon <b>40 g</b> · Sucre Cassonade <b>100 g</b> · Eau robinet <b>100 g</b></div>
+    
+  </div>
+  </div>
+  </div>
+  </div></div><div class="vue " data-t="10"><div class="n e1">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">PR Le Citron Framboise (10)</span>
+      <span class="qt">1 gâteau</span>
+      <span class="sk ">stock 0</span>
+    </div>
+    
+    <div class="n e2">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Le Citron Framboise (10)</span>
+      <span class="qt">1 u</span>
+      <span class="sk bas">stock 0</span>
+    </div>
+    
+    <div class="n e3">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Fond Citron Framboise (10)</span>
+      <span class="qt">1 u</span>
+      <span class="sk bas">stock 0</span>
+    </div>
+    
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Biscuit amande gingembre</span>
+      <span class="qt">367 g</span>
+      <span class="sk ">stock 3 300</span>
+    </div>
+    <div class="mps">Oeufs blanc <b>400 g</b> · Sucre Granule <b>400 g</b> · Oeufs entier <b>611 g</b> · Oeufs jaune <b>266 g</b> · Sucre Granule <b>877 g</b> · Amandes Poudre <b>1 117 g</b> · Farine <b>266 g</b> · Gingembre <b>532 g</b> · Beurre entremets <b>505 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron zest</span>
+      <span class="qt">12 g</span>
+      <span class="sk ">stock 1 493,28</span>
+    </div>
+    
+    
+  </div>
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Confit de framboise prod</span>
+      <span class="qt">270 g</span>
+      <span class="sk ">stock 3 045</span>
+    </div>
+    <div class="mps">Framboise Congelée <b>300 g</b> · Purée de Framboise <b>100 g</b> · Glucose <b>50 g</b> · Sucre Granule <b>60 g</b> · Pectine NH <b>8 g</b> · Sucre Granule <b>20 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron liquide</span>
+      <span class="qt">30 g</span>
+      <span class="sk ">stock 3 579,05</span>
+    </div>
+    
+    
+  </div>
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">crunchy citron passion</span>
+      <span class="qt">120 g</span>
+      <span class="sk bas">stock 3,5</span>
+    </div>
+    <div class="mps">Beurre de cacao <b>240 g</b> · Feuilletine <b>1 200 g</b> · Chocolat Valrhona Ivoire 35% <b>960 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Crumble pistache +cheese exotique nv</span>
+      <span class="qt">2 400 g</span>
+      <span class="sk bas">stock 9,37</span>
+    </div>
+    
+    
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">/ beurre clarifie</span>
+      <span class="qt">720 g</span>
+      <span class="sk bas">stock 512</span>
+    </div>
+    
+    
+  </div><div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron zest</span>
+      <span class="qt">100 g</span>
+      <span class="sk ">stock 1 493,28</span>
+    </div>
+    
+    
+  </div>
+  </div>
+  </div><div class="n e3">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Crème légère vanille citron</span>
+      <span class="qt">695 g</span>
+      <span class="sk bas">stock 250</span>
+    </div>
+    <div class="mps">Lait UHT <b>1 800 g</b> · Vanille Gousse Bourbon <b>36 g</b> · Oeufs jaune <b>300 g</b> · Maizena <b>240 g</b> · Sucre Granule <b>600 g</b> · Beurre entremets <b>900 g</b> · Mascarpone <b>600 g</b> · Masse gélatine <b>126 g</b> · Crème whipping <b>900 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Citron zest</span>
+      <span class="qt">12 g</span>
+      <span class="sk ">stock 1 493,28</span>
+    </div>
+    <div class="mps">Citron fruit <b>71 687 g</b></div>
+    
+  </div>
+  </div>
+  </div><div class="n e2">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">Glacage Rose Finition</span>
+      <span class="qt">211 g</span>
+      <span class="sk ">stock 4 900</span>
+    </div>
+    <div class="mps">Masse gélatine <b>5,6 kg</b> · Sucre Granule <b>1,2 kg</b> · Purisima <b>0,74 kg</b> · Glucose <b>1,2 kg</b> · Eau robinet <b>560 g</b> · Eau robinet <b>480 g</b> · Chocolat Callebaut Couverture Blanc <b>1,2 kg</b></div>
+    
+  </div><div class="n e2">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Chantilly rose pipée (10)</span>
+      <span class="qt">1 u</span>
+      <span class="sk bas">stock 0</span>
+    </div>
+    
+    <div class="n e3">
+    <div class="li">
+      <span class="pt o"></span>
+      <span class="nm">Chantilly à la Rose</span>
+      <span class="qt">140 g</span>
+      <span class="sk bas">stock -278</span>
+    </div>
+    <div class="mps">Crème whipping <b>170 g</b> · Boutons de roses séchées <b>10 g</b> · Chocolat Valrhona Ivoire 35% <b>220 g</b> · Masse gélatine <b>29,96 g</b> · Crème whipping <b>600 g</b></div>
+    <div class="n mp">
+    <div class="li">
+      <span class="pt v"></span>
+      <span class="nm">pate de vanille maison</span>
+      <span class="qt">20 g</span>
+      <span class="sk ">stock 500</span>
+    </div>
+    <div class="mps">Vanille Gousse Bourbon <b>40 g</b> · Sucre Cassonade <b>100 g</b> · Eau robinet <b>100 g</b></div>
+    
+  </div>
+  </div>
+  </div>
+  </div></div>
+<div class="lg">
+  <span class="p" style="background:#5c7a3f"></span> assez en stock &nbsp;
+  <span class="p" style="background:#b58f3c"></span> il en manque &nbsp;
+  <span class="p" style="background:#d6cbb8"></span> matière première achetée<br>
+  Les matières premières sont regroupées en gris sous chaque préparation, pour ne pas noyer l'écran.<br>
+  La <b>gélatine en poudre</b> est toujours affichée en <b>masse gélatine (× 7)</b> : c'est ce que le pâtissier pèse.
+</div>
+</div>
+<script>
+document.querySelectorAll('.tb').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tb').forEach(x=>x.classList.remove('on')); b.classList.add('on')
+  document.querySelectorAll('.vue').forEach(v=>v.classList.toggle('on',v.dataset.t===b.dataset.t))}))
+</script></body></html>

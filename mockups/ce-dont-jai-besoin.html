@@ -1,0 +1,237 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ce dont j'ai besoin</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+ :root{--cream:#fcfbf8;--line:#e5d8c3;--bordeaux:#993556;--ink:#2b2118;--soft:#5b4d40;
+   --mute:#9a8b7a;--ok:#5c7a3f;--okbg:#EAF3DE;--rouge:#b03a3a;--or:#b58f3c;--orbg:#FBF3DF}
+ *{box-sizing:border-box}
+ body{margin:0;background:#efeae1;color:var(--ink);font-family:Geist,system-ui,sans-serif;padding:16px 10px 40px;font-size:14px}
+ .w{max-width:640px;margin:0 auto}
+ h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:24px;margin:0 0 5px}
+ .intro{font-size:13px;color:var(--soft);line-height:1.6;margin:0 0 14px}
+ .sql{background:#fff6f2;border:1px solid #f0cdbd;border-radius:13px;padding:11px 13px;margin-bottom:16px;font-size:12.5px;line-height:1.55;color:var(--soft)}
+ .sql b{color:var(--rouge)}
+ .st{position:sticky;top:0;z-index:5;background:#efeae1;padding:8px 0 11px;display:flex;align-items:center;gap:9px;font-size:12.5px}
+ .rail{flex:1;height:7px;border-radius:99px;background:#e2dacb;overflow:hidden}
+ .rail i{display:block;height:100%;background:var(--ok);width:0;transition:width .2s}
+ .c{background:#fff;border:1px solid var(--line);border-radius:16px;margin-bottom:12px;overflow:hidden}
+ .h{display:flex;align-items:baseline;gap:9px;padding:13px 14px 8px}
+ .h .n{flex:1;font-family:Fraunces,Georgia,serif;font-style:italic;font-size:19px;color:var(--bordeaux)}
+ .h .ca{font-size:11.5px;color:var(--mute);white-space:nowrap}
+ .ok{margin:0 14px 12px;background:var(--okbg);border-radius:11px;padding:9px 11px;font-size:12px;color:#41602c;line-height:1.55}
+ .ok b{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;opacity:.75}
+ .ok ul{margin:0;padding-left:16px} .ok li{margin-bottom:2px}
+ .a{border-top:1px solid #f4eee3;padding:10px 14px}
+ .an{font-size:13.5px;font-weight:700;line-height:1.3}
+ .an .u{font-size:11px;color:var(--mute);font-weight:500}
+ .am{font-size:11.5px;color:var(--mute);margin:3px 0 8px}
+ .am b{color:var(--soft)} .am b.or{color:var(--or)}
+ .g3{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:7px}
+ .g3 label{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--mute);margin-bottom:3px}
+ .g3 input{width:100%;height:44px;border:1px solid var(--line);border-radius:10px;text-align:center;
+   font-family:inherit;font-size:16px;font-weight:700;background:var(--cream);outline:none;color:var(--ink)}
+ .g3 input:focus{border-color:var(--bordeaux);background:#fff}
+ .g3 .t input{border-color:var(--or);background:var(--orbg)}
+ .qs{border-top:1px solid #f4eee3;background:#fffdf6;padding:11px 14px}
+ .qs>b{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--or)}
+ .q{margin-top:9px} .qt{font-size:12.5px;line-height:1.55;color:var(--soft);margin-bottom:6px}
+ .qt b{color:var(--ink)} .qt i{color:var(--mute)}
+ input.lg{width:100%;height:40px;border:1px solid var(--line);border-radius:9px;padding:0 11px;
+   font-family:inherit;font-size:13.5px;background:#fff;outline:none;color:var(--ink)}
+ .cm{padding:11px 14px 14px}
+ .cm textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-family:inherit;
+   font-size:13.5px;background:var(--cream);outline:none;resize:vertical;color:var(--ink)}
+ .pied{position:sticky;bottom:0;background:#efeae1;padding:10px 0 0}
+ .pied button{width:100%;height:52px;border:0;border-radius:14px;background:var(--bordeaux);color:#fff;
+   font-family:inherit;font-size:15px;font-weight:800;cursor:pointer}
+ .out{width:100%;height:180px;margin-top:8px;border:1px solid var(--line);border-radius:11px;padding:10px;
+   font-family:ui-monospace,monospace;font-size:11px;background:#fff;display:none;white-space:pre}
+</style></head><body><div class="w">
+<h1>Ce dont j'ai besoin</h1>
+<p class="intro">Tout ce qu'il me manque pour finir les 5 gâteaux restants.
+Ce que tu m'as déjà dit est en <b>vert</b> — pas besoin d'y revenir.
+La <b>tournée</b> est pré-remplie avec ce que fait vraiment l'atelier ; corrige si besoin.</p>
+
+<div class="sql"><b>⚠️ Une seule chose à faire de ton côté</b><br>
+Lance <b>supabase/fab_annexe_achete.sql</b> dans Supabase. Sans lui, la framboise congelée
+continue de bloquer le confit du framboisier.</div>
+
+<div class="st"><b id="cpt">0</b><span class="rail"><i id="j"></i></span></div>
+<div id="l"><div class="c">
+  <div class="h"><span class="n">Black Forest</span><span class="ca">81 194 MAD</span></div>
+  <div class="ok"><b>Ce que tu m'as déjà dit</b><ul><li>L'annexe ne fabrique que le <b>cadre forêt noire</b> (le gâteau est monté à la boutique)</li><li>Une recette = <b>88 gâteaux</b>, mais en vrai vous en faites <b>176</b> (2 cadres)</li></ul></div>
+  <div class="a" data-k="SM- cadre foret noir grand Production">
+    <div class="an">SM- cadre foret noir grand Production <span class="u">u</span></div>
+    <div class="am">recette Odoo <b>88</b> · réel <b class="or">176</b> · stock 352</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="176"></div>
+    </div></div>
+  <div class="qs"><b>Il me manque aussi</b>
+    <div class="q"><div class="qt">Y a-t-il un ingrédient <b>figé</b> dans le cadre ? <i>(quelque chose qu'on utilise en entier, quoi qu'il sorte)</i></div><input data-k="q0_0" class="lg" placeholder="ta réponse…"></div></div>
+  <div class="cm"><textarea data-k="txt0" rows="2" placeholder="autre chose sur ce gâteau…"></textarea></div>
+</div><div class="c">
+  <div class="h"><span class="n">Fraisier</span><span class="ca">80 901 MAD</span></div>
+  <div class="ok"><b>Ce que tu m'as déjà dit</b><ul><li>Aucun article « fraisier » : on suit ses <b>préparations</b></li><li>La crème au beurre vanille se fait en <b>double recette</b> (11 150 g au lieu de 5 575)</li></ul></div>
+  <div class="a" data-k="SM. Creme au beurre Vanille Production vitrine">
+    <div class="an">SM. Creme au beurre Vanille Production vitrine <span class="u">g</span></div>
+    <div class="am">recette Odoo <b>5 575</b> · réel <b class="or">11 150</b> · stock 0</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="11 150"></div>
+    </div></div><div class="a" data-k="SM. creme patissiere vitrine Production">
+    <div class="an">SM. creme patissiere vitrine Production <span class="u">g</span></div>
+    <div class="am">recette Odoo <b>2 150</b> · réel <b class="or">2 150</b> · stock 0</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="2 150"></div>
+    </div></div>
+  <div class="qs"><b>Il me manque aussi</b>
+    <div class="q"><div class="qt">La <b>crème au beurre vanille</b> est-elle figée, comme le praliné et le citron ? <i>(je dirais oui, elle ne se garde pas)</i></div><input data-k="q1_0" class="lg" placeholder="ta réponse…"></div></div>
+  <div class="cm"><textarea data-k="txt1" rows="2" placeholder="autre chose sur ce gâteau…"></textarea></div>
+</div><div class="c">
+  <div class="h"><span class="n">Framboisier</span><span class="ca">62 945 MAD</span></div>
+  <div class="ok"><b>Ce que tu m'as déjà dit</b><ul><li>L'annexe ne fait que le <b>confit</b> (la crème diplomate est à la boutique)</li><li>Sa recette dit 1 000 g, mais en vrai vous en faites <b>5 721 g</b></li></ul></div>
+  <div class="a" data-k="SM. Confit de framboise finition">
+    <div class="an">SM. Confit de framboise finition <span class="u">g</span></div>
+    <div class="am">recette Odoo <b>1 000</b> · réel <b class="or">5 721</b> · stock 4 750</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="5 721"></div>
+    </div></div>
+  
+  <div class="cm"><textarea data-k="txt2" rows="2" placeholder="autre chose sur ce gâteau…"></textarea></div>
+</div><div class="c">
+  <div class="h"><span class="n">Gianduja</span><span class="ca">33 671 MAD</span></div>
+  <div class="ok"><b>Ce que tu m'as déjà dit</b><ul><li>Tournée = <b>6</b> (la mousse en fait 6, remplis en 2 fois 3 moules)</li><li><b>La mousse est figée</b></li><li>Le biscuit chocolat sort <b>6</b> par recette</li></ul></div>
+  <div class="a" data-k="SM- Gianduja 10 pers">
+    <div class="an">SM- Gianduja 10 pers <span class="u">u</span></div>
+    <div class="am">recette Odoo <b>1</b> · réel <b class="or">3</b> · stock 3</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="6" placeholder="3"></div>
+    </div></div><div class="a" data-k="SM. Biscuit chocolat Gianduja 10 pers">
+    <div class="an">SM. Biscuit chocolat Gianduja 10 pers <span class="u">u</span></div>
+    <div class="am">recette Odoo <b>6</b> · réel <b class="or">3</b> · stock 0</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="3"></div>
+    </div></div><div class="a" data-k="SM. Cremeux gianduja 10 pers Production">
+    <div class="an">SM. Cremeux gianduja 10 pers Production <span class="u">u</span></div>
+    <div class="am">recette Odoo <b>1</b> · réel <b class="or">15</b> · stock 1</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="15"></div>
+    </div></div><div class="a" data-k="SM. Cremeux a la vanille 10 pers Production">
+    <div class="an">SM. Cremeux a la vanille 10 pers Production <span class="u">u</span></div>
+    <div class="am">recette Odoo <b>1</b> · réel <b class="or">15</b> · stock 1</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="15"></div>
+    </div></div>
+  <div class="qs"><b>Il me manque aussi</b>
+    <div class="q"><div class="qt"><b>Laquelle est « la mousse »</b> à figer ? Le crémeux gianduja, le crémeux vanille, ou autre chose ?</div><input data-k="q3_0" class="lg" placeholder="ta réponse…"></div>
+    <div class="q"><div class="qt">Les deux <b>crémeux</b> : leur recette dit 1 pièce mais vous en faites 15 — c'est bien 15 la tournée ?</div><input data-k="q3_1" class="lg" placeholder="ta réponse…"></div></div>
+  <div class="cm"><textarea data-k="txt3" rows="2" placeholder="autre chose sur ce gâteau…"></textarea></div>
+</div><div class="c">
+  <div class="h"><span class="n">Cheese Caramel Beurre Salé</span><span class="ca">27 947 MAD</span></div>
+  <div class="ok"><b>Ce que tu m'as déjà dit</b><ul><li>1 recette = <b>20 cheesecakes</b>, et le réel confirme (médiane 20)</li><li><b>Ses matières premières sont figées</b></li></ul></div>
+  <div class="a" data-k="SM- Cheesecake nature">
+    <div class="an">SM- Cheesecake nature <span class="u">u</span></div>
+    <div class="am">recette Odoo <b>20</b> · réel <b class="or">20</b> · stock 23</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="20"></div>
+    </div></div>
+  
+  <div class="cm"><textarea data-k="txt4" rows="2" placeholder="autre chose sur ce gâteau…"></textarea></div>
+</div><div class="c">
+  <div class="h"><span class="n">Les préparations communes</span><span class="ca">servent à presque tout</span></div>
+  <div class="ok"><b>Ce que tu m'as déjà dit</b><ul><li>La <b>crème au beurre nature</b> est la base du praliné ET du citron — une seule tournée qu'on aromatise après</li><li>La <b>crème citron</b> sert à deux endroits, même bac</li><li>Pour la <b>génoise</b> : déclarer « commun » créera aussi l'ordre de « Production » <i>(reste à coder)</i></li></ul></div>
+  <div class="a" data-k="SM. Creme au beurre nature production">
+    <div class="an">SM. Creme au beurre nature production <span class="u">g</span></div>
+    <div class="am">recette Odoo <b>5 425</b> · réel <b class="or">10 850</b> · stock 0</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="10 850"></div>
+    </div></div><div class="a" data-k="SM. Genoise Vanille KG commun">
+    <div class="an">SM. Genoise Vanille KG commun <span class="u">kg</span></div>
+    <div class="am">recette Odoo <b>3 kg</b> · réel <b class="or">4 tournées</b> · stock ⚠️ 4 004 kg</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="4 "></div>
+    </div></div><div class="a" data-k="SM. sirop Imbibage production KG">
+    <div class="an">SM. sirop Imbibage production KG <span class="u">kg</span></div>
+    <div class="am">recette Odoo <b>5,55</b> · réel <b class="or">11</b> · stock 14,7</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="11"></div>
+    </div></div><div class="a" data-k="SM. creme citron Production">
+    <div class="an">SM. creme citron Production <span class="u">g</span></div>
+    <div class="am">recette Odoo <b>5 930</b> · réel <b class="or">5 930</b> · stock 66</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="5 930"></div>
+    </div></div><div class="a" data-k="SM. Creme au beurre citron Production">
+    <div class="an">SM. Creme au beurre citron Production <span class="u">g</span></div>
+    <div class="am">recette Odoo <b>9 425</b> · réel <b class="or">5 100</b> · stock 0</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="5 100"></div>
+    </div></div><div class="a" data-k="SM. Chantilly à la Rose">
+    <div class="an">SM. Chantilly à la Rose <span class="u">g</span></div>
+    <div class="am">recette Odoo <b>1 050</b> · réel <b class="or">280</b> · stock ⚠️ −278</div>
+    <div class="g3">
+      <div><label>mini</label><input data-f="mini"></div>
+      <div><label>maxi</label><input data-f="maxi"></div>
+      <div class="t"><label>tournée</label><input data-f="tournee" value="" placeholder="280"></div>
+    </div></div>
+  <div class="qs"><b>Il me manque aussi</b>
+    <div class="q"><div class="qt">La <b>génoise</b> affiche 4 tonnes en stock — c'est faux, non ? Faut-il faire un inventaire dessus ?</div><input data-k="q5_0" class="lg" placeholder="ta réponse…"></div>
+    <div class="q"><div class="qt">La <b>chantilly à la Rose</b> : maintenant qu'elle se pipe en pièces, faut-il encore la suivre seule ?</div><input data-k="q5_1" class="lg" placeholder="ta réponse…"></div></div>
+  <div class="cm"><textarea data-k="txt5" rows="2" placeholder="autre chose sur ce gâteau…"></textarea></div>
+</div></div>
+<div class="pied"><button id="cp">Copier mes réponses</button><textarea class="out" id="out" readonly></textarea></div>
+</div>
+<script>
+const CLE='besoins-v1'
+let v={}; try{v=JSON.parse(localStorage.getItem(CLE)||'{}')}catch{v={}}
+const arts=[...document.querySelectorAll('.a')]
+const sauve=()=>{try{localStorage.setItem(CLE,JSON.stringify(v))}catch{}}
+function maj(){const n=arts.filter(a=>{const x=v[a.dataset.k]||{};return x.mini!==undefined&&x.mini!==''}).length
+  document.getElementById('cpt').textContent=n+' / '+arts.length+' article'+(n>1?'s':'')
+  document.getElementById('j').style.width=(n/arts.length*100)+'%'}
+document.getElementById('l').addEventListener('input',e=>{
+  const i=e.target; if(!i.matches('input,textarea'))return
+  if(i.dataset.f){const k=i.closest('.a').dataset.k; v[k]=v[k]||{}; v[k][i.dataset.f]=i.value.replace(',','.')}
+  else if(i.dataset.k){v[i.dataset.k]=i.value}
+  sauve(); maj()})
+for(const a of arts){const x=v[a.dataset.k]||{}
+  for(const i of a.querySelectorAll('input[data-f]')) if(x[i.dataset.f]!==undefined) i.value=x[i.dataset.f]}
+for(const el of document.querySelectorAll('[data-k]')) if(!el.classList.contains('a')&&typeof v[el.dataset.k]==='string') el.value=v[el.dataset.k]
+maj()
+document.getElementById('cp').addEventListener('click',async()=>{const L=[]
+  for(const a of arts){const k=a.dataset.k,x=v[k]; if(!x)continue
+    const p=[]; for(const f of ['mini','maxi','tournee']) if(x[f]!==undefined&&x[f]!=='') p.push(f+' '+x[f])
+    if(p.length)L.push(k+' | '+p.join(' | '))}
+  for(const [k,val] of Object.entries(v)) if(typeof val==='string'&&val.trim()) L.push((k.startsWith('txt')?'note ':'réponse ')+k+' : '+val.trim())
+  const t=L.length?L.join('\n'):'(rien de rempli)'
+  const o=document.getElementById('out'); o.style.display='block'; o.value=t
+  try{await navigator.clipboard.writeText(t);alert('Copié. Colle-le dans la conversation.')}
+  catch{o.select();alert('Copie refusée : sélectionne le texte en bas et copie-le.')}})
+</script></body></html>

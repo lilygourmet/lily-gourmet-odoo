@@ -1,0 +1,166 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Questions — les 7 gâteaux</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+ :root{--cream:#fcfbf8;--line:#e5d8c3;--bordeaux:#993556;--ink:#2b2118;--soft:#5b4d40;
+   --mute:#9a8b7a;--ok:#5c7a3f;--okbg:#EAF3DE;--or:#b58f3c}
+ *{box-sizing:border-box}
+ body{margin:0;background:#efeae1;color:var(--ink);font-family:Geist,system-ui,sans-serif;padding:18px 11px 40px;font-size:14px}
+ .w{max-width:600px;margin:0 auto}
+ h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:24px;margin:0 0 6px}
+ .intro{font-size:13px;color:var(--soft);line-height:1.6;margin:0 0 18px}
+ .st{position:sticky;top:0;z-index:5;background:#efeae1;padding:8px 0 12px;display:flex;align-items:center;gap:9px;font-size:12.5px}
+ .rail{flex:1;height:7px;border-radius:99px;background:#e2dacb;overflow:hidden}
+ .rail i{display:block;height:100%;background:var(--ok);width:0;transition:width .2s}
+ .c{background:#fff;border:1px solid var(--line);border-radius:16px;margin-bottom:12px;overflow:hidden}
+ .c.fait{border-color:#bcd3a4}
+ .c.gen{background:#fffdf6;border-color:#e8dcbb}
+ .h{display:flex;align-items:baseline;gap:9px;padding:13px 14px 4px}
+ .h .n{flex:1;font-family:Fraunces,Georgia,serif;font-style:italic;font-size:19px;color:var(--bordeaux)}
+ .h .ca{font-size:11.5px;color:var(--mute);white-space:nowrap}
+ .q{padding:9px 14px 12px;border-top:1px solid #f4eee3;margin-top:8px}
+ .q:first-of-type{border-top:0;margin-top:0}
+ .tx{font-size:13.5px;line-height:1.65;color:var(--soft);margin-bottom:10px}
+ .tx b{color:var(--ink)} .tx i{color:var(--mute);font-size:12.5px}
+ .ch{display:flex;gap:8px}
+ .ch button{flex:1;border:1.5px solid var(--line);background:var(--cream);color:var(--soft);border-radius:11px;
+   padding:13px;font-size:15px;font-weight:800;font-family:inherit;cursor:pointer}
+ .ch button.on{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+ .ch button[data-v=non].on{background:#b03a3a;border-color:#b03a3a}
+ .cm{padding:4px 14px 14px}
+ .cm textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:inherit;
+   font-size:13.5px;background:var(--cream);outline:none;resize:vertical;color:var(--ink)}
+ .cm textarea:focus{border-color:var(--bordeaux);background:#fff}
+ .pied{position:sticky;bottom:0;background:#efeae1;padding:10px 0 0}
+ .pied button{width:100%;height:52px;border:0;border-radius:14px;background:var(--bordeaux);color:#fff;
+   font-family:inherit;font-size:15px;font-weight:800;cursor:pointer}
+ .out{width:100%;height:180px;margin-top:8px;border:1px solid var(--line);border-radius:11px;padding:10px;
+   font-family:ui-monospace,monospace;font-size:11px;background:#fff;display:none;white-space:pre}
+</style></head><body><div class="w">
+<h1>Questions — les 7 gâteaux</h1>
+<p class="intro">Tes 7 plus gros gâteaux, du plus gros chiffre d'affaires au plus petit.
+Pour chacun, je te dis ce que j'ai compris — tu réponds <b>oui</b> ou <b>non</b>.
+Si c'est non, explique-moi en dessous. Tout se sauvegarde tout seul.</p>
+<div class="st"><b id="cpt">0</b><span class="rail"><i id="j"></i></span></div>
+<div id="l"><div class="c" data-id="bf">
+  <div class="h"><span class="n">Black Forest</span><span class="ca">81 194 MAD</span></div>
+  <div class="q">
+  <div class="tx">Le Black Forest lui-même est monté <b>à la boutique</b> (20 fois en 4 mois). À l'annexe, on ne fabrique que le <b>cadre forêt noire</b>. C'est juste ?</div>
+  <div class="ch"><button data-k="bf_0" data-v="oui">oui</button><button data-k="bf_0" data-v="non">non</button></div>
+</div><div class="q">
+  <div class="tx">La recette dit qu'<b>un cadre donne 88 gâteaux</b>. C'est bien ça ?</div>
+  <div class="ch"><button data-k="bf_1" data-v="oui">oui</button><button data-k="bf_1" data-v="non">non</button></div>
+</div>
+  <div class="cm"><textarea data-k="bf_txt" rows="2" placeholder="un commentaire sur ce gâteau…"></textarea></div>
+</div><div class="c" data-id="fr">
+  <div class="h"><span class="n">Fraisier</span><span class="ca">80 901 MAD</span></div>
+  <div class="q">
+  <div class="tx">Il n'existe <b>aucun article « fraisier »</b> dans Odoo : le gâteau est monté à la commande. On suivra donc ses <b>préparations</b> (crème au beurre vanille, génoise, sirop) au lieu du gâteau. D'accord ?</div>
+  <div class="ch"><button data-k="fr_0" data-v="oui">oui</button><button data-k="fr_0" data-v="non">non</button></div>
+</div><div class="q">
+  <div class="tx">La crème au beurre vanille sort <b>5 575 g</b> par tournée. C'est juste ?</div>
+  <div class="ch"><button data-k="fr_1" data-v="oui">oui</button><button data-k="fr_1" data-v="non">non</button></div>
+</div>
+  <div class="cm"><textarea data-k="fr_txt" rows="2" placeholder="un commentaire sur ce gâteau…"></textarea></div>
+</div><div class="c" data-id="fb">
+  <div class="h"><span class="n">Framboisier</span><span class="ca">62 945 MAD</span></div>
+  <div class="q">
+  <div class="tx">Sa <b>crème diplomate</b> est faite à la boutique (334 fois en 4 mois), pas à l'annexe. C'est juste ?</div>
+  <div class="ch"><button data-k="fb_0" data-v="oui">oui</button><button data-k="fb_0" data-v="non">non</button></div>
+</div><div class="q">
+  <div class="tx">Donc à l'annexe, du framboisier on ne suit que le <b>confit de framboise</b> (1 000 g par tournée). C'est bon ?</div>
+  <div class="ch"><button data-k="fb_1" data-v="oui">oui</button><button data-k="fb_1" data-v="non">non</button></div>
+</div>
+  <div class="cm"><textarea data-k="fb_txt" rows="2" placeholder="un commentaire sur ce gâteau…"></textarea></div>
+</div><div class="c" data-id="cm">
+  <div class="h"><span class="n">Citron meringué</span><span class="ca">52 436 MAD</span></div>
+  <div class="q">
+  <div class="tx">C'est le <b>20 cm Vitrine citron</b> — déjà en place — plus 200 g de meringue française, elle-même faite <b>à la boutique</b>. Donc <b>rien à ajouter</b>. C'est juste ?</div>
+  <div class="ch"><button data-k="cm_0" data-v="oui">oui</button><button data-k="cm_0" data-v="non">non</button></div>
+</div>
+  <div class="cm"><textarea data-k="cm_txt" rows="2" placeholder="un commentaire sur ce gâteau…"></textarea></div>
+</div><div class="c" data-id="cf">
+  <div class="h"><span class="n">Le Citron Framboise</span><span class="ca">52 156 MAD</span></div>
+  <div class="q">
+  <div class="tx">Il se fait en <b>deux étapes à l'annexe</b> : d'abord le gâteau de base, puis un second article qui ajoute la chantilly rose et le glaçage. C'est juste ?</div>
+  <div class="ch"><button data-k="cf_0" data-v="oui">oui</button><button data-k="cf_0" data-v="non">non</button></div>
+</div><div class="q">
+  <div class="tx">On suit les <b>deux étapes</b> dans l'écran (deux lignes pour ce gâteau) ?</div>
+  <div class="ch"><button data-k="cf_1" data-v="oui">oui</button><button data-k="cf_1" data-v="non">non</button></div>
+</div><div class="q">
+  <div class="tx">La <b>chantilly à la Rose</b> se fait au moment du montage, pas à l'avance ? <i>(son stock est à −278 g)</i></div>
+  <div class="ch"><button data-k="cf_2" data-v="oui">oui</button><button data-k="cf_2" data-v="non">non</button></div>
+</div>
+  <div class="cm"><textarea data-k="cf_txt" rows="2" placeholder="un commentaire sur ce gâteau…"></textarea></div>
+</div><div class="c" data-id="gj">
+  <div class="h"><span class="n">Gianduja</span><span class="ca">33 671 MAD</span></div>
+  <div class="q">
+  <div class="tx">Sa recette dit <b>1 pièce à la fois</b> — donc pas de vraie tournée, on en monte au cas par cas. C'est juste ?</div>
+  <div class="ch"><button data-k="gj_0" data-v="oui">oui</button><button data-k="gj_0" data-v="non">non</button></div>
+</div><div class="q">
+  <div class="tx">Son <b>biscuit chocolat</b> sort <b>6 d'un coup</b>. C'est juste ?</div>
+  <div class="ch"><button data-k="gj_1" data-v="oui">oui</button><button data-k="gj_1" data-v="non">non</button></div>
+</div>
+  <div class="cm"><textarea data-k="gj_txt" rows="2" placeholder="un commentaire sur ce gâteau…"></textarea></div>
+</div><div class="c" data-id="cc">
+  <div class="h"><span class="n">Cheese Caramel Beurre Salé</span><span class="ca">27 947 MAD</span></div>
+  <div class="q">
+  <div class="tx">Une seule recette sort <b>20 cheesecakes</b> d'un coup, directement depuis les matières premières (14 kg de fromage, 5,8 kg de sucre…). C'est juste ?</div>
+  <div class="ch"><button data-k="cc_0" data-v="oui">oui</button><button data-k="cc_0" data-v="non">non</button></div>
+</div><div class="q">
+  <div class="tx">Faut-il <b>figer</b> ces matières premières ? <i>C'est-à-dire : si le pâtissier n'en sort que 18, les 14 kg de fromage sortent quand même du stock — comme la cuve de mousse du tiramisu.</i></div>
+  <div class="ch"><button data-k="cc_1" data-v="oui">oui</button><button data-k="cc_1" data-v="non">non</button></div>
+</div>
+  <div class="cm"><textarea data-k="cc_txt" rows="2" placeholder="un commentaire sur ce gâteau…"></textarea></div>
+</div>
+<h1 style="font-size:20px;margin:22px 0 10px">Trois questions générales</h1>
+<div class="c gen"><div class="h"><span class="n">Question générale 1</span></div>
+  <div class="q">
+  <div class="tx">Tes recettes demandent « Genoise Vanille KG <b>Production</b> », qui n'est <b>jamais fabriquée</b> (0 ordre en 4 mois). Celle qu'on fait vraiment s'appelle « KG <b>commun</b> » (57 fois). C'est bien la même chose, et il faudrait corriger les recettes ?</div>
+  <div class="ch"><button data-k="g1_0" data-v="oui">oui</button><button data-k="g1_0" data-v="non">non</button></div>
+</div><div class="cm"><textarea data-k="g1_txt" rows="2" placeholder="un commentaire…"></textarea></div></div><div class="c gen"><div class="h"><span class="n">Question générale 2</span></div>
+  <div class="q">
+  <div class="tx">La <b>crème au beurre nature</b> (5 425 g) est la base commune : on lui ajoute soit du praliné, soit de la crème citron. C'est bien une seule tournée qu'on aromatise ensuite ?</div>
+  <div class="ch"><button data-k="g2_0" data-v="oui">oui</button><button data-k="g2_0" data-v="non">non</button></div>
+</div><div class="cm"><textarea data-k="g2_txt" rows="2" placeholder="un commentaire…"></textarea></div></div><div class="c gen"><div class="h"><span class="n">Question générale 3</span></div>
+  <div class="q">
+  <div class="tx">La <b>crème citron</b> sert à deux endroits : dans la crème au beurre citron, <b>et</b> directement dans le gâteau. C'est bien le même bac pour les deux ?</div>
+  <div class="ch"><button data-k="g3_0" data-v="oui">oui</button><button data-k="g3_0" data-v="non">non</button></div>
+</div><div class="cm"><textarea data-k="g3_txt" rows="2" placeholder="un commentaire…"></textarea></div></div></div>
+<div class="pied"><button id="cp">Copier mes réponses</button><textarea class="out" id="out" readonly></textarea></div>
+</div>
+<script>
+const CLE='gateaux-q-v1'
+let v={}; try{v=JSON.parse(localStorage.getItem(CLE)||'{}')}catch{v={}}
+const btns=[...document.querySelectorAll('button[data-k]')]
+const total=new Set(btns.map(b=>b.dataset.k)).size
+const sauve=()=>{try{localStorage.setItem(CLE,JSON.stringify(v))}catch{}}
+function maj(){const n=[...new Set(btns.map(b=>b.dataset.k))].filter(k=>v[k]).length
+  document.getElementById('cpt').textContent=n+' / '+total+' répondu'+(n>1?'s':'')
+  document.getElementById('j').style.width=(n/total*100)+'%'
+  for(const c of document.querySelectorAll('.c')){
+    const ks=[...new Set([...c.querySelectorAll('button[data-k]')].map(b=>b.dataset.k))]
+    c.classList.toggle('fait',ks.length>0&&ks.every(k=>v[k]))}}
+document.getElementById('l').addEventListener('click',e=>{const b=e.target.closest('button[data-k]'); if(!b)return
+  v[b.dataset.k]=v[b.dataset.k]===b.dataset.v?undefined:b.dataset.v
+  for(const o of document.querySelectorAll('button[data-k="'+b.dataset.k+'"]')) o.classList.toggle('on',v[b.dataset.k]===o.dataset.v)
+  sauve(); maj()})
+document.getElementById('l').addEventListener('input',e=>{const t=e.target.closest('textarea[data-k]'); if(!t)return
+  v[t.dataset.k]=t.value; sauve()})
+for(const [k,val] of Object.entries(v)){
+  for(const o of document.querySelectorAll('button[data-k="'+k+'"]')) o.classList.toggle('on',val===o.dataset.v)
+  const t=document.querySelector('textarea[data-k="'+k+'"]'); if(t&&typeof val==='string') t.value=val}
+maj()
+const NOMS={bf:"Black Forest",fr:"Fraisier",fb:"Framboisier",cm:"Citron meringué",cf:"Le Citron Framboise",gj:"Gianduja",cc:"Cheese Caramel Beurre Salé",g1:'Génoise Production / commun',g2:'Crème au beurre nature = base commune',g3:'Crème citron à deux usages'}
+document.getElementById('cp').addEventListener('click',async()=>{const L=[]
+  for(const id of Object.keys(NOMS)){
+    const rep=Object.keys(v).filter(k=>k.startsWith(id+'_')&&!k.endsWith('_txt')&&v[k])
+      .sort().map((k,i)=>'Q'+(Number(k.split('_')[1])+1)+' '+v[k])
+    const txt=(v[id+'_txt']||'').trim()
+    if(rep.length||txt) L.push(NOMS[id]+' : '+rep.join(' · ')+(txt?' | '+txt:''))}
+  const t=L.length?L.join('\n'):'(rien de répondu)'
+  const o=document.getElementById('out'); o.style.display='block'; o.value=t
+  try{await navigator.clipboard.writeText(t);alert('Copié. Colle-le dans la conversation.')}
+  catch{o.select();alert('Copie refusée : sélectionne le texte en bas et copie-le.')}})
+</script></body></html>
