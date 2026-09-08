@@ -1605,6 +1605,8 @@ async function fetchFabrication(uid, jours) {
     name: m.name, id: m.id, produit: nom(m), qty: m.product_qty, unite: uom(m),
     etat: m.state, dispo: m.components_availability || '',
     origine: m.origin || '',
+    // la date sert à ranger l'historique des fabrications jour par jour
+    quand: m.date_planned_start || '',
     reserves: reservesPar[m.name] || {},
     pour: origines(m).filter(o => parNom.has(o)).join(', ') || (m.origin || ''),
   }))
@@ -1614,7 +1616,7 @@ async function fetchFabrication(uid, jours) {
   const dejaLa = new Set(ordres.map(o => o.name))
   const autres = await odooSearchRead(uid, 'mrp.production',
     [['name', 'like', 'WHLVP/MO/'], ['state', 'in', ['confirmed', 'progress', 'to_close']]],
-    ['name', 'product_id', 'product_qty', 'product_uom_id', 'state', 'origin'], { limit: 500, order: 'id desc' })
+    ['name', 'product_id', 'product_qty', 'product_uom_id', 'state', 'origin', 'date_planned_start'], { limit: 500, order: 'id desc' })
   for (const m of autres) {
     if (dejaLa.has(m.name)) continue
     ordres.push({
@@ -1623,6 +1625,7 @@ async function fetchFabrication(uid, jours) {
       qty: m.product_qty,
       unite: (Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : 'u').replace(/^units?$/i, 'u'),
       etat: m.state, dispo: '', pour: '', origine: m.origin || '',
+      quand: m.date_planned_start || '',
     })
   }
   return { ofs, ordres, recettes: recettesPrepa, stocks: stockDe, catalogue }

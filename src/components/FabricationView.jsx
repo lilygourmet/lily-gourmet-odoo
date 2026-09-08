@@ -379,7 +379,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [data, setData] = useState(() => dernierEcran('fabrication'))
   const [erreur, setErreur] = useState(null)
   const [sel, setSel] = useState([])                      // noms d'OF cochés
-  const [histoireOuverte, setHistoireOuverte] = useState(false)   // case « déjà déclaré », repliée par défaut
+  const [histoireOuverte, setHistoireOuverte] = useState(false)   // fenêtre « Historique », fermée par défaut
   const [soldeEnCours, setSoldeEnCours] = useState(false)
   const [ouvertes, setOuvertes] = useState({})
   const [lots, setLots] = useState({})       // combien de tournées on déclare, base par base
@@ -794,20 +794,43 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // crèmes, et ceux des composants de ces crèmes (la crème pâtissière est un
   // petit-enfant du gâteau). Un ordre peut avoir plusieurs origines séparées
   // par des virgules — « OP/00412,WHLVP/MO/200023 ».
-  // Ce que l'équipe a déclaré aujourd'hui : ça quitte la liste du travail à
-  // faire, mais on doit pouvoir se corriger — un clic par erreur, un gâteau
-  // finalement pas monté. Les crèmes sont rangées SOUS leur gâteau, pour qu'on
-  // voie tout de suite à qui appartient quoi.
-  const declaresAujourdhui = useMemo(() => {
-    const parNom = new Map(((data && data.ordres) || []).map(o => [o.name, o]))
-    const dedans = [...dejaDeclares].filter(n => parNom.has(n)).map(n => parNom.get(n))
-    const nomsDeclares = new Set(dedans.map(o => o.name))
+
+  // L'HISTORIQUE des fabrications, 7 jours, un bloc par jour.
+  //
+  // Deux sources, parce qu'il en faut deux : ce qui est déclaré mais pas encore
+  // validé vit dans l'app (c'est ce qu'on peut encore retirer), ce qui est
+  // validé ne vit plus que dans Odoo — l'app efface la coche à la validation.
+  // Les crèmes restent rangées SOUS leur gâteau, pour voir à qui appartient quoi.
+  const historique = useMemo(() => {
+    const tous = (data && data.ordres) || []
+    const d0 = new Date(); d0.setDate(d0.getDate() - 6)
+    const debut = d0.toLocaleDateString('sv-SE', CASA)
+    const jourOdoo = q => (q ? dt(q).toLocaleDateString('sv-SE', CASA) : '')
+    // Le jour où on l'a FABRIQUÉ, pas celui qu'Odoo avait prévu : un gâteau
+    // prévu vendredi mais monté aujourd'hui doit se retrouver sous aujourd'hui.
+    // La date de la coche fait donc foi quand on l'a ; sinon on retombe sur
+    // celle d'Odoo, seule disponible pour ce qui est déjà validé.
+    const jourLigne = o => (faits[o.name] && faits[o.name].fait_le
+      ? jourDe(faits[o.name].fait_le)
+      : jourOdoo(o.quand))
+    const retenus = tous.filter(o => {
+      if (o.etat === 'cancel') return false
+      const j = jourLigne(o)
+      if (!j || j < debut) return false
+      return o.etat === 'done' || dejaDeclares.has(o.name)
+    })
+    const noms = new Set(retenus.map(o => o.name))
     const parentDeclare = o => String(o.origine || '').split(',').map(x => x.trim())
-      .find(x => nomsDeclares.has(x))
-    return dedans
-      .filter(o => !parentDeclare(o))
-      .map(o => ({ ...o, enfants: dedans.filter(x => parentDeclare(x) === o.name) }))
-  }, [data, dejaDeclares])
+      .find(x => noms.has(x))
+    const parJour = new Map()
+    for (const o of retenus) {
+      if (parentDeclare(o)) continue          // il s'affichera sous son parent
+      const j = jourLigne(o)
+      if (!parJour.has(j)) parJour.set(j, [])
+      parJour.get(j).push({ ...o, enfants: retenus.filter(x => parentDeclare(x) === o.name) })
+    }
+    return [...parJour.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1))
+  }, [data, dejaDeclares, faits])
 
   // Retirer un ordre de la liste : soit il a sa propre coche, soit il vient
   // d'une préparation cochée par son nom.
@@ -1295,8 +1318,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         <div className={deuxColonnes ? 'pb-40 sm:pb-24 lg:pb-0' : ''}>
           <div className="flex items-center gap-3 mb-2 flex-wrap">
             <h1 className="font-fraunces italic text-[27px] font-medium">Fabrication CD</h1>
+            {/* L'historique était une case repliée tout en bas de la page : le
+                pâtissier qui vient de se tromper ne la trouvait pas. Il est
+                maintenant en haut, à côté d'« Actualiser ». */}
+            <button onClick={() => setHistoireOuverte(true)}
+              title="Ce qui a été fabriqué ces 7 derniers jours — et de quoi rattraper une erreur"
+              className="ml-auto bg-white border border-line rounded-xl px-3 py-2 text-[13px] text-ink-soft">🕓 Historique</button>
             <button onClick={relire} title="Relire Odoo (après une annulation ou une validation faite là-bas)"
-              className="ml-auto bg-white border border-line rounded-xl px-3 py-2 text-[13px] text-ink-soft">↻ Actualiser</button>
+              className="bg-white border border-line rounded-xl px-3 py-2 text-[13px] text-ink-soft">↻ Actualiser</button>
             {canValiderOf(user) && ordresAValider.length > 0 && (
               <button onClick={() => onNavigate && onNavigate('fabrication-valider')}
                 className="bg-bordeaux text-cream rounded-xl px-4 py-2.5 text-[13.5px] font-bold">
@@ -1425,37 +1454,6 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
               <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau}
  />
 
-              {/* Historique du jour : une case À PART, repliée, hors du travail à
-                  faire. Ce qui est déclaré n'est plus à produire — il ne doit
-                  plus encombrer la liste — mais on doit pouvoir se corriger. */}
-              {declaresAujourdhui.length > 0 && (
-                <div className="mt-6 pt-4 border-t border-line">
-                  <button onClick={() => setHistoireOuverte(v => !v)}
-                    aria-expanded={histoireOuverte}
-                    className="w-full flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-[#cfe0b8] bg-[#EAF3DE] text-left">
-                    <span className="text-[13px] font-semibold text-ok">✓ Déjà déclaré aujourd'hui</span>
-                    <span className="text-[12px] text-ink-mute tabular-nums">{declaresAujourdhui.length}</span>
-                    <span className="ml-auto text-[12px] text-ink-mute">{histoireOuverte ? 'masquer' : 'voir'}</span>
-                  </button>
-                  {histoireOuverte && (
-                    <div className="mt-2">
-                      <p className="text-[12px] text-ink-mute mb-2">
-                        à retirer si c'est une erreur — sauf ce qui est déjà validé
-                      </p>
-                      {declaresAujourdhui.map(o => (
-                        <div key={o.name} className="border border-[#cfe0b8] bg-[#EAF3DE] rounded-xl px-3.5 py-2.5 mb-1.5">
-                          <LigneDeclaree o={o} onRetirer={() => retirer(o)} />
-                          {o.enfants.map(e => (
-                            <div key={e.name} className="ml-4 pl-3 mt-1.5 border-l-2 border-[#cfe0b8]">
-                              <LigneDeclaree o={e} petit onRetirer={() => retirer(e)} />
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </>
           )}
         </div>
@@ -1472,6 +1470,55 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           )}
         </div>
       </div>
+
+      {/* L'historique des fabrications : 7 jours, un bloc par jour. On y retire
+          une production déclarée par erreur — l'ordre reste dans Odoo et
+          l'article revient tout de suite dans « à faire », avec sa quantité.
+          Ce qui est déjà validé porte « validé ✓ » et n'a plus de bouton.
+          Fenêtre en `vh` et non `dvh`, en trois zones figé/défile/figé : sur la
+          tablette, `dvh` déborde et le bas devient inatteignable. */}
+      {histoireOuverte && (
+        <div className="fixed inset-0 z-[70] bg-ink/40 flex items-start justify-center p-3 pt-10"
+          onPointerDown={e => { if (e.target === e.currentTarget) setHistoireOuverte(false) }}>
+          <div className="bg-cream rounded-2xl w-full max-w-[640px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="flex items-center gap-2 px-4 pt-4 pb-2 flex-shrink-0 border-b border-line">
+              <b className="text-[16px]">🕓 Historique des fabrications</b>
+              <button onClick={() => setHistoireOuverte(false)}
+                className="ml-auto bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px]">fermer</button>
+            </div>
+            <div className="px-4 py-3 flex-1 overflow-y-auto overscroll-contain">
+              <p className="text-[12px] text-ink-mute mb-3">
+                Les 7 derniers jours. À retirer si c'est une erreur : l'ordre reste dans
+                Odoo et l'article revient dans la liste à faire. Ce qui est déjà validé
+                ne peut plus être retiré.
+              </p>
+              {historique.length === 0 && (
+                <p className="text-center text-ink-mute text-[14px] py-10">
+                  Rien de fabriqué ces 7 derniers jours.
+                </p>
+              )}
+              {historique.map(([jour, lignesDuJour]) => (
+                <div key={jour} className="mb-4">
+                  <div className="text-[12.5px] font-bold text-bordeaux mb-1.5 pb-1 border-b border-line">
+                    {jour === aujourdhui() ? "Aujourd'hui" : new Date(jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    <span className="font-normal text-ink-mute"> · {lignesDuJour.length}</span>
+                  </div>
+                  {lignesDuJour.map(o => (
+                    <div key={o.name} className="border border-[#cfe0b8] bg-[#EAF3DE] rounded-xl px-3.5 py-2.5 mb-1.5">
+                      <LigneDeclaree o={o} onRetirer={() => retirer(o)} />
+                      {o.enfants.map(e => (
+                        <div key={e.name} className="ml-4 pl-3 mt-1.5 border-l-2 border-[#cfe0b8]">
+                          <LigneDeclaree o={e} petit onRetirer={() => retirer(e)} />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* téléphone : barre fixe qui ouvre la recette en page entière */}
       {deuxColonnes && (
