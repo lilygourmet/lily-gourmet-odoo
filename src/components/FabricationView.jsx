@@ -503,9 +503,18 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [pageRecette, setPageRecette] = useState(false)   // téléphone : recette en page à part
   const [faitsBruts, setFaits] = useState({})             // ce qui est coché dans l'app
   const [charge, setCharge] = useState(0)                // instant du dernier chargement d'Odoo
+  // Les bases ajoutées par Layla vivent dans une variable de module, parce que
+  // les petits composants d'affichage s'en servent aussi. React n'en sait donc
+  // rien : si leur lecture arrive APRÈS celle d'Odoo (elles partent ensemble),
+  // l'écran classait ses bases comme des préparations ordinaires jusqu'au
+  // prochain clic. Ce compteur ne sert qu'à redemander le calcul quand la liste
+  // est arrivée — il est dans les dépendances des mémos qui s'appuient dessus.
+  const [basesPretes, setBasesPretes] = useState(0)
 
   useEffect(() => {
-    loadBasesChoisies().then(l => { basesEnPlus = l || [] }).catch(() => { })
+    loadBasesChoisies()
+      .then(l => { basesEnPlus = l || []; setBasesPretes(v => v + 1) })
+      .catch(() => { })
   }, [])
 
   // Odoo fait foi : un ordre annulé (ou validé) là-bas rend sa coche caduque,
@@ -626,7 +635,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       .filter(o => o.etat === 'done' && !estBase(o.produit))
       .filter(o => attendQuelquun(o.name))
       .map(o => ({ produit: o.produit, qty: enKg(o.qty, o.unite).q }))
-  }, [data])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, basesPretes])
 
   const [stocks, stocksBases] = useMemo(() => {
     const s = {}, sb = {}
@@ -713,7 +723,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // autres. Il leur revient par `reservePour`, et par lui seul.
     for (const m of misesDeCote) bouge(m.produit, -m.qty)
     return [s, sb]
-  }, [data, faits, recettes, misesDeCote])
+  }, [data, faits, recettes, misesDeCote, basesPretes])
 
   // Le groupe d'un article = son « usage ». Une préparation fait son propre
   // groupe (elle ne se mélange avec rien, et STK reste distinct du normal) ;
@@ -1027,7 +1037,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     })
     return liste.sort((a, b) => rang(a.produit) - rang(b.produit) || String(a.produit).localeCompare(String(b.produit)))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aFaire, recettes, stocksBases, faits, data])
+  }, [aFaire, recettes, stocksBases, faits, data, basesPretes])
 
   // Ce qu'Odoo demande de préparer parce que le stock mini est atteint : crèmes
   // STK, base cupcake, magnum… (tous les articles CD* qui ne sont pas un format).
