@@ -247,7 +247,10 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
     if (!ok) return
     try {
       const r = await annulerOrdre([l.name], user?.id)
-      if (r && r.annules) {
+      // En mode test le serveur ne touche à rien et renvoie 0 annulation : dire
+      // « Odoo a refusé » ferait croire à une panne.
+      if (r && r.test) toast.success('Mode test : rien annulé dans Odoo')
+      else if (r && r.annules) {
         setLignes(v => { const reste = (v || []).filter(x => x.name !== l.name); garderEcran('valider', reste); return reste })
         setSel(v => v.filter(n => n !== l.name))
         toast.success(l.name + ' annulé dans Odoo')
@@ -274,11 +277,13 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
     const noms = []
     const refuses = []
     let panne = null
+    let modeTest = false
     try {
       // Odoo n'en relit que 50 à la fois : au-delà, les suivants partiraient
       // à la trappe sans rien dire.
       for (let i = 0; i < choisis.length; i += 50) {
         const r = await annulerOrdre(choisis.slice(i, i + 50).map(l => l.name), user?.id)
+        if (r && r.test) modeTest = true
         noms.push(...((r && r.noms) || []))
         refuses.push(...((r && r.refuses) || []))
       }
@@ -292,6 +297,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
       }
       if (refuses.length) toast.error('Odoo a refusé : ' + refuses.join(' · '))
       if (panne) toast.error('Interrompu après ' + noms.length + ' annulation(s) : ' + panne)
+      else if (modeTest) toast.success('Mode test : rien annulé dans Odoo')
       else if (!noms.length && !refuses.length) toast.error("Odoo n'a rien annulé")
     } catch (e) { toast.error(e.message || String(e)) }
     setRefus(false)
