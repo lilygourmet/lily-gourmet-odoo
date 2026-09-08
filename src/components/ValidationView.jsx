@@ -102,6 +102,9 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
   const [notes, setNotes] = useState({})          // { ordre: { idLigne: quantité } }
   const [ajouts, setAjouts] = useState({})        // { ordre: [ingrédients ajoutés à la main] }
+  // Vrai dès que les quantités gardées côté serveur ont été relues : tant que
+  // c'est faux, on n'enregistre RIEN (voir le commentaire de l'effet plus bas).
+  const saisiesLues = useRef(false)
 
   useEffect(() => {
     let vivant = true
@@ -142,6 +145,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
           Object.entries({ ...(recu || {}), ...actuel }).filter(([n]) => vivants.has(n)))
         setNotes(n => garder(gardees.notes, n))
         setAjouts(a => garder(gardees.ajouts, a))
+        saisiesLues.current = true
       })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
       .finally(() => { if (vivant) setChargement(false) })
@@ -150,9 +154,17 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
 
   const perdu = useRef(false)
   // Enregistrement retardé : pas un appel par touche du clavier, et jamais avant
-  // d'avoir la liste (on écraserait avec du vide).
+  // d'avoir RELU les quantités gardées côté serveur.
+  //
+  // ⚠️ Le garde-fou d'avant regardait si la liste était là — mais l'écran
+  // s'ouvre déjà sur celle de la dernière fois, gardée en mémoire. Elle était
+  // donc présente dès la première milliseconde, et 0,9 s plus tard l'app
+  // enregistrait des quantités VIDES par-dessus les vraies, puis relisait ce
+  // vide. Taper ses corrections, aller voir un autre onglet, revenir : tout
+  // était perdu. C'est la panne du 04/09 que le commentaire disait vouloir
+  // éviter. On attend maintenant que `loadSaisies` ait vraiment répondu.
   useEffect(() => {
-    if (!lignes) return undefined
+    if (!lignes || !saisiesLues.current) return undefined
     const t = setTimeout(() => {
       saveSaisies(CLE_SAISIES, { notes, ajouts })
         .then(() => { perdu.current = false })
