@@ -93,7 +93,7 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
   const meme = norm(uBase) === norm(unite) && base
   const f = meme ? qty / base : 1
   return (
-    <div className="ml-8 mb-2 bg-cream-warm rounded-xl px-3 py-2.5">
+    <div className="ml-3 sm:ml-8 mb-2 bg-cream-warm rounded-xl px-2 sm:px-3 py-2 sm:py-2.5">
       <div className="text-[11px] font-bold uppercase tracking-wider text-ink-soft mb-1">
         {propre(produit)} — {meme ? `pour ${qteLisible(qty, unite)}` : `pour ${qteLisible(r.qty, r.unite)}`}
         {stock > 0.001 && <span className="normal-case font-normal"> ({qteLisible(stock, unite)} déjà en stock)</span>}
@@ -110,20 +110,20 @@ function SousRecette({ recettes, produit, qty, unite, chemin = '', ouvertes = {}
         const dispo = !coche && couvert && couvert(l.produit, q)
         return (
           <div key={i}>
-            <div className="flex items-center gap-2.5 py-1.5 text-[14px] border-b border-dashed border-[#e6ddcd] last:border-0">
-              <b className={'min-w-[86px] ' + (barre ? 'line-through opacity-60' : '')}>{qteLisible(q, u)}</b>
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-1.5 gap-y-1 sm:gap-2.5 py-1.5 text-[12.5px] sm:text-[14px] border-b border-dashed border-[#e6ddcd] last:border-0">
+              <b className={'min-w-[62px] sm:min-w-[86px] ' + (barre ? 'line-through opacity-60' : '')}>{qteLisible(q, u)}</b>
               {ouvrable ? (
                 <button onClick={() => setOuvertes(o => ({ ...o, [sousCle]: !o[sousCle] }))}
-                  className={'text-left text-bordeaux font-semibold underline underline-offset-2 flex-1 ' + (barre ? 'line-through opacity-60' : '')}>
+                  className={'text-left text-bordeaux font-semibold underline underline-offset-2 flex-1 min-w-[50%] sm:min-w-0 ' + (barre ? 'line-through opacity-60' : '')}>
                   {propre(l.produit)} ▾
                 </button>
-              ) : <span className={'flex-1 ' + (barre ? 'line-through opacity-60' : '')}>{propre(l.produit)}</span>}
+              ) : <span className={'flex-1 min-w-[50%] sm:min-w-0 ' + (barre ? 'line-through opacity-60' : '')}>{propre(l.produit)}</span>}
               {sansRecette(l.produit, recettes) && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette</span>
+                <span className="text-[9.5px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette</span>
               )}
               {/* déjà en stock : rien à faire, et ce n'est pas « fait » par quelqu'un */}
               {dispo && peutEtreFait(l.produit) && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
+                <span className="text-[9.5px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
               )}
               {onFait && peutEtreFait(l.produit) && !dispo && (
                 <BoutonFait fait={coche} sansNomenclature={sansRecette(l.produit, recettes)}
@@ -164,25 +164,25 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
           </div>
           {g.lignes.map(l => (
         <div key={l.produit}>
-          <div className="flex items-center gap-3 py-2.5 text-[16px] border-b border-dashed border-[#f0e8db]">
-            <b className={'min-w-[96px] text-[17px] ' + (declare(l.produit) ? 'line-through opacity-60' : '')}>
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 sm:gap-3 py-2 sm:py-2.5 text-[13.5px] sm:text-[16px] border-b border-dashed border-[#f0e8db]">
+            <b className={'min-w-[66px] sm:min-w-[96px] text-[14.5px] sm:text-[17px] ' + (declare(l.produit) ? 'line-through opacity-60' : '')}>
               {qteLisible(l.qty, l.unite)}
             </b>
             {estPrepa(l.produit) && recettes[l.produit] && !jamaisDeplier(l.produit) && !l.enStock ? (
               <button onClick={() => setOuvertes(o => ({ ...o, [cle(l.produit)]: !o[cle(l.produit)] }))}
-                className="flex-1 text-left text-bordeaux font-bold underline underline-offset-4">
+                className="flex-1 min-w-[50%] sm:min-w-0 text-left text-bordeaux font-bold underline underline-offset-4">
                 {propre(l.produit)} ▾
               </button>
             ) : (
-              <span className="flex-1">
+              <span className="flex-1 min-w-[50%] sm:min-w-0">
                 {propre(l.produit)}
               </span>
             )}
             {sansRecette(l.produit, recettes) && (
-              <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette dans Odoo</span>
+              <span className="text-[9.5px] sm:text-[10.5px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B] whitespace-nowrap">pas de recette dans Odoo</span>
             )}
             {!declare(l.produit) && (l.enStock || (couvert && couvert(l.produit, l.qty))) && (
-              <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
+              <span className="text-[9.5px] sm:text-[10.5px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">en stock</span>
             )}
             {peutEtreFait(l.produit) && !l.enStock && !(!declare(l.produit) && couvert && couvert(l.produit, l.qty)) && (
               <BoutonFait fait={!!declare(l.produit)} sansNomenclature={sansRecette(l.produit, recettes)}
@@ -191,7 +191,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
             )}
           </div>
           {l.usages && l.usages.length > 1 && (
-            <div className="text-[12px] text-ink-mute pl-[96px] -mt-1 mb-1.5">
+            <div className="text-[12px] text-ink-mute pl-[66px] sm:pl-[96px] -mt-1 mb-1.5">
               {l.usages.map(([qui, q]) => (
                 <div key={qui}>{qteLisible(q, l.unite)} pour {qui}</div>
               ))}
@@ -199,7 +199,7 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
           )}
           {manquePour && estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
             && manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).length > 0 && (
-            <div className="text-[12px] text-[#854F0B] pl-[96px] -mt-1 mb-1.5">
+            <div className="text-[12px] text-[#854F0B] pl-[66px] sm:pl-[96px] -mt-1 mb-1.5">
               il manque : {manquePour(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).map(m => `${qteLisible(m.manque, m.unite)} de ${propre(m.produit)}`).join(' · ')}
             </div>
           )}
@@ -207,13 +207,13 @@ function PanneauRecette({ recettes, recette, ouvertes, setOuvertes, onEffacer, o
               de sa recette dort déjà au congélateur, inutile de la refaire */}
           {dejaLa && estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
             && dejaLa(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).length > 0 && (
-            <div className="text-[12px] text-ok pl-[96px] -mt-1 mb-1.5">
+            <div className="text-[12px] text-ok pl-[66px] sm:pl-[96px] -mt-1 mb-1.5">
               déjà en stock : {dejaLa(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).map(propre).join(' · ')}
             </div>
           )}
           {estPrepa(l.produit) && !estIngredient(l.produit) && !estBase(l.produit) && !l.enStock
             && !declare(l.produit) && bloquants && bloquants(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).length > 0 && (
-            <div className="text-[12px] text-[#854F0B] pl-[96px] -mt-1 mb-1.5">
+            <div className="text-[12px] text-[#854F0B] pl-[66px] sm:pl-[96px] -mt-1 mb-1.5">
               à faire d'abord : {bloquants(l.produit, l.aFaire || l.qty, g.cleGroupe, g.lot).map(propre).join(', ')}
             </div>
           )}
@@ -242,7 +242,7 @@ function BoutonFait({ fait, onClick, bloque = null, sansNomenclature = false }) 
       title={sansNomenclature ? 'Sa nomenclature manque dans Odoo : rien ne peut être enregistré'
         : empeche ? 'À faire d\'abord : ' + (bloque || []).map(propre).join(', ')
           : fait ? 'Annuler la déclaration' : 'Déclarer que c\'est fait'}
-      className={'flex-shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold border ' +
+      className={'flex-shrink-0 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-[12px] font-bold border ' +
         (fait ? 'bg-ok text-cream border-ok'
           : empeche ? 'bg-cream-warm text-ink-mute border-line opacity-50 cursor-not-allowed'
             : 'bg-white text-ink-mute border-line')}>
@@ -290,11 +290,11 @@ function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
   return (
     <div role="button" tabIndex={0} onClick={onToggle}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
-      className={'flex items-center gap-3 border rounded-xl px-3.5 py-3 mb-1.5 cursor-pointer ' +
+      className={'flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1.5 sm:gap-3 border rounded-xl px-2.5 sm:px-3.5 py-2.5 sm:py-3 mb-1.5 cursor-pointer ' +
         (fait ? 'bg-[#EAF3DE] border-[#cfe0b8]' : on ? 'bg-[#fdf4f7] border-bordeaux ring-1 ring-bordeaux' : 'bg-white border-line')}>
-      <input type="checkbox" checked={on} readOnly tabIndex={-1} className="w-6 h-6 accent-[#993556] pointer-events-none flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <div className={'text-[18px] font-extrabold ' + (fait ? 'line-through opacity-60' : '')}>
+      <input type="checkbox" checked={on} readOnly tabIndex={-1} className="w-5 h-5 sm:w-6 sm:h-6 accent-[#993556] pointer-events-none flex-shrink-0" />
+      <div className="flex-1 min-w-[55%] sm:min-w-0">
+        <div className={'text-[15px] sm:text-[18px] font-extrabold ' + (fait ? 'line-through opacity-60' : '')}>
           {o.taille || propre(o.produit)} <span className="text-[13px] font-medium text-ink-soft">{o.parfum}</span>
         </div>
         <div className="text-[11.5px] text-ink-mute">
@@ -303,10 +303,10 @@ function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
             : (stock === null ? 'stock inconnu' : stock > 0 ? `il en reste ${resteTexte} en stock` : 'plus rien en stock')}
         </div>
       </div>
-      {(o.stockAssez ?? (o.stock && o.stock.assez)) && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">déjà en stock</span>}
-      {o.recetteVide && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FCEEE8] text-danger">pas de recette dans Odoo</span>}
-      {o.enRetard && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
-      <span className={'text-[18px] font-extrabold text-bordeaux whitespace-nowrap ' + (fait ? 'line-through opacity-60' : '')}>{combien}</span>
+      {(o.stockAssez ?? (o.stock && o.stock.assez)) && <span className="text-[9.5px] sm:text-[10.5px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">déjà en stock</span>}
+      {o.recetteVide && <span className="text-[9.5px] sm:text-[10.5px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#FCEEE8] text-danger">pas de recette dans Odoo</span>}
+      {o.enRetard && <span className="text-[9.5px] sm:text-[10.5px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
+      <span className={'text-[15px] sm:text-[18px] font-extrabold text-bordeaux whitespace-nowrap ' + (fait ? 'line-through opacity-60' : '')}>{combien}</span>
       <BoutonFait fait={fait} onClick={onFait} bloque={bloque} />
       {fait && onValider && (
         <button onClick={e => { e.stopPropagation(); onValider() }}
@@ -1350,25 +1350,25 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                   {/* Toute la carte ouvre la recette : viser le petit bouton « recette »
                       au doigt était pénible. Le bouton reste, comme repère visuel. */}
                   <div onClick={ouvrable ? () => setOuvertes(o => ({ ...o, [cleBase(b.produit)]: !o[cleBase(b.produit)] })) : undefined}
-                    className={'flex items-center gap-3 border border-line rounded-xl px-3.5 py-3 mb-1.5 border-l-4 ' +
+                    className={'flex flex-wrap sm:flex-nowrap items-center gap-x-1.5 gap-y-1.5 sm:gap-3 border border-line rounded-xl px-2 sm:px-3.5 py-2.5 sm:py-3 mb-1.5 border-l-4 ' +
                     (ouvrable ? 'cursor-pointer ' : '') +
                     (b.manque <= 0.001 || faitBase(b) ? 'border-l-[#cfe0b8] bg-[#EAF3DE]' : 'border-l-bordeaux bg-white')}>
-                    <span className={'flex-1 min-w-0 ' + (baseBarree(b) ? 'line-through opacity-60' : '')}>
-                      <span className="text-[17px] font-bold">{propre(b.produit)}</span>
+                    <span className={'basis-full sm:basis-auto flex-1 min-w-0 ' + (baseBarree(b) ? 'line-through opacity-60' : '')}>
+                      <span className="text-[14.5px] sm:text-[17px] font-bold">{propre(b.produit)}</span>
                       {b.ordre && <span className="block text-[11px] text-ink-mute font-mono">demandé par Odoo · {b.ordre}</span>}
                     </span>
                     {b.manque <= 0.001 ? (
                       <span className="text-[13px] font-bold text-ok">en stock ({qteLisible(b.stock, b.unite)})</span>
                     ) : (
                       <>
-                        <span className="text-[11.5px] text-ink-mute text-right leading-tight">
+                        <span className="text-[10.5px] sm:text-[11.5px] text-ink-mute text-right leading-tight">
                           il en reste<br /><b>{qteLisible(b.stock, b.unite)}</b>
                           {b.reserve > 0.001 && (
                             <span className="block text-[10.5px]">{qteLisible(b.reserve, b.unite)} réservés</span>
                           )}
                         </span>
                         <span className="text-right">
-                          <span className="text-[19px] font-extrabold text-bordeaux">{qteLisible(b.qty, b.unite)}</span>
+                          <span className="text-[16px] sm:text-[19px] font-extrabold text-bordeaux">{qteLisible(b.qty, b.unite)}</span>
                           {b.n > 0 && (
                             <span className="block text-[10.5px] text-ink-mute leading-tight">
                               {b.n} tournée{b.n > 1 ? 's' : ''}
@@ -1383,12 +1383,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                         )}
                         {/* combien j'en fais maintenant : pas forcément tout d'un coup */}
                         {b.n > 1 && (
-                          <span className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                          <span className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                             <button onClick={() => setLots(l => ({ ...l, [b.produit]: Math.max(1, (l[b.produit] ?? b.n) - 1) }))}
-                              className="w-7 h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">−</button>
+                              className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">−</button>
                             <b className="min-w-[16px] text-center text-[15px]">{lots[b.produit] ?? b.n}</b>
                             <button onClick={() => setLots(l => ({ ...l, [b.produit]: Math.min(b.n, (l[b.produit] ?? b.n) + 1) }))}
-                              className="w-7 h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">+</button>
+                              className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">+</button>
                           </span>
                         )}
                         <BoutonFait fait={false} sansNomenclature={sansRecette(b.produit, recettes)}
