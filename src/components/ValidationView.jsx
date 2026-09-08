@@ -4,6 +4,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies } from '../lib/fabrication'
+import { todayISO } from '../lib/dates'
 
 // ====== « À valider » : la page dédiée ======
 // Tout ce que l'équipe a marqué « fait » (montages, préparations, tournées de
@@ -138,7 +139,10 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         setLignes(ouverts)
         // Cocher d'avance seulement ce qui est dû : un ordre prévu dans quinze
         // jours ne correspond pas à la tournée qu'on vient de faire.
-        const jour = new Date().toISOString().slice(0, 10)
+        // Date LOCALE : en UTC, entre minuit et 1 h au Maroc, on est encore la
+        // veille — les ordres prévus pour aujourd'hui n'étaient plus cochés
+        // d'avance et l'équipe de nuit devait tout recocher à la main.
+        const jour = todayISO()
         setSel(ouverts.filter(x => !x.quand || String(x.quand).slice(0, 10) <= jour).map(x => x.name))
         garderEcran('valider', ouverts)
         // Ce qui avait été corrigé ailleurs, sans écraser ce qu'on tape ici.
@@ -366,7 +370,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                 <div className="flex-1 min-w-0">
                   <div className="text-[16px] font-bold">{propre(l.produit)} — {qte(l.qty, l.unite)}</div>
                   <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.lieu ? ' · ' + l.lieu : ''}</div>
-                  {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > new Date().toISOString().slice(0, 10) ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
+                  {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > todayISO() ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
                     prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
                   </div>}
                 </div>
