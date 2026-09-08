@@ -237,16 +237,37 @@ function BoutonFait({ fait, onClick, bloque = null, sansNomenclature = false }) 
   // été faite. S'il en manque seulement une partie, on laisse déclarer : le
   // gâteau est monté, c'est un fait ; la validation tranchera sur le reste.
   const empeche = !fait && (sansNomenclature || (bloque && bloque.length))
+  // Créer un ordre dans Odoo prend une à deux secondes, pendant lesquelles
+  // l'écran ne bougeait pas : on croyait avoir raté le bouton et on appuyait
+  // trois fois. Maintenant le doigt sent une vibration, le bouton s'enfonce,
+  // puis il dit « en cours… » jusqu'à ce que ce soit vraiment enregistré.
+  const [envoi, setEnvoi] = useState(false)
+  const clic = async e => {
+    e.stopPropagation()
+    navigator.vibrate?.(15)
+    // Un bouton grisé ne faisait RIEN du tout, sans dire pourquoi : au doigt on
+    // ne voit pas l'infobulle. On le dit à voix haute.
+    if (empeche) {
+      toast.error(sansNomenclature
+        ? "Sa recette manque dans Odoo : rien ne peut être enregistré"
+        : "À faire d'abord : " + (bloque || []).map(propre).join(', '))
+      return
+    }
+    if (envoi) return
+    setEnvoi(true)
+    try { await onClick() } finally { setEnvoi(false) }
+  }
   return (
-    <button onClick={e => { e.stopPropagation(); if (!empeche) onClick() }}
+    <button onClick={clic}
       title={sansNomenclature ? 'Sa nomenclature manque dans Odoo : rien ne peut être enregistré'
         : empeche ? 'À faire d\'abord : ' + (bloque || []).map(propre).join(', ')
           : fait ? 'Annuler la déclaration' : 'Déclarer que c\'est fait'}
-      className={'flex-shrink-0 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-[12px] font-bold border ' +
-        (fait ? 'bg-ok text-cream border-ok'
-          : empeche ? 'bg-cream-warm text-ink-mute border-line opacity-50 cursor-not-allowed'
-            : 'bg-white text-ink-mute border-line')}>
-      {fait ? '✓ fait' : sansNomenclature ? 'pas de recette' : empeche ? 'en attente' : 'c\'est fait'}
+      className={'flex-shrink-0 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-[12px] font-bold border transition-transform active:scale-90 ' +
+        (envoi ? 'bg-bordeaux text-cream border-bordeaux'
+          : fait ? 'bg-ok text-cream border-ok'
+            : empeche ? 'bg-cream-warm text-ink-mute border-line opacity-50'
+              : 'bg-white text-ink-mute border-line')}>
+      {envoi ? 'en cours…' : fait ? '✓ fait' : sansNomenclature ? 'pas de recette' : empeche ? 'en attente' : 'c\'est fait'}
     </button>
   )
 }
