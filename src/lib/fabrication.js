@@ -86,9 +86,22 @@ export async function saveBasesChoisies(liste) {
   await saveSaisies('fabrication_bases', { liste: liste || [] })
 }
 
-/** Les OF déjà cochés « fait » (clé = nom de l'OF). */
+/**
+ * Les OF déjà cochés « fait » (clé = nom de l'OF).
+ *
+ * ⚠️ `.limit()` explicite : sans lui Supabase s'arrête à 1 000 lignes SANS
+ * prévenir, et rend un sous-ensemble arbitraire — des déclarations
+ * disparaîtraient de « À valider » sans que rien ne le dise. La table ne se
+ * vide que quand un ordre est validé (ou décoché), donc elle peut grossir vite
+ * un jour chargé. On lit du plus récent au plus ancien : si le plafond était
+ * atteint, ce serait au moins les vieilles coches qui sauteraient, pas celles
+ * du jour.
+ */
 export async function loadFaits() {
-  const { data, error } = await supabase.from('prod_of_faits').select('mo_name, produit, qty, ordres, fait_par, fait_le')
+  const { data, error } = await supabase.from('prod_of_faits')
+    .select('mo_name, produit, qty, ordres, fait_par, fait_le')
+    .order('fait_le', { ascending: false })
+    .limit(5000)
   if (error) throw error
   const map = {}
   for (const f of data || []) map[f.mo_name] = f
