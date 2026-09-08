@@ -238,13 +238,20 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
       // détaille par 24 (8 plaques de biscuit d'un coup), même si sa recette
       // Odoo est écrite pour une pièce. Sans ça l'écran disait « 24 tournées
       // de 1 » — juste, mais illisible.
-      const parTournee = lots[nom] || versUnite(sousBom.product_qty || 1,
+      const parRecette = versUnite(sousBom.product_qty || 1,
         sousBom.product_uom_id?.[1], p.uom_id[1]) || 1
+      const parTournee = lots[nom] || parRecette
       c.tourneeTaille = parTournee
       c.tournees = Math.max(1, Math.ceil((besoin - stock) / parTournee))
       c.produira = c.tournees * parTournee
+      // ⚠️ Quand le catalogue impose une autre taille de tournée que la recette
+      // Odoo, les INGRÉDIENTS doivent suivre. Sinon l'écran annonçait « 5 000 g
+      // de confit » au-dessus des quantités d'une recette de 568 g.
+      const ech = parRecette ? parTournee / parRecette : 1
       c.recette = lignesPour(sousBom, p).map(x => ({
-        produit: x.product_id[1], qty: x.product_qty, unite: x.product_uom_id[1],
+        produit: x.product_id[1],
+        qty: Math.round(x.product_qty * ech * 1000) / 1000,
+        unite: x.product_uom_id[1],
       }))
       c.enfants = await composantsDe(cache, p, c.produira, [], profondeur + 1, chemin, lots, achetes)
     }
