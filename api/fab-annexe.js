@@ -375,9 +375,11 @@ export async function repartir(cache, catalogue, lance, quantites) {
   return out
 }
 
+// La vignette fait 56 pixels de côté : l'image 512 d'Odoo pesait jusqu'à
+// 312 Ko pour rien. On prend la 256, et on retombe sur la 512 si elle manque.
 async function photoDe(nom) {
-  const t = await sr('product.product', [['name', '=', nom]], ['image_512'], { limit: 1 })
-  return t[0]?.image_512 || null
+  const t = await sr('product.product', [['name', '=', nom]], ['image_256', 'image_512'], { limit: 1 })
+  return t[0]?.image_256 || t[0]?.image_512 || null
 }
 
 export default async function handler(req, res) {

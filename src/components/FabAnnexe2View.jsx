@@ -57,18 +57,35 @@ const regleAtelier = produit => REGLES_ATELIER.find(r => r.quand.test(produit ||
 const nomAtelier = produit => regleAtelier(produit)?.nom || propre(produit)
 const facteurAtelier = produit => regleAtelier(produit)?.facteur || 1
 
-function Vignette({ photo, libelle, taille = 'w-14 h-14' }) {
+function Vignette({ photo, libelle, taille = 'w-14 h-14 rounded-xl shrink-0', gros }) {
   const [rate, setRate] = useState(false)
   if (!photo || rate) {
     return (
-      <div className={`${taille} rounded-xl shrink-0 bg-cream-deep grid place-items-center
-                       font-serif italic text-[22px] text-ink-mute`}>
+      <div className={`${taille} bg-cream-deep grid place-items-center
+                       font-serif italic text-ink-mute ${gros ? 'text-[40px]' : 'text-[22px]'}`}>
         {String(libelle || '?').trim().charAt(0).toUpperCase()}
       </div>
     )
   }
   return <img src={photoFabAnnexe(photo)} alt="" onError={() => setRate(true)}
-    className={`${taille} rounded-xl object-cover bg-cream-deep shrink-0`} />
+    className={`${taille} object-cover bg-cream-deep`} />
+}
+
+// Un gâteau occupe souvent plusieurs lignes du catalogue : le Citron Framboise
+// en a quatre (le montage, puis la finition en 3 tailles). On les rassemble
+// sous le nom du gâteau vendu, que leur photo désigne déjà.
+function parGateau(articles) {
+  const groupes = []
+  for (const a of articles || []) {
+    const cle = a.photo || a.produit
+    let g = groupes.find(x => x.cle === cle)
+    if (!g) {
+      g = { cle, nom: String(a.photo || a.libelle).replace(/^E-\s*/, '').trim(), articles: [] }
+      groupes.push(g)
+    }
+    g.articles.push(a)
+  }
+  return groupes
 }
 
 const Titre = ({ children }) => (
@@ -170,7 +187,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader {...nav} />
-        <div className="max-w-[640px] mx-auto px-4 py-5 pb-28">
+        <div className="max-w-[1000px] mx-auto px-4 py-5 pb-28">
           <h1 className="font-serif italic text-[26px] leading-tight">Fabrication Annexe 2</h1>
           <p className="text-[12.5px] text-ink-mute mb-4">
             Seul ce qui est sous le mini apparaît. Stock du Stock Prod annexe.
@@ -192,8 +209,18 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
             </div>
           )}
 
-          {articles?.map(a => (
-            <CarteArticle key={a.produit} a={a} faits={faits} onOuvrir={() => setChemin([a.produit])} />
+          {parGateau(articles).map(g => (
+            <section key={g.cle} className="mb-5">
+              {g.articles.length > 1 && (
+                <h2 className="font-serif italic text-[17px] text-bordeaux mb-1.5">{g.nom}</h2>
+              )}
+              <div className="grid gap-2.5"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
+                {g.articles.map(a => (
+                  <CarteArticle key={a.produit} a={a} faits={faits} onOuvrir={() => setChemin([a.produit])} />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       </div>
@@ -476,41 +503,36 @@ function CarteArticle({ a, faits, onOuvrir }) {
   // Ce qu'il faudrait pour remonter au maxi — une suggestion, modifiable
   // une fois l'article ouvert.
   const sug = tourneesSuggerees(a)
+  // Sous le titre « Le Citron Framboise », une tuile n'a pas à répéter le nom du
+  // gâteau : seule la fin du libellé distingue les lignes entre elles.
+  const court = a.libelle.includes(' · ') ? a.libelle.split(' · ').slice(1).join(' · ') : null
   return (
-    <div className="rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden mb-3 shadow-sm">
-      <div className="flex items-center gap-3 p-3">
-        <Vignette photo={a.photo} libelle={a.libelle} />
-        <div className="flex-1 min-w-0">
-          <div className="text-[16px] font-extrabold leading-tight">{a.libelle}</div>
-          <div className="text-[12px] text-ink-mute mt-0.5">{a.produit}</div>
-        </div>
-        <span className={`rounded-full px-3 py-1.5 text-[12px] font-extrabold shrink-0
-          ${a.etat === 'rupture' ? 'bg-danger/10 text-danger' : 'bg-gold/15 text-gold'}`}>
-          {a.etat === 'rupture' ? 'Rupture' : 'À refaire'}
-        </span>
-      </div>
-      <div className="px-3 pb-3">
-        <div className="h-2.5 rounded-full bg-cream-deep relative overflow-hidden">
-          <div className={`h-full rounded-full ${a.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}`}
+    <button onClick={onOuvrir}
+      className="text-left rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden
+                 shadow-sm hover:border-bordeaux/40 flex flex-col">
+      <div className="relative">
+        <Vignette photo={a.photo} libelle={a.libelle} gros taille="w-full aspect-square" />
+        <span className={`absolute top-1 left-1 w-2.5 h-2.5 rounded-full ring-2 ring-cream-warm
+          ${a.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}`}
+          title={a.etat === 'rupture' ? 'Rupture' : 'À refaire'} />
+        {bloque.length > 0 && (
+          <span className="absolute top-1 right-1 rounded-full bg-ink/70 text-cream
+                           px-1.5 text-[10px] font-extrabold leading-[17px]">🔒{bloque.length}</span>
+        )}
+        <div className="absolute bottom-0 inset-x-0 h-1 bg-cream-deep/80">
+          <div className={`h-full ${a.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}`}
             style={{ width: `${Math.min(100, Math.round((a.stock / a.maxi) * 100))}%` }} />
         </div>
-        <div className="flex justify-between text-[11px] text-ink-mute mt-1.5">
-          <span>En stock : <b className="text-ink">{qte(a.stock, a.unite)}</b></span>
-          <span>mini {nb(a.mini)}</span><span>maxi {nb(a.maxi)}</span>
+      </div>
+
+      <div className="px-2 py-1.5 flex flex-col gap-0.5 flex-1">
+        <div className="text-[12px] font-extrabold leading-[1.25]">{court || a.libelle}</div>
+        <div className="text-[10.5px] text-ink-mute">reste {qte(a.stock, a.unite)}</div>
+        <div className="mt-auto pt-1 text-[11.5px] font-extrabold text-gold leading-tight">
+          {sug === 0.5 ? '½' : sug === 1.5 ? '1½' : sug}× · {qte(a.tournee * sug, a.unite)}
         </div>
       </div>
-      <button onClick={onOuvrir}
-        className="w-full flex items-center gap-3 px-3 py-3 bg-gold/10 border-t border-gold/25 text-left">
-        <div className="flex-1">
-          <div className="text-[12.5px] text-ink-soft">À fabriquer</div>
-          <div className="font-serif italic text-[19px] font-bold text-gold leading-tight">
-            {sug === 0.5 ? '½' : sug === 1.5 ? '1½' : sug} tournée{sug > 1 ? 's' : ''} · {qte(a.tournee * sug, a.unite)}
-          </div>
-        </div>
-        {bloque.length > 0 && <span className="text-[12px] text-ink-mute">🔒 {bloque.length}</span>}
-        <span className="rounded-xl px-4 py-2.5 text-[13.5px] font-extrabold bg-bordeaux text-cream">Voir →</span>
-      </button>
-    </div>
+    </button>
   )
 }
 
@@ -522,7 +544,7 @@ function Cadre({ children, onRetour, photo, titre, sous, user, onLogout, onNavig
         <button onClick={onRetour} className="text-[13px] text-ink-mute font-bold mb-3">← Retour</button>
         <div className="rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden shadow-sm">
           <div className="flex items-center gap-3 p-3">
-            {titre && <Vignette photo={photo} libelle={titre} />}
+            {titre && <Vignette photo={photo} libelle={titre} taille="w-14 h-14 rounded-xl shrink-0" />}
             <div className="flex-1 min-w-0">
               <div className="text-[16px] font-extrabold leading-tight">{titre}</div>
               <div className="text-[12px] text-ink-mute mt-0.5">{sous}</div>
