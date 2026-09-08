@@ -37,6 +37,9 @@ const estPrepa = n => /^SM\b/i.test(String(n || ''))
 // Suivi « fait » : un gâteau se suit par son ordre Odoo, une préparation par son
 // nom + le jour (elle se refait chaque jour).
 const aujourdhui = () => new Date().toLocaleDateString('sv-SE', CASA)
+// Le jour d'une coche, à l'heure de Casablanca : `fait_le` arrive en UTC, et
+// une déclaration de 23 h 30 ne doit pas compter pour le lendemain.
+const jourDe = t => (t ? new Date(t).toLocaleDateString('sv-SE', CASA) : '')
 // La clé porte l'USAGE : une crème au beurre vanille faite pour la crème STK
 // n'est pas celle du 20 cm vanille. Chacun la sienne — sans usage (les bases),
 // la clé reste globale : une base sert tout le monde.
@@ -747,8 +750,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const tourneesFaites = b => {
     const t = tailleTournee(recettes, b.produit)
     if (!t || !t.q) return 0
+    // Seulement les coches DU JOUR. Sans ce filtre on additionnait tout ce qui
+    // traînait en base : le 2026-09-08 l'écran comptait 5 tournées de crème au
+    // beurre nature pour 2 vraiment faites (une remontait au 29 août), barrait
+    // la ligne, et l'équipe lisait « déjà fait ». Même règle qu'au calcul du
+    // stock plus haut : une base se refait chaque matin.
     const total = Object.values(faits)
-      .filter(i => i && i.produit === b.produit)
+      .filter(i => i && i.produit === b.produit && jourDe(i.fait_le) === aujourdhui())
       .reduce((s2, i) => s2 + (Number(i.qty) || 0), 0)
     return Math.round(total / t.q)
   }
