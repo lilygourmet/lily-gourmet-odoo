@@ -1145,6 +1145,75 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
 }
 
 // ============================================================
+// Réappro CD* : c'est l'APP qui tient les mini/maxi, plus Odoo.
+//
+// Pourquoi : les 55 règles de réapprovisionnement CD* d'Odoo relançaient les
+// mêmes fabrications chaque matin — 6 451 ordres ouverts, dont certains de
+// 2022, et le même gâteau affiché deux fois dans Fabrication CD. Elles ont été
+// effacées le 2026-09-08 et leurs valeurs rangées dans la table `cd_minmax`.
+//
+// Ce que fait cette fonction, une fois par matin : pour chaque article sous son
+// mini, lancer UN ordre qui le remonte à son maxi. Le garde-fou n'est pas une
+// fenêtre de temps mais le stock lui-même : ce qui est déjà lancé et pas encore
+// fini compte comme présent, donc un article déjà en cours ne repart jamais.
+// ============================================================
+async function reapproCD() {
+  if (!process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: 'base de l\'app indisponible' }
+  }
+  const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  const { data: regles, error } = await sb.from('cd_minmax')
+    .select('produit, mini, maxi, unite').eq('actif', true)
+  if (error) return { error: 'table cd_minmax illisible : ' + error.message }
+  if (!regles || !regles.length) return { crees: [], sautes: [], vide: true }
+
+  const uid = await odooAuth()
+  const modele = await modeleWhlvp(uid)
+  const lieu = modele && Array.isArray(modele.location_src_id) ? modele.location_src_id[0] : null
+  if (!lieu) return { error: 'emplacement de production introuvable' }
+
+  // Le nom d'Odoo peut porter une référence entre crochets : on compare sans.
+  const net = t => String(t || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const arts = await odooSearchRead(uid, 'product.product', [['name', 'ilike', 'CD*']],
+    ['id', 'display_name'], { limit: 2000 })
+  const parNom = new Map(arts.map(a => [net(a.display_name), a]))
+
+  const ids = arts.map(a => a.id)
+  // le stock LÀ où on fabrique, pas dans tout l'entrepôt
+  const lus = await odooCall(uid, 'product.product', 'read', [ids, ['free_qty']], { context: { location: lieu } })
+  const stockDe = Object.fromEntries(lus.map(x => [x.id, Math.max(0, x.free_qty || 0)]))
+
+  // ce qui est déjà lancé : il arrive, donc il compte
+  const ouverts = await odooSearchRead(uid, 'mrp.production',
+    [['product_id', 'in', ids], ['state', 'in', ['draft', 'confirmed', 'progress', 'to_close']]],
+    ['product_id', 'product_qty'], { limit: 3000 })
+  const enRoute = {}
+  for (const o of ouverts) {
+    const id = Array.isArray(o.product_id) ? o.product_id[0] : null
+    if (id) enRoute[id] = (enRoute[id] || 0) + (o.product_qty || 0)
+  }
+
+  const crees = []
+  const sautes = []
+  for (const r of regles) {
+    const a = parNom.get(net(r.produit))
+    if (!a) { sautes.push({ produit: r.produit, pourquoi: 'article introuvable dans Odoo' }); continue }
+    const couvert = (stockDe[a.id] || 0) + (enRoute[a.id] || 0)
+    if (couvert >= Number(r.mini) - 0.0001) continue
+    const qty = Math.round((Number(r.maxi) - couvert) * 1000) / 1000
+    if (!(qty > 0)) continue
+    try {
+      const of = await creerOfPreparation(uid, a.display_name, qty, [], r.unite)
+      crees.push({ produit: a.display_name, qty, unite: r.unite, ordre: of.name, couvert, mini: r.mini, maxi: r.maxi })
+    } catch (e) {
+      sautes.push({ produit: r.produit, pourquoi: (e.message || String(e)).slice(0, 140) })
+    }
+  }
+  console.log(`[reappro-cd] ${crees.length} ordre(s) cree(s), ${sautes.length} saute(s) sur ${regles.length} regle(s)`)
+  return { crees, sautes, regles: regles.length }
+}
+
+// ============================================================
 // Ce qui manque pour fabriquer ces ordres (lecture seule).
 // La génoise est ignorée : son stock restera négatif un moment (Layla).
 // ============================================================
@@ -1810,6 +1879,12 @@ export default async function handler(req, res) {
     // Deux garde-fous : un ordre TERMINÉ n'est jamais touché (sa production est
     // entrée en stock), et on `action_cancel` sans supprimer — la trace reste
     // dans Odoo, contrairement au décochage qui efface ce que l'app a créé.
+    // L'app relance les CD* sous leur mini (cron du matin, ou bouton
+    // « Actualiser » de Fabrication CD). Sans effet s'il n'y a rien à lancer.
+    if (req.query.mode === 'reappro-cd') {
+      return res.status(200).json(await reapproCD())
+    }
+
     if (req.method === 'POST' && req.query.mode === 'annuler-ordre') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
       const names = (body.ordres || []).filter(Boolean)

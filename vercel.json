@@ -34,11 +34,19 @@
       "destination": "/api/wati-webhook?action=ocp-sync-lgt"
     },
     {
+      "source": "/api/reappro-cd",
+      "destination": "/api/freezer-list?mode=reappro-cd"
+    },
+    {
       "source": "/annuaire",
       "destination": "/annuaire.html"
     }
   ],
   "crons": [
+    {
+      "path": "/api/reappro-cd",
+      "schedule": "0 5 * * *"
+    },
     {
       "path": "/api/task-reminders",
       "schedule": "0 7 * * *"

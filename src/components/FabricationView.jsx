@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { annulerDoublons, loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies } from '../lib/fabrication'
+import { annulerDoublons, loadFabrication, loadFaits, setFait, loadManques, validerDansOdoo , dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD } from '../lib/fabrication'
 import { buildZplInfo } from '../lib/etiquettes'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
@@ -562,7 +562,16 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
   // Odoo fait foi : après une annulation, une modification ou une validation
   // faite là-bas, ce bouton remet l'écran à jour sans changer de page.
-  const relire = () => { setData(null); setErreur(null); setRechargement(v => v + 1) }
+  // Ce bouton relance d'abord les articles passés sous leur mini : c'est l'app
+  // qui tient les mini/maxi depuis que les règles d'Odoo ont été effacées.
+  // Silencieux si ça échoue — la relecture ne doit jamais rester bloquée.
+  const relire = () => {
+    setData(null); setErreur(null)
+    reapproCD()
+      .then(r => { if (r && r.crees && r.crees.length) toast.success(`${r.crees.length} fabrication(s) relancée(s) : stock sous le mini`) })
+      .catch(() => { /* le réappro est un confort, pas une condition */ })
+      .finally(() => setRechargement(v => v + 1))
+  }
 
   const recettes = useMemo(() => (data && data.recettes) || {}, [data])
   // ====== Le stock tel que l'app le voit ======

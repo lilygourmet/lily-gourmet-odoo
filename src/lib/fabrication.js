@@ -26,6 +26,18 @@ export async function loadFabrication(jours = 60) {
   return { ofs: data.ofs || [], ordres: data.ordres || [], recettes: data.recettes || {}, stocks: data.stocks || {}, catalogue: data.catalogue || [] }
 }
 
+/**
+ * Relance les CD* passés sous leur mini. Ce sont les mini/maxi de l'APP (table
+ * `cd_minmax`) : les 55 règles d'Odoo ont été effacées, elles relançaient les
+ * mêmes fabrications chaque matin. Sans effet quand il n'y a rien à lancer —
+ * on peut donc l'appeler à chaque « Actualiser ».
+ */
+export async function reapproCD() {
+  const r = await fetch('/api/freezer-list?mode=reappro-cd')
+  if (!r.ok) throw new Error(`réappro indisponible (${r.status})`)
+  return await r.json()
+}
+
 /** Juste les ordres Odoo encore ouverts (rapide : une seule question à Odoo). */
 export async function loadOrdres() {
   const r = await fetch('/api/freezer-list?mode=ordres')
