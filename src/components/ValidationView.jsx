@@ -258,16 +258,23 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
       { confirmLabel: 'Annuler ces ordres', danger: true })
     if (!ok) return
     setRefus(true)
+    // Ce qui est DÉJÀ annulé dans Odoo doit sortir de l'écran même si la suite
+    // échoue : sinon un paquet passé, un paquet en panne de réseau, et les
+    // ordres annulés restaient affichés sans rien dire — on recliquait, et
+    // Odoo répondait « refusé » pour des ordres qui étaient bel et bien partis.
+    const noms = []
+    const refuses = []
+    let panne = null
     try {
       // Odoo n'en relit que 50 à la fois : au-delà, les suivants partiraient
       // à la trappe sans rien dire.
-      const noms = []
-      const refuses = []
       for (let i = 0; i < choisis.length; i += 50) {
         const r = await annulerOrdre(choisis.slice(i, i + 50).map(l => l.name), user?.id)
         noms.push(...((r && r.noms) || []))
         refuses.push(...((r && r.refuses) || []))
       }
+    } catch (e) { panne = e.message || String(e) }
+    try {
       if (noms.length) {
         const partis = new Set(noms)
         setLignes(v => { const reste = (v || []).filter(x => !partis.has(x.name)); garderEcran('valider', reste); return reste })
@@ -275,7 +282,8 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         toast.success(noms.length + (noms.length > 1 ? ' ordres annulés' : ' ordre annulé') + ' dans Odoo')
       }
       if (refuses.length) toast.error('Odoo a refusé : ' + refuses.join(' · '))
-      if (!noms.length && !refuses.length) toast.error("Odoo n'a rien annulé")
+      if (panne) toast.error('Interrompu après ' + noms.length + ' annulation(s) : ' + panne)
+      else if (!noms.length && !refuses.length) toast.error("Odoo n'a rien annulé")
     } catch (e) { toast.error(e.message || String(e)) }
     setRefus(false)
   }
