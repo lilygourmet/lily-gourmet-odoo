@@ -17,7 +17,13 @@ import { supabase } from '../lib/supabase'
 //      ses sous-catégories (la recette de la préparation, à la bonne quantité)
 // La recette est à droite sur ordinateur, en page séparée sur téléphone.
 
-const BASES = [/cr[eè]me au beurre nature/i, /craquant/i, /sirop/i, /amandes\s*caram/i]
+// La génoise est une base comme les autres : elle sert tous les gâteaux et se
+// fait par tournées entières de 3 kg. Elle en était exclue tant qu'on ne la
+// déclarait pas — son stock plongeait donc dans le négatif (−44 kg de vanille,
+// −61 kg de chocolat au 2026-09-08), faute que le labo enregistre ce qu'il
+// fabrique. Elle reste « jamais bloquante » (voir `toujoursLa`) le temps que ce
+// retard se résorbe.
+const BASES = [/cr[eè]me au beurre nature/i, /craquant/i, /sirop/i, /amandes\s*caram/i, /genoise/i]
 // Bases ajoutées par Layla depuis l'écran, en plus de celles reconnues au nom.
 // Variable de module : les petits composants d'affichage s'en servent aussi.
 let basesEnPlus = []
@@ -675,6 +681,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const qty = combien * ((t && t.q) || 0)
     if (!(qty > 0)) return
     setLots(l => { const s2 = { ...l }; delete s2[b.produit]; return s2 })
+    // « Genoise Vanille KG CD » n'est qu'un changement d'étiquette : sa recette
+    // est UNE tournée de « Genoise Vanille KG commun ». À l'atelier c'est un
+    // seul geste, on ne va pas faire cocher deux fois. On déclare donc la
+    // génoise du dessous EN MÊME TEMPS, et d'abord — ce qui fabrique part avant
+    // ce qui consomme. La génoise chocolat, elle, a sa propre recette : rien en
+    // dessous, rien à cascader.
+    for (const l of ((recettes[b.produit] || {}).lignes || [])) {
+      if (!estGenoise(l.produit) || l.produit === b.produit) continue
+      if (!recettes[l.produit]) continue
+      await declarerBase({ produit: l.produit, n: combien }, combien)
+    }
     const desGateaux = new Set(((data && data.ofs) || []).map(o => o.name))
     const libre = ((data && data.ordres) || []).find(o => o.produit === b.produit
       && o.etat !== 'done' && !faits[o.name] && !pourUnGateau(o.origine, desGateaux))
