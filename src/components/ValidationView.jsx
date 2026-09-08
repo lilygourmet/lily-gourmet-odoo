@@ -215,7 +215,17 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   const choisis = useMemo(() => (lignes || []).filter(l => sel.includes(l.name)), [lignes, sel])
   const prets = choisis.filter(l => !l.manques.length)
   const bloques = choisis.filter(l => l.manques.length)
-  const manquesCumules = [...new Map(bloques.flatMap(l => l.manques).map(m => [m.produit, m])).values()]
+  // On ADDITIONNE les manques d'un même article. Avant, on n'en gardait qu'un
+  // seul par article : trois ordres bloqués à 2 000 g de la même crème, et la
+  // fenêtre annonçait 2 000 g alors que 6 000 g allaient passer en négatif.
+  // C'est la seule chose qui protège avant une action irréversible.
+  const manquesCumules = [...bloques.flatMap(l => l.manques)
+    .reduce((m, x) => {
+      const vu = m.get(x.produit)
+      if (vu) vu.manque += (Number(x.manque) || 0)
+      else m.set(x.produit, { ...x, manque: Number(x.manque) || 0 })
+      return m
+    }, new Map()).values()]
 
   // Annuler l'ordre dans Odoo. Demande délibérée, donc on va au-delà du
   // décochage : même un ordre lancé par Odoo lui-même part. Il n'est pas
