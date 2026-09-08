@@ -420,7 +420,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
 
       {autres.length > 0 && <Titre>{racine ? 'Les composants' : "Ce qu'il faut avoir"}</Titre>}
       {autres.map(c => {
-        const fait = !!faits[c.produit] && !faits[c.produit].brouillon
+        // « fait » vient du serveur (ce qui est déclaré du jour), pas de la
+        // mémoire de l'écran : sortir de la page et revenir ne l'efface plus.
+        const fait = c.dejaFait > 0 || (!!faits[c.produit] && !faits[c.produit].brouillon)
         const ok = c.ok || fait
         return (
           <button key={c.produit}
@@ -432,7 +434,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               <div className="text-[14px]">{propre(c.produit)}</div>
               <div className="text-[11.5px] text-ink-mute mt-0.5">
                 {fait
-                  ? <span className="text-success font-bold">fait · en attente de validation</span>
+                  ? <span className="text-success font-bold">
+                      {c.dejaFait > 0 ? `${qte(c.dejaFait, c.unite)} fait` : 'fait'} · en attente de validation
+                    </span>
                   : <>stock {qte(c.stock, c.unite)} · il en faut {qte(c.besoin, c.unite)}
                     {c.fige && <span className="text-ink-mute"> · quantité figée</span>}</>}
               </div>

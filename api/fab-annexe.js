@@ -179,7 +179,7 @@ function ajustementsFiges(bom, produit, figes, tournee) {
  * qu'un composant fabriqué manque. Un composant en stock suffisant arrête la
  * descente : inutile de savoir de quoi il est fait, on l'a.
  */
-export async function composantsDe(cache, produit, quantite, figes, profondeur = 0, vus = [], lots = {}, achetes = new Set()) {
+export async function composantsDe(cache, produit, quantite, figes, profondeur = 0, vus = [], lots = {}, achetes = new Set(), declare = {}) {
   const bom = await bomDe(cache, produit)
   // Une recette qui se contiendrait elle-même tournerait sans fin : on ne
   // redescend jamais dans un article déjà croisé plus haut.
@@ -205,6 +205,12 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
     const fabrique = !!sousBom
     const fige = figes.includes(nom)
 
+    // Ce que l'atelier a DÉJÀ déclaré aujourd'hui compte comme s'il l'avait :
+    // le stock Odoo ne remonte qu'à la validation, et sans ça le pâtissier
+    // qui sort de l'écran et y revient se voyait redemander ce qu'il venait
+    // de faire. (Layla, 2026-09-08.)
+    const dejaFait = declare[nom] || 0
+
     // Un ingrédient ACHETÉ ne bloque jamais : le pâtissier ne peut pas
     // fabriquer du sucre, et le stock des matières premières à l'annexe n'est
     // pas tenu à jour (47 tonnes de sucre, une gélatine à −9…). Le laisser
@@ -214,7 +220,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
     // sortie réelle. La mousse du tiramisu ne bloque pas parce qu'elle est faite
     // de matières premières achetées ; la crème au beurre praliné du suprême
     // amandes, elle, est figée ET se fabrique — il faut la faire d'abord.
-    const ok = !fabrique || stock >= besoin
+    const ok = !fabrique || (stock + dejaFait) >= besoin
 
     // Plus bas que l'article de tête, la recette complète est déjà affichée
     // telle quelle : inutile de répéter ses matières premières ici. Mais à la
@@ -222,7 +228,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
     // le pâtissier doit la voir pour la faire.
     if (profondeur > 0 && !fige && !fabrique) return null
 
-    const c = { produit: nom, unite: uniteDe(p), besoin, stock, fabrique, fige, ok }
+    const c = { produit: nom, unite: uniteDe(p), besoin, stock, dejaFait, fabrique, fige, ok }
 
     // Tout ce qui se fabrique porte sa recette et sa descendance, MÊME en
     // stock : Layla veut pouvoir ouvrir un composant vert pour en préparer
@@ -242,7 +248,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
         sousBom.product_uom_id?.[1], p.uom_id[1]) || 1
       const parTournee = lots[nom] || parRecette
       c.tourneeTaille = parTournee
-      c.tournees = Math.max(1, Math.ceil((besoin - stock) / parTournee))
+      c.tournees = Math.max(1, Math.ceil((besoin - stock - dejaFait) / parTournee))
       c.produira = c.tournees * parTournee
       // ⚠️ Quand le catalogue impose une autre taille de tournée que la recette
       // Odoo, les INGRÉDIENTS doivent suivre. Sinon l'écran annonçait « 5 000 g
@@ -253,7 +259,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
         qty: Math.round(x.product_qty * ech * 1000) / 1000,
         unite: x.product_uom_id[1],
       }))
-      c.enfants = await composantsDe(cache, p, c.produira, [], profondeur + 1, chemin, lots, achetes)
+      c.enfants = await composantsDe(cache, p, c.produira, [], profondeur + 1, chemin, lots, achetes, declare)
     }
     return c
   }))
@@ -496,7 +502,7 @@ export default async function handler(req, res) {
               .sort((x, y) => (y.rang || 1) - (x.rang || 1))
               .map(x => detailTaille(cache, x)))).filter(Boolean)
           : [],
-        composants: await composantsDe(cache, p, a.tournee, a.figes || [], 0, [], lots, achetes),
+        composants: await composantsDe(cache, p, a.tournee, a.figes || [], 0, [], lots, achetes, declare),
       })
     }
 
