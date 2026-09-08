@@ -73,6 +73,8 @@ export function creerCache() {
 const CHAMPS_PRODUIT = ['id', 'name', 'display_name', 'uom_id', 'product_tmpl_id',
   'product_template_attribute_value_ids']
 const net = t => String(t || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+/** Le nom d'un article sans la référence interne qu'Odoo colle devant. */
+const sansRef = t => String(t || '').replace(/^\[[^\]]*\]\s*/, '').trim()
 
 /**
  * L'article, par son nom.
@@ -82,7 +84,9 @@ const net = t => String(t || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, '
  * (Citron) / (Praliné Amandes caramélisées) / … Le catalogue peut donc nommer
  * soit l'article simple, soit une variante précise — on essaie les deux.
  */
-export function produitParNom(cache, nom) {
+export function produitParNom(cache, nomBrut) {
+  // « [178] E- Tiramisu » : la référence interne d'Odoo n'est pas dans `name`.
+  const nom = String(nomBrut || '').replace(/^\[[^\]]*\]\s*/, '').trim()
   if (!cache.produits.has(nom)) {
     cache.produits.set(nom, memo('p:' + nom, async () => {
       const exact = await sr('product.product', [['name', '=', nom]], CHAMPS_PRODUIT, { limit: 40 })
@@ -160,10 +164,11 @@ function lignesPour(bom, produit) {
  * lignes du même produit change — ce qui ne touche ni le stock ni le coût.
  */
 function ajustementsFiges(bom, produit, figes, tournee) {
+  if (!bom) return {}                  // article sans recette : rien à imposer
   const facteur = tournee / (bom.product_qty || 1)
   const par = new Map()
   for (const l of lignesPour(bom, produit)) {
-    const nom = l.product_id[1]
+    const nom = sansRef(l.product_id[1])
     if (!figes.includes(nom)) continue
     const e = par.get(nom) || { unite: l.product_uom_id[1], total: 0, lignes: 0 }
     e.total += versUnite(l.product_qty, l.product_uom_id[1], e.unite) * facteur
@@ -195,7 +200,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
   const stocks = await stocksDe(ids)
 
   const out = await Promise.all(lignes.map(async l => {
-    const nom = l.product_id[1]
+    const nom = sansRef(l.product_id[1])
     const p = await produitParNom(cache, nom)
     if (!p) return null
 
@@ -267,49 +272,6 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
 }
 
 /**
- * Une taille de la même recette, vue depuis la tournée : ce qu'elle consomme
- * PAR PIÈCE. La quantité, elle, n'est connue qu'à la fin — quand le pâtissier
- * dit ce qu'il a monté.
- *
- * - `figesParPiece` : la part de mousse d'une pièce, dans l'unité de la ligne
- *   de recette. Sert à répartir la cuve entre les tailles montées.
- * - `fabriquesParPiece` : ce qu'il faut avoir par pièce (le biscuit de CETTE
- *   taille-là), avec son stock. Sert au contrôle de fin de tournée.
- */
-async function detailTaille(cache, a) {
-  const p = await produitParNom(cache, a.produit)
-  if (!p) return null
-  const bom = await bomDe(cache, p)
-  if (!bom) return null
-  const parRecette = bom.product_qty || 1
-  const figes = a.figes || []
-
-  const figesParPiece = {}
-  const fabriques = []
-  for (const l of lignesPour(bom, p)) {
-    const nom = l.product_id[1]
-    const q = l.product_qty / parRecette
-    if (figes.includes(nom)) {
-      figesParPiece[nom] = (figesParPiece[nom] || 0) + q
-      continue
-    }
-    const c = await produitParNom(cache, nom)
-    if (!c || !(await bomDe(cache, c))) continue        // acheté : rien à contrôler
-    fabriques.push({ produit: nom, unite: uniteDe(c), id: c.id,
-      parPiece: versUnite(l.product_qty, l.product_uom_id[1], c.uom_id[1]) / parRecette })
-  }
-
-  const stocks = await stocksDe([p.id, ...fabriques.map(f => f.id)])
-  return {
-    produit: a.produit, libelle: a.libelle || a.produit, rang: a.rang || 1,
-    unite: uniteDe(p), stock: stocks[p.id] || 0, tournee: a.tournee,
-    figesParPiece,
-    fabriques: fabriques.map(f => ({ produit: f.produit, unite: f.unite,
-      parPiece: f.parPiece, stock: stocks[f.id] || 0 })),
-  }
-}
-
-/**
  * Répartir LA CUVE entre les tailles réellement montées (choix « B » de Layla,
  * 2026-09-07). Chaque ordre porte sa vraie part de mousse, et l'écart entre la
  * cuve et la somme des parts retombe sur la taille lancée — c'est elle qui a
@@ -336,8 +298,9 @@ export async function repartir(cache, catalogue, lance, quantites) {
         const c = await produitParNom(cache, nom)
         if (!c) continue
         uniteArticle[nom] = c.uom_id[1]
-        const e = out[nom] || { ligne: 0, unite: l.product_uom_id[1] }
+        const e = out[nom] || { ligne: 0, unite: l.product_uom_id[1], n: 0 }
         e.ligne += versUnite(l.product_qty, l.product_uom_id[1], e.unite) / (bom.product_qty || 1)
+        e.n += 1
         out[nom] = e
       }
     }
@@ -380,7 +343,11 @@ export async function repartir(cache, catalogue, lance, quantites) {
     for (const [nom, e] of Object.entries(pp)) {
       let v = parts[produit][nom] || 0
       if (produit === lance.produit) v += (ecart[nom] || 0)
-      ajustements[nom] = Math.max(0, Math.round(versUnite(v, uniteArticle[nom], e.unite) * 1000) / 1000)
+      // ⚠️ Réparti entre les lignes du même produit : Odoo pose la consigne sur
+      // chacune, et le total serait sinon compté autant de fois qu'il y a de
+      // lignes (le sucre du tiramisu en occupe deux).
+      ajustements[nom] = Math.max(0,
+        Math.round(versUnite(v, uniteArticle[nom], e.unite) / (e.n || 1) * 1000) / 1000)
     }
     const p = await produitParNom(cache, produit)
     out.push({ produit, qty, unite: uniteDe(p), ajustements, lance: produit === lance.produit })
@@ -390,6 +357,7 @@ export async function repartir(cache, catalogue, lance, quantites) {
 
 // La vignette fait 56 pixels de côté : l'image 512 d'Odoo pesait jusqu'à
 // 312 Ko pour rien. On prend la 256, et on retombe sur la 512 si elle manque.
+
 async function photoDe(nom) {
   const t = await sr('product.product', [['name', '=', nom]], ['image_256', 'image_512'], { limit: 1 })
   return t[0]?.image_256 || t[0]?.image_512 || null
@@ -506,15 +474,10 @@ export default async function handler(req, res) {
         figes: a.figes || [],
         figesNom: a.figes_nom || 'Monté sur place',
         ajustements: ajustementsFiges(await bomDe(cache, p), p, a.figes || [], a.tournee),
-        // Les tailles où la cuve peut finir : la sienne et les PLUS PETITES.
-        // D'un 10 pers on descend en 5 pers et en individuels ; d'un 5 pers on
-        // ne remonte jamais en 10.
-        tailles: a.famille
-          ? (await Promise.all((catalogue || [])
-              .filter(x => x.famille === a.famille && (x.rang || 1) <= (a.rang || 1))
-              .sort((x, y) => (y.rang || 1) - (x.rang || 1))
-              .map(x => detailTaille(cache, x)))).filter(Boolean)
-          : [],
+        // ⚠️ Les tailles d'une même cuve (« d'un 10 pers on finit en 5 pers et
+        // en individuels ») ne sont PAS calculées ici : chacune coûte une
+        // dizaine d'allers-retours vers Odoo, et l'écran de fin multi-tailles
+        // n'est pas encore fait. `detailTaille` est prêt pour ce jour-là.
         composants: await composantsDe(cache, p, a.tournee, a.figes || [], 0, [], lots, achetes, declare),
       })
     }

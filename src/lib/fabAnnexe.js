@@ -67,10 +67,14 @@ export function pourFois(article, fois) {
   if (!article || fois === 1) return article
   const ech = c => {
     const besoin = c.besoin * fois
-    const ok = !c.fabrique || c.stock >= besoin
+    // ⚠️ Compter ce qui est DÉJÀ déclaré, comme le fait le serveur. Sans ça, un
+    // composant fabriqué ce matin redevenait bloquant dès qu'on choisissait
+    // autre chose qu'une tournée pile — c'est-à-dire presque toujours.
+    const dispo = (c.stock || 0) + (c.dejaFait || 0)
+    const ok = !c.fabrique || dispo >= besoin
     const out = { ...c, besoin, ok }
     if (!ok && c.tourneeTaille) {
-      out.tournees = Math.max(1, Math.ceil((besoin - c.stock) / c.tourneeTaille))
+      out.tournees = Math.max(1, Math.ceil((besoin - dispo) / c.tourneeTaille))
       out.produira = out.tournees * c.tourneeTaille
     }
     if (c.enfants) out.enfants = c.enfants.map(ech)
@@ -97,10 +101,17 @@ export function pourFois(article, fois) {
  */
 export function bloquants(noeud, dejaFaits) {
   const faits = dejaFaits instanceof Set ? dejaFaits : new Set(dejaFaits || [])
+  // ⚠️ L'appelant ne doit passer QUE des composants réellement déclarés : une
+  // quantité retapée sans « c'est fait » est un brouillon, pas une fabrication.
+  // Voir `declares()`.
   return enfantsDe(noeud)
     .filter(c => !c.ok && c.fabrique && !faits.has(c.produit))
     .map(c => c.produit)
 }
+
+/** Les composants vraiment déclarés — les brouillons n'en sont pas. */
+export const declares = faits =>
+  Object.entries(faits || {}).filter(([, v]) => v && !v.brouillon).map(([k]) => k)
 
 /**
  * Où on en est dans la descente. `chemin` part de l'article :

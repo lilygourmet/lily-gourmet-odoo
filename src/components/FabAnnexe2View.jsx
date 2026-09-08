@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe, bloquants, noeudAu,
+import { loadFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe, bloquants, declares, noeudAu,
   declarer, envoyerAValider, tourneesSuggerees, pourFois } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 
@@ -99,12 +99,15 @@ const Titre = ({ children }) => (
 // sucre.
 // ------------------------------------------------------------
 function LigneQte({ nom, valeur, unite, onValeur, gras }) {
-  const affiche = qte(valeur, unite).replace(new RegExp(`\\s*${unite}$`), '')
+  const suffixe = ' ' + unite
+  const brut = qte(valeur, unite)
+  const affiche = brut.endsWith(suffixe) ? brut.slice(0, -suffixe.length) : brut
   const [txt, setTxt] = useState(affiche)
   const [vu, setVu] = useState(affiche)
   if (affiche !== vu) { setVu(affiche); setTxt(affiche) }
 
   const valider = () => {
+    if (txt === affiche) return          // rien tapé : pas de recalcul
     const v = Number(String(txt).replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'))
     if (!(v > 0)) { setTxt(affiche); return }
     onValeur(v)
@@ -175,8 +178,14 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     if (!ouvert || details[ouvert]) return
     let vivant = true
     loadArticleFabAnnexe(ouvert)
-      .then(a => { if (vivant && a) setDetails(d => ({ ...d, [ouvert]: a })) })
-      .catch(e => { if (vivant) setErreur(e.message || String(e)) })
+      .then(a => {
+        if (!vivant) return
+        // Rien à afficher (l'article vient d'être retiré du catalogue) : on
+        // le dit et on revient, plutôt que de laisser tourner le squelette.
+        if (!a) { setErreur(`« ${ouvert} » n'est plus suivi.`); setChemin([]); return }
+        setDetails(d => ({ ...d, [ouvert]: a }))
+      })
+      .catch(e => { if (vivant) { setErreur(e.message || String(e)); setChemin([]) } })
     return () => { vivant = false }
   }, [ouvert, details])
 
@@ -217,7 +226,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               <div className="grid gap-2.5"
                 style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
                 {g.articles.map(a => (
-                  <CarteArticle key={a.produit} a={a} faits={faits} onOuvrir={() => setChemin([a.produit])} />
+                  <CarteArticle key={a.produit} a={a} onOuvrir={() => setChemin([a.produit])} />
                 ))}
               </div>
             </section>
@@ -245,7 +254,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
 
   const racine = chemin.length === 1
   const enfants = racine ? noeud.composants : noeud.enfants
-  const bloque = bloquants(noeud, Object.keys(faits))
+  const bloque = bloquants(noeud, declares(faits))
   // Un figé qui se FABRIQUE reste un composant à part entière : on peut
   // l'ouvrir, et il bloque tant qu'il n'est pas fait (la crème au beurre
   // praliné). Seuls les figés achetés se lisent en liste — c'est la mousse.
@@ -422,7 +431,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       {autres.map(c => {
         // « fait » vient du serveur (ce qui est déclaré du jour), pas de la
         // mémoire de l'écran : sortir de la page et revenir ne l'efface plus.
-        const fait = c.dejaFait > 0 || (!!faits[c.produit] && !faits[c.produit].brouillon)
+        const fait = c.dejaFait > 0 || declares(faits).includes(c.produit)
         const ok = c.ok || fait
         return (
           <button key={c.produit}
@@ -516,8 +525,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
 }
 
 // ------------------------------------------------------------
-function CarteArticle({ a, faits, onOuvrir }) {
-  const bloque = bloquants(a, Object.keys(faits))
+function CarteArticle({ a, onOuvrir }) {
   // Ce qu'il faudrait pour remonter au maxi — une suggestion, modifiable
   // une fois l'article ouvert.
   const sug = tourneesSuggerees(a)
@@ -533,10 +541,6 @@ function CarteArticle({ a, faits, onOuvrir }) {
         <span className={`absolute top-1 left-1 w-2.5 h-2.5 rounded-full ring-2 ring-cream-warm
           ${a.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}`}
           title={a.etat === 'rupture' ? 'Rupture' : 'À refaire'} />
-        {bloque.length > 0 && (
-          <span className="absolute top-1 right-1 rounded-full bg-ink/70 text-cream
-                           px-1.5 text-[10px] font-extrabold leading-[17px]">🔒{bloque.length}</span>
-        )}
         <div className="absolute bottom-0 inset-x-0 h-1 bg-cream-deep/80">
           <div className={`h-full ${a.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}`}
             style={{ width: `${Math.min(100, Math.round((a.stock / a.maxi) * 100))}%` }} />
