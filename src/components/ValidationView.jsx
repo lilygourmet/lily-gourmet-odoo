@@ -90,6 +90,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   const [envoi, setEnvoi] = useState(false)
   const [resultats, setResultats] = useState(null)
   const [confirmer, setConfirmer] = useState(false)
+  const [refus, setRefus] = useState(false)   // annulation groupée en cours
   const [tour, setTour] = useState(0)
   const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
   const [notes, setNotes] = useState({})          // { ordre: { idLigne: quantité } }
@@ -205,6 +206,40 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         toast.success(l.name + ' annulé dans Odoo')
       } else toast.error((r && r.refuses && r.refuses[0]) || "Odoo a refusé l'annulation")
     } catch (e) { toast.error(e.message || String(e)) }
+  }
+
+  // Refuser d'un coup ce qui est coché. C'est exactement le « annuler l'ordre »
+  // de chaque ligne, mais sur toute la sélection : le faire une par une était
+  // long, et ce bouton-là est caché au fond du panneau « ce qui a été consommé ».
+  async function refuser() {
+    if (!choisis.length) return
+    const ok = await confirmDialog(
+      `Annuler ${choisis.length} ordre${choisis.length > 1 ? 's' : ''} dans Odoo ?\n\n`
+      + choisis.map(l => `• ${propre(l.produit)} — ${l.name}`).join('\n')
+      + "\n\nIls passeront en « annulé » dans Odoo et sortiront de cette liste. Rien ne sera fabriqué.",
+      { confirmLabel: 'Annuler ces ordres', danger: true })
+    if (!ok) return
+    setRefus(true)
+    try {
+      // Odoo n'en relit que 50 à la fois : au-delà, les suivants partiraient
+      // à la trappe sans rien dire.
+      const noms = []
+      const refuses = []
+      for (let i = 0; i < choisis.length; i += 50) {
+        const r = await annulerOrdre(choisis.slice(i, i + 50).map(l => l.name), user?.id)
+        noms.push(...((r && r.noms) || []))
+        refuses.push(...((r && r.refuses) || []))
+      }
+      if (noms.length) {
+        const partis = new Set(noms)
+        setLignes(v => { const reste = (v || []).filter(x => !partis.has(x.name)); garderEcran('valider', reste); return reste })
+        setSel(v => v.filter(n => !partis.has(n)))
+        toast.success(noms.length + (noms.length > 1 ? ' ordres annulés' : ' ordre annulé') + ' dans Odoo')
+      }
+      if (refuses.length) toast.error('Odoo a refusé : ' + refuses.join(' · '))
+      if (!noms.length && !refuses.length) toast.error("Odoo n'a rien annulé")
+    } catch (e) { toast.error(e.message || String(e)) }
+    setRefus(false)
   }
 
   async function lancer(forcer) {
@@ -432,6 +467,17 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                 Forcer la sélection{bloques.length ? ` (${bloques.length})` : ''}
               </button>
             </div>
+            {/* Refuser : ce qui a été coché « fait » par erreur, ou qu'on ne
+                fabriquera pas. Sous les deux autres et en clair, pour ne pas
+                se tromper de bouton. */}
+            <button onClick={refuser} disabled={!choisis.length || refus}
+              className={'w-full mt-2 rounded-2xl py-3 text-[13.5px] font-bold border bg-white ' +
+                (choisis.length && !refus ? 'border-danger text-danger' : 'border-line text-ink-mute')}>
+              {refus ? 'Annulation dans Odoo…' : `Refuser la sélection${choisis.length ? ` (${choisis.length})` : ''}`}
+            </button>
+            <p className="text-[11.5px] text-ink-mute mt-1.5 text-center">
+              « Refuser » annule l'ordre dans Odoo : rien ne sera fabriqué, et il ne revient pas dans Fabrication CD.
+            </p>
           </>
         )}
       </div>
