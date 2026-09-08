@@ -361,6 +361,20 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
     return out
   }
+  // De quel(s) gâteau(x) chaque article descend : on montre la photo du parent
+  // sur la case, car une crème ou un biscuit n'a pas de photo à lui et rien ne
+  // dit à l'œil pour quel gâteau on le fabrique.
+  const meresDe = useMemo(() => {
+    const m = {}
+    for (const racine of (arbre && arbre.racines) || []) {
+      for (const { nom } of touteLaDescendance(racine)) {
+        if (!m[nom]) m[nom] = []
+        if (!m[nom].includes(racine)) m[nom].push(racine)
+      }
+    }
+    return m
+  }, [arbre, recettes])
+
   // On ne s'occupe que des articles suivis dans « Stock Prod Annexe » : c'est
   // la liste que Layla tient. Un article qu'elle n'y a pas activé n'a rien à
   // faire ici, même si Odoo lui connaît un minimum.
@@ -734,6 +748,23 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
     }
   }
 
+  // La photo du gâteau parent, en médaillon sur la case.
+  const Medaillon = ({ meres }) => {
+    if (!meres || !meres.length) return null
+    const m = meres[0]
+    return (
+      <span className="absolute bottom-1 left-1 w-[30px] h-[30px] rounded-full overflow-hidden border-2 border-white bg-white shadow-md"
+        title={meres.length > 1 ? 'pour ' + meres.map(propre).join(', ') : 'pour ' + propre(m)}>
+        <Vignette nom={m} photo={photoDe(m)} plein rond={99} />
+        {meres.length > 1 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-0.5 rounded-full bg-bordeaux text-white text-[9px] font-extrabold grid place-items-center">
+            +{meres.length - 1}
+          </span>
+        )}
+      </span>
+    )
+  }
+
   const carteArticle = nom => {
     const fait = combienDe[nom] || 0
     const st = stocks[nom]
@@ -742,8 +773,9 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
         className={'relative bg-white border rounded-[14px] overflow-hidden text-left ' +
           (fait ? 'border-2 border-ok' : 'border-line')}>
         <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
-        <span className="block w-full aspect-square overflow-hidden">
+        <span className="relative block w-full aspect-square overflow-hidden">
           <Vignette nom={nom} photo={photoDe(nom)} plein rond={0} />
+          {!photoDe(nom) && <Medaillon meres={meresDe[nom]} />}
         </span>
         {fait > 0 && (
           <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full bg-ok grid place-items-center">
@@ -758,12 +790,12 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
           </span>
         )}
         {(estPr(nom) || taille(nom)) && (
-          <span className="flex items-center flex-wrap gap-1 px-2 pt-1.5">
+          <span className="flex items-center flex-wrap gap-1 px-1.5 pt-1">
             <Etiquettes nom={nom} petit />
           </span>
         )}
-        <span className="block px-2 pt-1.5 text-[12px] font-bold leading-tight">{courtNom(nom)}</span>
-        <span className="block px-2 pb-2 pt-1 text-[10.5px] leading-tight text-ink-mute">
+        <span className="block px-1.5 pt-1 text-[11px] font-bold leading-tight">{courtNom(nom)}</span>
+        <span className="block px-1.5 pb-1.5 pt-0.5 text-[9.5px] leading-tight text-ink-mute">
           {st === undefined ? '\u00a0' : 'il en reste ' + nbQ(st, uniteDe(nom)) + ' ' + uniteDe(nom)}
         </span>
       </button>
@@ -862,31 +894,32 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
               <p className="text-center text-ink-mute text-[14px] py-10">Rien à faire aujourd'hui.</p>
             )}
             <div className="grid gap-2.5 items-start"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
               {casesAFaire.map(({ mere, l }) => {
                 const enRupture = (stocks[l.nom] || 0) <= 0
                 return (
                   <button key={(mere || '') + '|' + l.nom} onClick={() => ouvrirFiche(l.nom)}
                     className="relative bg-white border-2 border-danger rounded-[14px] overflow-hidden text-left">
                     <span className="absolute top-0 left-0 right-0 h-1 z-10" style={{ background: NIVEAU[0] }} />
-                    <span className="block w-full aspect-square overflow-hidden">
+                    <span className="relative block w-full aspect-square overflow-hidden">
                       <Vignette nom={l.nom} photo={photoDe(l.nom) || (mere ? photoDe(mere) : '')} plein rond={0} />
+                      {photoDe(l.nom) && mere && mere !== l.nom && <Medaillon meres={[mere]} />}
                     </span>
-                    <span className={'absolute top-3 left-2.5 right-2.5 rounded-full px-3 py-1.5 text-[11.5px] font-extrabold text-center text-white shadow-md '
+                    <span className={'absolute top-1.5 left-1.5 right-1.5 rounded-full px-2 py-1 text-[10px] font-extrabold text-center text-white shadow-md '
                       + (enRupture ? 'bg-danger' : 'bg-[#854F0B]')}>
                       {enRupture ? 'rupture' : 'à remplir'}
                     </span>
                     {mere && courtNom(mere).toLowerCase() !== courtNom(l.nom).toLowerCase() && (
-                      <span className="block px-2 pt-1.5 text-[10.5px] text-ink-mute leading-tight">
+                      <span className="block px-1.5 pt-1 text-[9.5px] text-ink-mute leading-tight truncate">
                         pour {courtNom(mere)}
                       </span>
                     )}
-                    <span className="flex items-center flex-wrap gap-1 px-2 pt-1.5">
+                    <span className="flex items-center flex-wrap gap-1 px-1.5 pt-1">
                       <Etiquettes nom={l.nom} petit />
-                      <b className="text-[19px] font-extrabold text-danger leading-none">{nbQ(l.besoin, recettes[l.nom] && recettes[l.nom].sortUnite)}</b>
+                      <b className="text-[16px] font-extrabold text-danger leading-none">{nbQ(l.besoin, recettes[l.nom] && recettes[l.nom].sortUnite)}</b>
                     </span>
-                    <span className="block px-2 pt-1 text-[12px] font-bold leading-tight">{courtNom(l.nom)}</span>
-                    <span className="block px-2 pb-2 pt-1 text-[10.5px] leading-tight text-ink-mute">
+                    <span className="block px-1.5 pt-0.5 text-[11px] font-bold leading-tight">{courtNom(l.nom)}</span>
+                    <span className="block px-1.5 pb-1.5 pt-0.5 text-[9.5px] leading-tight text-ink-mute">
                       il en reste {nbQ(stocks[l.nom] || 0, recettes[l.nom] && recettes[l.nom].sortUnite)}
                     </span>
                   </button>
@@ -1029,7 +1062,7 @@ export default function FabricationAnnexeView({ user, onLogout, onNavigate, acti
                   </div>
                 )}
                 <div className="grid gap-2.5 items-start"
-                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
                   {sec.articles.map(nom => carteArticle(nom))}
                 </div>
               </div>
