@@ -443,11 +443,11 @@ export default async function handler(req, res) {
       if (!p) { articles.push({ ...a, absent: true }); continue }
       const stock = stocks[p.id] || 0
 
-      // Au-dessus du mini, l'article n'a rien à dire : il ne sort pas.
-      // ⚠️ Sauf s'il est à ZÉRO : un mini à 0 (le caramel) veut dire « ne me
-      // montre que si je n'en ai plus » — et « 0 >= 0 » l'aurait masqué même
-      // en rupture.
-      if (!seul && stock >= a.mini && stock > 0) continue
+      // Le mini est ATTEINT, pas seulement franchi : à 11 pour un mini de 11,
+      // l'article se montre (Layla, 2026-09-08). Au-dessus, il ne sort pas.
+      // Un mini à 0 (le caramel) veut alors dire « ne me montre qu'à zéro » —
+      // et une rupture reste visible d'elle-même.
+      if (!seul && stock > a.mini) continue
 
       // La liste n'affiche que l'état : ni recette, ni cascade, ni tailles.
       if (!seul) {
