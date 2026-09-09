@@ -224,7 +224,7 @@ const Titre = ({ children }) => (
 // recette en veut 1,2, c'est faire une recette et demie — pas forcer sur le
 // sucre.
 // ------------------------------------------------------------
-function LigneQte({ nom, valeur, unite, onValeur, gras, sous }) {
+function LigneQte({ nom, valeur, unite, onValeur, gras }) {
   const suffixe = ' ' + unite
   const brut = qte(valeur, unite)
   const affiche = brut.endsWith(suffixe) ? brut.slice(0, -suffixe.length) : brut
@@ -242,10 +242,6 @@ function LigneQte({ nom, valeur, unite, onValeur, gras, sous }) {
     <div className="flex items-center gap-3 px-4 py-2.5">
       <span className="flex-1 min-w-0">
         <span className={`text-[14px] ${gras ? 'font-extrabold' : ''}`}>{nom}</span>
-        {/* Le repère à la pièce : « 160 g par u ». Sans lui on ne lisait que le
-            total, et il fallait diviser de tête pour savoir ce que mange UNE
-            pièce (Layla, 2026-09-09). */}
-        {sous && <span className="block text-[11px] text-ink-mute">{sous}</span>}
       </span>
       <input value={txt} inputMode="decimal" aria-label={'Quantité de ' + nom}
         onChange={e => setTxt(e.target.value)} onBlur={valider}
@@ -266,7 +262,6 @@ function Recette({ noeud, fois, onFois }) {
         const f = facteurAtelier(l.produit)
         return (
           <LigneQte key={i} nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
-            sous={parRecette ? `${qte((l.qty * f) / parRecette, l.unite)} par ${noeud.unite}` : null}
             onValeur={v => onFois(v / f / l.qty)} />
         )
       })}
@@ -924,21 +919,20 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
         const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
         if (!(total > 0) || !lignes.length) return null
         return (
-          <>
-            <Titre>Le montage — pour 1 {propre(article.libelle)}</Titre>
+          <div className="px-4 py-3 border-t border-cream-deep/60 italic text-ink-mute">
+            <div className="text-[11.5px] font-bold mb-1">
+              Pour 1 {propre(article.libelle)}
+            </div>
             {lignes.map((c, i) => (
               <div key={'m' + c.produit + i}
-                className="flex items-baseline gap-3 px-4 py-2 border-t border-cream-deep/40">
-                <span className="flex-1 min-w-0 text-[13.5px]">
-                  {nomAtelier(c.produit)}
-                  {c.fige && <span className="text-[11px] text-ink-mute"> · figé</span>}
+                className="flex items-baseline gap-3 text-[11.5px] py-[1px]">
+                <span className="flex-1 min-w-0">
+                  {nomAtelier(c.produit)}{c.fige ? ' · figé' : ''}
                 </span>
-                <span className="text-[14px] font-extrabold">
-                  {qte((c.besoin * facteurAtelier(c.produit)) / total, c.unite)}
-                </span>
+                <span>{qte((c.besoin * facteurAtelier(c.produit)) / total, c.unite)}</span>
               </div>
             ))}
-          </>
+          </div>
         )
       })()}
 
