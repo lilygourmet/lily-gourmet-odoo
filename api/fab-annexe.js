@@ -359,6 +359,73 @@ export async function repartir(cache, catalogue, lance, quantites) {
 // 312 Ko pour rien. On prend la 256, et on retombe sur la 512 si elle manque.
 
 /**
+ * Le squelette de l'onglet « Déclarer » : QUI sait fabriquer quoi, dans quelle
+ * unité, avec quelle photo et pour quel gâteau. Six lectures d'Odoo, dont une
+ * de 12 000 ordres — et rien là-dedans ne change d'une minute à l'autre. On le
+ * garde dix minutes ; le stock, lui, est relu à chaque appel.
+ *
+ * Conséquence assumée : un article jamais fabriqué depuis six mois qui vient
+ * d'arriver en stock n'apparaît qu'au prochain calcul. (Layla, 2026-09-09.)
+ */
+function squeletteTout() {
+  return memo('tout:squelette', async () => {
+    const depuis = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 19).replace('T', ' ')
+    // Ce que l'annexe a fabriqué, et ce qu'elle a en stock : l'un dit le
+    // savoir-faire, l'autre ce qui est là. Les deux comptent.
+    const [ordres, quants] = await Promise.all([
+      sr('mrp.production', [['name', 'like', 'WHPDX/MO/'], ['create_date', '>=', depuis]],
+        ['product_id', 'create_date'], { limit: 12000 }),
+      sr('stock.quant', [['location_id', '=', LIEU_ANNEXE]], ['product_id', 'quantity'], { limit: 4000 }),
+    ])
+    const vus = new Map()
+    for (const o of ordres) {
+      const [id, nom] = o.product_id
+      const e = vus.get(id) || { id, nom, fois: 0, dernier: null }
+      e.fois++
+      if (!e.dernier || o.create_date > e.dernier) e.dernier = o.create_date
+      vus.set(id, e)
+    }
+    for (const q of quants) {
+      const [id, nom] = q.product_id
+      if (!vus.has(id)) vus.set(id, { id, nom, fois: 0, dernier: null })
+    }
+    // On ne garde que ce qui se FABRIQUE : une matière première achetée n'a
+    // rien à faire dans un écran de déclaration.
+    //
+    // ⚠️ Par LOTS. Demander produit et recette un par un, c'était 550 appels
+    // d'un coup : Odoo répondait 502.
+    const tousIds = [...vus.keys()]
+    const prods = []
+    for (let i = 0; i < tousIds.length; i += 200) {
+      prods.push(...await sr('product.product', [['id', 'in', tousIds.slice(i, i + 200)]],
+        ['id', 'uom_id', 'product_tmpl_id']))
+    }
+    const tmpls = [...new Set(prods.map(p => p.product_tmpl_id[0]))]
+    const avecRecette = new Set()
+    for (let i = 0; i < tmpls.length; i += 200) {
+      for (const b of await sr('mrp.bom', [['product_tmpl_id', 'in', tmpls.slice(i, i + 200)]],
+        ['product_tmpl_id'], { limit: 2000 })) avecRecette.add(b.product_tmpl_id[0])
+    }
+    // Qui a une photo ? On le demande sans charger les images : 271 des 275
+    // en ont une, et l'écran se lit bien mieux avec.
+    const gardes = prods.filter(p => avecRecette.has(p.product_tmpl_id[0]))
+    const aPhoto = new Set()
+    for (let i = 0; i < gardes.length; i += 200) {
+      for (const p of await sr('product.product',
+        [['id', 'in', gardes.slice(i, i + 200).map(x => x.id)], ['image_1920', '!=', false]],
+        ['id'], { limit: 400 })) aPhoto.add(p.id)
+    }
+    const parents = await grapheParents()
+    return gardes.map(p => {
+      const e = vus.get(p.id)
+      return { id: p.id, produit: e.nom, unite: uniteDe(p),
+        fois: e.fois, dernier: e.dernier, photo: aPhoto.has(p.id) ? e.nom : null,
+        pour: [...(parents.get(sansRef(e.nom)) || [])].sort((a, b) => a.localeCompare(b, 'fr')) }
+    }).sort((a, b) => b.fois - a.fois || a.produit.localeCompare(b.produit, 'fr'))
+  })
+}
+
+/**
  * À quel(s) gâteau(x) vendu(s) chaque préparation sert-elle ?
  *
  * On charge TOUT le graphe des recettes d'un coup — 905 nomenclatures, 6 700
@@ -439,64 +506,22 @@ export default async function handler(req, res) {
     // suit pas. (Layla, 2026-09-09.)
     // ------------------------------------------------------------
     if (req.query.mode === 'tout') {
-      const depuis = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 19).replace('T', ' ')
-      // Ce que l'annexe a fabriqué, et ce qu'elle a en stock : l'un dit le
-      // savoir-faire, l'autre ce qui est là. Les deux comptent.
-      const [ordres, quants] = await Promise.all([
-        sr('mrp.production', [['name', 'like', 'WHPDX/MO/'], ['create_date', '>=', depuis]],
-          ['product_id', 'create_date'], { limit: 12000 }),
+      // Le squelette (qui sait faire quoi) est gardé dix minutes ; seuls les
+      // STOCKS sont relus. L'onglet mettait 2 secondes à s'ouvrir pour six
+      // lectures d'Odoo dont une de 12 000 ordres, alors que rien là-dedans ne
+      // change d'une minute à l'autre. (Layla, 2026-09-09.)
+      const [sq, quantsFrais] = await Promise.all([
+        squeletteTout(),
         sr('stock.quant', [['location_id', '=', LIEU_ANNEXE]], ['product_id', 'quantity'], { limit: 4000 }),
       ])
-      const vus = new Map()
-      for (const o of ordres) {
-        const [id, nom] = o.product_id
-        const e = vus.get(id) || { id, nom, fois: 0, dernier: null, stock: 0 }
-        e.fois++
-        if (!e.dernier || o.create_date > e.dernier) e.dernier = o.create_date
-        vus.set(id, e)
+      const parId = new Map()
+      for (const q of quantsFrais) {
+        parId.set(q.product_id[0], (parId.get(q.product_id[0]) || 0) + q.quantity)
       }
-      for (const q of quants) {
-        const [id, nom] = q.product_id
-        const e = vus.get(id) || { id, nom, fois: 0, dernier: null, stock: 0 }
-        e.stock += q.quantity
-        vus.set(id, e)
-      }
-      // On ne garde que ce qui se FABRIQUE : une matière première achetée n'a
-      // rien à faire dans un écran de déclaration.
-      //
-      // ⚠️ Par LOTS. Demander produit et recette un par un, c'était 550 appels
-      // d'un coup : Odoo répondait 502.
-      const tousIds = [...vus.keys()]
-      const prods = []
-      for (let i = 0; i < tousIds.length; i += 200) {
-        prods.push(...await sr('product.product', [['id', 'in', tousIds.slice(i, i + 200)]],
-          ['id', 'uom_id', 'product_tmpl_id']))
-      }
-      const tmpls = [...new Set(prods.map(p => p.product_tmpl_id[0]))]
-      const avecRecette = new Set()
-      for (let i = 0; i < tmpls.length; i += 200) {
-        for (const b of await sr('mrp.bom', [['product_tmpl_id', 'in', tmpls.slice(i, i + 200)]],
-          ['product_tmpl_id'], { limit: 2000 })) avecRecette.add(b.product_tmpl_id[0])
-      }
-      // Qui a une photo ? On le demande sans charger les images : 271 des 275
-      // en ont une, et l'écran se lit bien mieux avec.
-      const gardes = prods.filter(p => avecRecette.has(p.product_tmpl_id[0]))
-      const aPhoto = new Set()
-      for (let i = 0; i < gardes.length; i += 200) {
-        for (const p of await sr('product.product',
-          [['id', 'in', gardes.slice(i, i + 200).map(x => x.id)], ['image_1920', '!=', false]],
-          ['id'], { limit: 400 })) aPhoto.add(p.id)
-      }
-      const parents = await grapheParents()
-      const liste = gardes.map(p => {
-        const e = vus.get(p.id)
-        return { produit: e.nom, unite: uniteDe(p), stock: Math.round(e.stock * 100) / 100,
-          fois: e.fois, dernier: e.dernier, photo: aPhoto.has(p.id) ? e.nom : null,
-          pour: [...(parents.get(sansRef(e.nom)) || [])].sort((a, b) => a.localeCompare(b, 'fr')) }
-      })
-      liste.sort((a, b) => b.fois - a.fois || a.produit.localeCompare(b.produit, 'fr'))
       res.setHeader('Cache-Control', 'no-store')
-      return res.status(200).json({ articles: liste })
+      return res.status(200).json({
+        articles: sq.map(a => ({ ...a, stock: Math.round((parId.get(a.id) || 0) * 100) / 100 })),
+      })
     }
 
     // Fin de tournée : le pâtissier a dit ce qu'il a monté dans chaque taille.
