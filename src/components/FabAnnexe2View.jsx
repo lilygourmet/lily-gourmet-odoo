@@ -756,27 +756,15 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
           </div>
 
         <div className="px-4 pb-3">
-          {/* La barre va jusqu'au MAXI : en couleur le stock, en vert ce qui est
-              déjà déclaré du jour, et ce qui reste sombre est à faire. */}
-          {article.maxi > 0 && (
-            <div className="h-2.5 rounded-full bg-cream-deep overflow-hidden flex">
-              <div className={article.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}
-                style={{ width: `${Math.min(100, (article.stock / article.maxi) * 100)}%` }} />
-              {article.dejaFait > 0 && (
-                <div className="bg-success"
-                  style={{ width: `${Math.min(100, (article.dejaFait / article.maxi) * 100)}%` }} />
-              )}
+          {/* La barre de progression et sa ligne « En stock · mini · maxi » ont
+              été retirées (Layla, 2026-09-09) : la fiche sert à fabriquer, pas
+              à consulter des seuils. Ce qui a déjà été fait dans la journée
+              reste dit, parce que ça change ce qu'il reste à faire. */}
+          {article.dejaFait > 0 && (
+            <div className="text-[12px] text-success font-bold">
+              déjà fait {qte(article.dejaFait, article.unite)}
             </div>
           )}
-          <div className="flex justify-between text-[11px] text-ink-mute mt-1.5">
-            <span>En stock : <b className="text-ink">{qte(article.stock, article.unite)}</b></span>
-            {article.dejaFait > 0 && (
-              <span className="text-success font-bold">fait {qte(article.dejaFait, article.unite)}</span>
-            )}
-            {article.maxi > 0 && (
-              <><span>mini {nb(article.mini)}</span><span>maxi {nb(article.maxi)}</span></>
-            )}
-          </div>
           {article.dejaFait > 0 && article.reste > 0 && (
             <div className="text-[12px] text-ink-soft mt-1.5">
               Il reste <b className="text-gold">{qte(article.reste, article.unite)}</b> pour atteindre le maxi.
