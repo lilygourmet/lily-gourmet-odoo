@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { todayISO } from './dates'
 
 /**
  * Ce que l'équipe fabrique en Stock Prod, hors cake design.
@@ -79,6 +80,20 @@ export async function loadFabProd(jour, atelier = 'prod') {
   const { data, error } = await lire(base)
   if (error) throw error
   return data || []
+}
+
+/**
+ * Le premier jour à relire pour « À valider » : on remonte une semaine.
+ *
+ * ⚠️ L'écran ne lisait que le jour COURANT. Une déclaration faite hier et pas
+ * encore validée disparaissait au changement de jour — le travail était perdu
+ * de vue, et le stock d'Odoo restait négatif faute d'avoir jamais reçu la
+ * production. Vécu avec le biscuit amande gingembre (Layla, 2026-09-09).
+ */
+export function depuisJours(jours = 7) {
+  const d = new Date(todayISO() + 'T12:00:00')
+  d.setDate(d.getDate() - (jours - 1))
+  return d.toLocaleDateString('sv-SE')
 }
 
 /** Le journal sur plusieurs jours, pour l'historique (une seule requête). */

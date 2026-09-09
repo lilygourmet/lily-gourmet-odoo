@@ -7,9 +7,8 @@ import { countLivraisonsARelancer } from './deliveries'
 import { compterCheckCd } from './checkCd'
 import { canCheckCd, canValiderAnnexe, isAdmin } from './auth'
 import { loadEnAttentePour, lieuxDe } from './transfertsStock'
-import { loadFabProd } from './fabricationProd'
+import { loadFabProdDepuis, depuisJours } from './fabricationProd'
 import { loadManques, loadFaits, loadEtats } from './fabrication'
-import { todayISO } from './dates'
 
 // Compteurs de notif pour le mini-rail de la bande gauche (desktop).
 // Rafraîchis au montage + toutes les 180 s + au retour sur la fenêtre.
@@ -43,7 +42,7 @@ export function useNavBadges(user, activeView = '') {
         // on ne compte que les déclarations rattachées à un ordre ENCORE ouvert
         // dans Odoo, sinon le chiffre resterait allumé après la validation.
         canValiderAnnexe(user) ? (async () => {
-          const journal = await loadFabProd(todayISO(), 'annexe')
+          const journal = await loadFabProdDepuis(depuisJours(7), 'annexe')
           const noms = [...new Set((journal || []).map(d => d.ordre).filter(Boolean))]
           // ⚠️ Une déclaration dont l'ordre n'a PAS pu être créé dans Odoo reste
           // à l'écran, signalée « sans ordre » — et l'atelier attend qu'on s'en
