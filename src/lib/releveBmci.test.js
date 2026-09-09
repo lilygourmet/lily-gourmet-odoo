@@ -277,3 +277,35 @@ describe('reconcileEnvelopes — une caisse verte réserve une ligne libre', () 
     expect(results.find(r => r.env.id === 'G').status).toBe('trouve')
   })
 })
+
+// Une cliente vire son acompte AVANT la commande. Tant que la fenêtre virement était
+// de ±5 jours, la caisse restait invisible et la ligne bloquée dans « non liées ».
+describe('reconcileEnvelopes — acompte viré avant la commande', () => {
+  const ligne = { credit: 500, dateIso: '2026-07-14', type: 'virement_recu', label: 'VIR INST RECU TAZI NYBELE' }
+  const caisse = {
+    id: 'T1', amount_cash: 500, payment_method: 'virement',
+    releve_status: null, session_date: '2026-07-21', virement_client: 'Nybele Tazi',
+  }
+
+  it('rapproche un virement reçu 7 jours avant la commande', () => {
+    const { results } = reconcileEnvelopes([caisse], [ligne], {})
+    expect(results[0].status).toBe('trouve')
+    expect(results[0].line.dateIso).toBe('2026-07-14')
+  })
+
+  it('accepte jusqu\'à 14 jours avant', () => {
+    const { results } = reconcileEnvelopes([{ ...caisse, session_date: '2026-07-28' }], [ligne], {})
+    expect(results[0].status).toBe('trouve')
+  })
+
+  it('refuse au-delà de 14 jours', () => {
+    const { results } = reconcileEnvelopes([{ ...caisse, session_date: '2026-07-30' }], [ligne], {})
+    expect(results[0].status).toBe('absent')
+  })
+
+  it('reste à ±5 jours quand le libellé ne porte pas le nom', () => {
+    const anonyme = { ...ligne, label: 'VIR INST RECU 2378161 682183838646' }
+    const { results } = reconcileEnvelopes([{ ...caisse, virement_client: null }], [anonyme], {})
+    expect(results[0].status).toBe('absent')
+  })
+})
