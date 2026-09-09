@@ -103,6 +103,24 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           const coupe = String(o.name || '').match(/^(.+)-\d+$/)
           if (coupe && !morceauOuvert.has(coupe[1])) morceauOuvert.set(coupe[1], o)
         }
+        // ⚠️ `arbre.ordres` est rangé PAR PRODUIT : un seul ordre par article.
+        // Quand deux ordres existent pour le même produit — celui créé par la
+        // déclaration et un autre lancé par Odoo — le second écrase le premier,
+        // et la déclaration se retrouvait ignorée en silence. Vécu le 09/09 :
+        // WHPDX/MO/21333 (biscuit amande gingembre, déclaré par l'atelier)
+        // effacé par WHPDX/MO/21335. On demande donc leur état à Odoo pour tous
+        // les ordres du journal que l'arbre ne connaît pas.
+        const inconnus = [...new Set((journal || [])
+          .map(d => d.ordre)
+          .filter(n => n && !ouvertsParNom.has(n) && !morceauOuvert.has(n)))]
+        if (inconnus.length) {
+          for (const o of await loadManques(inconnus)) {
+            if (['draft', 'confirmed', 'progress', 'to_close'].includes(o.etat)) {
+              ouvertsParNom.set(o.name, { name: o.name, qty: o.qty, state: o.etat })
+            }
+          }
+          if (!vivant) return
+        }
         for (const d of journal || []) {
           // La déclaration sait à quel ordre elle se rattache. S'il n'est plus
           // ouvert, c'est qu'il a été validé (ou annulé) : il n'y a plus rien à
