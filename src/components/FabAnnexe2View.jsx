@@ -942,6 +942,28 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
         )
       })()}
 
+      {/* Tout en bas, pour information : ce que demande UNE unité. Toute la
+          fiche parle de la tournée en cours ; ce rappel en italique permet de
+          refaire le calcul pour n'importe quelle quantité sans diviser de
+          tête (Layla, 2026-09-09). Pour un gâteau, c'est le bloc « Le
+          montage » juste au-dessus qui joue ce rôle. */}
+      {!racine && (noeud.recette || []).length > 0 && (
+        <div className="px-4 py-3 border-t border-cream-deep/60 italic text-ink-mute">
+          <div className="text-[11.5px] font-bold mb-1">
+            Pour 1 {noeud.unite} de {propre(noeud.produit)}
+          </div>
+          {noeud.recette.map((l, i) => {
+            const f = facteurAtelier(l.produit)
+            return (
+              <div key={'u' + l.produit + i} className="flex items-baseline gap-3 text-[11.5px] py-[1px]">
+                <span className="flex-1 min-w-0">{nomAtelier(l.produit)}</span>
+                <span>{qte((l.qty * f) / parRecette, l.unite)}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {bloque.length > 0 ? (
         <div className="flex items-center gap-3 px-4 py-3 bg-cream-deep/40 border-t border-cream-deep">
           <div className="flex-1 text-[13px] font-bold text-ink-mute">
