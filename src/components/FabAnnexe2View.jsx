@@ -218,6 +218,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   const [faits, setFaits] = useState({})
   const [sortie, setSortie] = useState(null)
   const [gateau, setGateau] = useState(null)
+  const [qteTxt, setQteTxt] = useState(null)
   // Verrou contre le double appui : une création d'ordre Odoo prend
   // plusieurs secondes, et deux appuis feraient deux ordres.
   const [envoi, setEnvoi] = useState(false)
@@ -562,7 +563,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               const on = foisArticle === f
               const pieces = Math.round(brut.tournee * f)
               return (
-                <button key={f} onClick={() => setFoisPar(x => ({ ...x, [brut.produit]: f }))}
+                <button key={f}
+                  onClick={() => { setQteTxt(null); setFoisPar(x => ({ ...x, [brut.produit]: f })) }}
                   className={`rounded-xl px-3 py-2 text-[12.5px] font-extrabold border
                     ${on ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-cream-warm text-ink-soft border-cream-deep'}`}>
                   {f === 0.5 ? '½' : f === 1.5 ? '1½' : f} tournée{f > 1 ? 's' : ''}
@@ -573,23 +575,49 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               )
             })}
           </div>
+
+          {/* Un compte de tournées ne tombe pas toujours juste : on tape la
+              quantité voulue, et toute la cascade suit. (Layla, 2026-09-09.) */}
+          <div className="flex items-center gap-2 px-4 pb-3">
+            <span className="text-[12px] text-ink-mute">ou je produis</span>
+            <input inputMode="decimal" aria-label="Quantité à produire"
+              value={qteTxt?.produit === brut.produit ? qteTxt.txt : nb(article.tournee)}
+              onChange={e => {
+                const txt = e.target.value.replace(/[^\d.,]/g, '')
+                setQteTxt({ produit: brut.produit, txt })
+                const q = Number(txt.replace(',', '.'))
+                if (q > 0 && brut.tournee > 0) {
+                  setFoisPar(x => ({ ...x, [brut.produit]: q / brut.tournee }))
+                }
+              }}
+              className="w-24 h-11 rounded-xl border-2 border-bordeaux bg-cream-warm text-center
+                         font-serif text-[19px] text-ink outline-none" />
+            <span className="text-[12px] text-ink-mute">
+              {brut.unite} — la tournée en fait {nb(brut.tournee)}
+            </span>
+          </div>
+
         <div className="px-4 pb-3">
           {/* La barre va jusqu'au MAXI : en couleur le stock, en vert ce qui est
               déjà déclaré du jour, et ce qui reste sombre est à faire. */}
-          <div className="h-2.5 rounded-full bg-cream-deep overflow-hidden flex">
-            <div className={article.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}
-              style={{ width: `${Math.min(100, (article.stock / article.maxi) * 100)}%` }} />
-            {article.dejaFait > 0 && (
-              <div className="bg-success"
-                style={{ width: `${Math.min(100, (article.dejaFait / article.maxi) * 100)}%` }} />
-            )}
-          </div>
+          {article.maxi > 0 && (
+            <div className="h-2.5 rounded-full bg-cream-deep overflow-hidden flex">
+              <div className={article.etat === 'rupture' ? 'bg-danger' : 'bg-gold'}
+                style={{ width: `${Math.min(100, (article.stock / article.maxi) * 100)}%` }} />
+              {article.dejaFait > 0 && (
+                <div className="bg-success"
+                  style={{ width: `${Math.min(100, (article.dejaFait / article.maxi) * 100)}%` }} />
+              )}
+            </div>
+          )}
           <div className="flex justify-between text-[11px] text-ink-mute mt-1.5">
             <span>En stock : <b className="text-ink">{qte(article.stock, article.unite)}</b></span>
             {article.dejaFait > 0 && (
               <span className="text-success font-bold">fait {qte(article.dejaFait, article.unite)}</span>
             )}
-            <span>mini {nb(article.mini)}</span><span>maxi {nb(article.maxi)}</span>
+            {article.maxi > 0 && (
+              <><span>mini {nb(article.mini)}</span><span>maxi {nb(article.maxi)}</span></>
+            )}
           </div>
           {article.dejaFait > 0 && article.reste > 0 && (
             <div className="text-[12px] text-ink-soft mt-1.5">
