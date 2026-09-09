@@ -1294,6 +1294,34 @@ async function reapproCD() {
 // Ce qui manque pour fabriquer ces ordres (lecture seule).
 // La génoise est ignorée : son stock restera négatif un moment (Layla).
 // ============================================================
+/**
+ * La commande servie par chaque ordre, quand il y en a une → { ordre: 'S52506' }.
+ *
+ * ⚠️ L'origine d'un ordre ENFANT ne porte pas le code de commande : elle nomme
+ * l'ordre du dessus (« WHLVP/MO/202176 »), et c'est celui-là qui porte
+ * « S52506 ». On remonte donc de parent en parent, par paquets.
+ */
+async function commandeDe(uid, mos) {
+  const scode = o => (String(o || '').match(/S\d{3,}/i) || [''])[0].toUpperCase()
+  const trouve = {}
+  let niveau = (mos || []).map(m => ({ nom: m.name, origin: m.origin || '' }))
+  for (let i = 0; i < 5 && niveau.length; i++) {
+    const aRemonter = []
+    for (const n of niveau) {
+      const s = scode(n.origin)
+      if (s) { trouve[n.nom] = s; continue }
+      const parent = n.origin.split(',').map(x => x.trim()).find(x => /^WH.*\/MO\//i.test(x))
+      if (parent) aRemonter.push({ nom: n.nom, parent })
+    }
+    if (!aRemonter.length) break
+    const parents = await odooSearchRead(uid, 'mrp.production',
+      [['name', 'in', [...new Set(aRemonter.map(x => x.parent))]]], ['name', 'origin'], { limit: 200 })
+    const parNom = new Map(parents.map(p => [p.name, p.origin || '']))
+    niveau = aRemonter.map(x => ({ nom: x.nom, origin: parNom.get(x.parent) || '' }))
+  }
+  return trouve
+}
+
 async function manquesDesOrdres(uid, names) {
   const mos = await odooSearchRead(uid, 'mrp.production', [['name', 'in', names]],
     ['id', 'name', 'product_id', 'product_qty', 'product_uom_id', 'origin', 'state', 'components_availability', 'location_src_id', 'date_planned_start'])
@@ -2056,9 +2084,19 @@ export default async function handler(req, res) {
       const uid = await odooAuth()
       try {
         const mos = await odooSearchRead(uid, 'mrp.production',
-          [['name', 'in', names]], ['id', 'name', 'state'], { limit: 50 })
-        const ouverts = mos.filter(m => ['draft', 'confirmed', 'progress'].includes(m.state))
-        const refuses = mos.filter(m => !ouverts.includes(m)).map(m => `${m.name} (${m.state})`)
+          [['name', 'in', names]], ['id', 'name', 'state', 'origin'], { limit: 50 })
+        // ⚠️ Un ordre qui sert une COMMANDE ne s'annule pas ici. Vécu le 09/09 :
+        // deux étages 40x40 cochés par erreur, annulés depuis « À valider » —
+        // et le gâteau de la commande S52506 n'avait plus de quoi se monter.
+        // On retire la déclaration, on ne défait pas la commande.
+        const commandes = await commandeDe(uid, mos)
+        const ouverts = mos.filter(m =>
+          ['draft', 'confirmed', 'progress'].includes(m.state) && !commandes[m.name])
+        const refuses = mos
+          .filter(m => !ouverts.includes(m))
+          .map(m => (commandes[m.name]
+            ? `${m.name} sert la commande ${commandes[m.name]} : l'ordre reste`
+            : `${m.name} (${m.state})`))
         const noms = []
         for (const m of ouverts) {
           try {
@@ -2067,7 +2105,7 @@ export default async function handler(req, res) {
           } catch (e) { refuses.push(`${m.name} : ${(e.message || e).toString().slice(0, 80)}`) }
         }
         console.log(`[annuler-ordre] ${noms.length} annule(s) par ${body.actorId || '?'} : ${noms.join(', ')}`)
-        return res.status(200).json({ annules: noms.length, noms, refuses })
+        return res.status(200).json({ annules: noms.length, noms, refuses, commandes })
       } catch (e) {
         return res.status(200).json({ error: (e.message || String(e)).slice(0, 300) })
       }

@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
-import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies, loadStocksNegatifs } from '../lib/fabrication'
+import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies, loadStocksNegatifs, setFait } from '../lib/fabrication'
 import { todayISO } from '../lib/dates'
 
 // ====== « À valider » : la page dédiée ======
@@ -270,10 +270,18 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
     if (!ok) return
     try {
       const r = await annulerOrdre([l.name], user?.id)
+      // Un ordre qui sert une COMMANDE ne s'annule pas : la déclaration part,
+      // l'ordre reste, et le gâteau revient dans « ce qu'il faut faire ».
+      const cmd = r && r.commandes && r.commandes[l.name]
       // En mode test le serveur ne touche à rien et renvoie 0 annulation : dire
       // « Odoo a refusé » ferait croire à une panne.
       if (r && r.test) toast.success('Mode test : rien annulé dans Odoo')
-      else if (r && r.annules) {
+      else if (cmd) {
+        await setFait({ name: l.name }, false, user?.id)
+        setLignes(v => { const reste = (v || []).filter(x => x.name !== l.name); garderEcran('valider', reste); return reste })
+        setSel(v => v.filter(n => n !== l.name))
+        toast.success(`Déclaration retirée. L'ordre reste : il sert la commande ${cmd}.`)
+      } else if (r && r.annules) {
         setLignes(v => { const reste = (v || []).filter(x => x.name !== l.name); garderEcran('valider', reste); return reste })
         setSel(v => v.filter(n => n !== l.name))
         toast.success(l.name + ' annulé dans Odoo')
@@ -299,6 +307,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
     // Odoo répondait « refusé » pour des ordres qui étaient bel et bien partis.
     const noms = []
     const refuses = []
+    const retires = []
     let panne = null
     let modeTest = false
     try {
@@ -308,20 +317,29 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         const r = await annulerOrdre(choisis.slice(i, i + 50).map(l => l.name), user?.id)
         if (r && r.test) modeTest = true
         noms.push(...((r && r.noms) || []))
-        refuses.push(...((r && r.refuses) || []))
+        // Ceux qui servent une commande : on retire la déclaration, l'ordre reste.
+        for (const [n, cmd] of Object.entries((r && r.commandes) || {})) {
+          await setFait({ name: n }, false, user?.id).catch(() => { })
+          retires.push(`${n} → ${cmd}`)
+        }
+        refuses.push(...((r && r.refuses) || []).filter(x => !/sert la commande/.test(x)))
       }
     } catch (e) { panne = e.message || String(e) }
     try {
-      if (noms.length) {
-        const partis = new Set(noms)
+      const partis = new Set([...noms, ...retires.map(x => x.split(' → ')[0])])
+      if (partis.size) {
         setLignes(v => { const reste = (v || []).filter(x => !partis.has(x.name)); garderEcran('valider', reste); return reste })
         setSel(v => v.filter(n => !partis.has(n)))
-        toast.success(noms.length + (noms.length > 1 ? ' ordres annulés' : ' ordre annulé') + ' dans Odoo')
+      }
+      if (noms.length) toast.success(noms.length + (noms.length > 1 ? ' ordres annulés' : ' ordre annulé') + ' dans Odoo')
+      if (retires.length) {
+        toast.success(`Déclaration retirée pour ${retires.length} ordre(s) qui servent une commande : `
+          + retires.join(' · ') + ". Les ordres restent.")
       }
       if (refuses.length) toast.error('Odoo a refusé : ' + refuses.join(' · '))
       if (panne) toast.error('Interrompu après ' + noms.length + ' annulation(s) : ' + panne)
       else if (modeTest) toast.success('Mode test : rien annulé dans Odoo')
-      else if (!noms.length && !refuses.length) toast.error("Odoo n'a rien annulé")
+      else if (!noms.length && !refuses.length && !retires.length) toast.error("Odoo n'a rien annulé")
     } catch (e) { toast.error(e.message || String(e)) }
     setRefus(false)
   }

@@ -6,7 +6,7 @@ import { confirmDialog } from '../lib/confirmDialog'
 import { todayISO } from '../lib/dates'
 import { loadFabProd, delFabProd, datesDesOrdres } from '../lib/fabricationProd'
 import { loadArbreAnnexe } from '../lib/fabricationAnnexe'
-import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs } from '../lib/fabrication'
+import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs, setFait } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 import { AjoutIngredient } from './ValidationView'
 
@@ -250,7 +250,15 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     if (!ok) return
     try {
       const r = await annulerOrdre([l.name], user?.id)
-      if (r && r.annules) {
+      // Un ordre qui sert une COMMANDE ne s'annule pas : la déclaration part,
+      // l'ordre reste, et l'article revient dans « ce qu'il faut faire ».
+      const cmd = r && r.commandes && r.commandes[l.name]
+      if (cmd) {
+        await setFait({ name: l.name }, false, user?.id)
+        setLignes(v => (v || []).filter(x => x.name !== l.name))
+        setSel(v => v.filter(n => n !== l.name))
+        toast.success(`Déclaration retirée. L'ordre reste : il sert la commande ${cmd}.`)
+      } else if (r && r.annules) {
         setLignes(v => (v || []).filter(x => x.name !== l.name))
         setSel(v => v.filter(n => n !== l.name))
         toast.success(l.name + ' annulé dans Odoo')
