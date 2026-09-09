@@ -2,6 +2,7 @@
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
 import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, ECART_MINI } from './releveDoublons'
+import { reconcileEnvelopes } from './releveBmci'
 export { ECART_MINI }
 
 // ============================================================
@@ -622,6 +623,62 @@ export async function confirmReleveLine(env, choice) {
 export async function takeReleveLine(key, envId) {
   const { error } = await supabase.from('caisse_releve_lignes').update({ used_by: envId }).eq('key', key)
   if (error) throw error
+}
+
+// Rejoue le rapprochement sur les lignes DÉJÀ importées, sans redemander les PDF.
+// Un ré-import recrée des lignes (donc des doublons à revérifier à la main), alors que
+// seul le CALCUL a besoin d'être refait : les regles de rapprochement changent, les
+// caisses arrivent apres coup. Ici on ne fait qu'ECRIRE le resultat — aucune ligne n'est
+// creee, et les caisses deja vertes ne sont pas touchees (comme un import normal).
+export async function relancerRapprochement() {
+  const { data: libres, error } = await supabase
+    .from('caisse_releve_lignes')
+    .select('key, ligne_date, amount, label, type, releve_url')
+    .is('used_by', null)
+    .not('ignored', 'is', true)
+    .not('label', 'ilike', '%lanacash%')   // lignes TPE : jamais des enveloppes
+    .not('label', 'ilike', '%LNC%')
+    .not('label', 'ilike', '%TPE%')
+    .limit(5000)
+  if (error) throw error
+  const txns = (libres || [])
+    .filter(l => l.ligne_date && l.amount != null)
+    .map(l => ({
+      dateIso: l.ligne_date, credit: Number(l.amount), label: l.label || '', type: l.type,
+      _key: l.key, _url: l.releve_url,       // pour retrouver la ligne à marquer prise
+    }))
+  if (!txns.length) return { trouve: 0, a_confirmer: 0, lignes: 0 }
+
+  // Mêmes bornes qu'à l'import : les espèces et chèques se déposent jusqu'à 120 j après la vente.
+  const dates = txns.map(t => t.dateIso).sort()
+  const debut = new Date(dates[0])
+  debut.setDate(debut.getDate() - 120)
+  const envs = await loadBanqueEnvelopesBetween(debut.toISOString().slice(0, 10), dates[dates.length - 1])
+  const { results } = reconcileEnvelopes(envs, txns, { recompute: false })
+
+  let trouve = 0, aConfirmer = 0
+  for (const r of results) {
+    if (r.status === 'trouve' && r.line) {
+      await setEnveloppeReleve(r.env.id, {
+        // Preuve déjà déposée (photo) : on la garde, le rapprochement s'y ajoute.
+        proofUrl: r.env.proof_url ? undefined : (r.line._url || undefined),
+        proofDate: r.line.dateIso,
+        status: 'trouve',
+        libelle: `${r.line.dateIso} · ${r.line.label}`.slice(0, 220),
+        candidates: null,
+      })
+      await supabase.from('caisse_releve_lignes').update({ used_by: r.env.id }).eq('key', r.line._key)
+      trouve++
+    } else if (r.status === 'a_confirmer' && r.candidates?.length) {
+      await setEnveloppeReleve(r.env.id, {
+        status: 'a_confirmer',
+        libelle: r.candidates.map(c => `${c.dateIso} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300),
+        candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
+      })
+      aConfirmer++
+    }
+  }
+  return { trouve, a_confirmer: aConfirmer, lignes: txns.length }
 }
 
 // Retire la preuve manuelle d'une enveloppe (photo/PDF uploadée) -> repasse en attente.

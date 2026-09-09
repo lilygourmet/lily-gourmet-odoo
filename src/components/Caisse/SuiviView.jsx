@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, ECART_MINI } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, ECART_MINI } from '../../lib/caisse'
 import { windowFor } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
@@ -85,6 +85,7 @@ function BanqueSection({ user }) {
   const [showHistory, setShowHistory] = useState(false)
   const [ignoreEnv, setIgnoreEnv] = useState(null) // enveloppe en cours d'« ignorer » (saisie de la raison)
   const [ignoreReason, setIgnoreReason] = useState('')
+  const [relance, setRelance] = useState(false)   // rapprochement en cours de relance
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -207,6 +208,23 @@ function BanqueSection({ user }) {
     reload()
   }
 
+  // Rejoue le rapprochement sur les lignes déjà importées (sans redemander les PDF :
+  // un ré-import recrée des lignes, donc des doublons à revérifier).
+  async function handleRelancer() {
+    const ok = await confirmDialog(
+      'Relancer le rapprochement ?\n\nL\'app rejoue le calcul sur les lignes de relevé déjà importées. '
+      + 'Aucune ligne n\'est créée (donc aucun doublon), et les caisses déjà rapprochées ne sont pas touchées.',
+      { confirmLabel: 'Relancer' })
+    if (!ok) return
+    setRelance(true)
+    try {
+      const r = await relancerRapprochement()
+      await reload()
+      alert(`Rapprochement relancé sur ${r.lignes} ligne(s) libres :\n✓ ${r.trouve} rapprochée(s)\n⏳ ${r.a_confirmer} à confirmer`)
+    } catch (e) { alert('Erreur : ' + (e?.message || e)) }
+    setRelance(false)
+  }
+
   // Rattacher manuellement une ou plusieurs lignes libres du relevé à une caisse
   async function handleAttach(env, lignes) {
     await attachReleveLines(env, lignes)
@@ -281,6 +299,9 @@ function BanqueSection({ user }) {
             🕑 Relevés importés ({imports.length})
           </button>
         )}
+        <button onClick={handleRelancer} disabled={relance} style={{ ...btnNormal, opacity: relance ? 0.6 : 1 }}>
+          {relance ? '⏳ Rapprochement…' : '🔄 Relancer le rapprochement'}
+        </button>
         <button onClick={() => setShowImport(true)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>
           <FileText size={14} /> Importer relevé bancaire
         </button>
