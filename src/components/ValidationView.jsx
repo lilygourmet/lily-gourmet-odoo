@@ -109,6 +109,8 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   // Les compteurs faux du labo, montrés en colonne à droite : c'est la réponse
   // à « pourquoi ça me dit qu'il manque alors que la crème est là ».
   const [negatifs, setNegatifs] = useState([])
+  // { 'WHLVP/MO/202295': '2026-09-08T15:39:51Z' } — le jour où c'est FAIT
+  const [datesFaites, setDatesFaites] = useState({})
 
   useEffect(() => {
     let vivant = true
@@ -135,6 +137,16 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         // qui est encore ouvert.
         const noms = new Set()
         const ouvertsOdoo = new Set(tous.map(o => o.name))
+        // Quand chaque ordre a-t-il été DÉCLARÉ ? La production compte pour le
+        // jour où elle a été faite, pas pour celui où on la valide : un gâteau
+        // monté lundi et validé mercredi doit compter lundi dans Odoo.
+        const quand = {}
+        for (const [c, info] of Object.entries(f)) {
+          if (!info || !info.fait_le) continue
+          if (/^WH.*\/MO\//i.test(c)) quand[c] = info.fait_le
+          for (const n of (info.ordres || [])) if (!quand[n]) quand[n] = info.fait_le
+        }
+        setDatesFaites(quand)
         for (const [c, info] of Object.entries(f)) {
           if (/^WH.*\/MO\//i.test(c)) { noms.add(c); continue }
           if (!c.startsWith('PREP:')) continue
@@ -340,7 +352,11 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
       }))
     }
     try {
-      const res = await validerDansOdoo(cibles, forcer, user?.id, aEnvoyer, enPlus)
+      // La production compte pour le jour où elle a été FAITE, pas pour celui où
+      // on la valide. Odoo enregistre donc la date de la déclaration.
+      const quand = {}
+      for (const n of cibles) if (datesFaites[n]) quand[n] = datesFaites[n]
+      const res = await validerDansOdoo(cibles, forcer, user?.id, aEnvoyer, enPlus, null, quand)
       setResultats(res)
       // Ce qui est validé n'a plus rien à faire dans la liste. Ce qui a échoué
       // y reste, avec son message : c'est encore à traiter.
