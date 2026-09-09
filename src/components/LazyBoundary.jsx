@@ -32,10 +32,14 @@ export default class LazyBoundary extends Component {
     const msg = String(error?.message || '')
     const isChunkError = /dynamically imported module|Loading chunk|Failed to fetch|error loading/i.test(msg)
     if (isChunkError) {
+      // Même garde et même minute que autoUpdate.js : deux filets qui se
+      // déclenchent sur la même panne ne doivent pas recharger deux fois, et
+      // 10 secondes suffisaient à peine à ouvrir un écran — d'où la tablette
+      // qui « sautait, se remettait et sautait » (Layla, 2026-09-09).
       try {
-        const last = Number(sessionStorage.getItem('lazyReloadTs') || 0)
-        if (Date.now() - last > 10000) {
-          sessionStorage.setItem('lazyReloadTs', String(Date.now()))
+        const last = Number(sessionStorage.getItem('lg:recharge') || 0)
+        if (Date.now() - last > 60000) {
+          sessionStorage.setItem('lg:recharge', String(Date.now()))
           window.location.reload()
         }
       } catch { /* sessionStorage indispo : on laisse le bouton manuel */ }

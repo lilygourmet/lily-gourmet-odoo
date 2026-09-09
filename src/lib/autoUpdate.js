@@ -59,20 +59,27 @@ async function checkForUpdate() {
 // Filet : ÉCRAN BLANC après un déploiement.
 // Un onglet resté ouvert garde l'ancienne page ; quand il va chercher un écran
 // (ils se chargent à la demande), le fichier a changé de nom et n'existe plus.
-// Vite prévient par « vite:preloadError » : on recharge, une seule fois, pour
-// repartir sur la version en ligne. Le garde évite de boucler si le fichier
-// manque vraiment.
+// Vite prévient par « vite:preloadError » : on recharge pour repartir sur la
+// version en ligne.
+//
+// ⚠️ Le garde retient l'HEURE du dernier rechargement, et rien ne l'efface.
+// Vécu le 09/09 sur tablette et téléphone : « le site saute, se remet et
+// saute ». Le garde était remis à zéro à chaque chargement de page, alors que
+// l'erreur arrive APRÈS — au moment d'ouvrir un écran. Chaque rechargement
+// effaçait donc la trace du précédent, et l'app rechargeait sans fin.
 // ------------------------------------------------------------
+const ENTRE_DEUX_RECHARGES = 60 * 1000
+
 window.addEventListener('vite:preloadError', () => {
+  let dernier
   try {
-    if (sessionStorage.getItem('lg:recharge')) return
-    sessionStorage.setItem('lg:recharge', '1')
-  } catch { /* navigation privée : on recharge quand même, une fois */ }
+    dernier = Number(sessionStorage.getItem('lg:recharge') || 0)
+  } catch {
+    return   // sans mémoire, pas de garde possible : mieux vaut ne pas boucler
+  }
+  if (Date.now() - dernier < ENTRE_DEUX_RECHARGES) return
+  try { sessionStorage.setItem('lg:recharge', String(Date.now())) } catch { return }
   window.location.reload()
-})
-// Une session qui s'est chargée jusqu'au bout n'a plus besoin du garde.
-window.addEventListener('load', () => {
-  try { sessionStorage.removeItem('lg:recharge') } catch { /* sans importance */ }
 })
 
 // Au retour sur l'app (le cas le plus fréquent : on rouvre l'icône) + toutes les 5 min.
