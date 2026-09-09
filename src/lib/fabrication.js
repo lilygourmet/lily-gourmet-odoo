@@ -42,10 +42,11 @@ export async function reapproCD() {
  * Les articles dont Odoo compte MOINS QUE ZÉRO au labo. Un stock négatif compte
  * comme zéro disponible : c'est lui qui fait dire « il manque 600 g de crème »
  * alors que la crème est là. Affiché à côté de « À valider », là où la question
- * se pose. Le café, les jus et les emballages sont écartés côté serveur.
+ * se pose. Chaque écran ne voit QUE ses articles : `cd` → le labo cake design,
+ * noms portant « CD* » ; `annexe` → l'annexe, noms commençant par « SM ».
  */
-export async function loadStocksNegatifs() {
-  const r = await fetch('/api/freezer-list?mode=stocks-negatifs')
+export async function loadStocksNegatifs(atelier = 'cd') {
+  const r = await fetch(`/api/freezer-list?mode=stocks-negatifs&atelier=${encodeURIComponent(atelier)}`)
   if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
   return (await r.json()).articles || []
 }

@@ -2001,15 +2001,24 @@ export default async function handler(req, res) {
     // C'est ce qui fait dire « il manque 600 g de crème » alors que la crème est
     // là — un stock négatif compte comme zéro disponible. On les montre à côté
     // de « À valider », là où la question se pose.
-    // On écarte le café, les jus et les emballages (92 des 160 articles
-    // négatifs) : ils ne se fabriquent pas ici et n'expliquent aucun manque.
     if (req.query.mode === 'stocks-negatifs') {
       const uid = await odooAuth()
+      // Chaque écran ne montre QUE ses articles (demande de Layla, 2026-09-09) :
+      //  • « À valider CD- »     → le labo cake design, noms portant « CD* » ;
+      //  • « À valider Annexe »  → l'annexe, noms commençant par « SM ».
+      // ⚠️ « CD* » est pris au pied de la lettre, l'étoile comprise : les
+      // génoises s'appellent « SM Genoise Vanille KG CD », sans étoile, et
+      // n'apparaissent donc PAS — alors que ce sont les plus gros écarts
+      // (−87 kg, −61 kg, −44 kg). Choix assumé de Layla, prévenue du chiffre.
+      const annexe = String(req.query.atelier || '') === 'annexe'
+      const lieu = annexe ? 'WHPDX' : 'WHLVP/Stock'
+      const retenu = annexe
+        ? (n => /^\s*(\[[^\]]*\]\s*)?SM/i.test(String(n || '')))
+        : (n => /CD\*/i.test(String(n || '')))
       const quants = await odooSearchRead(uid, 'stock.quant',
-        [['location_id.complete_name', 'like', 'WHLVP/Stock'], ['quantity', '<', 0]],
-        ['product_id', 'quantity'], { limit: 500 })
-      const estProduction = n => /^\s*(\[[^\]]*\]\s*)?(SM|CD|MP-|C-)/i.test(String(n || ''))
-      const gardes = quants.filter(q => Array.isArray(q.product_id) && estProduction(q.product_id[1]))
+        [['location_id.complete_name', 'like', lieu], ['quantity', '<', 0]],
+        ['product_id', 'quantity'], { limit: 600 })
+      const gardes = quants.filter(q => Array.isArray(q.product_id) && retenu(q.product_id[1]))
       if (!gardes.length) return res.status(200).json({ articles: [] })
       const ids = [...new Set(gardes.map(q => q.product_id[0]))]
       const lus = await odooCall(uid, 'product.product', 'read', [ids, ['uom_id']])
