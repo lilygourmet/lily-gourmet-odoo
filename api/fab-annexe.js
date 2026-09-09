@@ -163,13 +163,28 @@ function lignesPour(bom, produit) {
  * lignes : la quantité consommée est exacte, seule sa répartition entre deux
  * lignes du même produit change — ce qui ne touche ni le stock ni le coût.
  */
+/**
+ * Un ingrédient FIGÉ : sa quantité ne suit pas la sortie réelle. Deux sources.
+ *
+ * 1. La liste réglée pour l'article, dans « Mini / maxi Annexe ».
+ * 2. Une règle générale : TOUTES LES MOUSSES sont figées (Layla, 2026-09-09).
+ *    Une cuve montée reste une cuve, que la tournée donne 6 gâteaux ou 4.
+ *
+ * ⚠️ Quand la mousse n'a pas d'article à elle — le tiramisu, le royal — ce sont
+ * ses matières premières qui portent la consigne, et leur nom ne dit pas
+ * « mousse » : celles-là se cochent une à une. À l'inverse, le craquant et les
+ * biscuits ne sont JAMAIS figés : six royals demandent six fois la pesée.
+ */
+const estFige = (nom, figes) =>
+  (figes || []).includes(nom) || /\bmousses?\b/i.test(String(nom || ''))
+
 function ajustementsFiges(bom, produit, figes, tournee) {
   if (!bom) return {}                  // article sans recette : rien à imposer
   const facteur = tournee / (bom.product_qty || 1)
   const par = new Map()
   for (const l of lignesPour(bom, produit)) {
     const nom = sansRef(l.product_id[1])
-    if (!figes.includes(nom)) continue
+    if (!estFige(nom, figes)) continue
     const e = par.get(nom) || { unite: l.product_uom_id[1], total: 0, lignes: 0 }
     e.total += versUnite(l.product_qty, l.product_uom_id[1], e.unite) * facteur
     e.lignes += 1
@@ -208,7 +223,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
     const stock = stocks[p.id] || 0
     const sousBom = achetes.has(nom) ? null : await bomDe(cache, p)
     const fabrique = !!sousBom
-    const fige = figes.includes(nom)
+    const fige = estFige(nom, figes)
 
     // Ce que l'atelier a DÉJÀ déclaré aujourd'hui compte comme s'il l'avait :
     // le stock Odoo ne remonte qu'à la validation, et sans ça le pâtissier
@@ -294,7 +309,7 @@ export async function repartir(cache, catalogue, lance, quantites) {
     if (bom) {
       for (const l of lignesPour(bom, p)) {
         const nom = l.product_id[1]
-        if (!(a.figes || []).includes(nom)) continue
+        if (!estFige(nom, a.figes)) continue
         const c = await produitParNom(cache, nom)
         if (!c) continue
         uniteArticle[nom] = c.uom_id[1]
