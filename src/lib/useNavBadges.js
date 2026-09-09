@@ -45,11 +45,19 @@ export function useNavBadges(user, activeView = '') {
         canValiderAnnexe(user) ? (async () => {
           const journal = await loadFabProd(todayISO(), 'annexe')
           const noms = [...new Set((journal || []).map(d => d.ordre).filter(Boolean))]
-          if (!noms.length) { set('valider-annexe', 0); return }
+          // ⚠️ Une déclaration dont l'ordre n'a PAS pu être créé dans Odoo reste
+          // à l'écran, signalée « sans ordre » — et l'atelier attend qu'on s'en
+          // occupe. La pastille ne comptait qu'un ordre par déclaration : elle
+          // annonçait 1 là où l'écran montrait quatre lignes. L'écran les
+          // regroupe par article : on compte pareil. (Layla, 2026-09-09.)
+          const orphelins = new Set(
+            (journal || []).filter(d => !d.ordre).map(d => d.article)).size
+          if (!noms.length) { set('valider-annexe', orphelins); return }
           // On lit CES ordres-là seulement : l'arbre complet de l'annexe est
           // volontairement sans cache, bien trop lourd pour une pastille.
           const det = await loadManques(noms)
-          set('valider-annexe', det.filter(x => x.etat !== 'done' && x.etat !== 'cancel').length)
+          const ouverts = det.filter(x => x.etat !== 'done' && x.etat !== 'cancel').length
+          set('valider-annexe', ouverts + orphelins)
         })().catch(() => {}) : Promise.resolve(),
         // Le cake design : ce que l'équipe a marqué « fait » et qui attend sa
         // confirmation. Même lecture que l'écran, mais on s'arrête aux ordres
