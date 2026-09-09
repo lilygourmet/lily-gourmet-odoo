@@ -607,6 +607,24 @@ export default async function handler(req, res) {
     const prods = await Promise.all(voulus.map(a => produitParNom(cache, a.produit)))
     const stocks = await stocksDe(prods.filter(Boolean).map(p => p.id))
 
+    // À quel gâteau sert cette préparation ? Le catalogue le dit… quand la
+    // colonne est remplie. Le 2026-09-09 elle était vide pour 7 articles sur
+    // 18 — Royal Chocolat 15 et 20 cm, Craquant Royal, glaçage miroir, les
+    // deux biscuits brownie — qui se retrouvaient donc SEULS au premier niveau
+    // de l'écran, alors qu'ils appartiennent tous au Royal chocolat.
+    // On retrouve le parent dans les nomenclatures : c'est le même graphe que
+    // l'onglet « Déclarer », gardé dix minutes en mémoire, et il tient compte
+    // des parfums (un suprême amandes n'hérite pas du gâteau citron).
+    // Calculé SEULEMENT s'il en manque : la liste doit rester rapide.
+    const parents = voulus.some(a => !a.photo) ? await grapheParents() : null
+    const gateauDe = nom => {
+      const s = parents && parents.get(sansRef(nom))
+      if (!s || !s.size) return null
+      // Une préparation peut servir plusieurs gâteaux : on la range sous le
+      // premier, faute de mieux — elle reste trouvable par la recherche.
+      return [...s].sort((x, y) => x.localeCompare(y, 'fr'))[0]
+    }
+
     for (let i = 0; i < voulus.length; i++) {
       const a = voulus[i]
       const p = prods[i]
@@ -629,7 +647,8 @@ export default async function handler(req, res) {
       // La liste n'affiche que l'état : ni recette, ni cascade, ni tailles.
       if (!seul) {
         articles.push({
-          produit: a.produit, libelle: a.libelle || a.produit, photo: a.photo,
+          produit: a.produit, libelle: a.libelle || a.produit,
+          photo: a.photo || gateauDe(a.produit),
           unite: uniteDe(p), stock, mini: a.mini, maxi: a.maxi, tournee: a.tournee,
           dejaFait, reste,
           etat: stock <= 0 ? 'rupture' : 'refaire',
