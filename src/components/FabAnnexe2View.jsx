@@ -701,8 +701,42 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   }
 
   // ---------- un nœud : l'article, ou n'importe quel composant ----------
+  // ---------- le rappel « pour 1 … », dans son carré sous « C'est fait » ----------
+  // Une info, pas une étape : Layla l'a sortie de la fiche (2026-09-09).
+  // Pour un gâteau c'est le MONTAGE (ce que demande une pièce), pour une
+  // préparation c'est sa recette ramenée à une unité. Même format, même place.
+  const pourUne = (() => {
+    if (racine) {
+      // ⚠️ `article.tournee` est DÉJÀ le total : `pourFois` l'a multiplié par
+      // le nombre de tournées, comme les besoins. Le remultiplier donnait la
+      // moitié des quantités (195 g au lieu de 391 g).
+      const total = Number(article.tournee) || 0
+      // Les quantités FIGÉES y figurent — Layla les cite en premier dans son
+      // exemple : la cuve part en entier sur la tournée, mais celui qui monte
+      // veut savoir ce qu'il en met sur une pièce.
+      const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
+      if (!(total > 0) || !lignes.length) return null
+      return {
+        titre: `Pour 1 ${propre(article.libelle)}`,
+        lignes: lignes.map(c => ({
+          nom: nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
+          valeur: qte((c.besoin * facteurAtelier(c.produit)) / total, c.unite),
+        })),
+      }
+    }
+    if (!(noeud.recette || []).length) return null
+    return {
+      titre: `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`,
+      lignes: noeud.recette.map(l => ({
+        nom: nomAtelier(l.produit),
+        valeur: qte((l.qty * facteurAtelier(l.produit)) / parRecette, l.unite),
+      })),
+    }
+  })()
+
   return (
     <Cadre {...nav} onRetour={() => setChemin(chemin.slice(0, -1))}
+      pied={pourUne}
       photo={racine ? article.photo : null}
       titre={racine ? article.libelle : propre(noeud.produit)}
       sous={racine
@@ -903,61 +937,6 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
         </>
       )}
 
-      {/* LE MONTAGE, tout en bas : ce que demande UNE pièce. Le reste de la
-          fiche parle de la tournée entière — utile pour sortir le stock, mais
-          celui qui monte a besoin de sa dose à lui. « 1 Citron Framboise (5) =
-          391 g de crème légère, 1 fond… » (Layla, 2026-09-09).
-          Les quantités FIGÉES y figurent — Layla les cite en premier dans son
-          exemple : la cuve part en entier sur la tournée, mais celui qui monte
-          veut savoir ce qu'il en met sur une pièce. Elles sont marquées comme
-          telles pour qu'on ne les prenne pas pour une dose à peser à part. */}
-      {racine && (() => {
-        // ⚠️ `article.tournee` est DÉJÀ le total : `pourFois` l'a multiplié par
-        // le nombre de tournées, comme les besoins. Le remultiplier donnait la
-        // moitié des quantités (195 g au lieu de 391 g).
-        const total = Number(article.tournee) || 0
-        const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
-        if (!(total > 0) || !lignes.length) return null
-        return (
-          <div className="px-4 py-3 border-t border-cream-deep/60 italic text-ink-mute">
-            <div className="text-[11.5px] font-bold mb-1">
-              Pour 1 {propre(article.libelle)}
-            </div>
-            {lignes.map((c, i) => (
-              <div key={'m' + c.produit + i}
-                className="flex items-baseline gap-3 text-[11.5px] py-[1px]">
-                <span className="flex-1 min-w-0">
-                  {nomAtelier(c.produit)}{c.fige ? ' · figé' : ''}
-                </span>
-                <span>{qte((c.besoin * facteurAtelier(c.produit)) / total, c.unite)}</span>
-              </div>
-            ))}
-          </div>
-        )
-      })()}
-
-      {/* Tout en bas, pour information : ce que demande UNE unité. Toute la
-          fiche parle de la tournée en cours ; ce rappel en italique permet de
-          refaire le calcul pour n'importe quelle quantité sans diviser de
-          tête (Layla, 2026-09-09). Pour un gâteau, c'est le bloc « Le
-          montage » juste au-dessus qui joue ce rôle. */}
-      {!racine && (noeud.recette || []).length > 0 && (
-        <div className="px-4 py-3 border-t border-cream-deep/60 italic text-ink-mute">
-          <div className="text-[11.5px] font-bold mb-1">
-            Pour 1 {noeud.unite} de {propre(noeud.produit)}
-          </div>
-          {noeud.recette.map((l, i) => {
-            const f = facteurAtelier(l.produit)
-            return (
-              <div key={'u' + l.produit + i} className="flex items-baseline gap-3 text-[11.5px] py-[1px]">
-                <span className="flex-1 min-w-0">{nomAtelier(l.produit)}</span>
-                <span>{qte((l.qty * f) / parRecette, l.unite)}</span>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
       {bloque.length > 0 ? (
         <div className="flex items-center gap-3 px-4 py-3 bg-cream-deep/40 border-t border-cream-deep">
           <div className="flex-1 text-[13px] font-bold text-ink-mute">
@@ -1046,7 +1025,7 @@ function CarteArticle({ a, onOuvrir }) {
   )
 }
 
-function Cadre({ children, onRetour, photo, titre, sous, user, onLogout, onNavigate, activeView }) {
+function Cadre({ children, pied, onRetour, photo, titre, sous, user, onLogout, onNavigate, activeView }) {
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
@@ -1062,6 +1041,21 @@ function Cadre({ children, onRetour, photo, titre, sous, user, onLogout, onNavig
           </div>
           {children}
         </div>
+        {/* Le rappel « pour 1 … » vit dans SON carré, sous le bouton
+            « C'est fait » : c'est une info, pas une étape de la fiche
+            (Layla, 2026-09-09). */}
+        {pied && (
+          <div className="mt-3 rounded-2xl border border-cream-deep bg-cream-warm/60
+                          px-4 py-3 italic text-ink-mute shadow-sm">
+            <div className="text-[11.5px] font-bold mb-1">{pied.titre}</div>
+            {pied.lignes.map((l, i) => (
+              <div key={'p' + i} className="flex items-baseline gap-3 text-[11.5px] py-[1px]">
+                <span className="flex-1 min-w-0">{l.nom}</span>
+                <span>{l.valeur}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
