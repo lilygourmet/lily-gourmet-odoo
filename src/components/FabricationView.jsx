@@ -23,6 +23,10 @@ import { supabase } from '../lib/supabase'
 // −61 kg de chocolat au 2026-09-08), faute que le labo enregistre ce qu'il
 // fabrique. Elle reste « jamais bloquante » (voir `toujoursLa`) le temps que ce
 // retard se résorbe.
+// Le seul article qui se lance À LA DEMANDE : aucun gâteau ne le réclame, il
+// n'apparaîtrait donc dans aucune liste calculée. Nom EXACT d'Odoo — c'est par
+// lui que le serveur le retrouve. Sa recette en sort 1 000 g, il se compte en g.
+const ARTICLE_FINITION = 'SM. Creme au beurre nature finition'
 const BASES = [/cr[eè]me au beurre nature/i, /craquant/i, /sirop/i, /amandes\s*caram/i, /genoise/i]
 // Bases ajoutées par Layla depuis l'écran, en plus de celles reconnues au nom.
 // Variable de module : les petits composants d'affichage s'en servent aussi.
@@ -402,6 +406,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // est arrivée — il est dans les dépendances des mémos qui s'appuient dessus.
   const [basesPretes, setBasesPretes] = useState(0)
   const [noms, setNoms] = useState({})          // { idUtilisateur : « Prénom Nom » }
+  // Combien de grammes de crème au beurre nature finition on lance. La recette
+  // Odoo en sort 1 000 g : c'est la proposition de départ, elle se corrige.
+  const [grammesFinition, setGrammesFinition] = useState(1000)
 
   useEffect(() => {
     loadBasesChoisies()
@@ -1317,6 +1324,37 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   }
 
   /**
+   * La crème au beurre nature finition se fait À LA DEMANDE : aucun gâteau ne
+   * la réclame, elle n'apparaît donc dans aucune des listes calculées. Layla la
+   * lance quand elle veut (2026-09-09). Elle se compte en GRAMMES ; sa recette
+   * Odoo en sort 1 000 g, mais on envoie exactement ce qui est tapé.
+   * L'ordre est créé dans Odoo PUIS déclaré fait : il part droit dans
+   * « À valider », comme une tournée de base.
+   */
+  const declarerFinition = async () => {
+    const q = Math.round(Number(grammesFinition) || 0)
+    if (!(q > 0)) { toast.error('Mets une quantité en grammes'); return }
+    const cree = await creerOfPrepa(ARTICLE_FINITION, q, user?.id, [], 'g')
+    if (cree && cree.test) { toast.success('Mode test : aucun ordre créé dans Odoo'); return }
+    if (!cree || !cree.name || cree.error) {
+      toast.error('Odoo : ' + ((cree && cree.error) || 'ordre non créé'))
+      return
+    }
+    toast.success(`Ordre ${cree.name} créé — ${nb(q)} g`)
+    // Odoo ne nous l'a pas encore renvoyé : on l'ajoute à ce qu'on connaît,
+    // sinon la coche ne se rattache à rien.
+    setData(d => (d ? {
+      ...d,
+      ordres: [...(d.ordres || []), {
+        name: cree.name, produit: ARTICLE_FINITION, qty: q, unite: 'g',
+        etat: 'confirmed', origine: 'LG-APP',
+        quand: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      }],
+    } : d))
+    return marquerOrdre(cree.name, ARTICLE_FINITION, q)
+  }
+
+  /**
    * Cocher un gâteau, c'est le moment où le bac de sirop est encore sur la
    * table. On demande ce qu'il en reste : l'ordre portera le poids PESÉ et non
    * la règle de trois. Pas de sirop dans la recette, ou Odoo muet ? on coche
@@ -1415,7 +1453,25 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
           {data && (
             <>
-              <Titre n="1">Bases à préparer</Titre>
+              {/* Toujours là, quoi qu'il y ait à faire : aucun gâteau ne réclame
+                  cette crème, elle se lance quand on veut. L'ordre est créé dans
+                  Odoo et part droit dans « À valider ». */}
+              <Titre n="1">À faire à la demande</Titre>
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1.5 sm:gap-3 border border-line rounded-xl px-2 sm:px-3.5 py-2.5 sm:py-3 mb-1.5 bg-white">
+                <span className="basis-full sm:basis-auto flex-1 min-w-0">
+                  <span className="text-[14.5px] sm:text-[17px] font-bold">Crème au beurre nature finition</span>
+                  <span className="block text-[11px] text-ink-mute">une recette en sort 1 000 g</span>
+                </span>
+                <input type="number" min="0" step="50" inputMode="numeric"
+                  value={grammesFinition}
+                  onChange={e => setGrammesFinition(e.target.value)}
+                  aria-label="grammes de crème au beurre nature finition"
+                  className="w-[92px] text-right text-[15px] font-bold border border-line rounded-lg px-2 py-1.5" />
+                <span className="text-[12px] text-ink-mute">g</span>
+                <BoutonFait fait={false} onClick={declarerFinition} />
+              </div>
+
+              <Titre n="2">Bases à préparer</Titre>
               {/* d'où vient le calcul : sinon on se demande pourquoi le craquant est là */}
               <p className="text-[12px] text-ink-mute -mt-1 mb-2">pour tous les gâteaux en attente</p>
               {bases.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Rien à préparer en base.</p>}
@@ -1496,7 +1552,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                       jamais filtré sur les règles — il ramasse tout ce qui n'est
                       pas un format de gâteau, y compris des crèmes mal
                       rattachées à leur gâteau. */}
-                  <Titre n="2">À relancer pour le stock</Titre>
+                  <Titre n="3">À relancer pour le stock</Titre>
                   <p className="text-[12px] text-ink-mute -mt-1 mb-2">passé sous le mini de l'app, sans gâteau qui l'attende</p>
                   {demandeOdoo.map(b => {
                     // dans aFaire, pas dans data.ofs : c'est là que le stock
@@ -1514,7 +1570,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                 </>
               )}
 
-              <Titre n={demandeOdoo.length ? 3 : 2}>Gâteaux à faire</Titre>
+              <Titre n={demandeOdoo.length ? 4 : 3}>Gâteaux à faire</Titre>
               {gateaux.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Aucun gâteau à faire.</p>}
               {/* Rien à cliquer : les doublons relancés par une règle mini/maxi
                   s'annulent tout seuls dans Odoo. On le dit pendant que ça se
