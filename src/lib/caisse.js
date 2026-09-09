@@ -648,7 +648,13 @@ export async function relancerRapprochement() {
   const dates = txns.map(t => t.dateIso).sort()
   const debut = new Date(dates[0])
   debut.setDate(debut.getDate() - 120)
-  const envs = await loadBanqueEnvelopesBetween(debut.toISOString().slice(0, 10), dates[dates.length - 1])
+  // Uniquement les caisses qui cherchent encore leur ligne. Une caisse déjà rapprochée, ou
+  // justifiée par une preuve photo, « réserve » au passage une ligne libre de même date et
+  // même montant — une protection anti-doublon prévue pour un RÉ-IMPORT, où sa propre ligne
+  // est relue. Ici les lignes relues n'existent pas : elle volait donc la ligne d'une autre
+  // caisse, et plus aucune ne se retrouvait avec une seule ligne possible (« 0 rapprochée »).
+  const toutes = await loadBanqueEnvelopesBetween(debut.toISOString().slice(0, 10), dates[dates.length - 1])
+  const envs = toutes.filter(e => e.releve_status !== 'trouve' && !(e.proof_url && !e.releve_status))
   const { results } = reconcileEnvelopes(envs, txns, { recompute: false })
 
   let trouve = 0, aConfirmer = 0
