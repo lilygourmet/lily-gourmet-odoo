@@ -242,8 +242,16 @@ describe('memeOperation', () => {
     expect(memeOperation(court, long)).toBe(true)
   })
 
-  it('exige le même jour quand il n\'y a pas de n° à comparer', () => {
-    expect(memeOperation(court, { ...long, ligne_date: '2026-07-27' })).toBe(false)
+  it('exige le même jour DANS un même document', () => {
+    const a = { ...court, releve_url: 'releves/juillet.pdf' }
+    const b = { ...long, ligne_date: '2026-07-27', releve_url: 'releves/juillet.pdf' }
+    expect(memeOperation(a, b)).toBe(false)
+  })
+
+  // Une caisse rapprochée de longue date n'a gardé aucun PDF : on ne peut pas savoir si
+  // les deux lignes viennent du même document, et les dates ne sont donc pas comparables.
+  it('tolère 3 jours quand le document est inconnu', () => {
+    expect(memeOperation(court, { ...long, ligne_date: '2026-07-29' })).toBe(true)
   })
 
   it('refuse deux clients différents du même montant le même jour', () => {
@@ -272,9 +280,15 @@ describe('memeOperation', () => {
     expect(memeOperation(a, b)).toBe(false)
   })
 
-  it('sépare deux jours différents, même client', () => {
+  it('sépare deux jours différents du même document, même client', () => {
+    const a = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2321144 FARHANE HAJAR', releve_url: 'releves/juillet.pdf' }
+    const b = { amount: 392, ligne_date: '2026-07-18', label: 'VIR INST RECU 2324371 FARHANE HAJAR', releve_url: 'releves/juillet.pdf' }
+    expect(memeOperation(a, b)).toBe(false)
+  })
+
+  it('refuse au-delà de 3 jours, document inconnu', () => {
     const a = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2321144 FARHANE HAJAR' }
-    const b = { amount: 392, ligne_date: '2026-07-18', label: 'VIR INST RECU 2324371 FARHANE HAJAR' }
+    const b = { amount: 392, ligne_date: '2026-07-22', label: 'VIR INST RECU 2324371 FARHANE HAJAR' }
     expect(memeOperation(a, b)).toBe(false)
   })
 
