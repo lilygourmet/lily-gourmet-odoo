@@ -205,8 +205,14 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         const la = libelleNorm(a.label), lb = libelleNorm(b.label)
         const court = la.length <= lb.length ? la : lb
         const tronque = court.length >= 10 && (la.startsWith(lb) || lb.startsWith(la))
+        // Nom du client IDENTIQUE (pas seulement ressemblant) : c'est la même opération,
+        // écrite avec ou sans ses références. Vécu : « VIRT RECU CITIBANK EUROPE PLC »
+        // (relevé scanné) et « VIRT RECU CITIBANK 2012323926 EUROPE PLC FI » (BMCI), même
+        // montant à un jour d'écart. Une orthographe seulement PROCHE (BENOMAR / BENNOMAR)
+        // reste signalée plus bas, pas fusionnée.
+        const memeNom = deuxNoms && na === nb
         if (ecart <= ecartCertain && !numerosContraires(a.label, b.label) &&
-            (tronque || !deuxNoms)) {
+            (tronque || memeNom || !deuxNoms)) {
           retirees.add(b.key)                       // on garde la plus ancienne (a)
         } else if (ecart <= ecartProbable && nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= seuil) {
           probables.set(a.key, { date: b.ligne_date, label: b.label })

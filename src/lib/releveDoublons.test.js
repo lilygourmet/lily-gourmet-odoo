@@ -430,3 +430,36 @@ describe('memeOperation — extrait et relevé datent différemment', () => {
     expect(memeOperation(extrait, { ...releve, ligne_date: '2026-07-15', label: 'VIR INST RECU OUKHADDA AYA' })).toBe(false)
   })
 })
+
+// Vécu : le même virement CITIBANK de 3 150 dh, vu le 11/05 sur le relevé BMCI (avec sa
+// référence) et le 12/05 sur le relevé scanné (sans). Même nom de client mot pour mot :
+// l'app le signalait en « doublon probable » et attendait un clic, sur des dizaines de cas.
+describe('marquerDoublons — même nom exact à un jour d\'écart', () => {
+  const L2 = (key, date, label, url) =>
+    ({ key, ligne_date: date, amount: 3150, label, releve_url: url, created_at: '2026-06-01T10:00:00' })
+
+  it('fusionne le même client écrit avec et sans sa référence', () => {
+    const out = marquerDoublons([
+      L2('a', '2026-05-11', 'VIRT RECU CITIBANK 2012323926 EUROPE PLC FI', 'releves/bmci.pdf'),
+      L2('b', '2026-05-12', 'VIRT RECU CITIBANK EUROPE PLC', 'releves/scan.pdf'),
+    ])
+    expect(out).toHaveLength(1)
+  })
+
+  it('laisse en « probable » une orthographe seulement proche', () => {
+    const out = marquerDoublons([
+      L2('a', '2026-05-11', 'VIRT RECU MME SELMA BENOMAR', 'releves/bmci.pdf'),
+      L2('b', '2026-05-12', 'VIRT RECU MME SELMA BENNOMAR', 'releves/scan.pdf'),
+    ])
+    expect(out).toHaveLength(2)
+    expect(out[0].doublon_probable).toBeTruthy()
+  })
+
+  it('garde deux clients différents du même montant', () => {
+    const out = marquerDoublons([
+      L2('a', '2026-05-11', 'VIRT RECU CITIBANK EUROPE PLC', 'releves/bmci.pdf'),
+      L2('b', '2026-05-12', 'VIRT RECU NOVACTUS MAROC', 'releves/scan.pdf'),
+    ])
+    expect(out).toHaveLength(2)
+  })
+})
