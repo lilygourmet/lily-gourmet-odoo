@@ -88,16 +88,39 @@ function Vignette({ photo, libelle, taille = 'w-14 h-14 rounded-xl shrink-0', gr
 // Un gâteau occupe souvent plusieurs lignes du catalogue : le Citron Framboise
 // en a quatre (le montage, puis la finition en 3 tailles). On les rassemble
 // sous le nom du gâteau vendu, que leur photo désigne déjà.
+// Du plus petit au plus grand : l'individuel, puis les parts, puis les
+// diamètres. Ce qui n'annonce aucune taille (un cadre, une plaque) ferme la
+// marche, par ordre alphabétique. (Layla, 2026-09-09 : « les SM classés par
+// taille ».)
+function rangTaille(nom) {
+  const n = String(nom || '').toLowerCase()
+  if (/\bindiv/.test(n)) return 0
+  const pers = n.match(/(\d+)\s*p(?:ers)?\b/)
+  if (pers) return Number(pers[1])
+  const cm = n.match(/(\d+)\s*cm\b/)
+  if (cm) return 100 + Number(cm[1])
+  // « Le Citron Framboise (1) / (5) / (10) » : la taille est entre parenthèses
+  // au bout du nom. Sans cette règle l'ordre était alphabétique — 1, 10, 5.
+  const par = n.match(/\((\d+)\)\s*$/)
+  if (par) return Number(par[1])
+  return 1000
+}
+
 function parGateau(articles) {
   const groupes = []
   for (const a of articles || []) {
     const cle = a.photo || a.produit
     let g = groupes.find(x => x.cle === cle)
     if (!g) {
-      g = { cle, nom: String(a.photo || a.libelle).replace(/^E-\s*/, '').trim(), articles: [] }
+      g = { cle, photo: a.photo, nom: String(a.photo || a.libelle).replace(/^E-\s*/, '').trim(), articles: [] }
       groupes.push(g)
     }
     g.articles.push(a)
+  }
+  for (const g of groupes) {
+    g.articles.sort((x, y) => rangTaille(x.produit) - rangTaille(y.produit)
+      || String(x.produit).localeCompare(String(y.produit), 'fr'))
+    g.ruptures = g.articles.filter(a => a.etat === 'rupture').length
   }
   return groupes
 }
@@ -350,8 +373,10 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
           </div>
 
           <div className="flex gap-2 my-3">
+            {/* Changer d'onglet remet la liste des gâteaux : les deux se
+                parcourent pareil et partagent le même « gâteau ouvert ». */}
             {[['faire', 'À faire'], ['declarer', 'Déclarer']].map(([k, t]) => (
-              <button key={k} onClick={() => setOnglet(k)}
+              <button key={k} onClick={() => { setOnglet(k); setGateau(null) }}
                 className={`flex-1 rounded-2xl py-3 text-[14px] font-extrabold border-2
                   ${onglet === k ? 'bg-bordeaux border-bordeaux text-cream'
                                  : 'bg-cream-warm border-cream-deep text-ink-mute'}`}>
@@ -462,19 +487,58 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
 
           {histoOuvert && <Historique histo={histo} onFermer={() => setHistoOuvert(false)} />}
 
-          {onglet === 'faire' && parGateau(articles).map(g => (
-            <section key={g.cle} className="mb-5">
-              {g.articles.length > 1 && (
-                <h2 className="font-serif italic text-[17px] text-bordeaux mb-1.5">{g.nom}</h2>
-              )}
-              <div className="grid gap-2.5"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
-                {g.articles.map(a => (
-                  <CarteArticle key={a.produit} a={a} onOuvrir={() => setChemin([a.produit])} />
-                ))}
-              </div>
-            </section>
-          ))}
+          {/* « À faire » se parcourt comme « Déclarer » : les GÂTEAUX d'abord,
+              puis les SM du gâteau ouvert, classés par taille, puis la recette.
+              Avant, les SM de tous les gâteaux étaient à plat sur un seul écran.
+              (Layla, 2026-09-09.) */}
+          {onglet === 'faire' && articles?.length > 0 && (() => {
+            const groupes = parGateau(articles)
+            const ouvert = groupes.find(g => g.cle === gateau)
+            if (!ouvert) {
+              return (
+                <div className="grid gap-2.5"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
+                  {groupes.map(g => (
+                    <button key={g.cle} onClick={() => setGateau(g.cle)}
+                      className="text-left rounded-2xl border border-cream-deep bg-cream-warm
+                                 overflow-hidden shadow-sm hover:border-bordeaux/40 flex flex-col">
+                      <Vignette photo={g.photo} libelle={g.nom} gros taille="w-full aspect-square" />
+                      <div className="px-2 py-1.5 flex flex-col gap-0.5 flex-1">
+                        <div className="text-[12px] font-extrabold leading-[1.25]">{g.nom}</div>
+                        <div className="mt-auto pt-0.5 text-[10.5px] text-ink-mute">
+                          {g.articles.length} à faire
+                          {g.ruptures > 0 && (
+                            <span className="block text-danger font-bold">
+                              {g.ruptures} rupture{g.ruptures > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )
+            }
+            return (
+              <>
+                <button onClick={() => setGateau(null)}
+                  className="text-[13px] text-ink-mute font-bold mb-3">← Tous les gâteaux</button>
+                <h2 className="flex items-center gap-2.5 mb-2">
+                  <Vignette photo={ouvert.photo} libelle={ouvert.nom} taille="w-10 h-10 rounded-lg shrink-0" />
+                  <span className="flex-1 min-w-0 font-serif italic text-[17px] text-bordeaux leading-tight">
+                    {ouvert.nom}
+                  </span>
+                  <span className="text-[12px] text-ink-mute">{ouvert.articles.length}</span>
+                </h2>
+                <div className="grid gap-2.5"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
+                  {ouvert.articles.map(a => (
+                    <CarteArticle key={a.produit} a={a} onOuvrir={() => setChemin([a.produit])} />
+                  ))}
+                </div>
+              </>
+            )
+          })()}
         </div>
       </div>
     )
