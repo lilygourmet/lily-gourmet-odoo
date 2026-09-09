@@ -4,7 +4,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { todayISO } from '../lib/dates'
-import { loadFabProd, delFabProd } from '../lib/fabricationProd'
+import { loadFabProd, delFabProd, datesDesOrdres } from '../lib/fabricationProd'
 import { loadArbreAnnexe } from '../lib/fabricationAnnexe'
 import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
@@ -285,7 +285,11 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
       if (liste.length) enPlus[n] = liste.map(a => ({ produit: a.produit, uom: a.uom, qty: Number(a.qty) }))
     }
     try {
-      const res = await validerDansOdoo(cibles, forcer, user?.id, quantites, enPlus, produits)
+      // La production compte pour le jour où elle a été FAITE, pas pour celui
+      // où on la valide : on retrouve la date de chaque déclaration, tous jours
+      // confondus. (Layla, 2026-09-09.)
+      const dates = await datesDesOrdres(cibles).catch(() => ({}))
+      const res = await validerDansOdoo(cibles, forcer, user?.id, quantites, enPlus, produits, dates)
       setResultats(res)
       // Ce qui est validé n'a plus rien à faire dans la liste. Ce qui a échoué
       // y reste, avec son message : c'est encore à traiter.

@@ -246,11 +246,11 @@ export async function loadManques(ordres) {
  * Odoo crée le reliquat et l'article revient dans « ce qu'il faut faire ».
  * Renvoie [{ name, ok, message }].
  */
-export async function validerDansOdoo(ordres, forcer, actorId, quantites = null, ajouts = null, produits = null) {
+export async function validerDansOdoo(ordres, forcer, actorId, quantites = null, ajouts = null, produits = null, dates = null) {
   const r = await fetch('/api/freezer-list?mode=valider', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ordres, forcer: !!forcer, actorId, quantites, ajouts, produits, test: estModeTest() }),
+    body: JSON.stringify({ ordres, forcer: !!forcer, actorId, quantites, ajouts, produits, dates, test: estModeTest() }),
   })
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)

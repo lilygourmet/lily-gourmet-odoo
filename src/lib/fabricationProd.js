@@ -105,6 +105,23 @@ export async function addFabProd(jour, article, qty, unite, userId, fois = null,
   return data
 }
 
+/**
+ * Quand chaque ordre a-t-il été DÉCLARÉ ? Sans filtre de jour : un gâteau monté
+ * lundi se valide parfois mercredi, et c'est lundi qu'il doit compter.
+ * → { 'WHPDX/MO/21310': '2026-09-08T16:05:58.000Z' }
+ */
+export async function datesDesOrdres(ordres) {
+  const noms = [...new Set((ordres || []).filter(Boolean))]
+  if (!noms.length) return {}
+  const { data, error } = await supabase.from('prod_fabrications')
+    .select('ordre, fait_le').in('ordre', noms).order('fait_le', { ascending: true })
+  if (error) return {}
+  const out = {}
+  // La PREMIÈRE déclaration fait foi : c'est le moment où le travail a été fait.
+  for (const l of data || []) if (l.ordre && !out[l.ordre]) out[l.ordre] = l.fait_le
+  return out
+}
+
 /** Rattache après coup l'ordre Odoo à une déclaration déjà enregistrée : la
  *  création prend plusieurs secondes, on ne fait plus attendre l'atelier. */
 export async function rattacherOrdre(id, ordre, ordreCree) {

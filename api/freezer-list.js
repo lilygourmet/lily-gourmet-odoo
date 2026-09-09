@@ -1010,8 +1010,10 @@ async function daterProduction(uid, idOrdre, quand) {
     if (isNaN(d)) return
     const iso = d.toISOString().slice(0, 19).replace('T', ' ')
     await odooCall(uid, 'mrp.production', 'write', [[idOrdre], { date_finished: iso }]).catch(() => {})
+    // ⚠️ Le « ou » d'Odoo se pose À PLAT dans le domaine, pas dans un tableau
+    // à lui : imbriqué, Odoo répond « unhashable type: list ».
     const moves = await odooSearchRead(uid, 'stock.move',
-      [['|', ['raw_material_production_id', '=', idOrdre], ['production_id', '=', idOrdre]]],
+      ['|', ['raw_material_production_id', '=', idOrdre], ['production_id', '=', idOrdre]],
       ['id'], { limit: 200 })
     if (!moves.length) return
     const ids = moves.map(m => m.id)
@@ -2131,7 +2133,8 @@ export default async function handler(req, res) {
       }
       const uid = await odooAuth()
       const out = []
-      for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true, (body.quantites || {})[n], (body.ajouts || {})[n], (body.produits || {})[n]))
+      for (const n of names) out.push(await validerOrdre(uid, n, body.forcer === true,
+        (body.quantites || {})[n], (body.ajouts || {})[n], (body.produits || {})[n], (body.dates || {})[n]))
       console.log(`[fabrication:valider] par ${body.actorId || '?'} · forcer=${body.forcer === true} · ${out.map(o => o.name + '=' + (o.ok ? 'ok' : o.message)).join(' | ')}`)
       return res.status(200).json({ resultats: out })
     }
