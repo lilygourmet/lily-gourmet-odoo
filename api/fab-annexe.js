@@ -180,7 +180,11 @@ const estFige = (nom, figes) =>
 
 function ajustementsFiges(bom, produit, figes, tournee) {
   if (!bom) return {}                  // article sans recette : rien à imposer
-  const facteur = tournee / (bom.product_qty || 1)
+  // ⚠️ Même conversion que dans `composantsDe` : la recette écrit parfois sa
+  // sortie dans une autre unité que celle de l'article. Ces quantités-là
+  // partent dans l'ordre Odoo : une erreur ici consomme vraiment du stock.
+  const facteur = tournee / (versUnite(bom.product_qty || 1,
+    bom.product_uom_id?.[1], produit.uom_id?.[1]) || 1)
   const par = new Map()
   for (const l of lignesPour(bom, produit)) {
     const nom = sansRef(l.product_id[1])
@@ -207,7 +211,15 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
   const chemin = [...vus, produit.id]
 
   // Combien de fois la recette, pour obtenir `quantite`.
-  const facteur = quantite / (bom.product_qty || 1)
+  //
+  // ⚠️ `quantite` est comptée dans l'unité de l'ARTICLE, mais la recette écrit
+  // parfois sa sortie dans une autre : la génoise vanille sort « 1 Tournée
+  // (3 kg) » pour un article compté en kg. Sans convertir, on divisait par 1
+  // au lieu de 3 — et l'app consommait TROIS fois trop de génoise commune.
+  // 21 recettes sur 905 sont dans ce cas (analyse du 2026-09-09), certaines à
+  // mille fois près (une recette écrite en kg pour un article compté en g).
+  const base = versUnite(bom.product_qty || 1, bom.product_uom_id?.[1], produit.uom_id?.[1]) || 1
+  const facteur = quantite / base
 
   // Le stock de tous les composants d'un coup.
   const lignes = lignesPour(bom, produit)
@@ -350,7 +362,8 @@ export async function repartir(cache, catalogue, lance, quantites) {
         if (!c) continue
         uniteArticle[nom] = c.uom_id[1]
         const e = out[nom] || { ligne: 0, unite: l.product_uom_id[1], n: 0 }
-        e.ligne += versUnite(l.product_qty, l.product_uom_id[1], e.unite) / (bom.product_qty || 1)
+        e.ligne += versUnite(l.product_qty, l.product_uom_id[1], e.unite)
+          / (versUnite(bom.product_qty || 1, bom.product_uom_id?.[1], p.uom_id?.[1]) || 1)
         e.n += 1
         out[nom] = e
       }
