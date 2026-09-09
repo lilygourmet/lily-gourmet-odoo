@@ -701,11 +701,25 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   }
 
   // ---------- un nœud : l'article, ou n'importe quel composant ----------
-  // ---------- le rappel « pour 1 … », dans son carré sous « C'est fait » ----------
-  // Une info, pas une étape : Layla l'a sortie de la fiche (2026-09-09).
-  // Pour un gâteau c'est le MONTAGE (ce que demande une pièce), pour une
-  // préparation c'est sa recette ramenée à une unité. Même format, même place.
-  const pourUne = (() => {
+  // ---------- les rappels « pour 1 … », en carrés sous « C'est fait » ----------
+  // Une info, pas une étape : Layla les a sortis de la fiche (2026-09-09).
+  // Le premier carré est celui de l'article ouvert — pour un gâteau c'est le
+  // MONTAGE (ce que demande une pièce), pour une préparation sa recette
+  // ramenée à une unité. Puis la CASCADE : un carré par composant et
+  // sous-composant qui se fabrique, aussi profond qu'aille la recette.
+  // « Comme apparaît cette recette, doivent apparaître les autres. »
+  const pieds = (() => {
+    const out = []
+    const vus = new Set([noeud.produit])
+    // Une recette ramenée à UNE unité de ce qu'elle produit.
+    const aLUnite = c => {
+      const par = c.tourneeTaille || 1
+      return (c.recette || []).map(l => ({
+        nom: nomAtelier(l.produit),
+        valeur: qte((l.qty * facteurAtelier(l.produit)) / par, l.unite),
+      }))
+    }
+
     if (racine) {
       // ⚠️ `article.tournee` est DÉJÀ le total : `pourFois` l'a multiplié par
       // le nombre de tournées, comme les besoins. Le remultiplier donnait la
@@ -715,23 +729,32 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       // exemple : la cuve part en entier sur la tournée, mais celui qui monte
       // veut savoir ce qu'il en met sur une pièce.
       const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
-      if (!(total > 0) || !lignes.length) return null
-      return {
-        titre: `Pour 1 ${propre(article.libelle)}`,
-        lignes: lignes.map(c => ({
-          nom: nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
-          valeur: qte((c.besoin * facteurAtelier(c.produit)) / total, c.unite),
-        })),
+      if (total > 0 && lignes.length) {
+        out.push({
+          titre: `Pour 1 ${propre(article.libelle)}`,
+          lignes: lignes.map(c => ({
+            nom: nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
+            valeur: qte((c.besoin * facteurAtelier(c.produit)) / total, c.unite),
+          })),
+        })
+      }
+    } else if ((noeud.recette || []).length) {
+      out.push({ titre: `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`, lignes: aLUnite(noeud) })
+    }
+
+    // La descendance, dans l'ordre où elle s'affiche. Une préparation qui sert
+    // deux fois n'a droit qu'à un carré.
+    const descendre = liste => {
+      for (const c of liste || []) {
+        if (!c.fabrique || vus.has(c.produit)) continue
+        vus.add(c.produit)
+        const lignes = aLUnite(c)
+        if (lignes.length) out.push({ titre: `Pour 1 ${c.unite} de ${propre(c.produit)}`, lignes })
+        descendre(c.enfants)
       }
     }
-    if (!(noeud.recette || []).length) return null
-    return {
-      titre: `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`,
-      lignes: noeud.recette.map(l => ({
-        nom: nomAtelier(l.produit),
-        valeur: qte((l.qty * facteurAtelier(l.produit)) / parRecette, l.unite),
-      })),
-    }
+    descendre(enfants)
+    return out
   })()
 
   // Les raccourcis « Je fais » ne proposent QUE ce qui ne dépasse pas le maxi :
@@ -748,7 +771,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
 
   return (
     <Cadre {...nav} onRetour={() => setChemin(chemin.slice(0, -1))}
-      pied={pourUne}
+      pieds={pieds}
       photo={racine ? article.photo : null}
       titre={racine ? article.libelle : propre(noeud.produit)}
       sous={racine
@@ -1037,7 +1060,7 @@ function CarteArticle({ a, onOuvrir }) {
   )
 }
 
-function Cadre({ children, pied, onRetour, photo, titre, sous, user, onLogout, onNavigate, activeView }) {
+function Cadre({ children, pieds, onRetour, photo, titre, sous, user, onLogout, onNavigate, activeView }) {
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
@@ -1053,12 +1076,15 @@ function Cadre({ children, pied, onRetour, photo, titre, sous, user, onLogout, o
           </div>
           {children}
         </div>
-        {/* Le rappel « pour 1 … » vit dans SON carré, sous le bouton
-            « C'est fait » : c'est une info, pas une étape de la fiche
-            (Layla, 2026-09-09). */}
-        {pied && (
-          <div className="mt-3 rounded-2xl border border-cream-deep bg-cream-warm/60
-                          px-4 py-3 italic text-ink-mute shadow-sm">
+        {/* Les rappels « pour 1 … » vivent dans LEURS carrés, sous le bouton
+            « C'est fait » : c'est une info, pas une étape de la fiche. Un
+            carré par préparation, toute la cascade y passe — « comme apparaît
+            cette recette, doivent apparaître les autres » (Layla,
+            2026-09-09). */}
+        {(pieds || []).map((pied, n) => (
+          <div key={'pied' + n}
+            className="mt-3 rounded-2xl border border-cream-deep bg-cream-warm/60
+                       px-4 py-3 italic text-ink-mute shadow-sm">
             <div className="text-[11.5px] font-bold mb-1">{pied.titre}</div>
             {pied.lignes.map((l, i) => (
               <div key={'p' + i} className="flex items-baseline gap-3 text-[11.5px] py-[1px]">
@@ -1067,7 +1093,7 @@ function Cadre({ children, pied, onRetour, photo, titre, sous, user, onLogout, o
               </div>
             ))}
           </div>
-        )}
+        ))}
       </div>
     </div>
   )
