@@ -925,7 +925,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                     </>
                   ) : (
                     <>
-                      <div className="text-[13px] font-extrabold">{c.tournees} tournée{c.tournees > 1 ? 's' : ''}</div>
+                      <div className="text-[13px] font-extrabold">
+                        {c.tournees === 0.5 ? '½' : nb(c.tournees)} tournée{c.tournees > 1 ? 's' : ''}
+                      </div>
                       <div className="text-[11px] text-ink-mute">= {qte(c.produira, c.unite)}</div>
                     </>
                   )}

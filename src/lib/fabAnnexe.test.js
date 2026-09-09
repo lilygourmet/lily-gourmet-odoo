@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { bloquants, noeudAu, enfantsDe, parGateauMere, parJour, tourneesSuggerees,
-  lignesRecette } from './fabAnnexe'
+  lignesRecette, pourFois } from './fabAnnexe'
 
 // Un tiramisu tel que l'API le renvoie, en plus court.
 const tiramisu = {
@@ -218,5 +218,34 @@ describe('lignesRecette', () => {
   it('ne casse pas sur un article sans recette', () => {
     expect(lignesRecette({}, [{ produit: 'x' }])).toEqual([])
     expect(lignesRecette(null, null)).toEqual([])
+  })
+})
+
+describe('pourFois — les composants suivent la quantité', () => {
+  // Une demi-tournée de gâteaux ne demande pas une tournée entière de fonds.
+  const gateau = {
+    produit: 'Sm- Le Citron Framboise (1)',
+    tournee: 58,
+    composants: [{
+      produit: 'SM- Fond Citron Framboise (1)',
+      unite: 'u', besoin: 58, stock: 0, dejaFait: 0,
+      fabrique: true, ok: false, tourneeTaille: 58, tournees: 1, produira: 58,
+    }],
+  }
+
+  it('propose une demi-tournée de composant pour une demi-tournée de gâteau', () => {
+    const c = pourFois(gateau, 0.5).composants[0]
+    expect(c.besoin).toBe(29)
+    expect(c.tournees).toBe(0.5)
+    expect(c.produira).toBe(29)
+  })
+
+  it('arrondit au demi SUPÉRIEUR : le besoin doit être couvert', () => {
+    // 35 fonds voulus sur une tournée de 58 : une demie (29) ne suffit pas.
+    const g = { ...gateau, composants: [{ ...gateau.composants[0], besoin: 70 }] }
+    const c = pourFois(g, 0.5).composants[0]
+    expect(c.besoin).toBe(35)
+    expect(c.tournees).toBe(1)
+    expect(c.produira).toBe(58)
   })
 })

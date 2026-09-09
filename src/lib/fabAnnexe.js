@@ -232,7 +232,8 @@ export function pourFois(article, fois) {
         out.tournees = 1
         out.produira = Math.max(0, Math.round((besoin - dispo) * 1000) / 1000)
       } else {
-        out.tournees = Math.max(1, Math.ceil((besoin - dispo) / c.tourneeTaille))
+        // Au demi près, comme le serveur : la quantité suit celle du gâteau.
+        out.tournees = Math.max(0.5, Math.ceil(((besoin - dispo) / c.tourneeTaille) * 2) / 2)
         out.produira = out.tournees * c.tourneeTaille
       }
     }

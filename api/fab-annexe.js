@@ -279,9 +279,19 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
         c.aLaQuantite = true
         c.tournees = 1
         c.produira = Math.max(0, Math.round(manque * 1000) / 1000)
-      } else {
-        c.tournees = Math.max(1, Math.ceil(manque / parTournee))
+      } else if (manque > 0) {
+        // Au DEMI près, comme les gâteaux : une demi-tournée de gâteaux ne
+        // demande pas une tournée entière de fonds. « La quantité doit
+        // suivre » (Layla, 2026-09-09) — 29 gâteaux, 29 fonds, pas 58.
+        // Toujours arrondi vers le HAUT : il faut couvrir le besoin, sinon
+        // le montage se bloque à la dernière pièce.
+        c.tournees = Math.max(0.5, Math.ceil((manque / parTournee) * 2) / 2)
         c.produira = c.tournees * parTournee
+      } else {
+        // Rien à combler : on ouvre pour prendre de l'avance, donc une
+        // tournée ENTIÈRE.
+        c.tournees = 1
+        c.produira = parTournee
       }
       // ⚠️ Quand le catalogue impose une autre taille de tournée que la recette
       // Odoo, les INGRÉDIENTS doivent suivre. Sinon l'écran annonçait « 5 000 g
