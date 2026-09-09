@@ -109,15 +109,19 @@ export function memeOperation(a, b) {
   // jour dans le MÊME fichier sont deux remises réelles.
   const memeFichier = !!a.releve_url && a.releve_url === b.releve_url
   if (estRemiseCheque(a.label) && estRemiseCheque(b.label)) return !memeFichier && memeMontant && memeJour
-  // Deux n° d'opération qui se contredisent = deux opérations réelles.
+  if (!memeMontant || !memeJour) return false
+  // Même client, même montant, le MÊME JOUR = un seul virement, même si les n° diffèrent.
+  // Sur ces relevés un libellé s'étale sur 5-6 lignes dans le PDF, et le lecteur rattache
+  // parfois les morceaux à l'opération voisine : vu un n° 2321144 enregistré avec la
+  // référence d'une AUTRE opération (le PDF, lui, n'a qu'un seul virement ce jour-là).
+  // Le nom du client, lui, ne se mélange pas — c'est le seul repère solide.
+  const na = nomDeLigne(a.label), nb = nomDeLigne(b.label)
+  if (nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= 0.85) return true
+  // Sans nom pour trancher, deux n° qui se contredisent restent deux opérations.
   if (sa && sb) return false
-  if (!memeMontant) return false
-  if (!memeJour) return false
   const la = libelleNorm(a.label), lb = libelleNorm(b.label)
   const court = la.length <= lb.length ? la : lb
-  if (court.length >= 10 && (la.startsWith(lb) || lb.startsWith(la))) return true
-  const na = nomDeLigne(a.label), nb = nomDeLigne(b.label)
-  return nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= 0.85
+  return court.length >= 10 && (la.startsWith(lb) || lb.startsWith(la))
 }
 
 /**
@@ -162,6 +166,12 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         // deux documents (voir memeOperation). Le n° ne les départage pas.
         if (ecart === 0 && estRemiseCheque(a.label) && estRemiseCheque(b.label)) {
           retirees.add(b.key)                       // on garde la plus ancienne (a)
+          continue
+        }
+        // Même client, même montant, le MÊME JOUR : un seul virement (voir memeOperation —
+        // le lecteur de PDF mélange les morceaux de libellé, donc les n° ne prouvent rien).
+        if (ecart === 0 && nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= seuil) {
+          retirees.add(b.key)
           continue
         }
         // Même montant + dates proches + imports différents = la MÊME opération, même si
