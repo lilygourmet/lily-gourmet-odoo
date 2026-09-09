@@ -78,7 +78,7 @@ const estPr = nom => /^pr\s/i.test(sansPrefixe(nom))
 const cleGateau = nom =>
   sansPrefixe(nom).replace(/^pr\s*-?\s*/i, '').replace(/\W+/g, '').toLowerCase()
 
-export function parGateauMere(articles, cherche) {
+export function parGateauMere(articles, cherche, tout = false) {
   const q = String(cherche || '').trim()
   // Quand un « Pr » existe, lui seul a une case : l'étape d'avant s'ouvre
   // depuis sa recette, où on voit son stock. Les tailles restent distinctes
@@ -91,7 +91,9 @@ export function parGateauMere(articles, cherche) {
     // deux étapes d'un couple « Pr » compris — on vient chercher un composant
     // précis, pas parcourir les gâteaux. Sans rien de tapé, la liste garde ses
     // raccourcis. Fautes de frappe et mots inversés acceptés. (Layla, 2026-09-09.)
-    if (q) {
+    // `tout` : l'écran de réglage montre TOUT ce que l'annexe sait faire, sans
+    // les raccourcis de l'écran de fabrication. (Layla, 2026-09-09.)
+    if (q || tout) {
       if (!correspond(a.produit, q)) continue
     } else {
       if (estPreparation(a.produit)) continue

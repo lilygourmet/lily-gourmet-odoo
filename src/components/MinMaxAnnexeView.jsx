@@ -3,10 +3,9 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { isAdmin } from '../lib/auth'
-import { correspond } from '../lib/recherche'
 import {
   loadCatalogueAnnexe, saveCatalogueAnnexe, retirerDuCatalogue, loadToutFabAnnexe,
-  saveFigesAnnexe, loadArticleFabAnnexe,
+  saveFigesAnnexe, loadArticleFabAnnexe, parGateauMere,
 } from '../lib/fabAnnexe'
 
 // ====== « Mini / maxi Annexe » : les trois nombres qui décident de tout ======
@@ -136,7 +135,6 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
   const [tout, setTout] = useState(null)          // tout ce que l'annexe sait faire
   const [erreur, setErreur] = useState(null)
   const [filtre, setFiltre] = useState('')
-  const [ajout, setAjout] = useState('')          // la recherche du bloc « ajouter »
   const [enCours, setEnCours] = useState('')
   const [figes, setFiges] = useState(null)   // l'article dont on règle les figés
 
@@ -153,27 +151,40 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
     return () => { vivant = false }
   }, [])
 
-  const infos = useMemo(() => {
-    const m = new Map()
-    for (const a of tout || []) m.set(a.produit, a)
-    return m
-  }, [tout])
+  // TOUT ce que l'annexe sait faire, rangé sous le ou les gâteaux qu'il sert —
+  // pas seulement les articles déjà suivis. Un article sans seuils est à 0 / 0 :
+  // il ne sera jamais proposé tant qu'on ne l'a pas réglé. (Layla, 2026-09-09.)
+  const groupes = useMemo(() => {
+    const reglages = new Map((lignes || []).map(l => [l.produit, l]))
+    const base = (tout || []).map(a => {
+      const r = reglages.get(a.produit)
+      return r
+        ? { ...a, ...r, suivi: true }
+        : { ...a, libelle: propre(a.produit), mini: 0, maxi: 0, tournee: 1, suivi: false }
+    })
+    // Ce qui est suivi mais qu'Odoo ne renvoie plus : on ne le perd pas de vue.
+    for (const l of lignes || []) {
+      if (!base.some(a => a.produit === l.produit)) base.push({ ...l, suivi: true, pour: [] })
+    }
+    return parGateauMere(base, filtre, true)
+  }, [tout, lignes, filtre])
 
-  const visibles = useMemo(
-    () => (lignes || []).filter(l => correspond(l.libelle + ' ' + l.produit, filtre)),
-    [lignes, filtre])
-
-  // Ce que l'annexe sait faire mais que l'écran ne suit pas encore. Sans
-  // recherche on n'en montre rien : la liste ferait 250 lignes.
-  const ajoutables = useMemo(() => {
-    if (!ajout.trim() || !tout) return []
-    const deja = new Set((lignes || []).map(l => l.produit))
-    return tout.filter(a => !deja.has(a.produit) && correspond(a.produit, ajout)).slice(0, 12)
-  }, [tout, lignes, ajout])
+  const combien = useMemo(
+    () => new Set(groupes.flatMap(g => g.articles.map(a => a.produit))).size, [groupes])
 
   // On tape sans rien envoyer : l'enregistrement se fait en quittant la case.
-  const changer = (produit, champ, valeur) =>
-    setLignes(v => (v || []).map(l => (l.produit === produit ? { ...l, [champ]: valeur } : l)))
+  // Un article encore hors catalogue y entre à la première frappe.
+  const changer = (ligne, champ, valeur) =>
+    setLignes(v => {
+      const liste = v || []
+      if (liste.some(l => l.produit === ligne.produit)) {
+        return liste.map(l => (l.produit === ligne.produit ? { ...l, [champ]: valeur } : l))
+      }
+      return [...liste, {
+        produit: ligne.produit, libelle: ligne.libelle, actif: true,
+        mini: ligne.mini, maxi: ligne.maxi, tournee: ligne.tournee, [champ]: valeur,
+      }]
+    })
 
   const enregistrer = async ligne => {
     setEnCours(ligne.produit)
@@ -184,13 +195,6 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
       toast.error('Pas enregistré : ' + (e.message || e))
     }
     setEnCours('')
-  }
-
-  const ajouter = async a => {
-    const neuf = { produit: a.produit, libelle: propre(a.produit), mini: 0, maxi: 0, tournee: 1, actif: true }
-    setLignes(v => [...(v || []), neuf].sort((x, y) => x.produit.localeCompare(y.produit, 'fr')))
-    setAjout('')
-    await enregistrer(neuf)
   }
 
   const retirer = async l => {
@@ -217,8 +221,9 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
       <div className="max-w-[860px] mx-auto px-4 py-5 pb-24">
         <h1 className="font-serif italic text-[26px] leading-tight mb-1">Mini / maxi Annexe</h1>
         <p className="text-[12.5px] text-ink-mute mb-3">
-          Sous le <b>mini</b> (ou pile dessus), l'article apparaît dans Fabrication
-          Annexe 2. On en fait des <b>tournées</b> entières jusqu'au <b>maxi</b>.
+          Tout ce que l'annexe sait fabriquer, rangé sous son gâteau. Sous le
+          <b> mini</b> (ou pile dessus), l'article apparaît dans Fabrication
+          Annexe 2 ; on en fait des <b>tournées</b> entières jusqu'au <b>maxi</b>.
           Un article à <b>0 / 0</b> n'apparaîtra qu'une fois à zéro.
         </p>
 
@@ -228,75 +233,88 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
         {lignes && (
           <>
             <input value={filtre} onChange={e => setFiltre(e.target.value)}
-              placeholder="chercher un article suivi…" aria-label="Chercher un article suivi"
+              placeholder="chercher — tiramisu, sirop, ghriba…" aria-label="Chercher un article"
               className="w-full h-11 rounded-xl border border-cream-deep bg-cream-warm px-3
                          text-[15px] outline-none focus:border-bordeaux mb-3" />
 
-            <div className="text-[12px] text-ink-mute mb-1.5">
-              {visibles.length} article{visibles.length > 1 ? 's' : ''} suivi{visibles.length > 1 ? 's' : ''}
-              {filtre ? ` sur ${lignes.length}` : ''}
+            <div className="text-[12px] text-ink-mute mb-2">
+              {combien} article{combien > 1 ? 's' : ''} · {groupes.length} gâteau{groupes.length > 1 ? 'x' : ''}
+              {!tout && ' — lecture d’Odoo en cours…'}
             </div>
 
-            {visibles.map(l => {
-              const a = infos.get(l.produit)
-              const unite = a?.unite || ''
-              const sousLeMini = a && Number(a.stock) <= Number(l.mini)
-              return (
-                <div key={l.produit}
-                  className={'border rounded-xl px-3 py-2.5 mb-1.5 bg-cream-warm ' +
-                    (sousLeMini ? 'border-l-4 border-l-bordeaux border-cream-deep' : 'border-cream-deep')}>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <div className="basis-full sm:basis-auto sm:flex-1 min-w-0">
-                      <div className="text-[14px] font-bold">{propre(l.libelle || l.produit)}</div>
-                      <div className="text-[11.5px] text-ink-mute">
-                        {a
-                          ? <>il en reste <b>{qte(a.stock, unite)}</b>{sousLeMini ? ' — à refaire' : ''}</>
-                          : 'stock en cours de lecture…'}
+            {groupes.map(g => (
+              <section key={g.nom} className="mb-4">
+                <h2 className="font-serif italic text-[17px] text-bordeaux mb-1.5 pb-1 border-b border-cream-deep">
+                  {g.nom.replace(/^(E-|MI-|V-)\s*/, '')}
+                  <span className="not-italic font-sans text-[12px] text-ink-mute"> · {g.articles.length}</span>
+                </h2>
+                {g.articles.map(l => {
+                  const unite = l.unite || ''
+                  const sousLeMini = l.stock !== undefined && Number(l.stock) <= Number(l.mini)
+                  return (
+                    <div key={g.nom + l.produit}
+                      className={'border rounded-xl px-3 py-2.5 mb-1.5 ' +
+                        (l.suivi ? 'bg-cream-warm ' : 'bg-cream ') +
+                        (l.suivi && sousLeMini ? 'border-l-4 border-l-bordeaux border-cream-deep' : 'border-cream-deep')}>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <div className="basis-full sm:basis-auto sm:flex-1 min-w-0">
+                          <div className="text-[14px] font-bold">
+                            {propre(l.libelle || l.produit)}
+                            {!l.suivi && <span className="ml-2 text-[10.5px] font-bold text-ink-mute">pas suivi</span>}
+                          </div>
+                          <div className="text-[11.5px] text-ink-mute">
+                            {l.stock !== undefined
+                              ? <>il en reste <b>{qte(l.stock, unite)}</b>{l.suivi && sousLeMini ? ' — à refaire' : ''}</>
+                              : 'plus dans Odoo'}
+                          </div>
+                        </div>
+                        {[['mini', 'mini'], ['maxi', 'maxi'], ['tournee', 'tournée']].map(([champ, titre]) => (
+                          <label key={champ} className="text-[11.5px] text-ink-mute">
+                            {titre}<br />
+                            <input type="number" min="0" step="any" inputMode="decimal"
+                              value={l[champ] ?? ''} aria-label={`${titre} de ${propre(l.libelle || l.produit)}`}
+                              onChange={e => changer(l, champ, e.target.value)}
+                              onBlur={() => enregistrer(l)}
+                              className="w-[76px] text-right text-[14px] font-bold border border-cream-deep
+                                         rounded-lg px-2 py-1.5 bg-cream" />
+                          </label>
+                        ))}
+                        <span className="text-[12px] text-ink-mute w-[26px]">{unite}</span>
+                        <button
+                          onClick={() => {
+                            const actif = !(l.actif !== false)
+                            changer(l, 'actif', actif)
+                            enregistrer({ ...l, actif })
+                          }}
+                          title={l.actif !== false ? 'Ne plus le proposer tout seul' : 'Le proposer quand il passe sous son mini'}
+                          className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
+                            (l.actif !== false ? 'bg-success/10 text-success border-success/30' : 'bg-cream text-ink-mute border-cream-deep')}>
+                          {l.actif !== false ? 'suivi' : 'en pause'}
+                        </button>
+                        <button onClick={() => setFiges(l)}
+                          title="Choisir les ingrédients dont la quantité ne bouge pas"
+                          className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
+                            ((l.figes || []).length
+                              ? 'bg-gold/10 text-gold border-gold/40'
+                              : 'bg-cream text-ink-mute border-cream-deep')}>
+                          ❄️{(l.figes || []).length ? ` ${l.figes.length}` : ''}
+                        </button>
+                        {l.suivi && (
+                          <button onClick={() => retirer(l)} title="Ne plus suivre du tout cet article"
+                            className="rounded-lg px-2 py-1.5 text-[11.5px] text-ink-mute border border-cream-deep">
+                            retirer
+                          </button>
+                        )}
+                        {enCours === l.produit && <span className="text-[11.5px] text-bordeaux">enregistrement…</span>}
                       </div>
                     </div>
-                    {[['mini', 'mini'], ['maxi', 'maxi'], ['tournee', 'tournée']].map(([champ, titre]) => (
-                      <label key={champ} className="text-[11.5px] text-ink-mute">
-                        {titre}<br />
-                        <input type="number" min="0" step="any" inputMode="decimal"
-                          value={l[champ] ?? ''} aria-label={`${titre} de ${propre(l.libelle || l.produit)}`}
-                          onChange={e => changer(l.produit, champ, e.target.value)}
-                          onBlur={() => enregistrer(l)}
-                          className="w-[80px] text-right text-[14px] font-bold border border-cream-deep
-                                     rounded-lg px-2 py-1.5 bg-cream" />
-                      </label>
-                    ))}
-                    <span className="text-[12px] text-ink-mute w-[26px]">{unite}</span>
-                    <button
-                      onClick={() => {
-                        const actif = !(l.actif !== false)
-                        changer(l.produit, 'actif', actif)
-                        enregistrer({ ...l, actif })
-                      }}
-                      title={l.actif !== false ? 'Ne plus le proposer tout seul' : 'Le proposer quand il passe sous son mini'}
-                      className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
-                        (l.actif !== false ? 'bg-success/10 text-success border-success/30' : 'bg-cream text-ink-mute border-cream-deep')}>
-                      {l.actif !== false ? 'suivi' : 'en pause'}
-                    </button>
-                    <button onClick={() => setFiges(l)}
-                      title="Choisir les ingrédients dont la quantité ne bouge pas"
-                      className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
-                        ((l.figes || []).length
-                          ? 'bg-gold/10 text-gold border-gold/40'
-                          : 'bg-cream text-ink-mute border-cream-deep')}>
-                      ❄️ figés{(l.figes || []).length ? ` · ${l.figes.length}` : ''}
-                    </button>
-                    <button onClick={() => retirer(l)} title="Ne plus suivre du tout cet article"
-                      className="rounded-lg px-2 py-1.5 text-[11.5px] text-ink-mute border border-cream-deep">
-                      retirer
-                    </button>
-                    {enCours === l.produit && <span className="text-[11.5px] text-bordeaux">enregistrement…</span>}
-                  </div>
-                </div>
-              )
-            })}
+                  )
+                })}
+              </section>
+            ))}
 
-            {visibles.length === 0 && (
-              <p className="py-8 text-center text-ink-mute text-[14px]">Aucun article suivi de ce nom.</p>
+            {!groupes.length && (
+              <p className="py-8 text-center text-ink-mute text-[14px]">Aucun article de ce nom.</p>
             )}
 
             {figes && (
@@ -305,35 +323,6 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
                   (x.produit === figes.produit ? { ...x, figes: liste, figes_nom: nom } : x)))} />
             )}
 
-            {/* Ajouter un article que l'annexe sait faire mais qu'on ne suit pas
-                encore : il n'apparaîtra dans « À faire » qu'une fois ses trois
-                nombres réglés. */}
-            <section className="mt-6 rounded-2xl border border-cream-deep bg-cream-warm p-3">
-              <div className="text-[13px] font-extrabold mb-1.5">Suivre un article de plus</div>
-              <p className="text-[12px] text-ink-mute mb-2">
-                Cherche parmi tout ce que l'annexe sait fabriquer. Il arrive à 0 / 0 :
-                règle ses trois nombres juste après.
-              </p>
-              <input value={ajout} onChange={e => setAjout(e.target.value)}
-                placeholder="chercher — tiramisu, sirop, ghriba…" aria-label="Chercher un article à suivre"
-                className="w-full h-11 rounded-xl border border-cream-deep bg-cream px-3
-                           text-[15px] outline-none focus:border-bordeaux" />
-              {!tout && ajout.trim() && (
-                <p className="text-[12px] text-ink-mute mt-2">lecture d'Odoo en cours…</p>
-              )}
-              {ajoutables.map(a => (
-                <button key={a.produit} onClick={() => ajouter(a)}
-                  className="w-full flex items-center gap-3 text-left mt-1.5 rounded-xl border
-                             border-cream-deep bg-cream px-3 py-2 hover:border-bordeaux/40">
-                  <span className="flex-1 min-w-0 text-[13px]">{propre(a.produit)}</span>
-                  <span className="text-[11.5px] text-ink-mute whitespace-nowrap">{qte(a.stock, a.unite)}</span>
-                  <span className="text-[16px] text-bordeaux font-extrabold">+</span>
-                </button>
-              ))}
-              {ajout.trim() && tout && !ajoutables.length && (
-                <p className="text-[12px] text-ink-mute mt-2">Rien de ce nom-là, ou déjà suivi.</p>
-              )}
-            </section>
           </>
         )}
       </div>
