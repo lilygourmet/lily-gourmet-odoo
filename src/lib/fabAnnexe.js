@@ -192,8 +192,16 @@ export function pourFois(article, fois) {
     const ok = !c.fabrique || dispo >= besoin
     const out = { ...c, besoin, ok }
     if (!ok && c.tourneeTaille) {
-      out.tournees = Math.max(1, Math.ceil((besoin - dispo) / c.tourneeTaille))
-      out.produira = out.tournees * c.tourneeTaille
+      // Même exception que côté serveur : un article à quantité FIGÉE se fait
+      // à la quantité manquante, pas par tournée entière (Layla, 2026-09-09).
+      if (c.fige) {
+        out.aLaQuantite = true
+        out.tournees = 1
+        out.produira = Math.max(0, Math.round((besoin - dispo) * 1000) / 1000)
+      } else {
+        out.tournees = Math.max(1, Math.ceil((besoin - dispo) / c.tourneeTaille))
+        out.produira = out.tournees * c.tourneeTaille
+      }
     }
     if (c.enfants) out.enfants = c.enfants.map(ech)
     return out

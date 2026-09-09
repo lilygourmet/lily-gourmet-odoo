@@ -268,8 +268,21 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
         sousBom.product_uom_id?.[1], p.uom_id[1]) || 1
       const parTournee = lots[nom] || parRecette
       c.tourneeTaille = parTournee
-      c.tournees = Math.max(1, Math.ceil((besoin - stock - dejaFait) / parTournee))
-      c.produira = c.tournees * parTournee
+      const manque = besoin - stock - dejaFait
+      if (fige) {
+        // ⚠️ EXCEPTION à « toujours une tournée entière » : un article à
+        // quantité FIGÉE ne se fait pas par tournée — la cuve part en entier
+        // sur la fournée, et on en produit exactement ce qui manque.
+        // « J'ai besoin de 5 474 pour faire la recette, il m'en reste 250,
+        // donc ce qu'il me reste à faire c'est 5 474 − 250 » (Layla,
+        // 2026-09-09). Avant, l'écran annonçait « 1 tournée = 5 492 g ».
+        c.aLaQuantite = true
+        c.tournees = 1
+        c.produira = Math.max(0, Math.round(manque * 1000) / 1000)
+      } else {
+        c.tournees = Math.max(1, Math.ceil(manque / parTournee))
+        c.produira = c.tournees * parTournee
+      }
       // ⚠️ Quand le catalogue impose une autre taille de tournée que la recette
       // Odoo, les INGRÉDIENTS doivent suivre. Sinon l'écran annonçait « 5 000 g
       // de confit » au-dessus des quantités d'une recette de 568 g.

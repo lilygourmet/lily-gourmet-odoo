@@ -702,12 +702,14 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       photo={racine ? article.photo : null}
       titre={racine ? article.libelle : propre(noeud.produit)}
       sous={racine
-        // « Tournée de … » ne vaut que pour la tournée de référence : dès qu'on
-        // en choisit plusieurs, le chiffre est ce QU'ON FAIT, pas ce que fait
-        // une tournée. (Layla, 2026-09-09.)
-        ? (foisArticle === 1
-            ? `Tournée de ${qte(article.tournee, article.unite)}`
-            : `Je fais ${qte(article.tournee, article.unite)} · ${nb(foisArticle)} tournée${foisArticle > 1 ? 's' : ''}`)
+        // Toujours « Tournée de … », jamais « Je fais X · N tournées » : le
+        // second doublait le compteur juste en dessous, et Layla l'a fait
+        // retirer (2026-09-09).
+        // ⚠️ `brut`, pas `article` : `pourFois` a multiplié `article.tournee`
+        // par le nombre de tournées choisi. Écrire « Tournée de 28 u » pour
+        // deux tournées de 14 serait faux — c'est le piège corrigé le matin
+        // même par l'autre session, à ne pas rouvrir.
+        ? `Tournée de ${qte(brut.tournee, brut.unite)}`
         : noeud.besoin > noeud.stock
           ? `Il en faut ${qte(noeud.besoin - noeud.stock, noeud.unite)} pour ${propre(parent)}`
           : `Tu en as ${qte(noeud.stock, noeud.unite)} — pour prendre de l'avance`}>
@@ -858,8 +860,19 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               ? <span className="text-[11.5px] text-ink-mute shrink-0">recette</span>
               : (
                 <div className="text-right shrink-0">
-                  <div className="text-[13px] font-extrabold">{c.tournees} tournée{c.tournees > 1 ? 's' : ''}</div>
-                  <div className="text-[11px] text-ink-mute">= {qte(c.produira, c.unite)}</div>
+                  {/* Un article à quantité figée ne se compte pas en tournées :
+                      on en fait exactement ce qui manque (Layla, 2026-09-09). */}
+                  {c.aLaQuantite || c.fige ? (
+                    <>
+                      <div className="text-[11px] text-ink-mute">à faire</div>
+                      <div className="text-[13px] font-extrabold">{qte(c.produira, c.unite)}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-[13px] font-extrabold">{c.tournees} tournée{c.tournees > 1 ? 's' : ''}</div>
+                      <div className="text-[11px] text-ink-mute">= {qte(c.produira, c.unite)}</div>
+                    </>
+                  )}
                 </div>
               )}
             <span className={`text-[17px] ${ok ? 'text-ink-mute/50' : 'text-ink-mute'}`}>›</span>
@@ -881,6 +894,40 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
           ))}
         </>
       )}
+
+      {/* LE MONTAGE, tout en bas : ce que demande UNE pièce. Le reste de la
+          fiche parle de la tournée entière — utile pour sortir le stock, mais
+          celui qui monte a besoin de sa dose à lui. « 1 Citron Framboise (5) =
+          391 g de crème légère, 1 fond… » (Layla, 2026-09-09).
+          Les quantités FIGÉES y figurent — Layla les cite en premier dans son
+          exemple : la cuve part en entier sur la tournée, mais celui qui monte
+          veut savoir ce qu'il en met sur une pièce. Elles sont marquées comme
+          telles pour qu'on ne les prenne pas pour une dose à peser à part. */}
+      {racine && (() => {
+        // ⚠️ `article.tournee` est DÉJÀ le total : `pourFois` l'a multiplié par
+        // le nombre de tournées, comme les besoins. Le remultiplier donnait la
+        // moitié des quantités (195 g au lieu de 391 g).
+        const total = Number(article.tournee) || 0
+        const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
+        if (!(total > 0) || !lignes.length) return null
+        return (
+          <>
+            <Titre>Le montage — pour 1 {propre(article.libelle)}</Titre>
+            {lignes.map((c, i) => (
+              <div key={'m' + c.produit + i}
+                className="flex items-baseline gap-3 px-4 py-2 border-t border-cream-deep/40">
+                <span className="flex-1 min-w-0 text-[13.5px]">
+                  {nomAtelier(c.produit)}
+                  {c.fige && <span className="text-[11px] text-ink-mute"> · figé</span>}
+                </span>
+                <span className="text-[14px] font-extrabold">
+                  {qte((c.besoin * facteurAtelier(c.produit)) / total, c.unite)}
+                </span>
+              </div>
+            ))}
+          </>
+        )
+      })()}
 
       {bloque.length > 0 ? (
         <div className="flex items-center gap-3 px-4 py-3 bg-cream-deep/40 border-t border-cream-deep">
