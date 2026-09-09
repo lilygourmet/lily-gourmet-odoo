@@ -1973,6 +1973,30 @@ export default async function handler(req, res) {
       return res.status(200).json(await reapproCD())
     }
 
+    // Le stock actuel des articles que l'app suit par mini/maxi. Sert à l'écran
+    // de réglage : régler un mini sans voir ce qu'il en reste n'a pas de sens.
+    if (req.query.mode === 'stock-minmax') {
+      const uid = await odooAuth()
+      const modele = await modeleWhlvp(uid)
+      const lieu = modele && Array.isArray(modele.location_src_id) ? modele.location_src_id[0] : null
+      if (!lieu) return res.status(200).json({ stocks: {} })
+      const arts = await odooSearchRead(uid, 'product.product', [['name', 'ilike', 'CD*']],
+        ['id', 'display_name'], { limit: 2000 })
+      if (!arts.length) return res.status(200).json({ stocks: {} })
+      const lus = await odooCall(uid, 'product.product', 'read',
+        [arts.map(a => a.id), ['free_qty', 'qty_available']], { context: { location: lieu } })
+      const parId = Object.fromEntries(lus.map(p => [p.id, p]))
+      const stocks = {}
+      for (const a of arts) {
+        const p = parId[a.id] || {}
+        stocks[a.display_name] = {
+          dispo: Math.round((p.free_qty || 0) * 100) / 100,
+          physique: Math.round((p.qty_available || 0) * 100) / 100,
+        }
+      }
+      return res.status(200).json({ stocks })
+    }
+
     // Les compteurs FAUX du labo : les articles dont Odoo compte moins que zéro.
     // C'est ce qui fait dire « il manque 600 g de crème » alors que la crème est
     // là — un stock négatif compte comme zéro disponible. On les montre à côté

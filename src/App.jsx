@@ -12,6 +12,7 @@ const FabricationProdView = lazy(() => import('./components/FabricationProdView'
 const FabricationAnnexeView = lazy(() => import('./components/FabricationAnnexeView'))
 const FabAnnexe2View = lazy(() => import('./components/FabAnnexe2View'))
 const ValidationView = lazy(() => import('./components/ValidationView'))
+const MinMaxCdView = lazy(() => import('./components/MinMaxCdView'))
 const ValidationAnnexeView = lazy(() => import('./components/ValidationAnnexeView'))
 const FreezerView = lazy(() => import('./components/FreezerView'))
 const CheckCdView = lazy(() => import('./components/CheckCdView'))
@@ -390,6 +391,7 @@ function App() {
     if (activeView === 'fabrication-annexe') return <FabricationAnnexeView {...navProps} />
     if (activeView === 'fabrication-annexe-2') return <FabAnnexe2View {...navProps} />
     if (activeView === 'fabrication-valider') return <ValidationView {...navProps} />
+    if (activeView === 'minmax-cd') return <MinMaxCdView {...navProps} />
     if (activeView === 'valider-annexe') return <ValidationAnnexeView {...navProps} />
     if (activeView === 'sales') return <ProdView {...navProps} forcedCategory="sales" />
     if (activeView === 'freezer') return <FreezerView {...navProps} />

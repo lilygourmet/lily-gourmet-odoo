@@ -24,9 +24,14 @@ CREATE TABLE IF NOT EXISTS cd_minmax (
 
 ALTER TABLE cd_minmax ENABLE ROW LEVEL SECURITY;
 
+-- ⚠️ « anon » EN PLUS de « authenticated » : l'app a son propre système de
+-- comptes, le navigateur parle donc à Supabase avec la clé ANONYME. Une table
+-- ouverte aux seuls « authenticated » ne rend RIEN au navigateur — et sans la
+-- moindre erreur, juste une liste vide. C'est la convention de `prod_of_faits`.
+-- L'écran de modification, lui, est réservé aux admins côté app.
 DROP POLICY IF EXISTS cd_minmax_all ON cd_minmax;
 CREATE POLICY cd_minmax_all ON cd_minmax
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 -- Les valeurs reprises d'Odoo. ON CONFLICT DO NOTHING : relancer ce fichier
 -- n'écrase JAMAIS une valeur que Layla aurait changée entre-temps.

@@ -64,6 +64,39 @@ export async function loadNoms() {
   return out
 }
 
+/**
+ * Les mini/maxi que l'app tient à la place d'Odoo (voir supabase/cd_minmax.sql).
+ * Réservé aux admins côté écran ; la table, elle, est lue par tout le monde —
+ * c'est le réappro du matin qui s'en sert.
+ */
+export async function loadMinMax() {
+  const { data, error } = await supabase.from('cd_minmax')
+    .select('produit, mini, maxi, unite, actif, maj_le').order('produit').limit(2000)
+  if (error) throw error
+  return data || []
+}
+
+/** Enregistre une ligne mini/maxi. `produit` est la clé : on écrase ou on crée. */
+export async function saveMinMax(ligne, userId) {
+  const { error } = await supabase.from('cd_minmax').upsert({
+    produit: ligne.produit,
+    mini: Number(ligne.mini) || 0,
+    maxi: Number(ligne.maxi) || 0,
+    unite: ligne.unite || null,
+    actif: ligne.actif !== false,
+    maj_le: new Date().toISOString(),
+    maj_par: userId || null,
+  }, { onConflict: 'produit' })
+  if (error) throw error
+}
+
+/** Ce qu'il reste en stock de chaque article CD*, pour régler les mini/maxi. */
+export async function loadStockMinMax() {
+  const r = await fetch('/api/freezer-list?mode=stock-minmax')
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  return (await r.json()).stocks || {}
+}
+
 /** Juste les ordres Odoo encore ouverts (rapide : une seule question à Odoo). */
 export async function loadOrdres() {
   const r = await fetch('/api/freezer-list?mode=ordres')
