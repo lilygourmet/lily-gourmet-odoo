@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { bloquants, noeudAu, enfantsDe, parGateauMere, parJour, tourneesSuggerees,
-  lignesRecette, pourFois } from './fabAnnexe'
+  lignesRecette, pourFois, enfantsPour } from './fabAnnexe'
 
 // Un tiramisu tel que l'API le renvoie, en plus court.
 const tiramisu = {
@@ -247,5 +247,42 @@ describe('pourFois — les composants suivent la quantité', () => {
     expect(c.besoin).toBe(35)
     expect(c.tournees).toBe(1)
     expect(c.produira).toBe(58)
+  })
+})
+
+describe('enfantsPour — les sous-composants suivent, à tous les niveaux', () => {
+  // Le fond de citron framboise (5) : une tournée en sort 14, et sa recette
+  // demande 1 960 g de biscuit, lui-même fait d'une plaque.
+  const fond = {
+    produit: 'SM- Fond Citron Framboise (5)',
+    unite: 'u', tourneeTaille: 14, tournees: 1, produira: 14, pourQuantite: 14,
+    enfants: [{
+      produit: 'SM. Biscuit amande gingembre',
+      unite: 'g', besoin: 1960, stock: 3292, dejaFait: 0,
+      fabrique: true, ok: true, tourneeTaille: 4400, tournees: 1, produira: 4400,
+      pourQuantite: 4400,
+      enfants: [{
+        produit: 'SM. Citron zest', unite: 'g', besoin: 13, stock: 0, dejaFait: 0,
+        fabrique: true, ok: false, tourneeTaille: 1000, tournees: 0.5, produira: 500,
+      }],
+    }],
+  }
+
+  it('double les composants quand on double la fournée', () => {
+    const e = enfantsPour(fond, 28)
+    expect(e[0].besoin).toBe(3920)
+    expect(e[0].enfants[0].besoin).toBe(26)   // le sous-sous-composant suit aussi
+  })
+
+  it('rend le composant BLOQUANT s’il ne suffit plus', () => {
+    // 3 292 g de biscuit en stock : ça passe pour 14 fonds, plus pour 28.
+    expect(enfantsPour(fond, 14)[0].ok).toBe(true)
+    const gros = enfantsPour(fond, 28)[0]
+    expect(gros.ok).toBe(false)
+    expect(gros.tournees).toBe(0.5)           // 628 g manquants sur 4 400
+  })
+
+  it('ne touche à rien quand la quantité ne bouge pas', () => {
+    expect(enfantsPour(fond, 14)).toBe(fond.enfants)
   })
 })

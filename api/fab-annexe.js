@@ -269,7 +269,15 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
       const parTournee = lots[nom] || parRecette
       c.tourneeTaille = parTournee
       const manque = besoin - stock - dejaFait
-      if (fige) {
+      // ⚠️ Une « tournée » de 1 g ou de 1 kg n'est pas une tournée : la recette
+      // Odoo est alors écrite POUR UNE UNITÉ (0,328 g de lait pour 1 g de crème
+      // légère). Ces préparations se comptent en QUANTITÉ, comme les figées —
+      // sinon l'écran annonçait « 2 317 tournées » de craquant royal et
+      // « 2 737 tournées » de crème légère. Une tournée de 1 PIÈCE, elle, est
+      // bien une tournée (la plaque de biscuit à la cuillère).
+      // (Analyse du circuit, Layla, 2026-09-09.)
+      const aLaQuantite = fige || (parTournee <= 1 && !/^u$/i.test(c.unite))
+      if (aLaQuantite) {
         // ⚠️ EXCEPTION à « toujours une tournée entière » : un article à
         // quantité FIGÉE ne se fait pas par tournée — la cuve part en entier
         // sur la fournée, et on en produit exactement ce qui manque.
@@ -302,6 +310,11 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
         qty: Math.round(x.product_qty * ech * 1000) / 1000,
         unite: x.product_uom_id[1],
       }))
+      // ⚠️ La quantité pour laquelle les enfants ont été calculés. Sans elle,
+      // changer le nombre de tournées d'une préparation ne faisait PAS suivre
+      // ses composants : le fond annonçait 2 tournées (28 u) au-dessus de
+      // « 1 960 g de biscuit », la dose d'une seule (Layla, 2026-09-09).
+      c.pourQuantite = c.produira
       c.enfants = await composantsDe(cache, p, c.produira, [], profondeur + 1, chemin, lots, achetes, declare)
     }
     return c

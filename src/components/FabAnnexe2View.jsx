@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
   loadHistoriqueAnnexe, parJour, bloquants, declares, parGateauMere, noeudAu,
   declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe, foisDuNoeud,
-  lignesRecette } from '../lib/fabAnnexe'
+  lignesRecette, enfantsPour } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
 import { todayISO } from '../lib/dates'
@@ -568,16 +568,6 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   if (!noeud) { setChemin([]); return null }
 
   const racine = chemin.length === 1
-  const enfants = racine ? noeud.composants : noeud.enfants
-  const bloque = bloquants(noeud, declares(faits))
-  // Un figé qui se FABRIQUE reste un composant à part entière : on peut
-  // l'ouvrir, et il bloque tant qu'il n'est pas fait (la crème au beurre
-  // praliné). Seuls les figés achetés se lisent en liste — c'est la mousse.
-  const figes = (enfants || []).filter(c => c.fige && !c.fabrique)
-  const autres = (enfants || []).filter(c => c.fabrique)
-  // Les matières premières achetées : rien à fabriquer, rien à cliquer, mais
-  // elles font partie de la recette — sans l'eau du robinet, on ne la fait pas.
-  const achetes = (enfants || []).filter(c => !c.fige && !c.fabrique)
   const fois = faits[noeud.produit]?.fois ?? foisDuNoeud(noeud)
   const majFois = f => setFaits(x => ({ ...x, [noeud.produit]: { fois: Math.max(0.01, Math.round(f * 10000) / 10000), brouillon: true } }))
   // Un article à quantité FIGÉE se règle en QUANTITÉ, pas en tournées : sa
@@ -588,6 +578,25 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   const pasFois = aLaQte
     ? (noeud.unite === 'u' ? 1 : /^kg$/i.test(noeud.unite) ? 0.1 : 10) / parRecette
     : 0.5
+
+  // ⚠️ LA QUANTITÉ DOIT SUIVRE. Ce que l'API a calculé vaut pour la fournée
+  // qu'elle proposait ; dès que le pâtissier change le nombre de tournées, ses
+  // composants — et les sous-composants, aussi profond qu'aille la recette —
+  // doivent suivre. Le fond annonçait « 2 tournées · 28 u » au-dessus de
+  // « 1 960 g de biscuit », la dose d'UNE seule (Layla, 2026-09-09).
+  // C'est aussi ce qui décide du blocage : doubler une fournée peut rendre
+  // insuffisant un composant qui suffisait.
+  const dansLeNoeud = racine ? noeud : { ...noeud, enfants: enfantsPour(noeud, parRecette * fois) }
+  const enfants = racine ? noeud.composants : dansLeNoeud.enfants
+  const bloque = bloquants(dansLeNoeud, declares(faits))
+  // Un figé qui se FABRIQUE reste un composant à part entière : on peut
+  // l'ouvrir, et il bloque tant qu'il n'est pas fait (la crème au beurre
+  // praliné). Seuls les figés achetés se lisent en liste — c'est la mousse.
+  const figes = (enfants || []).filter(c => c.fige && !c.fabrique)
+  const autres = (enfants || []).filter(c => c.fabrique)
+  // Les matières premières achetées : rien à fabriquer, rien à cliquer, mais
+  // elles font partie de la recette — sans l'eau du robinet, on ne la fait pas.
+  const achetes = (enfants || []).filter(c => !c.fige && !c.fabrique)
 
   // Envoyer la fournée à « À valider ». Sorti du bouton pour être appelé aussi
   // par « C'est fait » quand on ne pose pas la question du rendement.

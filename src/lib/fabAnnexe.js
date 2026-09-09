@@ -207,6 +207,51 @@ export function foisDuNoeud(c) {
 }
 
 /**
+ * Un composant remis à l'échelle — et TOUTE sa descendance avec lui.
+ *
+ * C'est la seule règle de calcul du circuit, la même à tous les niveaux :
+ * le besoin suit le facteur, ce qui est en stock ne bloque plus, et ce qui
+ * manque se rattrape à la demi-tournée près (ou à la quantité exacte pour une
+ * préparation figée ou dont la recette est écrite à l'unité).
+ */
+function echelle(c, facteur) {
+  const besoin = c.besoin * facteur
+  // ⚠️ Compter ce qui est DÉJÀ déclaré, comme le fait le serveur. Sans ça, un
+  // composant fabriqué ce matin redevenait bloquant dès qu'on choisissait
+  // autre chose qu'une tournée pile — c'est-à-dire presque toujours.
+  const dispo = (c.stock || 0) + (c.dejaFait || 0)
+  const ok = !c.fabrique || dispo >= besoin
+  const out = { ...c, besoin, ok }
+  if (c.pourQuantite) out.pourQuantite = c.pourQuantite * facteur
+  if (!ok && c.tourneeTaille) {
+    if (c.fige || c.aLaQuantite) {
+      out.aLaQuantite = true
+      out.tournees = 1
+      out.produira = Math.max(0, Math.round((besoin - dispo) * 1000) / 1000)
+    } else {
+      // Au demi près, comme le serveur : la quantité suit celle du gâteau.
+      out.tournees = Math.max(0.5, Math.ceil(((besoin - dispo) / c.tourneeTaille) * 2) / 2)
+      out.produira = out.tournees * c.tourneeTaille
+    }
+  }
+  if (c.enfants) out.enfants = c.enfants.map(x => echelle(x, facteur))
+  return out
+}
+
+/**
+ * La descendance d'une préparation, pour la quantité qu'on a choisi d'en
+ * produire. Les composants de l'API valent pour `pourQuantite` ; si le
+ * pâtissier double la fournée, ses composants doivent doubler aussi — et leurs
+ * propres sous-composants avec. « Que le reste et les sous et sous-sous
+ * composants soient pareil » (Layla, 2026-09-09).
+ */
+export function enfantsPour(noeud, quantite) {
+  const base = noeud?.pourQuantite
+  if (!base || !(quantite > 0) || Math.abs(quantite - base) < 1e-9) return noeud?.enfants || []
+  return (noeud.enfants || []).map(c => echelle(c, quantite / base))
+}
+
+/**
  * Ce qu'il faut vraiment, pour le nombre de tournées choisi. Les quantités de
  * l'API valent pour UNE tournée ; ici on les met à l'échelle, et on recalcule
  * ce que chaque composant demande à son tour.
@@ -216,30 +261,7 @@ export function foisDuNoeud(c) {
  */
 export function pourFois(article, fois) {
   if (!article || fois === 1) return article
-  const ech = c => {
-    const besoin = c.besoin * fois
-    // ⚠️ Compter ce qui est DÉJÀ déclaré, comme le fait le serveur. Sans ça, un
-    // composant fabriqué ce matin redevenait bloquant dès qu'on choisissait
-    // autre chose qu'une tournée pile — c'est-à-dire presque toujours.
-    const dispo = (c.stock || 0) + (c.dejaFait || 0)
-    const ok = !c.fabrique || dispo >= besoin
-    const out = { ...c, besoin, ok }
-    if (!ok && c.tourneeTaille) {
-      // Même exception que côté serveur : un article à quantité FIGÉE se fait
-      // à la quantité manquante, pas par tournée entière (Layla, 2026-09-09).
-      if (c.fige) {
-        out.aLaQuantite = true
-        out.tournees = 1
-        out.produira = Math.max(0, Math.round((besoin - dispo) * 1000) / 1000)
-      } else {
-        // Au demi près, comme le serveur : la quantité suit celle du gâteau.
-        out.tournees = Math.max(0.5, Math.ceil(((besoin - dispo) / c.tourneeTaille) * 2) / 2)
-        out.produira = out.tournees * c.tourneeTaille
-      }
-    }
-    if (c.enfants) out.enfants = c.enfants.map(ech)
-    return out
-  }
+  const ech = c => echelle(c, fois)
   return {
     ...article,
     tournee: article.tournee * fois,
