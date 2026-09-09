@@ -1304,7 +1304,7 @@ async function manquesDesOrdres(uid, names) {
   for (let debut = 0; debut < 10000; debut += 500) {
     const page = await odooSearchRead(uid, 'stock.move',
       [['raw_material_production_id', 'in', mos.map(m => m.id)]],
-      ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom', 'reserved_availability', 'quantity_done'],
+      ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom', 'quantity_done'],
       { limit: 500, offset: debut, order: 'id asc' })
     moves.push(...page)
     if (page.length < 500) break
@@ -1313,10 +1313,17 @@ async function manquesDesOrdres(uid, names) {
   const stockParLieu = {}          // "lieu:produit" → { qty, unite }
   const lieux = [...new Set(mos.map(m => (Array.isArray(m.location_src_id) ? m.location_src_id[0] : null)).filter(Boolean))]
   for (const lieu of lieux) {
-    const lus = await odooCall(uid, 'product.product', 'read', [idsProd, ['free_qty', 'uom_id']], { context: { location: lieu } })
+    // ⚠️ Le stock PHYSIQUE, pas le « libre ». Vécu le 09/09 : une plaque de
+    // biscuit à la cuillère bien présente au Stock Prod annexe était donnée
+    // manquante, parce que deux ordres du 2 septembre encore ouverts la
+    // tenaient réservée. Les compteurs de réservation d'Odoo sont faux chez
+    // nous, et de toute façon on écrit les consommations à la validation :
+    // c'est ce qu'il y a sur l'étagère qui décide. (Layla : « ignorer les
+    // résa d'Odoo ».)
+    const lus = await odooCall(uid, 'product.product', 'read', [idsProd, ['qty_available', 'uom_id']], { context: { location: lieu } })
     for (const p of lus) {
       stockParLieu[lieu + ':' + p.id] = {
-        qty: Math.max(0, p.free_qty || 0),
+        qty: Math.max(0, p.qty_available || 0),
         unite: ((Array.isArray(p.uom_id) ? p.uom_id[1] : 'u') || 'u').replace(/^units?$/i, 'u'),
       }
     }
@@ -1336,9 +1343,7 @@ async function manquesDesOrdres(uid, names) {
       const uniteLigne = (Array.isArray(x.product_uom) ? x.product_uom[1] : 'u').replace(/^units?$/i, 'u')
       const lieu = Array.isArray(m.location_src_id) ? m.location_src_id[0] : null
       const st = stockParLieu[lieu + ':' + x.product_id[0]]
-      // ce qui est déjà réservé pour cet ordre s'ajoute à ce qu'il peut prendre
-      const brut = st ? convertir(st.qty, st.unite, uniteLigne) : 0
-      const dispo = brut === null ? null : brut + (x.reserved_availability || 0)
+      const dispo = st ? convertir(st.qty, st.unite, uniteLigne) : 0
       const comparable = dispo !== null                       // unités incompatibles → on n'affirme rien
       return {
         id: x.id,
