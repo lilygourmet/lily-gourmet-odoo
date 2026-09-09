@@ -1880,6 +1880,50 @@ async function produireGsAnnexe(uid, { tmplId, nom, qty }) {
   return { of: of.name, valide: !!res.ok, transfert, message: res.ok ? '' : (res.message || '') }
 }
 
+/**
+ * Tout ce qui entre dans un article « GS- » (le circuit vitrine salé), sur
+ * trois niveaux : le biscuit du biscotti, et le sablé qui entre dans ce
+ * biscuit. Sert à écarter ces articles des « compteurs faux » de l'annexe —
+ * leurs écarts ne regardent pas la pâtisserie. (Layla, 2026-09-09.)
+ *
+ * Gardé dix minutes : neuf lectures d'Odoo pour une liste qui ne bouge pas.
+ */
+let _gsCache = null
+async function composantsDesGS(uid) {
+  if (_gsCache && Date.now() - _gsCache.t < 10 * 60 * 1000) return _gsCache.v
+  const cle = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const dedans = new Set()
+  try {
+    const gs = await odooSearchRead(uid, 'product.product', [['name', 'ilike', 'GS-']],
+      ['id', 'product_tmpl_id'], { limit: 500 })
+    let tmpls = [...new Set(gs.map(p => p.product_tmpl_id[0]))]
+    for (let n = 0; n < 3 && tmpls.length; n++) {
+      const boms = await odooSearchRead(uid, 'mrp.bom',
+        [['product_tmpl_id', 'in', tmpls]], ['id'], { limit: 1000 })
+      if (!boms.length) break
+      const lignes = await odooSearchRead(uid, 'mrp.bom.line',
+        [['bom_id', 'in', boms.map(b => b.id)]], ['product_id'], { limit: 5000 })
+      const neufs = []
+      for (const l of lignes) {
+        if (!Array.isArray(l.product_id)) continue
+        const k = cle(l.product_id[1])
+        if (dedans.has(k)) continue
+        dedans.add(k)
+        neufs.push(l.product_id[0])
+      }
+      if (!neufs.length) break
+      const prods = await odooSearchRead(uid, 'product.product',
+        [['id', 'in', neufs]], ['product_tmpl_id'], { limit: 5000 })
+      tmpls = [...new Set(prods.map(p => p.product_tmpl_id[0]))]
+    }
+  } catch (e) {
+    console.warn('[composantsDesGS]', e?.message || e)
+    return dedans          // dans le doute on ne cache rien
+  }
+  _gsCache = { t: Date.now(), v: dedans }
+  return dedans
+}
+
 export default async function handler(req, res) {
   try {
     // création de l'ordre de glaçage (POST), quand l'équipe a fait sa tournée
@@ -2072,7 +2116,12 @@ export default async function handler(req, res) {
       const quants = await odooSearchRead(uid, 'stock.quant',
         [['location_id.complete_name', 'like', lieu], ['quantity', '<', 0]],
         ['product_id', 'quantity'], { limit: 600 })
-      const gardes = quants.filter(q => Array.isArray(q.product_id) && retenu(q.product_id[1]))
+      // Le circuit vitrine salé a ses propres écarts (ghribas, biscottis,
+      // pâte à croissant) : ils ne regardent pas la pâtisserie, on les écarte.
+      const duSale = annexe ? await composantsDesGS(uid) : new Set()
+      const cleNomGS = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+      const gardes = quants.filter(q => Array.isArray(q.product_id)
+        && retenu(q.product_id[1]) && !duSale.has(cleNomGS(q.product_id[1])))
       if (!gardes.length) return res.status(200).json({ articles: [] })
       const ids = [...new Set(gardes.map(q => q.product_id[0]))]
       const lus = await odooCall(uid, 'product.product', 'read', [ids, ['uom_id']])
