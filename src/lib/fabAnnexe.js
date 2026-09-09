@@ -277,8 +277,12 @@ export function peseesDe(noeud, fois) {
  * travail de l'atelier. L'ordre se rattache après coup.
  */
 export async function declarer({ produit, qty, unite, fois = null, ajustements = null }, userId) {
-  const ligne = await addFabProd(todayISO(), produit, qty, unite, userId, fois, 'annexe')
-  const of = await creerOfPrepa(produit, qty, userId, [], unite, 'annexe', ajustements)
+  // Les deux écritures ne dépendent pas l'une de l'autre : les mener de front
+  // enlève une attente entière au pâtissier, qui a le doigt sur l'écran.
+  const [ligne, of] = await Promise.all([
+    addFabProd(todayISO(), produit, qty, unite, userId, fois, 'annexe'),
+    creerOfPrepa(produit, qty, userId, [], unite, 'annexe', ajustements),
+  ])
   // En mode test (?test=1) Odoo n'écrit rien : pas de numéro à rattacher.
   if (of?.name && !of.error && !of.test) await rattacherOrdre(ligne.id, of.name, !of.deja)
   return { produit, qty, ordre: of?.name || null, erreur: of?.error || null }

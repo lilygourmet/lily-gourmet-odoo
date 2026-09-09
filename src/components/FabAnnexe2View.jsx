@@ -8,6 +8,7 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
 import { todayISO } from '../lib/dates'
+import { dernierEcran, garderEcran } from '../lib/fabrication'
 
 // ============================================================
 // « Fabrication Annexe 2 » — la refonte, article par article.
@@ -226,7 +227,10 @@ function Recette({ noeud, fois, onFois }) {
 }
 
 export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView }) {
-  const [articles, setArticles] = useState(null)
+  // On affiche tout de suite la dernière liste connue, puis on la remplace dès
+  // qu'Odoo répond : l'écran ne part plus d'un squelette vide à chaque retour.
+  // (Layla, 2026-09-09 : « rends l'onglet plus rapide ».)
+  const [articles, setArticles] = useState(() => dernierEcran('fab_annexe2'))
   const [erreur, setErreur] = useState(null)
   const [tour, setTour] = useState(0)
   // Où on est : [] = la liste, ['Tiramisu'] = l'article, ['Tiramisu', 'Biscuit
@@ -246,7 +250,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   // « À faire » ne montre que ce qui est sous son mini ; « Déclarer » montre
   // tout ce que l'annexe sait faire, pour venir dire ce qu'on a fabriqué.
   const [onglet, setOnglet] = useState('faire')
-  const [tout, setTout] = useState(null)
+  const [tout, setTout] = useState(() => dernierEcran('fab_annexe2_tout'))
   const [cherche, setCherche] = useState('')
   const [histo, setHisto] = useState(null)
   // Le détail d'un article (sa cascade) n'arrive qu'à son ouverture.
@@ -263,21 +267,20 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   useEffect(() => {
     let vivant = true
     loadFabAnnexe()
-      .then(l => { if (vivant) { setArticles(l); setErreur(null) } })
+      .then(l => { if (vivant) { setArticles(l); garderEcran('fab_annexe2', l); setErreur(null) } })
       .catch(e => { if (vivant) { setErreur(e.message || String(e)); setArticles([]) } })
     return () => { vivant = false }
   }, [tour])
 
-  // Le catalogue complet n'arrive qu'à l'ouverture de l'onglet : c'est une
-  // grosse lecture, inutile tant qu'on reste sur « À faire ».
+  // Le catalogue complet part en même temps que « À faire », sans attendre le
+  // clic sur l'onglet : quand elle y arrive, il est déjà là.
   useEffect(() => {
-    if (onglet !== 'declarer' || tout) return
     let vivant = true
     loadToutFabAnnexe()
-      .then(l => { if (vivant) setTout(l) })
-      .catch(e => { if (vivant) setErreur(e.message || String(e)) })
+      .then(l => { if (vivant) { setTout(l); garderEcran('fab_annexe2_tout', l) } })
+      .catch(() => { /* l'onglet « À faire » n'a pas à en souffrir */ })
     return () => { vivant = false }
-  }, [onglet, tout])
+  }, [tour])
 
   useEffect(() => {
     if (!ouvert || details[ouvert]) return
@@ -544,6 +547,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
 
           <button disabled={!(n > 0) || envoi}
             onClick={async () => {
+              // Le bouton répond au doigt AVANT de parler à Odoo : la création
+              // d'un ordre prend plusieurs secondes (règle de Layla).
+              navigator.vibrate?.(15)
               setEnvoi(true)
               try {
                 const r = racine
