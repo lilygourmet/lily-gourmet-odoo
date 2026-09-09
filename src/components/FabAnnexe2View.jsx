@@ -406,12 +406,6 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
             ))}
           </div>
 
-          <p className="text-[12.5px] text-ink-mute mb-4">
-            {onglet === 'faire'
-              ? 'Seul ce qui est sous le mini apparaît. Stock du Stock Prod annexe.'
-              : 'Tout ce que l’annexe sait faire. Viens dire ce que tu as fabriqué.'}
-          </p>
-
           {erreur && (
             <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-[13px] text-danger">
               {erreur}
@@ -645,9 +639,15 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               ? `Combien de ${propre(article.libelle).toLowerCase()} sont sortis ?`
               : 'Combien ça a donné, au final ?'}
           </div>
-          <div className="text-[12px] text-ink-mute mb-4">
-            {racine ? 'La tournée en fait environ' : 'La recette en annonce'} {qte(prevu, cible.unite)}
-          </div>
+          {/* Sur une tournée montée, on ne rappelle plus ce qu'elle « fait
+              environ » : la question suffit (Layla, 2026-09-09). La recette
+              d'une préparation, elle, reste annoncée — c'est le repère de
+              celui qui pèse. */}
+          {!racine && (
+            <div className="text-[12px] text-ink-mute mb-4">
+              La recette en annonce {qte(prevu, cible.unite)}
+            </div>
+          )}
           <div className="flex items-center justify-center gap-2">
             <button onClick={() => setSortie(String(arrondi(n - pas)))} type="button"
               aria-label={`Retirer ${pas}`}
@@ -752,9 +752,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               }}
               className="w-24 h-11 rounded-xl border-2 border-bordeaux bg-cream-warm text-center
                          font-serif text-[19px] text-ink outline-none" />
-            <span className="text-[12px] text-ink-mute">
-              {brut.unite} — la tournée en fait {nb(brut.tournee)}
-            </span>
+            <span className="text-[12px] text-ink-mute">{brut.unite}</span>
           </div>
 
         <div className="px-4 pb-3">
@@ -909,7 +907,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       ) : (
         <div className="flex items-center gap-3 px-4 py-3 bg-gold/10 border-t border-gold/30">
           <div className="flex-1 text-[13px]">
-            {racine ? 'Tout y est'
+            {/* Plus de « Tout y est » sur une tournée montée : le bouton dit
+                déjà quoi faire (Layla, 2026-09-09). */}
+            {racine ? ''
               : fois === noeud.tournees ? "Recette d'origine" : `Recette × ${nb(fois)}`}
             {!racine && noeud.besoin <= noeud.stock && (
               <div className="text-[11.5px] text-ink-mute mt-0.5">Tu n'en as pas besoin maintenant</div>
