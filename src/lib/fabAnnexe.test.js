@@ -96,7 +96,14 @@ describe('parGateauMere', () => {
   it('garde ce qui se monte, tiret ou autre famille', () => {
     const noms = parGateauMere(arts, '').flatMap(g => g.articles.map(a => a.produit))
     expect(noms).toContain('SMPr- Boite Biscotti')
-    expect(noms).toContain('GS- Ghriba Behla')
+  })
+
+  it('laisse les GS- dehors — ils ont leur propre circuit', () => {
+    const noms = parGateauMere(arts, '').flatMap(g => g.articles.map(a => a.produit))
+    expect(noms).not.toContain('GS- Ghriba Behla')
+    // mais la recherche les retrouve
+    expect(parGateauMere(arts, 'ghriba').flatMap(g => g.articles.map(a => a.produit)))
+      .toContain('GS- Ghriba Behla')
   })
 
   it('met à la fin ce qui ne sert à aucun gâteau', () => {

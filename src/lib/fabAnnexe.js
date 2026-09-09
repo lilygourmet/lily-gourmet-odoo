@@ -97,6 +97,9 @@ export function parGateauMere(articles, cherche) {
       // Un « F- » est un fruit, pas une fabrication : sa nomenclature ne dit que
       // « 1 kg de framboise fraîche donne 1 kg de congelée ».
       if (/^\s*(\[\d+\]\s*)?f\s*-/i.test(a.produit)) continue
+      // Les « GS- » (vitrine salé, biscottis) ne se déclarent pas ici :
+      // ils suivent leur propre circuit. (Layla, 2026-09-09.)
+      if (/^\s*(\[\d+\]\s*)?gs\s*-/i.test(a.produit)) continue
       if (avecPr.has(cleGateau(a.produit)) && !estPr(a.produit)) continue
     }
     const oues = (a.pour || []).length ? a.pour : ['Le reste']
