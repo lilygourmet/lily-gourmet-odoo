@@ -784,10 +784,14 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
     let l = envs.filter(e => (e.payment_method || 'cash') === method)
     const s = q.trim().toLowerCase()
     if (s) l = l.filter(e => String(e.amount_cash).includes(s) || (e.virement_client || '').toLowerCase().includes(s) || (e.source || '').toLowerCase().includes(s))
-    // Les enveloppes encore libres d'abord ; les déjà rapprochées à la fin (dépannage).
+    // Le MONTANT d'abord : la caisse du montant exact doit être en tête, quel que soit son
+    // état. Faire passer l'état avant l'enterrait en fin de liste — une caisse « à
+    // confirmer » de 392 dh se retrouvait sous des caisses de 400, 376, 375 dh.
+    // L'état ne départage que deux caisses aussi proches l'une que l'autre : une caisse
+    // déjà rapprochée passe en dernier (la relier veut dire remplacer).
     return l.sort((a, b) =>
-      ((a.deja_rapprochee || a.a_confirmer) ? 1 : 0) - ((b.deja_rapprochee || b.a_confirmer) ? 1 : 0) ||
-      Math.abs(Number(a.amount_cash) - Number(line.amount)) - Math.abs(Number(b.amount_cash) - Number(line.amount)))
+      Math.abs(Number(a.amount_cash) - Number(line.amount)) - Math.abs(Number(b.amount_cash) - Number(line.amount)) ||
+      (a.deja_rapprochee ? 1 : 0) - (b.deja_rapprochee ? 1 : 0))
   }, [envs, q, method, line.amount])
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
