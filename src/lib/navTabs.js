@@ -32,6 +32,7 @@ const TAB_DEFS = [
   { view: 'fabrication-valider', emoji: '✅', label: 'À valider CD-',       can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_of) },
   // Admin SEULEMENT : changer un mini change ce que l'atelier fabriquera demain.
   { view: 'minmax-cd',           emoji: '📏', label: 'Mini / maxi CD',     can: u => isAdmin(u) },
+  { view: 'minmax-annexe',       emoji: '📐', label: 'Mini / maxi Annexe', can: u => isAdmin(u) },
   { view: 'sales',             emoji: '🥪', label: 'Salés',             can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_sales) },
   { view: 'stock-gs',          emoji: '🥪', label: 'Stock GS-',         can: u => !isLivreur(u) && canStockGS(u) },
   // Ces deux-là n'existaient que dans le menu du haut : invisibles dans la barre

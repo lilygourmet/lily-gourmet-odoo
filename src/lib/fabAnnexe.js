@@ -9,6 +9,7 @@ import { addFabProd, rattacherOrdre, loadFabProdDepuis, loadNoms } from './fabri
 import { creerOfPrepa } from './fabrication'
 import { todayISO } from './dates'
 import { correspond } from './recherche'
+import { supabase } from './supabase'
 
 /** L'état du jour. Jamais mis en cache : Layla doit voir ses corrections tout de suite. */
 export async function loadFabAnnexe() {
@@ -303,4 +304,58 @@ export function envoyerAValider(article, sortie, userId) {
     produit: article.produit, qty: sortie, unite: article.unite,
     ajustements: article.ajustements || null,
   }, userId)
+}
+
+// ============================================================
+// Le catalogue : ce que l'écran suit, et à quels seuils.
+// Ces trois nombres décident de tout — sous le mini l'article apparaît, on en
+// fait des tournées entières jusqu'au maxi. Ils vivaient dans Supabase, hors
+// de portée de Layla : d'où l'écran « Mini / maxi Annexe ».
+// ============================================================
+
+export async function loadCatalogueAnnexe() {
+  const { data, error } = await supabase.from('fab_annexe_articles')
+    .select('produit, libelle, mini, maxi, tournee, actif, famille, rang, figes, figes_nom')
+    .order('produit').limit(2000)
+  if (error) throw error
+  return data || []
+}
+
+/**
+ * Écrit une ligne du catalogue. `produit` est la clé : on écrase ou on crée.
+ *
+ * ⚠️ On n'envoie QUE les colonnes réglées ici. Les figés, la photo et la
+ * famille ne sont pas dans cet écran : les citer les remettrait à vide.
+ */
+export async function saveCatalogueAnnexe(ligne) {
+  const { error } = await supabase.from('fab_annexe_articles').upsert({
+    produit: ligne.produit,
+    libelle: ligne.libelle || ligne.produit,
+    mini: Number(ligne.mini) || 0,
+    maxi: Number(ligne.maxi) || 0,
+    tournee: Number(ligne.tournee) || 1,
+    actif: ligne.actif !== false,
+  }, { onConflict: 'produit' })
+  if (error) throw error
+}
+
+/**
+ * Les ingrédients FIGÉS d'un article : ceux dont la quantité ne suit pas la
+ * sortie réelle. Une cuve de mousse reste une cuve, que la tournée donne 128
+ * pièces ou 150 ; le biscuit et le sirop, eux, se recalculent au prorata.
+ *
+ * ⚠️ Écriture à part : `saveCatalogueAnnexe` ne cite pas ces colonnes, pour ne
+ * pas les vider en réglant un mini.
+ */
+export async function saveFigesAnnexe(produit, figes, figesNom) {
+  const { error } = await supabase.from('fab_annexe_articles')
+    .update({ figes: figes || [], figes_nom: figesNom || null })
+    .eq('produit', produit)
+  if (error) throw error
+}
+
+/** Retirer un article du suivi. Sa fabrication reste possible par « Déclarer ». */
+export async function retirerDuCatalogue(produit) {
+  const { error } = await supabase.from('fab_annexe_articles').delete().eq('produit', produit)
+  if (error) throw error
 }
