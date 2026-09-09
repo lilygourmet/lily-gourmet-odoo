@@ -736,15 +736,24 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     // ce genre de recette ».)
     if (!/^u$/i.test(racine ? article.unite : noeud.unite)) return null
 
+    // ⚠️ Un CADRE se monte d'un bloc : on ne pèse pas pour une part, on remplit
+    // le cadre. Ses quantités valent donc pour le cadre ENTIER, et le titre dit
+    // combien de pièces il en sort — « Pour 1 cadre = 46 u » (Layla,
+    // 2026-09-09). `brut`, pas `article` : `pourFois` a multiplié la tournée
+    // par le nombre de cadres choisi.
+    const estCadre = /\bcadre\b/i.test(racine ? article.produit : noeud.produit)
+    const parCadre = !estCadre ? 1
+      : (racine ? Number(brut.tournee) : Number(noeud.tourneeTaille)) || 1
+
     // Ce qu'une pièce demande. Quand il en entre MOINS D'UNE — un cadre de
     // Black Forest ne mange qu'un onzième de plaque de biscuit viennois — le
     // chiffre s'écrirait « 0 u » : on dit alors combien de pièces couvre une
     // tournée. « 1 tournée pour 88 » (Layla, 2026-09-09).
     const dose = (nom, parPiece, unite, tourneeTaille) => ({
       nom,
-      valeur: /^u$/i.test(unite) && parPiece < 1 && tourneeTaille > 0
+      valeur: !estCadre && /^u$/i.test(unite) && parPiece < 1 && tourneeTaille > 0
         ? `1 tournée pour ${nb(Math.round(tourneeTaille / parPiece))}`
-        : qteFine(parPiece, unite),
+        : qteFine(parPiece * parCadre, unite),
     })
 
     if (racine) {
@@ -758,7 +767,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
       if (!(total > 0) || !lignes.length) return null
       return {
-        titre: `Pour 1 ${propre(article.libelle)}`,
+        titre: estCadre
+          ? `Pour 1 cadre = ${nb(parCadre)} ${brut.unite}`
+          : `Pour 1 ${propre(article.libelle)}`,
         lignes: lignes.map(c => dose(
           nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
           (c.besoin * facteurAtelier(c.produit)) / total, c.unite, c.tourneeTaille)),
@@ -768,7 +779,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     // La taille de tournée d'un composant se lit dans la liste du dessous.
     const tailleDe = nom => (enfants || []).find(c => c.produit === nom)?.tourneeTaille
     return {
-      titre: `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`,
+      titre: estCadre
+        ? `Pour 1 cadre = ${nb(parCadre)} ${noeud.unite}`
+        : `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`,
       lignes: noeud.recette.map(l => dose(
         nomAtelier(l.produit),
         (l.qty * facteurAtelier(l.produit)) / parRecette, l.unite, tailleDe(l.produit))),
