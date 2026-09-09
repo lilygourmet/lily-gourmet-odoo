@@ -320,7 +320,10 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
       c.recette = lignesPour(sousBom, p).map(x => ({
         produit: x.product_id[1],
         qty: Math.round(x.product_qty * ech * 1000) / 1000,
-        unite: x.product_uom_id[1],
+        // « Units » est le nom Odoo ; l'atelier lit « u ». Même normalisation
+        // que pour les articles (`uniteDe`) — sans elle, une ligne comptée en
+        // pièces n'était pas reconnue comme telle à l'affichage.
+        unite: String(x.product_uom_id[1] || '').replace(/^Units?$/i, 'u'),
       }))
       // ⚠️ La quantité pour laquelle les enfants ont été calculés. Sans elle,
       // changer le nombre de tournées d'une préparation ne faisait PAS suivre

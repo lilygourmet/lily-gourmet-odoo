@@ -43,6 +43,15 @@ const qte = (v, u) => {
   // Personne ne pèse « 0,06 kg » de gélatine : sous le kilo, on dit 57 g.
   return n < 1 ? `${nb(Math.round(n * 1000))} g` : `${nb(Math.round(n * 100) / 100)} kg`
 }
+// Dans le rappel « pour 1 … », les doses sont minuscules : arrondir à l'entier
+// écrivait « 0 g » de gélatine là où il en faut 0,4. On garde deux chiffres
+// significatifs tant que l'entier ne dirait rien. (Layla, 2026-09-09.)
+const qteFine = (v, u) => {
+  const enKg = /^kg$/i.test(String(u || '').trim())
+  const n = (Number(v) || 0) * (enKg ? 1000 : 1)
+  if (n === 0 || Math.abs(n) >= 1) return qte(v, u)
+  return `${nb(Number(n.toPrecision(2)))} ${enKg ? 'g' : (u || '')}`.trim()
+}
 const propre = n => String(n || '')
   .replace(/^(SM[.\- ]?|MP[.\- ]?|E-)\s*/i, '').replace(/\s{2,}/g, ' ').trim()
 
@@ -721,6 +730,23 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   // Pour un gâteau c'est le MONTAGE (ce que demande une pièce), pour une
   // préparation c'est sa recette ramenée à une unité. Même format, même place.
   const pourUne = (() => {
+    // ⚠️ Le rappel n'a de sens que pour ce qui se compte À LA PIÈCE. « Pour 1 g
+    // de ganache : crème 0 g, beurre 0 g » ne dit rien — la recette au-dessus
+    // donne déjà la tournée. (Layla, 2026-09-09 : « ici pas besoin d'afficher
+    // ce genre de recette ».)
+    if (!/^u$/i.test(racine ? article.unite : noeud.unite)) return null
+
+    // Ce qu'une pièce demande. Quand il en entre MOINS D'UNE — un cadre de
+    // Black Forest ne mange qu'un onzième de plaque de biscuit viennois — le
+    // chiffre s'écrirait « 0 u » : on dit alors combien de pièces couvre une
+    // tournée. « 1 tournée pour 88 » (Layla, 2026-09-09).
+    const dose = (nom, parPiece, unite, tourneeTaille) => ({
+      nom,
+      valeur: /^u$/i.test(unite) && parPiece < 1 && tourneeTaille > 0
+        ? `1 tournée pour ${nb(Math.round(tourneeTaille / parPiece))}`
+        : qteFine(parPiece, unite),
+    })
+
     if (racine) {
       // ⚠️ `article.tournee` est DÉJÀ le total : `pourFois` l'a multiplié par
       // le nombre de tournées, comme les besoins. Le remultiplier donnait la
@@ -733,19 +759,19 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       if (!(total > 0) || !lignes.length) return null
       return {
         titre: `Pour 1 ${propre(article.libelle)}`,
-        lignes: lignes.map(c => ({
-          nom: nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
-          valeur: qte((c.besoin * facteurAtelier(c.produit)) / total, c.unite),
-        })),
+        lignes: lignes.map(c => dose(
+          nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
+          (c.besoin * facteurAtelier(c.produit)) / total, c.unite, c.tourneeTaille)),
       }
     }
     if (!(noeud.recette || []).length) return null
+    // La taille de tournée d'un composant se lit dans la liste du dessous.
+    const tailleDe = nom => (enfants || []).find(c => c.produit === nom)?.tourneeTaille
     return {
       titre: `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`,
-      lignes: noeud.recette.map(l => ({
-        nom: nomAtelier(l.produit),
-        valeur: qte((l.qty * facteurAtelier(l.produit)) / parRecette, l.unite),
-      })),
+      lignes: noeud.recette.map(l => dose(
+        nomAtelier(l.produit),
+        (l.qty * facteurAtelier(l.produit)) / parRecette, l.unite, tailleDe(l.produit))),
     }
   })()
 
