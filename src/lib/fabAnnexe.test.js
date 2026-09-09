@@ -72,6 +72,9 @@ describe('parGateauMere', () => {
     { produit: 'SM CD* Crème au beurre Praliné', pour: ['E- Fraisier'] },
     { produit: 'SMT. creme patissiere cbs', pour: ['E- Fraisier'] },
     { produit: 'SM/ beurre clarifie', pour: ['E- Fraisier'] },
+    { produit: 'SM- Pr Cheesecake indiv', pour: ['E- Cheesecake'] },
+    { produit: 'SM- Cheesecake indiv', pour: ['E- Cheesecake'] },
+    { produit: 'SM- Cheesecake 10 pers', pour: ['E- Cheesecake'] },
   ]
 
   it('range chaque article sous CHAQUE gâteau qu’il sert', () => {
@@ -99,6 +102,13 @@ describe('parGateauMere', () => {
     const g = parGateauMere(arts, '')
     expect(g[g.length - 1].nom).toBe('Le reste')
     expect(g[g.length - 1].articles[0].produit).toBe('SM- Truc inconnu')
+  })
+
+  it('ne montre que le « Pr » quand le couple existe, taille par taille', () => {
+    const noms = parGateauMere(arts, '').flatMap(g => g.articles.map(a => a.produit))
+    expect(noms).toContain('SM- Pr Cheesecake indiv')
+    expect(noms).not.toContain('SM- Cheesecake indiv')
+    expect(noms).toContain('SM- Cheesecake 10 pers')
   })
 
   it('filtre sur la recherche', () => {

@@ -67,11 +67,26 @@ export function estPreparation(nom) {
  *
  * Ce qui ne sert à aucun article vendu se retrouve à la fin, sous « Le reste ».
  */
+const sansPrefixe = nom => String(nom || '').trim().replace(/^sm\s*-\s*/i, '')
+
+/** « SM- Pr Cheesecake indiv » : le montage fini, qui consomme l'étape d'avant. */
+const estPr = nom => /^pr\s/i.test(sansPrefixe(nom))
+
+/** Le gâteau et sa taille, sans le préfixe ni le « Pr » : la clé d'un couple. */
+const cleGateau = nom =>
+  sansPrefixe(nom).replace(/^pr\s*-?\s*/i, '').replace(/\W+/g, '').toLowerCase()
+
 export function parGateauMere(articles, cherche) {
   const q = String(cherche || '').trim().toLowerCase()
+  // Quand un « Pr » existe, lui seul a une case : l'étape d'avant s'ouvre
+  // depuis sa recette, où on voit son stock. Les tailles restent distinctes
+  // — un « Pr » 10 pers ne cache pas l'indiv. (Layla, 2026-09-09.)
+  const avecPr = new Set(
+    (articles || []).filter(a => estPr(a.produit)).map(a => cleGateau(a.produit)))
   const groupes = new Map()
   for (const a of articles || []) {
     if (estPreparation(a.produit)) continue
+    if (avecPr.has(cleGateau(a.produit)) && !estPr(a.produit)) continue
     if (q && !a.produit.toLowerCase().includes(q)) continue
     const oues = (a.pour || []).length ? a.pour : ['Le reste']
     for (const g of oues) {
