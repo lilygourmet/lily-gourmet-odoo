@@ -734,6 +734,18 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     }
   })()
 
+  // Les raccourcis « Je fais » ne proposent QUE ce qui ne dépasse pas le maxi :
+  // au-delà, on remplirait le congélateur pour rien. Le choix suggéré reste
+  // proposé même s'il déborde (une demi-tournée est le minimum faisable), et
+  // celui déjà choisi ne disparaît pas sous le doigt. Pour le reste, la case
+  // « quantité voulue » juste en dessous : « sinon on écrira à la main »
+  // (Layla, 2026-09-09).
+  const choixTournees = [0.5, 1, 1.5, 2, 3].filter(f =>
+    f === foisArticle
+    || f === tourneesSuggerees(brut)
+    || !(brut.reste > 0)
+    || brut.tournee * f <= brut.reste)
+
   return (
     <Cadre {...nav} onRetour={() => setChemin(chemin.slice(0, -1))}
       pied={pourUne}
@@ -756,7 +768,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
         <>
           <div className="flex items-center gap-2 px-4 pb-3 flex-wrap">
             <span className="text-[12px] text-ink-mute mr-1">Je fais</span>
-            {[0.5, 1, 1.5, 2, 3].map(f => {
+            {choixTournees.map(f => {
               const on = foisArticle === f
               // ⚠️ `qte` et non un arrondi : une tournée de 5,55 kg
               // affichait « 6 kg » pour une entière et « 3 kg » pour

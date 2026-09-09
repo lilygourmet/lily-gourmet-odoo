@@ -168,9 +168,12 @@ export function tourneesSuggerees(article) {
   // 70 tiramisus pour une tournée de 140, et 2,775 kg de sirop pour 5,55.
   // (Vu le 2026-09-09.)
   if (!(manque > 0)) return 1
-  // Au demi près : le suprême amandes 20 cm a un maxi de 33 pour une tournée
-  // de 22 — il y faut une tournée et demie, pas une ni deux.
-  return Math.max(0.5, Math.round((manque / t) * 2) / 2)
+  // Au demi près, SANS JAMAIS DÉPASSER le maxi : le suprême amandes 20 cm a un
+  // maxi de 33 pour une tournée de 22 — il y faut une tournée et demie.
+  // On arrondit vers le BAS : mieux vaut proposer un peu moins que de remplir
+  // le congélateur au-delà du maxi. « Sinon on écrira à la main »
+  // (Layla, 2026-09-09).
+  return Math.max(0.5, Math.floor((manque / t) * 2) / 2)
 }
 
 /**

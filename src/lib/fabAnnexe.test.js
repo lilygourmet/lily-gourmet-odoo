@@ -182,4 +182,11 @@ describe('tourneesSuggerees', () => {
   it('jamais moins d’une demi-tournée quand il reste un fond à faire', () => {
     expect(tourneesSuggerees({ tournee: 140, reste: 3 })).toBe(0.5)
   })
+
+  it('ne dépasse JAMAIS le maxi : on arrondit vers le bas', () => {
+    // 25 pièces à rattraper, une tournée de 14 : une tournée et demie (21)
+    // et non deux (28) — on ne fabrique pas au-delà du maxi.
+    expect(tourneesSuggerees({ tournee: 14, reste: 25 })).toBe(1.5)
+    expect(tourneesSuggerees({ tournee: 14, reste: 41 })).toBe(2.5)
+  })
 })
