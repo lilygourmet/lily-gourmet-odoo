@@ -183,6 +183,14 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
           ? a.releve_url === b.releve_url
           : String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
         if (memeDoc) continue
+        // Deux documents différents, même client (à l'orthographe près), même montant, à
+        // UN JOUR d'écart : la même opération, datée du jour de l'ordre dans un document et
+        // du jour de la valeur dans l'autre. Au-delà d'un jour, deux choses sont incertaines
+        // à la fois (le nom ET la date) — l'app se contente de signaler « doublon probable ».
+        if (ecart <= 1 && nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= seuil) {
+          retirees.add(b.key)                       // on garde la plus ancienne (a)
+          continue
+        }
         // Remise de chèques du même jour et du même montant : la même remise, vue dans
         // deux documents (voir memeOperation). Le n° ne les départage pas.
         if (ecart === 0 && estRemiseCheque(a.label) && estRemiseCheque(b.label)) {

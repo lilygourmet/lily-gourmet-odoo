@@ -53,10 +53,10 @@ describe('doublons des lignes à lier', () => {
   it('signale (sans retirer) une orthographe qui se ressemble', () => {
     const out = marquerDoublons([
       L('a', '2026-06-05', 376, 'VIRT RECU MME SELMA BENOMAR', '2026-06-02T13:40:57'),
-      L('b', '2026-06-06', 376, 'VIRT RECU MME SELMA BENNOMAR', '2026-07-21T12:16:56'),
+      L('b', '2026-06-07', 376, 'VIRT RECU MME SELMA BENNOMAR', '2026-07-21T12:16:56'),
     ])
     expect(out).toHaveLength(2)
-    expect(out[0].doublon_probable.date).toBe('2026-06-06')
+    expect(out[0].doublon_probable.date).toBe('2026-06-07')
     expect(out[1].doublon_probable.date).toBe('2026-06-05')
   })
 
@@ -446,10 +446,10 @@ describe('marquerDoublons — même nom exact à un jour d\'écart', () => {
     expect(out).toHaveLength(1)
   })
 
-  it('laisse en « probable » une orthographe seulement proche', () => {
+  it('laisse en « probable » une orthographe proche à plus d\'un jour', () => {
     const out = marquerDoublons([
       L2('a', '2026-05-11', 'VIRT RECU MME SELMA BENOMAR', 'releves/bmci.pdf'),
-      L2('b', '2026-05-12', 'VIRT RECU MME SELMA BENNOMAR', 'releves/scan.pdf'),
+      L2('b', '2026-05-13', 'VIRT RECU MME SELMA BENNOMAR', 'releves/scan.pdf'),
     ])
     expect(out).toHaveLength(2)
     expect(out[0].doublon_probable).toBeTruthy()
@@ -459,6 +459,40 @@ describe('marquerDoublons — même nom exact à un jour d\'écart', () => {
     const out = marquerDoublons([
       L2('a', '2026-05-11', 'VIRT RECU CITIBANK EUROPE PLC', 'releves/bmci.pdf'),
       L2('b', '2026-05-12', 'VIRT RECU NOVACTUS MAROC', 'releves/scan.pdf'),
+    ])
+    expect(out).toHaveLength(2)
+  })
+})
+
+// Orthographe proche mais dates voisines : c'est le même client, l'app fusionne sans
+// demander. Au-delà d'un jour, le doute porte sur deux choses à la fois — elle signale.
+describe('marquerDoublons — orthographe proche à un jour', () => {
+  const L3 = (key, date, label) => ({
+    key, ligne_date: date, amount: 376, label,
+    releve_url: `releves/${key}.pdf`, created_at: '2026-07-01T10:00:00',
+  })
+
+  it('fusionne à un jour d\'écart', () => {
+    const out = marquerDoublons([
+      L3('a', '2026-06-05', 'VIRT RECU MME SELMA BENOMAR'),
+      L3('b', '2026-06-06', 'VIRT RECU MME SELMA BENNOMAR'),
+    ])
+    expect(out).toHaveLength(1)
+  })
+
+  it('signale seulement à deux jours d\'écart', () => {
+    const out = marquerDoublons([
+      L3('a', '2026-06-05', 'VIRT RECU MME SELMA BENOMAR'),
+      L3('b', '2026-06-07', 'VIRT RECU MME SELMA BENNOMAR'),
+    ])
+    expect(out).toHaveLength(2)
+    expect(out[0].doublon_probable).toBeTruthy()
+  })
+
+  it('garde deux noms vraiment différents à un jour d\'écart', () => {
+    const out = marquerDoublons([
+      L3('a', '2026-06-05', 'VIRT RECU MME SELMA BENOMAR'),
+      L3('b', '2026-06-06', 'VIRT RECU MR OMAR TAZI'),
     ])
     expect(out).toHaveLength(2)
   })
