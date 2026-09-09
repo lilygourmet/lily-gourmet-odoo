@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { bloquants, noeudAu, enfantsDe, parGateauMere, parJour, tourneesSuggerees,
-  lignesRecette, pourFois, enfantsPour } from './fabAnnexe'
+  lignesRecette, pourFois, enfantsPour, noeudAu as descendre } from './fabAnnexe'
 
 // Un tiramisu tel que l'API le renvoie, en plus court.
 const tiramisu = {
@@ -284,5 +284,62 @@ describe('enfantsPour — les sous-composants suivent, à tous les niveaux', () 
 
   it('ne touche à rien quand la quantité ne bouge pas', () => {
     expect(enfantsPour(fond, 14)).toBe(fond.enfants)
+  })
+})
+
+describe('descendre — la quantité réglée suit dans les fiches du dessous', () => {
+  // Le Citron Framboise (5) › son fond › le biscuit du fond.
+  const arbre = () => ([{
+    produit: 'Sm- Le Citron Framboise (5)', libelle: 'Citron Framboise (5)',
+    tournee: 14, unite: 'u',
+    composants: [{
+      produit: 'SM- Fond Citron Framboise (5)',
+      unite: 'u', besoin: 14, stock: 0, dejaFait: 0, fabrique: true, ok: false,
+      tourneeTaille: 14, tournees: 1, produira: 14, pourQuantite: 14,
+      enfants: [{
+        produit: 'SM. Biscuit amande gingembre',
+        unite: 'g', besoin: 1960, stock: 3292, dejaFait: 0, fabrique: true, ok: true,
+        tourneeTaille: 4400, tournees: 1, produira: 4400, pourQuantite: 4400,
+        enfants: [{
+          produit: 'SM. Citron zest', unite: 'g', besoin: 13, stock: 0, dejaFait: 0,
+          fabrique: true, ok: false, tourneeTaille: 1000, tournees: 0.5, produira: 500,
+        }],
+      }],
+    }],
+  }])
+  const chemin = ['Sm- Le Citron Framboise (5)', 'SM- Fond Citron Framboise (5)',
+    'SM. Biscuit amande gingembre']
+
+  it('sans réglage, rien ne bouge', () => {
+    expect(descendre(arbre(), chemin).noeud.besoin).toBe(1960)
+  })
+
+  it('le fond réglé sur 2 tournées ouvre le biscuit à 3 920 g, pas 1 960', () => {
+    const foisDe = c => (c.produit === 'SM- Fond Citron Framboise (5)' ? 2 : undefined)
+    const b = descendre(arbre(), chemin, foisDe).noeud
+    expect(b.besoin).toBe(3920)
+    expect(b.ok).toBe(false)                    // 3 292 g en stock ne suffisent plus
+    expect(b.enfants[0].besoin).toBe(26)        // et le zeste suit aussi
+  })
+
+  it('un réglage est ABSOLU : 2 tournées de biscuit, c’est 2 tournées', () => {
+    // Régler un étage ne multiplie pas celui du dessus : « 2 tournées de
+    // biscuit » veut dire 2 × 4 400 g, d'où qu'on vienne. Le zeste suit cette
+    // quantité-là — 13 g pour 4 400 g, donc 26 g pour 8 800.
+    const foisDe = c => ({
+      'SM- Fond Citron Framboise (5)': 2,
+      'SM. Biscuit amande gingembre': 2,
+    })[c.produit]
+    const z = descendre(arbre(), [...chemin, 'SM. Citron zest'], foisDe).noeud
+    expect(z.besoin).toBe(26)
+  })
+
+  it('la quantité par défaut d’un étage suit celle du dessus', () => {
+    // Fond réglé sur 2 → il manque 628 g de biscuit → une demi-tournée
+    // (2 200 g) est proposée, et le zeste vaut 6,5 g pour cette demi-tournée.
+    const foisDe = c => (c.produit === 'SM- Fond Citron Framboise (5)' ? 2 : undefined)
+    const b = descendre(arbre(), chemin, foisDe).noeud
+    expect(b.tournees).toBe(0.5)
+    expect(enfantsPour(b, b.tourneeTaille * b.tournees)[0].besoin).toBe(6.5)
   })
 })

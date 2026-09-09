@@ -465,7 +465,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                   <div className="grid gap-2.5"
                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
                     {g.articles.map(a => (
-                      <button key={a.produit} onClick={() => setChemin([a.produit])}
+                      <button key={a.produit} onClick={() => { setFaits({}); setChemin([a.produit]) }}
                         className="text-left rounded-2xl border border-cream-deep bg-cream-warm
                                    overflow-hidden shadow-sm hover:border-bordeaux/40 flex flex-col">
                         <div className="relative">
@@ -540,7 +540,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                 <div className="grid gap-2.5"
                   style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
                   {ouvert.articles.map(a => (
-                    <CarteArticle key={a.produit} a={a} onOuvrir={() => setChemin([a.produit])} />
+                    <CarteArticle key={a.produit} a={a}
+                      onOuvrir={() => { setFaits({}); setChemin([a.produit]) }} />
                   ))}
                 </div>
               </>
@@ -564,7 +565,11 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     )
   }
   const foisArticle = foisPar[brut.produit] ?? tourneesSuggerees(brut)
-  const { article, noeud, parent } = noeudAu([pourFois(brut, foisArticle)], chemin)
+  // `faits` porte la quantité réglée à chaque étage : on la fait suivre tout au
+  // long de la descente, sinon la fiche d'un composant s'ouvrait sur une autre
+  // quantité que celle annoncée juste au-dessus (Layla, 2026-09-09).
+  const { article, noeud, parent } = noeudAu([pourFois(brut, foisArticle)], chemin,
+    c => faits[c.produit]?.fois)
   if (!noeud) { setChemin([]); return null }
 
   const racine = chemin.length === 1

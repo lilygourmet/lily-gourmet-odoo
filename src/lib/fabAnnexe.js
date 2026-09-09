@@ -299,13 +299,22 @@ export const declares = faits =>
  * Où on en est dans la descente. `chemin` part de l'article :
  * ['Tiramisu', 'Biscuit indiv', 'Biscuit plaque'] → le nœud de la plaque.
  */
-export function noeudAu(articles, chemin) {
+export function noeudAu(articles, chemin, foisDe) {
   const article = (articles || []).find(a => a.produit === chemin[0])
   if (!article) return { article: null, noeud: null, parent: null }
   let noeud = article
   let parent = null
   for (const nom of chemin.slice(1)) {
-    const suivant = enfantsDe(noeud).find(c => c.produit === nom)
+    // ⚠️ La quantité choisie à CET étage doit se propager plus bas. Sans ça, le
+    // fond réglé sur 2 tournées listait « 3 920 g de biscuit », et ouvrir ce
+    // biscuit affichait la recette de 1 960 — « il m'affiche une autre
+    // recette » (Layla, 2026-09-09). L'article de tête est déjà à l'échelle
+    // (`pourFois`), on ne le remet pas deux fois.
+    const fois = noeud !== article && foisDe ? foisDe(noeud) : null
+    const enfants = fois > 0
+      ? enfantsPour(noeud, (noeud.tourneeTaille || 1) * fois)
+      : enfantsDe(noeud)
+    const suivant = enfants.find(c => c.produit === nom)
     if (!suivant) return { article, noeud: null, parent: null }
     parent = noeud.produit || article.libelle
     noeud = suivant
