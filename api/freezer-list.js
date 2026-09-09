@@ -1885,7 +1885,10 @@ export default async function handler(req, res) {
     // création de l'ordre de glaçage (POST), quand l'équipe a fait sa tournée
     if (req.method === 'POST' && (req.query.mode === 'prepa' || req.query.mode === 'glacage')) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
-      const t = Math.max(1, Math.min(50, parseInt(body.tournees) || 0))
+      // ⚠️ Pas `parseInt` : une demi-tournée (0,5) devenait 0, donc 1 — l'écran
+      // demandait la moitié et Odoo recevait une cuve entière. On accepte le
+      // demi, arrondi au demi le plus proche. (Layla, 2026-09-09.)
+      const t = Math.min(50, Math.max(0.5, Math.round((Number(body.tournees) || 0) * 2) / 2))
       if (!t) return res.status(400).json({ error: 'nombre de tournées invalide' })
       const quoi = String(req.query.quoi || 'glacage')
       const uid = await odooAuth()
