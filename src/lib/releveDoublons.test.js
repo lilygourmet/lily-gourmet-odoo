@@ -358,3 +358,37 @@ describe('remise de chèques — le même n° reste décisif', () => {
     expect(memeOperation(a, { ...a, ligne_date: '2026-08-26', releve_url: 'releves/2.pdf' })).toBe(true)
   })
 })
+
+// La fausse ligne fabriquée par le lecteur de PDF vient du MÊME fichier que la vraie :
+// le garde-fou « deux lignes d'un même document sont deux opérations réelles » ne doit pas
+// empêcher de les fusionner quand le nom du client, le montant et le jour concordent.
+describe('marquerDoublons — jumeau fabriqué dans le même PDF', () => {
+  const D = (key, label) => ({
+    key, ligne_date: '2026-07-17', amount: 392, label,
+    releve_url: 'releves/juillet.pdf', created_at: '2026-08-01T10:00:00',
+  })
+
+  it('fusionne les deux libellés du même virement', () => {
+    const out = marquerDoublons([
+      D('a', 'VIR INST RECU 2321144 215469570/1XXXXX FARHANE HAJAR'),
+      D('b', 'VIR INST RECU 2324371 706376617404 00720260717706376617404 FARHANE HAJAR'),
+    ])
+    expect(out).toHaveLength(1)
+  })
+
+  it('garde deux clients différents du même fichier', () => {
+    const out = marquerDoublons([
+      D('a', 'VIR INST RECU 2321144 FARHANE HAJAR'),
+      D('b', 'VIR INST RECU 2324371 OUKHADDA AYA'),
+    ])
+    expect(out).toHaveLength(2)
+  })
+
+  it('garde deux remises de chèques du même fichier (aucun nom pour trancher)', () => {
+    const out = marquerDoublons([
+      { ...D('a', 'REMISE CHEQUE A ENC 47729339'), amount: 3776 },
+      { ...D('b', 'REMISE CHEQUE A ENC 47729338'), amount: 3776 },
+    ])
+    expect(out).toHaveLength(2)
+  })
+})
