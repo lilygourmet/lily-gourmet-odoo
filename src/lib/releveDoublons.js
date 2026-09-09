@@ -138,12 +138,6 @@ export function memeOperation(a, b) {
   // parfois les morceaux à l'opération voisine : vu un n° 2321144 enregistré avec la
   // référence d'une AUTRE opération (le PDF, lui, n'a qu'un seul virement ce jour-là).
   // Le nom du client, lui, ne se mélange pas — c'est le seul repère solide.
-  // MAIS pas dans un même document quand les deux n° se contredisent : un relevé n'écrit
-  // jamais deux fois la même opération. Vécu : Nybele Tazi a fait DEUX virements de 500 dh
-  // le même jour, sous deux n° différents — l'app n'en gardait qu'un et un paiement
-  // disparaissait. Entre DEUX documents, le nom garde le dernier mot : les références
-  // imprimées n'y sont pas les mêmes pour une seule et même opération.
-  if (memeDocConnu && numerosContraires(a.label, b.label)) return false
   const na = nomDeLigne(a.label), nb = nomDeLigne(b.label)
   if (nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= 0.85) return true
   // Sans nom pour trancher, deux n° qui se contredisent restent deux opérations.
@@ -191,18 +185,13 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         // document, car la fausse ligne vient justement du MÊME PDF : le lecteur y coupait
         // les libellés au mauvais endroit et fabriquait un jumeau (corrigé pour les
         // prochains imports, mais les lignes déjà enregistrées restent mélangées).
-        const memeDoc = (a.releve_url && b.releve_url)
-          ? a.releve_url === b.releve_url
-          : String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
-        // Deux n° d'opération différents DANS UN MÊME document = deux opérations réelles :
-        // un relevé n'écrit jamais deux fois la même. Vécu : Nybele Tazi a fait DEUX
-        // virements de 500 dh le même jour, sous deux n° différents — la fusion sur le nom
-        // ci-dessous en retirait un, et un paiement disparaissait de « non liées ».
-        if (memeDoc && numerosContraires(a.label, b.label)) continue
         if (ecart === 0 && nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= seuil) {
           retirees.add(b.key)                       // on garde la plus ancienne (a)
           continue
         }
+        const memeDoc = (a.releve_url && b.releve_url)
+          ? a.releve_url === b.releve_url
+          : String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
         if (memeDoc) continue
         // Deux documents différents, même client (à l'orthographe près), même montant, à
         // UN JOUR d'écart : la même opération, datée du jour de l'ordre dans un document et
