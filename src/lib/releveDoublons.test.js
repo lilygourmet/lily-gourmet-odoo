@@ -257,9 +257,30 @@ describe('memeOperation', () => {
     expect(memeOperation(a, b)).toBe(true)
   })
 
-  it('refuse deux n° d\'opération qui se contredisent', () => {
+  // Corrigé après lecture du relevé papier : ce jour-là il n'y a qu'UN virement de 392 dh
+  // de FARHANE HAJAR. Les deux libellés viennent du lecteur de PDF, qui a rattaché à cette
+  // opération des références appartenant à sa voisine. Le nom, lui, est fiable.
+  it('reconnaît un seul virement derrière deux n° différents, même client et même jour', () => {
     const a = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2321144 215469570 FARHANE HAJAR' }
     const b = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2324371 706376617404 FARHANE HAJAR' }
+    expect(memeOperation(a, b)).toBe(true)
+  })
+
+  it('sépare deux clients différents, même montant et même jour', () => {
+    const a = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2321144 FARHANE HAJAR' }
+    const b = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2324371 OUKHADDA AYA' }
+    expect(memeOperation(a, b)).toBe(false)
+  })
+
+  it('sépare deux jours différents, même client', () => {
+    const a = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2321144 FARHANE HAJAR' }
+    const b = { amount: 392, ligne_date: '2026-07-18', label: 'VIR INST RECU 2324371 FARHANE HAJAR' }
+    expect(memeOperation(a, b)).toBe(false)
+  })
+
+  it('sans nom lisible, deux n° qui se contredisent restent deux opérations', () => {
+    const a = { amount: 200, ligne_date: '2026-07-29', label: 'VIR INST RECU 2376336 260729308078' }
+    const b = { amount: 200, ligne_date: '2026-07-29', label: 'VIR INST RECU 2378161 682183838646' }
     expect(memeOperation(a, b)).toBe(false)
   })
 
@@ -292,9 +313,9 @@ describe('remise de chèques — le n° change d\'un document à l\'autre', () =
     expect(memeOperation(a, { ...b, amount: 3780 })).toBe(false)
   })
 
-  it('ne touche pas aux virements : deux n° différents restent deux opérations', () => {
+  it('ne touche pas aux virements de clients différents', () => {
     const v1 = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2321144 215469570 FARHANE HAJAR' }
-    const v2 = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2324371 706376617404 FARHANE HAJAR' }
+    const v2 = { amount: 392, ligne_date: '2026-07-17', label: 'VIR INST RECU 2324371 706376617404 OUKHADDA AYA' }
     expect(memeOperation(v1, v2)).toBe(false)
   })
 
