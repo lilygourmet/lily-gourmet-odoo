@@ -3,7 +3,7 @@ import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
 import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, ECART_MINI } from '../../lib/caisse'
-import { windowFor } from '../../lib/releveBmci'
+import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
@@ -580,7 +580,6 @@ function NonLieSection() {
   // et le moyen, un montant courant comme 175 dh renvoyait des dizaines de caisses.
   const caissesPossibles = (l) => {
     const methode = TYPE_GROUP[l.type] || 'virement'
-    const w = windowFor(methode)
     const k = Math.round(Number(l.amount))
     const out = []
     for (const dk of [k - 1, k, k + 1]) {
@@ -588,6 +587,9 @@ function NonLieSection() {
         if (Math.abs(Number(e.amount_cash) - Number(l.amount)) >= ECART_MINI) continue
         if ((e.payment_method || 'cash') !== methode) continue
         const j = (new Date(l.ligne_date) - new Date(e.session_date)) / 86400000
+        // Même règle que le rapprochement auto : le nom de la cliente dans le libellé
+        // autorise un virement reçu jusqu'à 14 jours avant la commande (acompte).
+        const w = windowFor(methode, methode === 'virement' && nomDansLibelle(e.virement_client, l.label))
         if (j >= w.min && j <= w.max) out.push(e)
       }
     }

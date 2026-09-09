@@ -363,12 +363,26 @@ function candidatesFor(method, credits) {
   return []
 }
 
+// Le nom de la cliente de la caisse est-il écrit dans le libellé de la ligne bancaire ?
+export function nomDansLibelle(client, label) {
+  const toks = nameTokens(client)
+  if (!toks.length) return false
+  const L = norm(label)
+  return toks.some(t => L.includes(t))
+}
+
 // Fenêtre de dates par moyen (en jours). Virement : ±5 (instantané/classique).
 // Espèces : dépôt le jour même ou APRÈS l'encaissement boutique — JAMAIS avant
 // (on ne peut pas déposer un argent pas encore encaissé) → min 0.
 // Chèque : dépôt après la vente, petite tolérance amont pour les dates de remise.
-export function windowFor(method) {
-  if (method === 'virement') return { min: -5, max: 5 }
+// Virement dont le libellé porte le NOM de la cliente : on remonte jusqu'à 14 jours AVANT
+// la commande. C'est le nom qui fait la preuve, la date ne fait que confirmer. Vécu :
+// « VIR INST RECU TAZI NYBELE » du 14/07 pour une commande du 21/07 — l'acompte est versé
+// jusqu'à deux semaines à l'avance, et la fenêtre ±5 j rendait la caisse invisible : la
+// ligne restait bloquée dans « Reçus banque non liés », relance après relance.
+// Sans le nom dans le libellé, on reste à ±5 jours : le montant seul ne prouve rien.
+export function windowFor(method, nomDansLeLibelle = false) {
+  if (method === 'virement') return { min: nomDansLeLibelle ? -14 : -5, max: 5 }
   if (method === 'cash')     return { min: 0, max: 100 }
   return { min: -2, max: 100 }
 }
@@ -467,7 +481,9 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
   const avail = (env) => {
     const method = env.payment_method || 'cash'
     const amt = Number(env.amount_cash)
-    const w = windowFor(method)
+    // Fenêtre élargie dès que la caisse porte un nom de cliente : les lignes rendues
+    // ci-dessous sont de toute façon filtrées sur ce nom (bloc « virement » plus bas).
+    const w = windowFor(method, method === 'virement' && nameTokens(env.virement_client).length > 0)
     let c = candidatesFor(method, credits).filter(x =>
       !used.has(x) && Math.abs(x.credit - amt) < ECART_MINI &&
       signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max)
