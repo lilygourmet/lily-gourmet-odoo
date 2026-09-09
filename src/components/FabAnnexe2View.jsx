@@ -878,8 +878,16 @@ function CarteArticle({ a, onOuvrir }) {
 
       <div className="px-2 py-1.5 flex flex-col gap-0.5 flex-1">
         <div className="text-[12px] font-extrabold leading-[1.25]">{court || a.libelle}</div>
-        <div className="text-[10.5px] text-ink-mute">
+        {/* L'état EN TOUTES LETTRES et les mini/maxi : le passage aux tuiles les
+            avait fait disparaître au profit d'une pastille de couleur, et on ne
+            savait plus de quel seuil on parlait (Layla, 2026-09-09). */}
+        <div className={`text-[10.5px] font-extrabold leading-tight
+          ${a.etat === 'rupture' ? 'text-danger' : 'text-gold'}`}>
+          {a.etat === 'rupture' ? 'Rupture' : 'À refaire'}
+        </div>
+        <div className="text-[10.5px] text-ink-mute leading-tight">
           en stock {qte(a.stock, a.unite)}
+          <span className="block">mini {nb(a.mini)} / maxi {nb(a.maxi)}</span>
           {a.dejaFait > 0 && (
             <span className="block text-success font-bold">déjà fait {qte(a.dejaFait, a.unite)}</span>
           )}
