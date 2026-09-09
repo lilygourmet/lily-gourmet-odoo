@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bloquants, noeudAu, enfantsDe, parGateauMere } from './fabAnnexe'
+import { bloquants, noeudAu, enfantsDe, parGateauMere, parJour } from './fabAnnexe'
 
 // Un tiramisu tel que l'API le renvoie, en plus court.
 const tiramisu = {
@@ -136,5 +136,23 @@ describe('parGateauMere', () => {
     expect(trouve('crème')).toContain('SM. Creme au beurre nature')
     expect(trouve('framboize')).toContain('F- Framboise Congelée')
     expect(trouve('imbibage sirop')).toContain('Sm. sirop imbibage')
+  })
+})
+
+describe('parJour', () => {
+  const histo = [
+    { id: 1, jour: '2026-09-09', article: 'A' },
+    { id: 2, jour: '2026-09-07', article: 'B' },
+    { id: 3, jour: '2026-09-09', article: 'C' },
+  ]
+
+  it('range par date, la plus récente en haut', () => {
+    const j = parJour(histo)
+    expect(j.map(([d]) => d)).toEqual(['2026-09-09', '2026-09-07'])
+    expect(j[0][1].map(l => l.article)).toEqual(['A', 'C'])
+  })
+
+  it('ne casse pas sur rien', () => {
+    expect(parJour(null)).toEqual([])
   })
 })

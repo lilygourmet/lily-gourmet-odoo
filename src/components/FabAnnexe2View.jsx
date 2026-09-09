@@ -3,10 +3,11 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
-  loadHistoriqueAnnexe, bloquants, declares, parGateauMere, noeudAu,
+  loadHistoriqueAnnexe, parJour, bloquants, declares, parGateauMere, noeudAu,
   declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
+import { todayISO } from '../lib/dates'
 
 // ============================================================
 // « Fabrication Annexe 2 » — la refonte, article par article.
@@ -119,33 +120,50 @@ function Pave({ onTouche }) {
 // Ce qui est déjà passé aujourd'hui, et par qui. Deux personnes travaillent
 // souvent en même temps à l'annexe : sans ça, l'une refait ce que l'autre vient
 // de faire.
-function Journee({ histo }) {
-  const [ouvert, setOuvert] = useState(false)
-  if (!histo || !histo.length) return null
-  const vus = ouvert ? histo : histo.slice(0, 3)
+/**
+ * L'historique des déclarations, rangé par date — une fenêtre qu'on ouvre.
+ * Fenêtre en `vh` et en trois zones figé/défile/figé : sur la tablette, `dvh`
+ * déborde et le bas devient inatteignable. (Layla, 2026-09-09.)
+ */
+function Historique({ histo, onFermer }) {
+  const jours = parJour(histo)
   return (
-    <section className="rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden mb-1">
-      <button onClick={() => setOuvert(o => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
-        <span className="flex-1 text-[13px] font-extrabold">
-          Aujourd'hui · {histo.length} fabrication{histo.length > 1 ? 's' : ''}
-        </span>
-        {histo.length > 3 && (
-          <span className="text-[11.5px] text-ink-mute">{ouvert ? 'réduire' : 'tout voir'}</span>
-        )}
-        <span className="text-ink-mute text-[15px]">{ouvert ? '▾' : '▸'}</span>
-      </button>
-      {vus.map(l => (
-        <div key={l.id} className="flex items-baseline gap-2.5 px-3 py-1.5 border-t border-cream-deep/50">
-          <span className="text-[11px] text-ink-mute font-mono shrink-0">{heure(l.fait_le)}</span>
-          <span className="flex-1 min-w-0 text-[12.5px] leading-tight">{propre(l.article)}</span>
-          <span className="text-[12px] font-extrabold whitespace-nowrap">{qte(l.qty, l.unite)}</span>
-          {l.qui && <span className="text-[11px] text-ink-mute whitespace-nowrap">{l.qui.split(' ')[0]}</span>}
+    <div className="fixed inset-0 z-[70] bg-ink/40 flex items-start justify-center p-3 pt-10"
+      onPointerDown={e => { if (e.target === e.currentTarget) onFermer() }}>
+      <div className="bg-cream rounded-2xl w-full max-w-[560px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+        <div className="flex items-center gap-2 px-4 pt-4 pb-2 flex-shrink-0 border-b border-cream-deep">
+          <b className="text-[16px]">🕓 Ce qui a été déclaré</b>
+          <button onClick={onFermer}
+            className="ml-auto bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px]">fermer</button>
         </div>
-      ))}
-    </section>
+        <div className="px-4 py-3 flex-1 overflow-y-auto overscroll-contain">
+          {!jours.length && (
+            <p className="text-center text-[13px] text-ink-mute py-10">Rien ces 7 derniers jours.</p>
+          )}
+          {jours.map(([jour, lignes]) => (
+            <div key={jour} className="mb-4">
+              <div className="text-[12.5px] font-bold text-bordeaux mb-1.5 pb-1 border-b border-cream-deep">
+                {jour === todayISO() ? "Aujourd'hui" : jourLong(jour)}
+                <span className="font-normal text-ink-mute"> · {lignes.length}</span>
+              </div>
+              {lignes.map(l => (
+                <div key={l.id} className="flex items-baseline gap-2.5 py-1.5 border-b border-cream-deep/40 last:border-0">
+                  <span className="text-[11px] text-ink-mute font-mono shrink-0">{heure(l.fait_le)}</span>
+                  <span className="flex-1 min-w-0 text-[12.5px] leading-tight">{propre(l.article)}</span>
+                  <span className="text-[12px] font-extrabold whitespace-nowrap">{qte(l.qty, l.unite)}</span>
+                  {l.qui && <span className="text-[11px] text-ink-mute whitespace-nowrap">{l.qui.split(' ')[0]}</span>}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
+
+const jourLong = j =>
+  new Date(j + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 
 const heure = t => (t ? new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '')
 
@@ -219,6 +237,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   const [sortie, setSortie] = useState(null)
   const [gateau, setGateau] = useState(null)
   const [qteTxt, setQteTxt] = useState(null)
+  const [histoOuvert, setHistoOuvert] = useState(false)
   // Verrou contre le double appui : une création d'ordre Odoo prend
   // plusieurs secondes, et deux appuis feraient deux ordres.
   const [envoi, setEnvoi] = useState(false)
@@ -282,6 +301,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     // « Déclarer » s'ouvre sur les gâteaux, pas sur les 140 articles : on
     // choisit son gâteau, puis sa taille. Une recherche saute l'étape et
     // montre les articles directement. (Layla, 2026-09-09.)
+    const dujour = (histo || []).filter(l => (l.jour || todayISO()) === todayISO()).length
     const groupes = onglet === 'declarer' ? parGateauMere(tout, cherche) : []
     const ouvertG = cherche.trim() ? null : groupes.find(g => g.nom === gateau)
     const vus = cherche.trim() ? groupes : ouvertG ? [ouvertG] : []
@@ -289,9 +309,14 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       <div className="min-h-screen bg-cream">
         <AppHeader {...nav} />
         <div className="max-w-[1000px] mx-auto px-4 py-5 pb-28">
-          <h1 className="font-serif italic text-[26px] leading-tight">Fabrication Annexe 2</h1>
-
-          <Journee histo={histo} />
+          <div className="flex items-center gap-2">
+            <h1 className="flex-1 font-serif italic text-[26px] leading-tight">Fabrication Annexe 2</h1>
+            <button onClick={() => setHistoOuvert(true)}
+              className="rounded-xl border border-cream-deep bg-cream-warm px-3 py-2 text-[12.5px] font-bold">
+              🕓 Historique
+              {dujour > 0 && <span className="text-ink-mute font-normal"> · {dujour}</span>}
+            </button>
+          </div>
 
           <div className="flex gap-2 my-3">
             {[['faire', 'À faire'], ['declarer', 'Déclarer']].map(([k, t]) => (
@@ -403,6 +428,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               )}
             </>
           )}
+
+          {histoOuvert && <Historique histo={histo} onFermer={() => setHistoOuvert(false)} />}
 
           {onglet === 'faire' && parGateau(articles).map(g => (
             <section key={g.cle} className="mb-5">

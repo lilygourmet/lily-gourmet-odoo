@@ -81,6 +81,18 @@ export async function loadFabProd(jour, atelier = 'prod') {
   return data || []
 }
 
+/** Le journal sur plusieurs jours, pour l'historique (une seule requête). */
+export async function loadFabProdDepuis(depuis, atelier = 'prod') {
+  const lire = champs => supabase.from('prod_fabrications').select(champs)
+    .gte('jour', depuis).eq('atelier', atelier).order('fait_le', { ascending: false })
+  const base = 'id, jour, article, qty, unite, fois, fait_par, fait_le'
+  const avec = await lire(base + ', ordre, ordre_cree')
+  if (!avec.error) return avec.data || []
+  const { data, error } = await lire(base)
+  if (error) throw error
+  return data || []
+}
+
 /**
  * Ajouter une fournée au journal du jour. `fois` = combien de fois la recette
  * a été faite ; `qty` = ce que ça produit, pour garder une trace chiffrée même

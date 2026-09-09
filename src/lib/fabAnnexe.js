@@ -5,7 +5,7 @@
 // Supabase, le stock et les recettes viennent d'Odoo.
 // ============================================================
 
-import { addFabProd, rattacherOrdre, loadFabProd, loadNoms } from './fabricationProd'
+import { addFabProd, rattacherOrdre, loadFabProdDepuis, loadNoms } from './fabricationProd'
 import { creerOfPrepa } from './fabrication'
 import { todayISO } from './dates'
 import { correspond } from './recherche'
@@ -115,14 +115,27 @@ export function parGateauMere(articles, cherche) {
  * onglets : l'atelier voit d'un coup d'œil ce qui est déjà passé, et personne
  * ne refait ce qu'un collègue vient de faire. (Layla, 2026-09-09.)
  */
-export async function loadHistoriqueAnnexe() {
+export async function loadHistoriqueAnnexe(jours = 7) {
+  const debut = new Date(todayISO() + 'T12:00:00')
+  debut.setDate(debut.getDate() - (jours - 1))
   const [journal, noms] = await Promise.all([
-    loadFabProd(todayISO(), 'annexe').catch(() => []),
+    loadFabProdDepuis(debut.toLocaleDateString('sv-SE'), 'annexe').catch(() => []),
     loadNoms().catch(() => ({})),
   ])
   return (journal || [])
-    .map(l => ({ ...l, qui: noms[l.fait_par] || '' }))
+    .map(l => ({ ...l, jour: l.jour || todayISO(), qui: noms[l.fait_par] || '' }))
     .sort((a, b) => String(b.fait_le).localeCompare(String(a.fait_le)))
+}
+
+/** L'historique rangé par jour, du plus récent au plus ancien. */
+export function parJour(histo) {
+  const jours = new Map()
+  for (const l of histo || []) {
+    const j = l.jour || todayISO()
+    if (!jours.has(j)) jours.set(j, [])
+    jours.get(j).push(l)
+  }
+  return [...jours.entries()].sort((a, b) => b[0].localeCompare(a[0]))
 }
 
 /** La photo d'un article, servie par Odoo (souvent celle du produit vendu). */
