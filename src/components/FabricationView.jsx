@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms } from '../lib/fabrication'
+import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation } from '../lib/fabrication'
 import { buildZplInfo } from '../lib/etiquettes'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
@@ -71,6 +71,9 @@ const estBase = n => BASES.some(r => r.test(String(n || ''))) || basesEnPlus.inc
 // le bloc du haut, et la génoise ne se détaille pas ici (demande de Layla).
 const estIngredient = n => /^SM\.\s*/i.test(String(n || ''))
 const estGenoise = n => /genoise/i.test(String(n || ''))
+// Ce qu'on pèse au lieu de le calculer. Les sirops seulement : la génoise ou
+// les amandes ne valent pas la peine d'être pesées (Layla, 2026-09-06).
+const estSirop = n => /sirop/i.test(String(n || ''))
 // Jamais bloquant : la génoise (stock négatif pour un moment encore) et l'eau
 // du robinet, qui ne se gère pas en stock.
 const toujoursLa = n => estGenoise(n) || /eau\s*robinet|^\s*MP-\s*Eau/i.test(String(n || ''))
@@ -384,6 +387,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [erreur, setErreur] = useState(null)
   const [sel, setSel] = useState([])                      // noms d'OF cochés
   const [histoireOuverte, setHistoireOuverte] = useState(false)   // fenêtre « Historique », fermée par défaut
+  const [pesee, setPesee] = useState(null)                        // le bac de sirop à peser avant de cocher
   const [soldeEnCours, setSoldeEnCours] = useState(false)
   const [ouvertes, setOuvertes] = useState({})
   const [lots, setLots] = useState({})       // combien de tournées on déclare, base par base
@@ -1312,6 +1316,57 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       }))
   }
 
+  /**
+   * Cocher un gâteau, c'est le moment où le bac de sirop est encore sur la
+   * table. On demande ce qu'il en reste : l'ordre portera le poids PESÉ et non
+   * la règle de trois. Pas de sirop dans la recette, ou Odoo muet ? on coche
+   * comme avant. (Layla, 2026-09-06, codé le 09/09.)
+   */
+  const marquerGateau = async (name, produit, qty) => {
+    if (faits[name] || !/^WH.*\/MO\//i.test(name)) return marquer(name, produit, qty)
+    let sirops = []
+    try {
+      const [o] = await loadManques([name])
+      // Tout en grammes dans la fenêtre : c'est ce que dit la balance, et ce
+      // que l'équipe lit partout ailleurs. On reconvertit à l'enregistrement.
+      sirops = (o?.lignes || []).filter(l => estSirop(l.produit) && l.dispo > 0)
+        .map(l => {
+          const fact = norm(l.unite) === 'kg' ? 1000 : 1
+          return {
+            id: l.id, produit: l.produit, uniteOdoo: l.unite, fact,
+            unite: fact === 1000 ? 'g' : l.unite,
+            avant: Math.round(l.dispo * fact * 100) / 100,
+            prevu: Math.round(l.besoin * fact * 100) / 100,
+          }
+        })
+    } catch { /* Odoo muet : on coche sans peser, comme avant */ }
+    if (!sirops.length) return marquer(name, produit, qty)
+    // Pré-rempli avec ce que la recette laisserait : ne rien toucher revient
+    // au fonctionnement d'aujourd'hui.
+    setPesee({
+      ordre: name, produit, qty, sirops,
+      restes: Object.fromEntries(sirops.map(l =>
+        [l.id, String(Math.max(0, Math.round((l.avant - l.prevu) * 100) / 100))])),
+    })
+  }
+
+  const validerPesee = async () => {
+    const p = pesee
+    setPesee(null)
+    const mesures = []
+    for (const s2 of p.sirops) {
+      const reste = Number(String(p.restes[s2.id] ?? '').replace(',', '.'))
+      if (!Number.isFinite(reste)) continue
+      const utilise = Math.max(0, Math.round((s2.avant - reste) * 100) / 100)
+      mesures.push({ id: s2.id, qty: utilise / s2.fact, unite: s2.uniteOdoo })
+    }
+    if (mesures.length) {
+      await noterConsommation(p.ordre, mesures)
+        .catch(() => toast.error('Pesée non enregistrée : à ressaisir dans « À valider ».'))
+    }
+    await marquer(p.ordre, p.produit, p.qty)
+  }
+
   const effacer = () => { setSel([]); setPageRecette(false) }
 
   // téléphone : la recette occupe tout l'écran
@@ -1470,9 +1525,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                 </div>
               )}
 
-              <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau}
+              <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquerGateau} bloqueGateau={bloquantsGateau}
  />
-              <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquer} bloqueGateau={bloquantsGateau}
+              <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquerGateau} bloqueGateau={bloquantsGateau}
  />
 
             </>
@@ -1498,6 +1553,70 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           Ce qui est déjà validé porte « validé ✓ » et n'a plus de bouton.
           Fenêtre en `vh` et non `dvh`, en trois zones figé/défile/figé : sur la
           tablette, `dvh` déborde et le bas devient inatteignable. */}
+      {/* Peser plutôt que calculer : le bac contenait 2 790 g, il en reste
+          1 200 → 1 590 g ont servi. C'est la réalité, pas une règle de trois.
+          Trois zones figé/défile/figé et `vh` : sur la tablette, `dvh` déborde
+          et le bas devient inatteignable. */}
+      {pesee && (
+        <div className="fixed inset-0 z-[70] bg-ink/40 flex items-start justify-center p-3 pt-10"
+          onPointerDown={e => { if (e.target === e.currentTarget) setPesee(null) }}>
+          <div className="bg-cream rounded-2xl w-full max-w-[520px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-4 pt-4 pb-2 flex-shrink-0 border-b border-line">
+              <b className="text-[16px]">⚖️ Pèse ce qui reste de sirop</b>
+              <div className="text-[12.5px] text-ink-mute mt-0.5">
+                {propre(pesee.produit)} · {nb(pesee.qty)}
+              </div>
+            </div>
+            <div className="px-4 py-3 flex-1 overflow-y-auto overscroll-contain">
+              {pesee.sirops.map(l => {
+                const reste = Number(String(pesee.restes[l.id] ?? '').replace(',', '.'))
+                const utilise = Number.isFinite(reste)
+                  ? Math.max(0, Math.round((l.avant - reste) * 100) / 100) : null
+                return (
+                  <div key={l.id} className="rounded-xl border border-line bg-white p-3 mb-2.5">
+                    <div className="text-[14px] font-bold">{propre(l.produit)}</div>
+                    <div className="text-[12px] text-ink-mute mt-0.5 mb-2">
+                      Il y en avait {nb(l.avant)} {l.unite} avant
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12.5px] text-ink-mute">Ce qui reste, pesé</span>
+                      <input inputMode="decimal" aria-label={'Reste de ' + l.produit}
+                        value={pesee.restes[l.id] ?? ''}
+                        onChange={e => {
+                          const v = e.target.value.replace(/[^\d.,]/g, '')
+                          setPesee(p => ({ ...p, restes: { ...p.restes, [l.id]: v } }))
+                        }}
+                        className="w-24 h-11 rounded-xl border-2 border-bordeaux bg-cream-warm
+                                   text-center font-serif text-[19px] text-ink outline-none" />
+                      <span className="text-[12.5px] text-ink-mute">{l.unite}</span>
+                    </div>
+                    <div className="flex justify-between text-[12.5px] mt-2 pt-2 border-t border-line">
+                      <span>Donc utilisé <b className="text-bordeaux">
+                        {utilise === null ? '—' : `${nb(utilise)} ${l.unite}`}</b></span>
+                      <span className="text-ink-mute">
+                        la recette aurait dit {nb(l.prevu)} {l.unite}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+              <p className="text-[12px] text-ink-mute">
+                Ne rien changer revient au fonctionnement d'aujourd'hui : c'est la
+                recette qui décide.
+              </p>
+            </div>
+            <div className="flex gap-2 px-4 py-3 flex-shrink-0 border-t border-line">
+              <button onClick={() => setPesee(null)}
+                className="bg-cream-warm rounded-xl px-4 py-3 text-[13px] font-bold">annuler</button>
+              <button onClick={validerPesee}
+                className="flex-1 bg-bordeaux text-cream rounded-xl py-3 text-[14px] font-extrabold">
+                c'est fait
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {histoireOuverte && (
         <div className="fixed inset-0 z-[70] bg-ink/40 flex items-start justify-center p-3 pt-10"
           onPointerDown={e => { if (e.target === e.currentTarget) setHistoireOuverte(false) }}>

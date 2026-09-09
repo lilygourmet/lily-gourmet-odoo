@@ -279,6 +279,33 @@ export async function annulerOrdre(ordres, actorId) {
   return j
 }
 
+/**
+ * La consommation VRAIE d'un ingrédient, pesée à l'atelier au lieu d'être
+ * calculée par la règle de trois. On la range dans le carnet de « À valider »,
+ * qui la reprend pré-remplie puis l'envoie à Odoo.
+ *
+ * ⚠️ On relit avant d'écrire : l'écran de validation écrit dans le même
+ * carnet, et le dernier arrivé ne doit pas effacer le travail de l'autre.
+ * (Layla, 2026-09-09.)
+ */
+export async function noterConsommation(ordre, mesures) {
+  const annexe = /^WHPDX\//i.test(ordre)
+  const cle = annexe ? 'valider_annexe_saisies' : 'valider_saisies'
+  const gardees = await loadSaisies(cle)
+  const notes = { ...(gardees.notes || {}) }
+  const pour = { ...(notes[ordre] || {}) }
+  for (const m of mesures || []) {
+    // ⚠️ Deux écrans, deux conventions : « À valider » (CD) saisit en GRAMMES
+    // quand la ligne d'Odoo est en kg, celui de l'annexe garde l'unité de la
+    // ligne. On écrit dans la convention de celui qui relira, sinon 1,59 kg
+    // arrive comme 1,59 g.
+    const enG = !annexe && /^kg$/i.test(String(m.unite || ''))
+    pour[m.id] = String(Math.round((enG ? m.qty * 1000 : m.qty) * 100) / 100)
+  }
+  notes[ordre] = pour
+  await saveSaisies(cle, { ...gardees, notes })
+}
+
 /** Ce qui manque pour fabriquer ces ordres Odoo (lecture seule, génoise ignorée). */
 export async function loadManques(ordres) {
   if (!ordres.length) return []

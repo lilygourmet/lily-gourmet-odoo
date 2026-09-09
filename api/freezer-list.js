@@ -932,8 +932,11 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   // l'écran envoie une quantité pour un composant, c'est elle qui part dans
   // l'ordre. Sinon l'ordre dirait 1 361 g de crème là où 1 400 ont été mis.
   const cleNom = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  // Zéro est une mesure comme une autre : « il ne reste rien, tout est passé »
+  // ou « on n'en a pas mis ». L'écarter revenait à retomber sur la recette.
   const mesure = new Map(Object.entries(ajustements || {})
-    .filter(([, v]) => Number(v) > 0).map(([k, v]) => [cleNom(k), Number(v)]))
+    .filter(([, v]) => v !== '' && v !== null && Number.isFinite(Number(v)) && Number(v) >= 0)
+    .map(([k, v]) => [cleNom(k), Number(v)]))
   // ⚠️ TOUS les ingrédients en UN SEUL appel. Un par un, c'était un aller-retour
   // vers Odoo par ligne de recette : sur une recette de 13 ingrédients, l'écran
   // restait bloqué plusieurs secondes avant d'enregistrer. Odoo accepte une
@@ -1917,7 +1920,8 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && req.query.mode === 'ajuster-of') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
       const nomOrdre = String(body.ordre || '')
-      const mesures = Object.entries(body.ajustements || {}).filter(([, v]) => Number(v) > 0)
+      const mesures = Object.entries(body.ajustements || {})
+        .filter(([, v]) => v !== '' && v !== null && Number.isFinite(Number(v)) && Number(v) >= 0)
       if (!nomOrdre || !mesures.length) return res.status(400).json({ error: 'ordre ou quantités manquants' })
       if (body.test) return res.status(200).json({ test: true, ajustes: 0 })
       const uid = await odooAuth()
