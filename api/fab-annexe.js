@@ -433,9 +433,14 @@ function squeletteTout() {
     const parents = await grapheParents()
     return gardes.map(p => {
       const e = vus.get(p.id)
+      const pour = [...(parents.get(sansRef(e.nom)) || [])].sort((a, b) => a.localeCompare(b, 'fr'))
       return { id: p.id, produit: e.nom, unite: uniteDe(p),
-        fois: e.fois, dernier: e.dernier, photo: aPhoto.has(p.id) ? e.nom : null,
-        pour: [...(parents.get(sansRef(e.nom)) || [])].sort((a, b) => a.localeCompare(b, 'fr')) }
+        fois: e.fois, dernier: e.dernier,
+        // Pas d'image à lui ? On montre celle de son GÂTEAU : une crème ou un
+        // biscuit n'a pas de photo, et une lettre grise ne dit rien à l'œil.
+        // Même idée que le médaillon de l'ancien onglet Annexe.
+        photo: aPhoto.has(p.id) ? e.nom : (pour[0] || null),
+        pour }
     }).sort((a, b) => b.fois - a.fois || a.produit.localeCompare(b.produit, 'fr'))
   })
 }
@@ -659,7 +664,9 @@ export default async function handler(req, res) {
       articles.push({
         produit: a.produit,
         libelle: a.libelle || a.produit,
-        photo: a.photo || a.produit,
+        // Même règle que la liste : à défaut de photo à lui, celle de son
+        // gâteau. On ne retombe sur son propre nom qu'en dernier recours.
+        photo: a.photo || gateauDe(a.produit) || a.produit,
         unite: uniteDe(p),
         stock, mini: a.mini, maxi: a.maxi, tournee: a.tournee,
         dejaFait, reste,
