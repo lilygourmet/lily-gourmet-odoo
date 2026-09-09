@@ -420,10 +420,19 @@ export default async function handler(req, res) {
         for (const b of await sr('mrp.bom', [['product_tmpl_id', 'in', tmpls.slice(i, i + 200)]],
           ['product_tmpl_id'], { limit: 2000 })) avecRecette.add(b.product_tmpl_id[0])
       }
-      const liste = prods.filter(p => avecRecette.has(p.product_tmpl_id[0])).map(p => {
+      // Qui a une photo ? On le demande sans charger les images : 271 des 275
+      // en ont une, et l'écran se lit bien mieux avec.
+      const gardes = prods.filter(p => avecRecette.has(p.product_tmpl_id[0]))
+      const aPhoto = new Set()
+      for (let i = 0; i < gardes.length; i += 200) {
+        for (const p of await sr('product.product',
+          [['id', 'in', gardes.slice(i, i + 200).map(x => x.id)], ['image_1920', '!=', false]],
+          ['id'], { limit: 400 })) aPhoto.add(p.id)
+      }
+      const liste = gardes.map(p => {
         const e = vus.get(p.id)
         return { produit: e.nom, unite: uniteDe(p), stock: Math.round(e.stock * 100) / 100,
-          fois: e.fois, dernier: e.dernier }
+          fois: e.fois, dernier: e.dernier, photo: aPhoto.has(p.id) ? e.nom : null }
       })
       liste.sort((a, b) => b.fois - a.fois || a.produit.localeCompare(b.produit, 'fr'))
       res.setHeader('Cache-Control', 'no-store')

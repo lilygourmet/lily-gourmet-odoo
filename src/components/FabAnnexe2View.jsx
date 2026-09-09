@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
-  bloquants, declares, familleDe, noeudAu,
+  loadHistoriqueAnnexe, bloquants, declares, familleDe, noeudAu,
   declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
@@ -69,7 +69,11 @@ function Vignette({ photo, libelle, taille = 'w-14 h-14 rounded-xl shrink-0', gr
       </div>
     )
   }
+  // ⚠️ « lazy » : l'onglet « Déclarer » affiche 278 tuiles. Toutes les photos
+  // d'un coup, ce sont plusieurs mégaoctets sur la tablette de l'atelier — le
+  // navigateur ne charge que ce qui approche de l'écran.
   return <img src={photoFabAnnexe(photo)} alt="" onError={() => setRate(true)}
+    loading="lazy" decoding="async"
     className={`${taille} object-cover bg-cream-deep`} />
 }
 
@@ -127,6 +131,39 @@ function Pave({ onTouche }) {
     </div>
   )
 }
+
+// Ce qui est déjà passé aujourd'hui, et par qui. Deux personnes travaillent
+// souvent en même temps à l'annexe : sans ça, l'une refait ce que l'autre vient
+// de faire.
+function Journee({ histo }) {
+  const [ouvert, setOuvert] = useState(false)
+  if (!histo || !histo.length) return null
+  const vus = ouvert ? histo : histo.slice(0, 3)
+  return (
+    <section className="rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden mb-1">
+      <button onClick={() => setOuvert(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
+        <span className="flex-1 text-[13px] font-extrabold">
+          Aujourd'hui · {histo.length} fabrication{histo.length > 1 ? 's' : ''}
+        </span>
+        {histo.length > 3 && (
+          <span className="text-[11.5px] text-ink-mute">{ouvert ? 'réduire' : 'tout voir'}</span>
+        )}
+        <span className="text-ink-mute text-[15px]">{ouvert ? '▾' : '▸'}</span>
+      </button>
+      {vus.map(l => (
+        <div key={l.id} className="flex items-baseline gap-2.5 px-3 py-1.5 border-t border-cream-deep/50">
+          <span className="text-[11px] text-ink-mute font-mono shrink-0">{heure(l.fait_le)}</span>
+          <span className="flex-1 min-w-0 text-[12.5px] leading-tight">{propre(l.article)}</span>
+          <span className="text-[12px] font-extrabold whitespace-nowrap">{qte(l.qty, l.unite)}</span>
+          {l.qui && <span className="text-[11px] text-ink-mute whitespace-nowrap">{l.qui.split(' ')[0]}</span>}
+        </div>
+      ))}
+    </section>
+  )
+}
+
+const heure = t => (t ? new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '')
 
 const Titre = ({ children }) => (
   <div className="px-4 pt-3 pb-1 text-[11.5px] font-extrabold uppercase tracking-wide text-ink-mute">{children}</div>
@@ -206,11 +243,18 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   const [onglet, setOnglet] = useState('faire')
   const [tout, setTout] = useState(null)
   const [cherche, setCherche] = useState('')
+  const [histo, setHisto] = useState(null)
   // Le détail d'un article (sa cascade) n'arrive qu'à son ouverture.
   const [details, setDetails] = useState({})
   const ouvert = chemin[0] || null
 
   const recharger = () => setTour(t => t + 1)
+  useEffect(() => {
+    let vivant = true
+    loadHistoriqueAnnexe().then(h => { if (vivant) setHisto(h) }).catch(() => {})
+    return () => { vivant = false }
+  }, [tour])
+
   useEffect(() => {
     let vivant = true
     loadFabAnnexe()
@@ -254,6 +298,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
         <AppHeader {...nav} />
         <div className="max-w-[1000px] mx-auto px-4 py-5 pb-28">
           <h1 className="font-serif italic text-[26px] leading-tight">Fabrication Annexe 2</h1>
+
+          <Journee histo={histo} />
 
           <div className="flex gap-2 my-3">
             {[['faire', 'À faire'], ['declarer', 'Déclarer']].map(([k, t]) => (
@@ -301,25 +347,31 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               {!tout && !erreur && <Skeleton rows={4} />}
               {parFamille(tout, cherche).map(g => (
                 <section key={g.nom} className="mb-5">
-                  <h2 className="font-serif italic text-[17px] text-bordeaux mb-1.5">
+                  <h2 className="font-serif italic text-[17px] text-bordeaux mb-2">
                     {g.nom} <span className="text-[12px] text-ink-mute not-italic">{g.articles.length}</span>
                   </h2>
-                  {g.articles.map(a => (
-                    <button key={a.produit} onClick={() => setChemin([a.produit])}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 bg-cream-warm border
-                                 border-cream-deep rounded-xl mb-1.5 text-left hover:border-bordeaux/40">
-                      <span className={`w-2.5 h-2.5 rounded-full shrink-0
-                        ${a.stock > 0 ? 'bg-success' : 'bg-ink-mute/40'}`} />
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-[13.5px] leading-tight">{propre(a.produit)}</span>
-                        <span className="block text-[11.5px] text-ink-mute mt-0.5">
-                          en stock {qte(a.stock, a.unite)}
-                          {a.fois > 0 && ` · fait ${a.fois}× en 6 mois`}
-                        </span>
-                      </span>
-                      <span className="text-ink-mute text-[17px]">›</span>
-                    </button>
-                  ))}
+                  <div className="grid gap-2.5"
+                    style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
+                    {g.articles.map(a => (
+                      <button key={a.produit} onClick={() => setChemin([a.produit])}
+                        className="text-left rounded-2xl border border-cream-deep bg-cream-warm
+                                   overflow-hidden shadow-sm hover:border-bordeaux/40 flex flex-col">
+                        <div className="relative">
+                          <Vignette photo={a.photo} libelle={propre(a.produit)} gros
+                            taille="w-full aspect-square" />
+                          <span className={`absolute top-1 left-1 w-2.5 h-2.5 rounded-full ring-2 ring-cream-warm
+                            ${a.stock > 0 ? 'bg-success' : 'bg-ink-mute/50'}`}
+                            title={a.stock > 0 ? 'il y en a en stock' : 'à zéro'} />
+                        </div>
+                        <div className="px-2 py-1.5 flex flex-col gap-0.5 flex-1">
+                          <div className="text-[12px] font-extrabold leading-[1.25]">{propre(a.produit)}</div>
+                          <div className="mt-auto pt-0.5 text-[10.5px] text-ink-mute">
+                            {qte(a.stock, a.unite)} en stock
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </section>
               ))}
               {tout && !parFamille(tout, cherche).length && (

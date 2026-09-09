@@ -5,7 +5,7 @@
 // Supabase, le stock et les recettes viennent d'Odoo.
 // ============================================================
 
-import { addFabProd, rattacherOrdre } from './fabricationProd'
+import { addFabProd, rattacherOrdre, loadFabProd, loadNoms } from './fabricationProd'
 import { creerOfPrepa } from './fabrication'
 import { todayISO } from './dates'
 
@@ -68,6 +68,21 @@ export function familleDe(nom) {
   if (/crunchy|croustillant|craquant|feuilletine/.test(n)) return 'Croustillants'
   if (/confit|gelee|gélee|gélée|marmelade|citron|framboise|fruit/.test(n)) return 'Confits et fruits'
   return 'Le reste'
+}
+
+/**
+ * Ce qui a été déclaré aujourd'hui, et par qui. S'affiche en haut des deux
+ * onglets : l'atelier voit d'un coup d'œil ce qui est déjà passé, et personne
+ * ne refait ce qu'un collègue vient de faire. (Layla, 2026-09-09.)
+ */
+export async function loadHistoriqueAnnexe() {
+  const [journal, noms] = await Promise.all([
+    loadFabProd(todayISO(), 'annexe').catch(() => []),
+    loadNoms().catch(() => ({})),
+  ])
+  return (journal || [])
+    .map(l => ({ ...l, qui: noms[l.fait_par] || '' }))
+    .sort((a, b) => String(b.fait_le).localeCompare(String(a.fait_le)))
 }
 
 /** La photo d'un article, servie par Odoo (souvent celle du produit vendu). */
