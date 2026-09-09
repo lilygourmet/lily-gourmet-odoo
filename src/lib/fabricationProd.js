@@ -83,8 +83,11 @@ export async function loadFabProd(jour, atelier = 'prod') {
 
 /** Le journal sur plusieurs jours, pour l'historique (une seule requête). */
 export async function loadFabProdDepuis(depuis, atelier = 'prod') {
+  // ⚠️ `.limit()` explicite : sans lui PostgREST s'arrête à 1000 lignes sans
+  // rien dire, et les jours les plus anciens disparaîtraient de l'historique.
   const lire = champs => supabase.from('prod_fabrications').select(champs)
-    .gte('jour', depuis).eq('atelier', atelier).order('fait_le', { ascending: false })
+    .gte('jour', depuis).eq('atelier', atelier)
+    .order('fait_le', { ascending: false }).limit(5000)
   const base = 'id, jour, article, qty, unite, fois, fait_par, fait_le'
   const avec = await lire(base + ', ordre, ordre_cree')
   if (!avec.error) return avec.data || []

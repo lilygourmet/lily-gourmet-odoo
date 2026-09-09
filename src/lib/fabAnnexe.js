@@ -160,6 +160,11 @@ export function tourneesSuggerees(article) {
     ? article.reste
     : (article?.maxi || 0) - (article?.stock || 0)
   const t = article?.tournee || 1
+  // ⚠️ Rien à rattraper = une tournée ENTIÈRE, pas une demie. C'est le cas de
+  // tout l'onglet « Déclarer » (ni mini ni maxi, donc reste 0) : il proposait
+  // 70 tiramisus pour une tournée de 140, et 2,775 kg de sirop pour 5,55.
+  // (Vu le 2026-09-09.)
+  if (!(manque > 0)) return 1
   // Au demi près : le suprême amandes 20 cm a un maxi de 33 pour une tournée
   // de 22 — il y faut une tournée et demie, pas une ni deux.
   return Math.max(0.5, Math.round((manque / t) * 2) / 2)
@@ -277,12 +282,11 @@ export function peseesDe(noeud, fois) {
  * travail de l'atelier. L'ordre se rattache après coup.
  */
 export async function declarer({ produit, qty, unite, fois = null, ajustements = null }, userId) {
-  // Les deux écritures ne dépendent pas l'une de l'autre : les mener de front
-  // enlève une attente entière au pâtissier, qui a le doigt sur l'écran.
-  const [ligne, of] = await Promise.all([
-    addFabProd(todayISO(), produit, qty, unite, userId, fois, 'annexe'),
-    creerOfPrepa(produit, qty, userId, [], unite, 'annexe', ajustements),
-  ])
+  // ⚠️ Dans CET ordre, et pas de front : si le journal n'est pas écrit, il ne
+  // faut pas d'ordre Odoo tout seul dans la nature, que l'app ne saurait plus
+  // rattacher ni retirer. La demi-seconde gagnée ne vaut pas un ordre orphelin.
+  const ligne = await addFabProd(todayISO(), produit, qty, unite, userId, fois, 'annexe')
+  const of = await creerOfPrepa(produit, qty, userId, [], unite, 'annexe', ajustements)
   // En mode test (?test=1) Odoo n'écrit rien : pas de numéro à rattacher.
   if (of?.name && !of.error && !of.test) await rattacherOrdre(ligne.id, of.name, !of.deja)
   return { produit, qty, ordre: of?.name || null, erreur: of?.error || null }

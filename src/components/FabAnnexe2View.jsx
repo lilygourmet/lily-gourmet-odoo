@@ -259,7 +259,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   // Ce qu'on est déjà allé chercher d'avance, pour ne pas y retourner.
   const precharges = useRef(new Set())
 
-  const recharger = () => setTour(t => t + 1)
+  const recharger = () => { precharges.current.clear(); setTour(t => t + 1) }
   useEffect(() => {
     let vivant = true
     loadHistoriqueAnnexe().then(h => { if (vivant) setHisto(h) }).catch(() => {})
@@ -609,7 +609,10 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
             <span className="text-[12px] text-ink-mute mr-1">Je fais</span>
             {[0.5, 1, 1.5, 2, 3].map(f => {
               const on = foisArticle === f
-              const pieces = Math.round(brut.tournee * f)
+              // ⚠️ `qte` et non un arrondi : une tournée de 5,55 kg
+              // affichait « 6 kg » pour une entière et « 3 kg » pour
+              // une demie. (Vu le 2026-09-09.)
+              const pieces = qte(brut.tournee * f, brut.unite)
               return (
                 <button key={f}
                   onClick={() => { setQteTxt(null); setFoisPar(x => ({ ...x, [brut.produit]: f })) }}
@@ -617,7 +620,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                     ${on ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-cream-warm text-ink-soft border-cream-deep'}`}>
                   {f === 0.5 ? '½' : f === 1.5 ? '1½' : f} tournée{f > 1 ? 's' : ''}
                   <span className={`block text-[11px] font-bold ${on ? 'text-cream/80' : 'text-ink-mute'}`}>
-                    {pieces} {brut.unite}
+                    {pieces}
                   </span>
                 </button>
               )

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bloquants, noeudAu, enfantsDe, parGateauMere, parJour } from './fabAnnexe'
+import { bloquants, noeudAu, enfantsDe, parGateauMere, parJour, tourneesSuggerees } from './fabAnnexe'
 
 // Un tiramisu tel que l'API le renvoie, en plus court.
 const tiramisu = {
@@ -161,5 +161,25 @@ describe('parJour', () => {
 
   it('ne casse pas sur rien', () => {
     expect(parJour(null)).toEqual([])
+  })
+})
+
+describe('tourneesSuggerees', () => {
+  it('propose une tournée ENTIÈRE quand il n’y a rien à rattraper', () => {
+    // Tout l'onglet « Déclarer » est dans ce cas : ni mini ni maxi, reste 0.
+    // Il proposait 70 tiramisus pour une tournée de 140.
+    expect(tourneesSuggerees({ tournee: 140, reste: 0 })).toBe(1)
+    expect(tourneesSuggerees({ tournee: 5.55, reste: 0 })).toBe(1)
+    expect(tourneesSuggerees({ tournee: 140, maxi: 140, stock: 228 })).toBe(1)
+  })
+
+  it('arrondit au demi ce qu’il faut pour atteindre le maxi', () => {
+    expect(tourneesSuggerees({ tournee: 22, reste: 33 })).toBe(1.5)
+    expect(tourneesSuggerees({ tournee: 140, reste: 140 })).toBe(1)
+    expect(tourneesSuggerees({ tournee: 140, reste: 280 })).toBe(2)
+  })
+
+  it('jamais moins d’une demi-tournée quand il reste un fond à faire', () => {
+    expect(tourneesSuggerees({ tournee: 140, reste: 3 })).toBe(0.5)
   })
 })
