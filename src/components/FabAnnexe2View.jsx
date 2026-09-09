@@ -28,6 +28,12 @@ import { dernierEcran, garderEcran } from '../lib/fabrication'
 // ============================================================
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
+
+// Ceux à qui on NE demande PAS « combien ça a donné ? ». Ils sortent toujours
+// le compte annoncé par la recette : la question ne faisait que ralentir
+// l'atelier (Layla, 2026-09-09). Couvre aussi les bases de flan, par « flan ».
+const SANS_RENDEMENT = /flan|cheese\s*cake|biscuit|g[ée]noise/i
+const sansRendement = nom => SANS_RENDEMENT.test(String(nom || ''))
 // À l'atelier on ne pèse pas 201,04 g : grammes et pièces en entiers, seuls
 // les kg gardent leurs décimales.
 const qte = (v, u) => {
@@ -497,10 +503,42 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   const fois = faits[noeud.produit]?.fois ?? noeud.tournees ?? 1
   const majFois = f => setFaits(x => ({ ...x, [noeud.produit]: { fois: Math.max(0.01, Math.round(f * 10000) / 10000), brouillon: true } }))
 
+  // Envoyer la fournée à « À valider ». Sorti du bouton pour être appelé aussi
+  // par « C'est fait » quand on ne pose pas la question du rendement.
+  const envoyer = async (n) => {
+    if (!(n > 0) || envoi) return
+    // Le bouton répond au doigt AVANT de parler à Odoo : la création
+    // d'un ordre prend plusieurs secondes (règle de Layla).
+    navigator.vibrate?.(15)
+    setEnvoi(true)
+    try {
+      const r = racine
+        ? await envoyerAValider(article, n, user?.id)
+        : await declarer({
+            produit: noeud.produit, unite: noeud.unite, fois, qty: n,
+            ajustements: peseesDe(noeud, fois),
+          }, user?.id)
+      toast(r.erreur
+        ? `Enregistré, mais Odoo a refusé : ${r.erreur}`
+        : `${racine ? article.libelle : propre(noeud.produit)} : en attente dans « À valider Annexe »`)
+      setSortie(null)
+      if (racine) { setFaits({}); setChemin([]) }
+      else { setFaits(f => ({ ...f, [noeud.produit]: { fois } })); setChemin(chemin.slice(0, -1)) }
+      setDetails({}); recharger()
+    } catch (e) {
+      toast('Échec : ' + (e.message || e))
+    } finally { setEnvoi(false) }
+  }
+
   // ---------- « combien ça a donné ? » ----------
   // Vaut pour l'article de tête comme pour une préparation : ce qui sort d'une
   // fournée n'est jamais tout à fait ce que la recette annonce. Les
   // ingrédients, eux, restent ceux qu'on a pesés (Layla, 2026-09-08).
+  //
+  // ⚠️ SAUF pour les articles de `SANS_RENDEMENT` : flans, cheesecakes,
+  // biscuits, génoises et bases de flan sortent toujours le compte annoncé,
+  // la question était une perte de temps (Layla, 2026-09-09). Pour eux,
+  // « C'est fait » envoie directement la quantité prévue.
   if (sortie !== null) {
     const cible = racine ? article : noeud
     const prevu = racine ? article.tournee : Math.round((noeud.tourneeTaille || 1) * fois * 100) / 100
@@ -561,29 +599,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
           )}
 
           <button disabled={!(n > 0) || envoi}
-            onClick={async () => {
-              // Le bouton répond au doigt AVANT de parler à Odoo : la création
-              // d'un ordre prend plusieurs secondes (règle de Layla).
-              navigator.vibrate?.(15)
-              setEnvoi(true)
-              try {
-                const r = racine
-                  ? await envoyerAValider(article, n, user?.id)
-                  : await declarer({
-                      produit: noeud.produit, unite: noeud.unite, fois, qty: n,
-                      ajustements: peseesDe(noeud, fois),
-                    }, user?.id)
-                toast(r.erreur
-                  ? `Enregistré, mais Odoo a refusé : ${r.erreur}`
-                  : `${racine ? article.libelle : propre(noeud.produit)} : en attente dans « À valider Annexe »`)
-                setSortie(null)
-                if (racine) { setFaits({}); setChemin([]) }
-                else { setFaits(f => ({ ...f, [noeud.produit]: { fois } })); setChemin(chemin.slice(0, -1)) }
-                setDetails({}); recharger()
-              } catch (e) {
-                toast('Échec : ' + (e.message || e))
-              } finally { setEnvoi(false) }
-            }}
+            onClick={() => envoyer(n)}
             className="w-full rounded-xl py-4 text-[15px] font-extrabold bg-success text-cream disabled:opacity-40">
             {envoi ? 'Envoi en cours…' : estModeTest() ? 'Envoyer (mode test)' : 'Envoyer à « À valider »'}
           </button>
@@ -811,12 +827,18 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               <div className="text-[11.5px] text-ink-mute mt-0.5">Tu n'en as pas besoin maintenant</div>
             )}
           </div>
-          <button
-            onClick={() => setSortie(String(racine
-              ? article.tournee
-              : Math.round((noeud.tourneeTaille || 1) * fois * 100) / 100))}
-            className="rounded-xl px-4 py-3 text-[13.5px] font-extrabold bg-bordeaux text-cream">
-            C'est fait →
+          <button disabled={envoi}
+            onClick={() => {
+              const prevu = racine
+                ? article.tournee
+                : Math.round((noeud.tourneeTaille || 1) * fois * 100) / 100
+              // Flans, cheesecakes, biscuits, génoises, bases de flan : on ne
+              // demande pas le rendement, on envoie la quantité prévue.
+              if (sansRendement(racine ? article.libelle : noeud.produit)) return envoyer(prevu)
+              setSortie(String(prevu))
+            }}
+            className="rounded-xl px-4 py-3 text-[13.5px] font-extrabold bg-bordeaux text-cream disabled:opacity-40">
+            {envoi ? 'Envoi…' : "C'est fait →"}
           </button>
         </div>
       )}
