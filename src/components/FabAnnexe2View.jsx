@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
-  loadHistoriqueAnnexe, bloquants, declares, familleDe, noeudAu,
+  loadHistoriqueAnnexe, bloquants, declares, parGateauMere, noeudAu,
   declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
@@ -80,22 +80,6 @@ function Vignette({ photo, libelle, taille = 'w-14 h-14 rounded-xl shrink-0', gr
 // Un gâteau occupe souvent plusieurs lignes du catalogue : le Citron Framboise
 // en a quatre (le montage, puis la finition en 3 tailles). On les rassemble
 // sous le nom du gâteau vendu, que leur photo désigne déjà.
-// L'onglet « Déclarer » range par famille de préparation — pas par gâteau :
-// la crème au beurre nature sert à une dizaine de gâteaux et se retrouverait
-// dans chacun. Les plus fabriquées en tête de chaque famille.
-function parFamille(articles, cherche) {
-  const q = String(cherche || '').trim().toLowerCase()
-  const groupes = []
-  for (const a of articles || []) {
-    if (q && !a.produit.toLowerCase().includes(q)) continue
-    const nom = familleDe(a.produit)
-    let g = groupes.find(x => x.nom === nom)
-    if (!g) { g = { nom, articles: [] }; groupes.push(g) }
-    g.articles.push(a)
-  }
-  return groupes.sort((a, b) => b.articles.length - a.articles.length)
-}
-
 function parGateau(articles) {
   const groupes = []
   for (const a of articles || []) {
@@ -345,10 +329,15 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                 className="w-full h-11 rounded-xl border border-cream-deep bg-cream-warm px-3
                            text-[15px] text-ink outline-none focus:border-bordeaux mb-3" />
               {!tout && !erreur && <Skeleton rows={4} />}
-              {parFamille(tout, cherche).map(g => (
+              {parGateauMere(tout, cherche).map(g => (
                 <section key={g.nom} className="mb-5">
-                  <h2 className="font-serif italic text-[17px] text-bordeaux mb-2">
-                    {g.nom} <span className="text-[12px] text-ink-mute not-italic">{g.articles.length}</span>
+                  <h2 className="flex items-center gap-2.5 mb-2">
+                    <Vignette photo={g.photo} libelle={g.nom}
+                      taille="w-10 h-10 rounded-lg shrink-0" />
+                    <span className="flex-1 min-w-0 font-serif italic text-[17px] text-bordeaux leading-tight">
+                      {g.nom.replace(/^(E-|MI-|V-)\s*/, '')}
+                    </span>
+                    <span className="text-[12px] text-ink-mute">{g.articles.length}</span>
                   </h2>
                   <div className="grid gap-2.5"
                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
@@ -374,7 +363,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                   </div>
                 </section>
               ))}
-              {tout && !parFamille(tout, cherche).length && (
+              {tout && !parGateauMere(tout, cherche).length && (
                 <p className="text-center text-[13px] text-ink-mute py-8">Rien à ce nom-là.</p>
               )}
             </>

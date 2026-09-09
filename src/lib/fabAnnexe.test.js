@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bloquants, noeudAu, enfantsDe, familleDe } from './fabAnnexe'
+import { bloquants, noeudAu, enfantsDe, parGateauMere } from './fabAnnexe'
 
 // Un tiramisu tel que l'API le renvoie, en plus court.
 const tiramisu = {
@@ -60,30 +60,27 @@ describe('noeudAu', () => {
   })
 })
 
-describe('familleDe', () => {
-  it('range une préparation d’après son nom', () => {
-    expect(familleDe('SM. Creme au beurre nature production')).toBe('Crèmes au beurre')
-    expect(familleDe("SM. Sirop d'imbibage cafe Tiramisu")).toBe('Sirops')
-    expect(familleDe('SM. Biscuit amande gingembre')).toBe('Biscuits et pâtes')
-    expect(familleDe('SM. glacage mirroir Finition')).toBe('Glaçages')
-    expect(familleDe('SM. crunchy citron passion')).toBe('Croustillants')
-    expect(familleDe('SM. Chantilly à la Rose')).toBe('Crèmes et mousses')
+describe('parGateauMere', () => {
+  const arts = [
+    { produit: 'SM. Creme au beurre nature', pour: ['E- Fraisier', 'E- Suprême amande'] },
+    { produit: 'SM. Sirop café', pour: ['E- Tiramisu'] },
+    { produit: 'SM. Truc inconnu', pour: [] },
+  ]
+
+  it('range chaque préparation sous CHAQUE gâteau qu’elle sert', () => {
+    const g = parGateauMere(arts, '')
+    expect(g.find(x => x.nom === 'E- Fraisier').articles).toHaveLength(1)
+    expect(g.find(x => x.nom === 'E- Suprême amande').articles).toHaveLength(1)
   })
 
-  // « SM- » désigne ce qui est monté, « SM. » une préparation. C'est la
-  // distinction la plus utile de tout le catalogue.
-  it('sépare ce qui est monté des préparations', () => {
-    expect(familleDe('SM- flan vanille 20 cm')).toBe('Gâteaux et pièces montés')
-    expect(familleDe('SM- Gianduja 10 pers')).toBe('Gâteaux et pièces montés')
-    expect(familleDe('SM- cadre foret noir grand Production')).toBe('Gâteaux et pièces montés')
-    expect(familleDe('SM. Voile mangue passion')).toBe('Le reste')
-    expect(familleDe('')).toBe('Le reste')
+  it('met à la fin ce qui ne sert à aucun gâteau', () => {
+    const g = parGateauMere(arts, '')
+    expect(g[g.length - 1].nom).toBe('Le reste')
+    expect(g[g.length - 1].articles[0].produit).toBe('SM. Truc inconnu')
   })
 
-  // La crème au beurre passe avant les crèmes : sinon elle tomberait dans le
-  // sac commun, alors que c'est une famille à elle seule.
-  it('distingue la crème au beurre des autres crèmes', () => {
-    expect(familleDe('SM. Creme au beurre citron')).toBe('Crèmes au beurre')
-    expect(familleDe('SM. creme patissiere vitrine')).toBe('Crèmes et mousses')
+  it('filtre sur la recherche', () => {
+    expect(parGateauMere(arts, 'sirop')).toHaveLength(1)
+    expect(parGateauMere(arts, 'rien du tout')).toHaveLength(0)
   })
 })

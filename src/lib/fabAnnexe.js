@@ -45,29 +45,27 @@ export async function loadToutFabAnnexe() {
 }
 
 /**
- * La famille d'une préparation, lue dans son nom. Ranger par gâteau ne marche
- * pas ici : la crème au beurre nature sert à une dizaine de gâteaux et se
- * retrouverait partout.
+ * L'onglet « Déclarer », rangé par GÂTEAU : chaque préparation sous le ou les
+ * gâteaux auxquels elle sert, avec leur photo. Une même crème peut donc
+ * apparaître sous plusieurs — c'est voulu : on cherche par le gâteau qu'on est
+ * en train de faire. (Layla, 2026-09-09.)
+ *
+ * Ce qui ne sert à aucun article vendu se retrouve à la fin, sous « Le reste ».
  */
-export function familleDe(nom) {
-  const n = String(nom || '').toLowerCase()
-  // ⚠️ Le préfixe fait la première distinction, et c'est la plus utile :
-  // « SM- » désigne ce qui est MONTÉ (un flan, un gianduja, un cadre), « SM. »
-  // une préparation (une crème, un sirop). Sans ça, 119 articles sur 278
-  // tombaient dans « Le reste ».
-  if (/^sm-|^smpr|^sm ?pr/i.test(String(nom || '').trim())) return 'Gâteaux et pièces montés'
-  if (/sirop|imbibage/.test(n)) return 'Sirops'
-  if (/glacage|glaçage|flocage/.test(n)) return 'Glaçages'
-  if (/ganache/.test(n)) return 'Ganaches'
-  if (/creme au beurre|crème au beurre/.test(n)) return 'Crèmes au beurre'
-  if (/chantilly|mousse|cremeux|crémeux|creme|crème|namlaka|diplomate/.test(n)) return 'Crèmes et mousses'
-  if (/biscuit|genoise|génoise|daquoise|dacquoise|sable|sablé|pate|pâte|craquelin|crumble/.test(n)) return 'Biscuits et pâtes'
-  if (/caramel|praline|praliné|amande|pecan|noisette/.test(n)) return 'Caramels et fruits secs'
-  // ⚠️ Les croustillants AVANT les fruits : « crunchy citron passion » tombait
-  // dans les confits à cause du mot « citron ».
-  if (/crunchy|croustillant|craquant|feuilletine/.test(n)) return 'Croustillants'
-  if (/confit|gelee|gélee|gélée|marmelade|citron|framboise|fruit/.test(n)) return 'Confits et fruits'
-  return 'Le reste'
+export function parGateauMere(articles, cherche) {
+  const q = String(cherche || '').trim().toLowerCase()
+  const groupes = new Map()
+  for (const a of articles || []) {
+    if (q && !a.produit.toLowerCase().includes(q)) continue
+    const oues = (a.pour || []).length ? a.pour : ['Le reste']
+    for (const g of oues) {
+      const e = groupes.get(g) || { nom: g, photo: g === 'Le reste' ? null : g, articles: [] }
+      e.articles.push(a); groupes.set(g, e)
+    }
+  }
+  return [...groupes.values()]
+    .sort((a, b) => (a.nom === 'Le reste') - (b.nom === 'Le reste')
+      || b.articles.length - a.articles.length)
 }
 
 /**

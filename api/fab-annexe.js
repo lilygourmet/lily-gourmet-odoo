@@ -358,6 +358,64 @@ export async function repartir(cache, catalogue, lance, quantites) {
 // La vignette fait 56 pixels de côté : l'image 512 d'Odoo pesait jusqu'à
 // 312 Ko pour rien. On prend la 256, et on retombe sur la 512 si elle manque.
 
+/**
+ * À quel(s) gâteau(x) vendu(s) chaque préparation sert-elle ?
+ *
+ * On charge TOUT le graphe des recettes d'un coup — 905 nomenclatures, 6 700
+ * lignes, 3 300 produits, en deux secondes — puis on descend depuis chaque
+ * article vendu. Le faire article par article prenait des minutes.
+ *
+ * Une préparation sert souvent à plusieurs gâteaux (la crème au beurre nature
+ * en alimente une dizaine) : elle apparaîtra sous chacun.
+ */
+function grapheParents() {
+  return memo('graphe:parents', async () => {
+    const [boms, lignes, prods] = await Promise.all([
+      sr('mrp.bom', [], ['id', 'product_tmpl_id'], { limit: 5000 }),
+      sr('mrp.bom.line', [], ['bom_id', 'product_id', 'bom_product_template_attribute_value_ids'], { limit: 40000 }),
+      sr('product.product', [], ['id', 'name', 'display_name', 'product_tmpl_id',
+        'product_template_attribute_value_ids'], { limit: 20000 }),
+    ])
+    const bomDuTmpl = new Map()
+    for (const b of boms) if (!bomDuTmpl.has(b.product_tmpl_id[0])) bomDuTmpl.set(b.product_tmpl_id[0], b.id)
+    const lignesDuBom = new Map()
+    for (const l of lignes) {
+      const a = lignesDuBom.get(l.bom_id[0]) || []
+      a.push(l); lignesDuBom.set(l.bom_id[0], a)
+    }
+    const parId = new Map(prods.map(p => [p.id, p]))
+
+    // On part des articles VENDUS et on descend.
+    const parents = new Map()          // nom d'une préparation → Set de gâteaux
+    const vendus = prods.filter(p => /^(E-|MI-|V-)/i.test(String(p.name || '').trim()))
+    for (const v of vendus) {
+      // Sans la taille : « E- Citron meringué (1) », « (5) », « (10) »… sont le
+      // MÊME gâteau. Les garder séparés faisait cinq groupes pour un seul.
+      const gateau = sansRef(v.display_name).replace(/\s*\(\d[^)]*\)\s*$/, '').trim()
+      const vus = new Set()
+      const pile = [v]
+      while (pile.length) {
+        const p = pile.pop()
+        if (!p || vus.has(p.id)) continue
+        vus.add(p.id)
+        const bom = bomDuTmpl.get(p.product_tmpl_id[0])
+        if (!bom) continue
+        const siens = new Set(p.product_template_attribute_value_ids || [])
+        for (const l of lignesDuBom.get(bom) || []) {
+          const pour = l.bom_product_template_attribute_value_ids || []
+          if (pour.length && !pour.some(x => siens.has(x))) continue
+          const nom = sansRef(l.product_id[1])
+          const e = parents.get(nom) || new Set()
+          e.add(gateau); parents.set(nom, e)
+          const c = parId.get(l.product_id[0])
+          if (c) pile.push(c)
+        }
+      }
+    }
+    return parents
+  })
+}
+
 async function photoDe(nom) {
   const t = await sr('product.product', [['name', '=', nom]], ['image_256', 'image_512'], { limit: 1 })
   return t[0]?.image_256 || t[0]?.image_512 || null
@@ -429,10 +487,12 @@ export default async function handler(req, res) {
           [['id', 'in', gardes.slice(i, i + 200).map(x => x.id)], ['image_1920', '!=', false]],
           ['id'], { limit: 400 })) aPhoto.add(p.id)
       }
+      const parents = await grapheParents()
       const liste = gardes.map(p => {
         const e = vus.get(p.id)
         return { produit: e.nom, unite: uniteDe(p), stock: Math.round(e.stock * 100) / 100,
-          fois: e.fois, dernier: e.dernier, photo: aPhoto.has(p.id) ? e.nom : null }
+          fois: e.fois, dernier: e.dernier, photo: aPhoto.has(p.id) ? e.nom : null,
+          pour: [...(parents.get(sansRef(e.nom)) || [])].sort((a, b) => a.localeCompare(b, 'fr')) }
       })
       liste.sort((a, b) => b.fois - a.fois || a.produit.localeCompare(b.produit, 'fr'))
       res.setHeader('Cache-Control', 'no-store')
