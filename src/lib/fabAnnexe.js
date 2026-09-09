@@ -45,10 +45,15 @@ export async function loadToutFabAnnexe() {
 }
 
 /**
- * Un « SM. » est une préparation (crème, sirop, biscuit) ; un « SM- » est un
- * gâteau monté. Le point ou le tiret, c'est toute la différence dans Odoo.
+ * Dans Odoo, tout ce qui se fabrique à l'annexe commence par « SM ». Ce qui
+ * suit dit quoi : un TIRET (« SM- », « SMPr- ») = un gâteau monté ; un point,
+ * un slash ou rien du tout (« SM. », « SMT. », « SM CD* », « SM/ ») = une
+ * préparation — crème, sirop, biscuit, fourrage. (Layla, 2026-09-09.)
  */
-export const estPreparation = nom => /^\s*sm\s*\./i.test(String(nom || ''))
+export function estPreparation(nom) {
+  const m = /^([A-Za-z]+)\s*(.?)/.exec(String(nom || '').trim())
+  return !!m && /^sm/i.test(m[1]) && m[2] !== '-'
+}
 
 /**
  * L'onglet « Déclarer », rangé par GÂTEAU : chaque article monté sous le ou les

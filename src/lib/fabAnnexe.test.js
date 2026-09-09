@@ -65,8 +65,13 @@ describe('parGateauMere', () => {
     { produit: 'SM- Fraisier 20 cm', pour: ['E- Fraisier', 'E- Suprême amande'] },
     { produit: 'SM- Sirop café monté', pour: ['E- Tiramisu'] },
     { produit: 'SM- Truc inconnu', pour: [] },
+    { produit: 'SMPr- Boite Biscotti', pour: [] },
+    { produit: 'GS- Ghriba Behla', pour: [] },
     { produit: 'SM. Creme au beurre nature', pour: ['E- Fraisier'] },
     { produit: 'Sm. sirop imbibage', pour: ['E- Tiramisu'] },
+    { produit: 'SM CD* Crème au beurre Praliné', pour: ['E- Fraisier'] },
+    { produit: 'SMT. creme patissiere cbs', pour: ['E- Fraisier'] },
+    { produit: 'SM/ beurre clarifie', pour: ['E- Fraisier'] },
   ]
 
   it('range chaque article sous CHAQUE gâteau qu’il sert', () => {
@@ -75,10 +80,19 @@ describe('parGateauMere', () => {
     expect(g.find(x => x.nom === 'E- Suprême amande').articles).toHaveLength(1)
   })
 
-  it('laisse les préparations hors de la liste', () => {
+  it('laisse les préparations hors de la liste — point, slash ou rien', () => {
     const noms = parGateauMere(arts, '').flatMap(g => g.articles.map(a => a.produit))
     expect(noms).not.toContain('SM. Creme au beurre nature')
     expect(noms).not.toContain('Sm. sirop imbibage')
+    expect(noms).not.toContain('SM CD* Crème au beurre Praliné')
+    expect(noms).not.toContain('SMT. creme patissiere cbs')
+    expect(noms).not.toContain('SM/ beurre clarifie')
+  })
+
+  it('garde ce qui se monte, tiret ou autre famille', () => {
+    const noms = parGateauMere(arts, '').flatMap(g => g.articles.map(a => a.produit))
+    expect(noms).toContain('SMPr- Boite Biscotti')
+    expect(noms).toContain('GS- Ghriba Behla')
   })
 
   it('met à la fin ce qui ne sert à aucun gâteau', () => {
