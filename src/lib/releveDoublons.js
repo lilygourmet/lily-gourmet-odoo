@@ -158,6 +158,14 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         // C'est le PDF qui fait foi (releve_url), pas l'instant de l'import : le relevé et
         // l'extrait choisis ensemble arrivent dans le même import, à la même seconde — s'y
         // fier laissait passer TOUS les doublons entre ces deux documents.
+        // Même client, même montant, le MÊME JOUR : un seul virement. AVANT le garde-fou du
+        // document, car la fausse ligne vient justement du MÊME PDF : le lecteur y coupait
+        // les libellés au mauvais endroit et fabriquait un jumeau (corrigé pour les
+        // prochains imports, mais les lignes déjà enregistrées restent mélangées).
+        if (ecart === 0 && nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= seuil) {
+          retirees.add(b.key)                       // on garde la plus ancienne (a)
+          continue
+        }
         const memeDoc = (a.releve_url && b.releve_url)
           ? a.releve_url === b.releve_url
           : String(a.created_at).slice(0, 19) === String(b.created_at).slice(0, 19)
@@ -166,12 +174,6 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
         // deux documents (voir memeOperation). Le n° ne les départage pas.
         if (ecart === 0 && estRemiseCheque(a.label) && estRemiseCheque(b.label)) {
           retirees.add(b.key)                       // on garde la plus ancienne (a)
-          continue
-        }
-        // Même client, même montant, le MÊME JOUR : un seul virement (voir memeOperation —
-        // le lecteur de PDF mélange les morceaux de libellé, donc les n° ne prouvent rien).
-        if (ecart === 0 && nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= seuil) {
-          retirees.add(b.key)
           continue
         }
         // Même montant + dates proches + imports différents = la MÊME opération, même si
