@@ -342,7 +342,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                   <div className="grid gap-2.5"
                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
                     {g.articles.map(a => (
-                      <button key={a.produit} onClick={() => { setSortie(''); setChemin([a.produit]) }}
+                      <button key={a.produit} onClick={() => setChemin([a.produit])}
                         className="text-left rounded-2xl border border-cream-deep bg-cream-warm
                                    overflow-hidden shadow-sm hover:border-bordeaux/40 flex flex-col">
                         <div className="relative">
@@ -479,12 +479,6 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               ))}
             </div>
           )}
-
-          <button onClick={() => setSortie(null)} type="button"
-            className="w-full rounded-xl py-3 mb-2.5 text-[13px] font-bold border border-cream-deep
-                       bg-cream-warm text-ink-soft">
-            voir la recette et les composants
-          </button>
 
           <button disabled={!(n > 0) || envoi}
             onClick={async () => {

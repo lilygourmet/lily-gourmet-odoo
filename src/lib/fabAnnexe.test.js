@@ -62,21 +62,29 @@ describe('noeudAu', () => {
 
 describe('parGateauMere', () => {
   const arts = [
-    { produit: 'SM. Creme au beurre nature', pour: ['E- Fraisier', 'E- Suprême amande'] },
-    { produit: 'SM. Sirop café', pour: ['E- Tiramisu'] },
-    { produit: 'SM. Truc inconnu', pour: [] },
+    { produit: 'SM- Fraisier 20 cm', pour: ['E- Fraisier', 'E- Suprême amande'] },
+    { produit: 'SM- Sirop café monté', pour: ['E- Tiramisu'] },
+    { produit: 'SM- Truc inconnu', pour: [] },
+    { produit: 'SM. Creme au beurre nature', pour: ['E- Fraisier'] },
+    { produit: 'Sm. sirop imbibage', pour: ['E- Tiramisu'] },
   ]
 
-  it('range chaque préparation sous CHAQUE gâteau qu’elle sert', () => {
+  it('range chaque article sous CHAQUE gâteau qu’il sert', () => {
     const g = parGateauMere(arts, '')
     expect(g.find(x => x.nom === 'E- Fraisier').articles).toHaveLength(1)
     expect(g.find(x => x.nom === 'E- Suprême amande').articles).toHaveLength(1)
   })
 
+  it('laisse les préparations hors de la liste', () => {
+    const noms = parGateauMere(arts, '').flatMap(g => g.articles.map(a => a.produit))
+    expect(noms).not.toContain('SM. Creme au beurre nature')
+    expect(noms).not.toContain('Sm. sirop imbibage')
+  })
+
   it('met à la fin ce qui ne sert à aucun gâteau', () => {
     const g = parGateauMere(arts, '')
     expect(g[g.length - 1].nom).toBe('Le reste')
-    expect(g[g.length - 1].articles[0].produit).toBe('SM. Truc inconnu')
+    expect(g[g.length - 1].articles[0].produit).toBe('SM- Truc inconnu')
   })
 
   it('filtre sur la recherche', () => {

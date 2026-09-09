@@ -45,10 +45,20 @@ export async function loadToutFabAnnexe() {
 }
 
 /**
- * L'onglet « Déclarer », rangé par GÂTEAU : chaque préparation sous le ou les
- * gâteaux auxquels elle sert, avec leur photo. Une même crème peut donc
+ * Un « SM. » est une préparation (crème, sirop, biscuit) ; un « SM- » est un
+ * gâteau monté. Le point ou le tiret, c'est toute la différence dans Odoo.
+ */
+export const estPreparation = nom => /^\s*sm\s*\./i.test(String(nom || ''))
+
+/**
+ * L'onglet « Déclarer », rangé par GÂTEAU : chaque article monté sous le ou les
+ * gâteaux auxquels il sert, avec leur photo. Un même article peut donc
  * apparaître sous plusieurs — c'est voulu : on cherche par le gâteau qu'on est
  * en train de faire. (Layla, 2026-09-09.)
+ *
+ * Les préparations n'ont pas leur place dans cette liste : on les retrouve
+ * dans la recette du gâteau, avec leur stock, là où on les débloque.
+ * (Layla, 2026-09-09.)
  *
  * Ce qui ne sert à aucun article vendu se retrouve à la fin, sous « Le reste ».
  */
@@ -56,6 +66,7 @@ export function parGateauMere(articles, cherche) {
   const q = String(cherche || '').trim().toLowerCase()
   const groupes = new Map()
   for (const a of articles || []) {
+    if (estPreparation(a.produit)) continue
     if (q && !a.produit.toLowerCase().includes(q)) continue
     const oues = (a.pour || []).length ? a.pour : ['Le reste']
     for (const g of oues) {
