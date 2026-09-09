@@ -309,3 +309,24 @@ describe('reconcileEnvelopes — acompte viré avant la commande', () => {
     expect(results[0].status).toBe('absent')
   })
 })
+
+// Odoo dit « Bennomar Salma », le relevé écrit « SELMA BENOMAR » : un N et une voyelle
+// d'écart suffisaient à ce que l'app ne reconnaisse plus la cliente.
+describe('reconcileEnvelopes — orthographe proche du nom de la cliente', () => {
+  const ligne = { credit: 306, dateIso: '2026-07-17', type: 'virement_recu', label: 'VIRT RECU MME SELMA BENOMAR' }
+  const caisse = {
+    id: 'B1', amount_cash: 306, payment_method: 'virement',
+    releve_status: null, session_date: '2026-07-16', virement_client: 'Bennomar Salma',
+  }
+
+  it('rapproche malgré les deux fautes d\'orthographe', () => {
+    const { results } = reconcileEnvelopes([caisse], [ligne], {})
+    expect(results[0].status).toBe('trouve')
+  })
+
+  it('ne rapproche pas une cliente vraiment différente', () => {
+    const autre = { ...caisse, virement_client: 'Iraqi Yacout' }
+    const { results } = reconcileEnvelopes([autre], [ligne], {})
+    expect(results[0].status).toBe('absent')
+  })
+})

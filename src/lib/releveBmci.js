@@ -8,7 +8,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 // Odoo compte les centimes, la banque arrondit : même seuil que partout ailleurs pour
 // décider que deux montants sont LE MÊME montant.
-import { ECART_MINI } from './releveDoublons'
+import { ECART_MINI, nomDeLigne, similarite } from './releveDoublons'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -363,12 +363,18 @@ function candidatesFor(method, credits) {
   return []
 }
 
-// Le nom de la cliente de la caisse est-il écrit dans le libellé de la ligne bancaire ?
+// Le nom de la cliente de la caisse est-il celui du libellé de la ligne bancaire ?
+// D'abord mot à mot, puis À L'ORTHOGRAPHE PRÈS : Odoo dit « Bennomar Salma » et le relevé
+// écrit « VIRT RECU MME SELMA BENOMAR » — un N et une voyelle d'écart suffisaient à ce que
+// l'app ne reconnaisse plus la cliente, et le virement restait « non lié » pour toujours.
+// C'est la comparaison qui sert déjà à repérer les doublons : une seule règle pour une
+// seule question, « est-ce la même personne ? ».
 export function nomDansLibelle(client, label) {
   const toks = nameTokens(client)
   if (!toks.length) return false
   const L = norm(label)
-  return toks.some(t => L.includes(t))
+  if (toks.some(t => L.includes(t))) return true
+  return similarite(nomDeLigne(label), nomDeLigne(client)) >= 0.85
 }
 
 // Fenêtre de dates par moyen (en jours). Virement : ±5 (instantané/classique).
@@ -494,7 +500,7 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     if (method === 'virement') {
       const toks = nameTokens(env.virement_client)
       if (toks.length) {
-        const named = c.filter(x => { const L = norm(x.label); return toks.some(t => L.includes(t)) })
+        const named = c.filter(x => nomDansLibelle(env.virement_client, x.label))
         if (named.length >= 1) return named
         return c.filter(x => /INST/i.test(x.label) &&
           signedDays(x.dateIso, env.session_date) >= -1 && signedDays(x.dateIso, env.session_date) <= 0)
