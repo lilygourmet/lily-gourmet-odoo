@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildZplLabels } from './etiquettes'
+import { buildZplLabels, estMontageCD } from './etiquettes'
 
 // On découpe le nom nous-mêmes : si on laisse ZPL le faire (^FB), les lignes en
 // trop s'impriment PAR-DESSUS les précédentes et l'étiquette est illisible
@@ -45,4 +45,28 @@ describe('le prix ne sort que pour les GS-', () => {
   it('GS- : prix affiché', () => expect(avecPrix('gs')).toBe(true))
   it('E- (entremets) : pas de prix', () => expect(avecPrix('cd')).toBe(false))
   it('SU- : pas de prix', () => expect(avecPrix('su')).toBe(false))
+})
+
+describe('estMontageCD — qui reçoit une étiquette au frigo', () => {
+  it('les étages, quel que soit leur nom dans Odoo', () => {
+    expect(estMontageCD('20 cm CD* (Chocolat)')).toBe(true)
+    expect(estMontageCD('25 cm CD* (Praliné Chocolaté)')).toBe(true)
+    expect(estMontageCD('30 cm cakedesign (Vanille)')).toBe(true)
+  })
+
+  it('les plaques, les cœurs et les formes', () => {
+    expect(estMontageCD('33x33 Cakedesign CD* (Citron)')).toBe(true)
+    expect(estMontageCD('18cm bombé Cakedesign CD* (Citron)')).toBe(true)
+    expect(estMontageCD('Coeur 10p Cakedesign CD* (Praliné Amandes caramélisées)')).toBe(true)
+    expect(estMontageCD('CD- Cakedesign Letter Cake CD* (Oréo, 10)')).toBe(true)
+    expect(estMontageCD('CD- Gateau Forme (Citron, 30, carré)')).toBe(true)
+  })
+
+  it('jamais une préparation — même quand son nom dit « cakedesign »', () => {
+    expect(estMontageCD('CD- Ganache cakedesign (Chocolat noir, 30)')).toBe(false)
+    expect(estMontageCD('SM CD* Crème au beurre Praliné')).toBe(false)
+    expect(estMontageCD('SM CD* Boule Cake pops accs (Caramel)')).toBe(false)
+    expect(estMontageCD('SM. sirop Imbibage production KG')).toBe(false)
+    expect(estMontageCD('SM Genoise Chocolat KG CD')).toBe(false)
+  })
 })

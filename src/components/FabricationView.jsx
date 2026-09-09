@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation } from '../lib/fabrication'
-import { buildZplInfo } from '../lib/etiquettes'
+import { buildZplInfo, estMontageCD } from '../lib/etiquettes'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
@@ -1273,8 +1273,15 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
    * ne va pas sortir 1135 etiquettes pour 1135 g de pate a sucre.
    */
   const imprimerEtiquettesFab = async (produit, qty) => {
-    if (!/cakedesign/i.test(String(produit || ''))) return
-    const n = Math.min(20, Math.max(1, Math.round(Number(qty) || 1)))
+    if (!estMontageCD(produit)) return
+    // Un montage ×15, c'est 15 étiquettes (Layla, 2026-09-09). Le garde-fou
+    // n'est plus là pour rogner la quantité mais pour qu'une saisie aberrante
+    // ne vide pas le rouleau : au-delà, on ne devine pas, on le dit.
+    const n = Math.max(1, Math.round(Number(qty) || 1))
+    if (n > 50) {
+      toast.error(`${n} étiquettes d'un coup : rien n'a été imprimé. À faire depuis l'onglet Étiquettes.`)
+      return
+    }
     try {
       // L'etage porte son parfum et sa date, rien d'autre : le numero de commande
       // va sur l'etiquette du cake design entier, pas sur le morceau congele.

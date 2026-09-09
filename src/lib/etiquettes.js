@@ -269,3 +269,22 @@ export async function syncEtiquettesFromOdoo(token) {
   }
   return await r.json()
 }
+
+/**
+ * Ce qui mérite une étiquette à coller au frigo : un morceau MONTÉ, qu'on ne
+ * saura plus reconnaître une fois congelé — les étages (« 20 cm CD* »), les
+ * plaques et les cœurs (« 33x33 Cakedesign CD* », « Coeur 10p Cakedesign »),
+ * les formes (« CD- Gateau Forme »).
+ *
+ * Pas les préparations : crèmes, sirops, génoises et ganaches se comptent en
+ * kilos, on ne va pas sortir 1 135 étiquettes pour 1 135 g de pâte à sucre.
+ * La ganache porte « cakedesign » dans son nom sans être un montage : elle est
+ * écartée à part. (Layla, 2026-09-09.)
+ */
+export function estMontageCD(nom) {
+  const n = String(nom || '')
+  if (/ganache/i.test(n)) return false
+  return /cakedesign/i.test(n)
+    || /^\s*\d+\s*cm\s+CD\*/i.test(n)
+    || /^\s*CD-\s*Gateau\s*Forme/i.test(n)
+}
