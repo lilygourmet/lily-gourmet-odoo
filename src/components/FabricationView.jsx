@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation } from '../lib/fabrication'
-import { buildZplInfo, estMontageCD } from '../lib/etiquettes'
+import { buildZplInfo, estMontageCD, estPrepaEtiquetee } from '../lib/etiquettes'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
@@ -1273,11 +1273,15 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
    * ne va pas sortir 1135 etiquettes pour 1135 g de pate a sucre.
    */
   const imprimerEtiquettesFab = async (produit, qty) => {
-    if (!estMontageCD(produit)) return
-    // Un montage ×15, c'est 15 étiquettes (Layla, 2026-09-09). Le garde-fou
-    // n'est plus là pour rogner la quantité mais pour qu'une saisie aberrante
-    // ne vide pas le rouleau : au-delà, on ne devine pas, on le dit.
-    const n = Math.max(1, Math.round(Number(qty) || 1))
+    const montage = estMontageCD(produit)
+    const prepa = !montage && estPrepaEtiquetee(produit)
+    if (!montage && !prepa) return
+    // Un montage ×15, c'est 15 étiquettes (Layla, 2026-09-09). Une préparation
+    // n'en a qu'UNE, quel que soit le nombre de tournées : c'est le bac qu'on
+    // étiquette, et c'est son poids qui compte, pas un nombre de pièces.
+    const n = montage ? Math.max(1, Math.round(Number(qty) || 1)) : 1
+    // Le garde-fou ne rogne plus la quantité ; il évite qu'une saisie aberrante
+    // ne vide le rouleau. Au-delà, on ne devine pas, on le dit.
     if (n > 50) {
       toast.error(`${n} étiquettes d'un coup : rien n'a été imprimé. À faire depuis l'onglet Étiquettes.`)
       return
@@ -1288,9 +1292,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const titre = String(produit).replace(/^\[\d+\]\s*/, '').trim()
       // Meme ecriture que sur les etiquettes de Check CD- : « Lundi 31/08/26 ».
       const j = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: '2-digit' })
+      // Sur une préparation, le poids en gros en bas — là où le montage porte
+      // son numéro de commande : on lit le bac de loin sans le peser.
+      const unite = (recettes[produit] || {}).unite || 'kg'
+      const poids = prepa ? qteLisible(enKg(Number(qty) || 0, unite).q, 'kg') : undefined
       const [r] = await sendEtiquettes([buildZplInfo({
         entete: j.charAt(0).toUpperCase() + j.slice(1),
         titre,
+        code: poids,
         qty: n,
       })])
       if (!r?.ok) toast.error(r?.error || 'Étiquette non imprimée')

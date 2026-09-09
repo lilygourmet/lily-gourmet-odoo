@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildZplLabels, estMontageCD } from './etiquettes'
+import { buildZplLabels, estMontageCD, estPrepaEtiquetee } from './etiquettes'
 
 // On découpe le nom nous-mêmes : si on laisse ZPL le faire (^FB), les lignes en
 // trop s'impriment PAR-DESSUS les précédentes et l'étiquette est illisible
@@ -68,5 +68,19 @@ describe('estMontageCD — qui reçoit une étiquette au frigo', () => {
     expect(estMontageCD('SM CD* Boule Cake pops accs (Caramel)')).toBe(false)
     expect(estMontageCD('SM. sirop Imbibage production KG')).toBe(false)
     expect(estMontageCD('SM Genoise Chocolat KG CD')).toBe(false)
+  })
+})
+
+describe('estPrepaEtiquetee — le bac qui part au frigo', () => {
+  it('les sirops et les crèmes, accent ou pas', () => {
+    expect(estPrepaEtiquetee('SM CD* Sirop imbibage kg')).toBe(true)
+    expect(estPrepaEtiquetee('SM CD* Crème au beurre Praliné')).toBe(true)
+    expect(estPrepaEtiquetee('SM. Creme patissiere Angelo finition')).toBe(true)
+  })
+
+  it('rien d’autre', () => {
+    expect(estPrepaEtiquetee('CD- Ganache cakedesign (Chocolat noir, 30)')).toBe(false)
+    expect(estPrepaEtiquetee('SM Genoise Chocolat KG CD')).toBe(false)
+    expect(estPrepaEtiquetee('20 cm CD* (Chocolat)')).toBe(false)
   })
 })

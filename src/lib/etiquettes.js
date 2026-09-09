@@ -288,3 +288,13 @@ export function estMontageCD(nom) {
     || /^\s*\d+\s*cm\s+CD\*/i.test(n)
     || /^\s*CD-\s*Gateau\s*Forme/i.test(n)
 }
+
+/**
+ * Les préparations qui méritent aussi leur étiquette : sirops et crèmes
+ * (Layla, 2026-09-09). Elles partent au frigo dans un bac, et une crème au
+ * beurre citron ressemble à une crème au beurre vanille.
+ *
+ * Une seule étiquette, quel que soit le nombre de tournées : c'est le poids
+ * total qui y figure, pas un compte de pièces.
+ */
+export const estPrepaEtiquetee = nom => /sirop|cr[eè]me/i.test(String(nom || ''))
