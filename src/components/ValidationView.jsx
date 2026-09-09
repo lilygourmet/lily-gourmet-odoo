@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
-import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies } from '../lib/fabrication'
+import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies, loadStocksNegatifs } from '../lib/fabrication'
 import { todayISO } from '../lib/dates'
 
 // ====== « À valider » : la page dédiée ======
@@ -106,6 +106,17 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   // Vrai dès que les quantités gardées côté serveur ont été relues : tant que
   // c'est faux, on n'enregistre RIEN (voir le commentaire de l'effet plus bas).
   const saisiesLues = useRef(false)
+  // Les compteurs faux du labo, montrés en colonne à droite : c'est la réponse
+  // à « pourquoi ça me dit qu'il manque alors que la crème est là ».
+  const [negatifs, setNegatifs] = useState([])
+
+  useEffect(() => {
+    let vivant = true
+    loadStocksNegatifs()
+      .then(l => { if (vivant) setNegatifs(l) })
+      .catch(() => { /* un compteur non lu ne doit pas gêner la validation */ })
+    return () => { vivant = false }
+  }, [tour])
 
   // `chargement` part à vrai et ne repasse à vrai nulle part : inutile, les deux
   // boutons qui relancent la lecture remettent d'abord la liste à zéro, et une
@@ -353,7 +364,10 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
-      <div className="max-w-[660px] mx-auto px-4 py-5">
+      {/* Deux colonnes sur ordinateur : la validation à gauche, les compteurs
+          faux à droite. Sur téléphone la colonne passe simplement dessous. */}
+      <div className="mx-auto px-4 py-5 max-w-[1010px] grid gap-6 lg:grid-cols-[minmax(0,1fr)_290px]">
+        <div>
         <div className="flex items-center gap-3 flex-wrap mb-1">
           <h1 className="font-fraunces italic text-[26px] font-medium">À valider CD-</h1>
           <button onClick={() => { setLignes(null); setResultats(null); setTour(v => v + 1) }}
@@ -541,6 +555,37 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
             </p>
           </>
         )}
+        </div>
+
+        {/* Les compteurs faux, à droite. Un stock négatif compte comme zéro
+            disponible : c'est lui qui fait dire « il manque » alors que la
+            matière est là. La liste part du pire. */}
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <div className="bg-white border border-line rounded-2xl overflow-hidden">
+            <div className="px-3.5 pt-3 pb-2 border-b border-line">
+              <b className="text-[14px]">⚠️ Compteurs faux</b>
+              <span className="text-[12px] text-ink-mute tabular-nums"> · {negatifs.length}</span>
+              <p className="text-[11.5px] text-ink-mute mt-1 leading-snug">
+                Odoo en compte moins que zéro. C'est ce qui fait dire « il manque »
+                alors que la matière est là.
+              </p>
+            </div>
+            {negatifs.length === 0 ? (
+              <p className="px-3.5 py-6 text-center text-ink-mute text-[13px]">Aucun — tout est à zéro ou au-dessus.</p>
+            ) : (
+              <div className="max-h-[60vh] overflow-y-auto overscroll-contain">
+                {negatifs.map(a => (
+                  <div key={a.produit} className="flex items-baseline gap-2 px-3.5 py-1.5 border-b border-dashed border-[#f0e8db] last:border-0">
+                    <span className="flex-1 min-w-0 text-[12.5px]">{propre(a.produit)}</span>
+                    <b className="text-[12.5px] text-danger whitespace-nowrap tabular-nums">
+                      {qte(a.qty, a.unite)}
+                    </b>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {confirmer && (

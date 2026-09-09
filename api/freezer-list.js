@@ -581,7 +581,7 @@ async function reserverPourLeParent(uid, mo) {
 // `produit` = ce qui a VRAIMENT été fabriqué. En dessous du demandé, Odoo
 // propose un reliquat : on le crée (action_backorder) au lieu de clôturer
 // l'ordre (action_close_mo), sinon le reste était perdu sans prévenir.
-async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, produit = null) {
+async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, produit = null, quand = null) {
   const mo = (await odooSearchRead(uid, 'mrp.production', [['name', '=', name]],
     ['id', 'name', 'state', 'product_qty', 'qty_producing', 'product_id', 'location_src_id', 'company_id', 'origin']))[0]
   if (!mo) return { name, ok: false, message: 'ordre introuvable' }
@@ -692,6 +692,11 @@ async function validerOrdre(uid, name, forcer, quantites = null, ajouts = null, 
     }
     const apres = (await odooSearchRead(uid, 'mrp.production', [['id', '=', mo.id]], ['state']))[0]
     const fini = apres && apres.state === 'done'
+    // La production compte pour le jour où elle a ÉTÉ FAITE, pas pour celui où
+    // on la valide : un gâteau monté lundi et validé mercredi est un gâteau de
+    // lundi. (Layla, 2026-09-09.) Odoo date tout à la clôture ; on corrige
+    // l'ordre et ses mouvements juste après.
+    if (fini && quand) await daterProduction(uid, mo.id, quand)
     // La production vient d'entrer en stock : tant que personne ne la réserve,
     // n'importe quel autre ordre peut la prendre (le stock d'Odoo est commun).
     // On la réserve tout de suite pour le gâteau qui l'attend.
@@ -989,6 +994,34 @@ async function rattacherEnfants(uid, idParent, nomParent) {
   } catch (e) {
     console.warn('[creer-of] rattachement des enfants impossible :', (e.message || e).toString().slice(0, 120))
   }
+}
+
+/**
+ * Reporter une production sur sa vraie date. Odoo horodate tout au moment de
+ * la clôture ; on réécrit ensuite la date sur l'ordre, sur ses mouvements et
+ * sur leurs lignes — ce sont elles qui portent la valorisation du stock.
+ *
+ * Sans effet si Odoo refuse (période comptable fermée, par exemple) : dater
+ * est un confort, jamais une raison de faire échouer une validation.
+ */
+async function daterProduction(uid, idOrdre, quand) {
+  try {
+    const d = new Date(quand)
+    if (isNaN(d)) return
+    const iso = d.toISOString().slice(0, 19).replace('T', ' ')
+    await odooCall(uid, 'mrp.production', 'write', [[idOrdre], { date_finished: iso }]).catch(() => {})
+    const moves = await odooSearchRead(uid, 'stock.move',
+      [['|', ['raw_material_production_id', '=', idOrdre], ['production_id', '=', idOrdre]]],
+      ['id'], { limit: 200 })
+    if (!moves.length) return
+    const ids = moves.map(m => m.id)
+    await odooCall(uid, 'stock.move', 'write', [ids, { date: iso }]).catch(() => {})
+    const lignes = await odooSearchRead(uid, 'stock.move.line',
+      [['move_id', 'in', ids]], ['id'], { limit: 400 })
+    if (lignes.length) {
+      await odooCall(uid, 'stock.move.line', 'write', [lignes.map(l => l.id), { date: iso }]).catch(() => {})
+    }
+  } catch { /* dater est un confort : jamais bloquant */ }
 }
 
 /**
@@ -1936,6 +1969,39 @@ export default async function handler(req, res) {
     // « Actualiser » de Fabrication CD). Sans effet s'il n'y a rien à lancer.
     if (req.query.mode === 'reappro-cd') {
       return res.status(200).json(await reapproCD())
+    }
+
+    // Les compteurs FAUX du labo : les articles dont Odoo compte moins que zéro.
+    // C'est ce qui fait dire « il manque 600 g de crème » alors que la crème est
+    // là — un stock négatif compte comme zéro disponible. On les montre à côté
+    // de « À valider », là où la question se pose.
+    // On écarte le café, les jus et les emballages (92 des 160 articles
+    // négatifs) : ils ne se fabriquent pas ici et n'expliquent aucun manque.
+    if (req.query.mode === 'stocks-negatifs') {
+      const uid = await odooAuth()
+      const quants = await odooSearchRead(uid, 'stock.quant',
+        [['location_id.complete_name', 'like', 'WHLVP/Stock'], ['quantity', '<', 0]],
+        ['product_id', 'quantity'], { limit: 500 })
+      const estProduction = n => /^\s*(\[[^\]]*\]\s*)?(SM|CD|MP-|C-)/i.test(String(n || ''))
+      const gardes = quants.filter(q => Array.isArray(q.product_id) && estProduction(q.product_id[1]))
+      if (!gardes.length) return res.status(200).json({ articles: [] })
+      const ids = [...new Set(gardes.map(q => q.product_id[0]))]
+      const lus = await odooCall(uid, 'product.product', 'read', [ids, ['uom_id']])
+      const uniteDe = Object.fromEntries(lus.map(p => [p.id, Array.isArray(p.uom_id) ? p.uom_id[1] : '']))
+      // un même article peut être négatif dans plusieurs sous-emplacements
+      const parProduit = new Map()
+      for (const q of gardes) {
+        const [id, nom] = q.product_id
+        const d = parProduit.get(id) || { produit: nom, qty: 0, unite: (uniteDe[id] || 'u').replace(/^units?$/i, 'u') }
+        d.qty += q.quantity || 0
+        parProduit.set(id, d)
+      }
+      return res.status(200).json({
+        articles: [...parProduit.values()]
+          .filter(a => a.qty < 0)
+          .map(a => ({ ...a, qty: Math.round(a.qty * 100) / 100 }))
+          .sort((a, b) => a.qty - b.qty),
+      })
     }
 
     if (req.method === 'POST' && req.query.mode === 'annuler-ordre') {

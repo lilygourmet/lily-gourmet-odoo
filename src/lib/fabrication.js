@@ -38,6 +38,18 @@ export async function reapproCD() {
   return await r.json()
 }
 
+/**
+ * Les articles dont Odoo compte MOINS QUE ZÉRO au labo. Un stock négatif compte
+ * comme zéro disponible : c'est lui qui fait dire « il manque 600 g de crème »
+ * alors que la crème est là. Affiché à côté de « À valider », là où la question
+ * se pose. Le café, les jus et les emballages sont écartés côté serveur.
+ */
+export async function loadStocksNegatifs() {
+  const r = await fetch('/api/freezer-list?mode=stocks-negatifs')
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  return (await r.json()).articles || []
+}
+
 /** Juste les ordres Odoo encore ouverts (rapide : une seule question à Odoo). */
 export async function loadOrdres() {
   const r = await fetch('/api/freezer-list?mode=ordres')
