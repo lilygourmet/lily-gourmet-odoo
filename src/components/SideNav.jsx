@@ -93,7 +93,7 @@ export default function SideNav({ user, activeView, onNavigate, width, mode, onS
   const allowed = navTabsForUser(user)
   const byView = Object.fromEntries(allowed.map(t => [t.view, t]))
   const entries = buildEntries(user, byView, allowed)
-  const badges = useNavBadges(user)   // { conversations, tasks, paiements, modifications, livraisons, devis-internet, hr }
+  const badges = useNavBadges(user, activeView)   // { conversations, tasks, paiements, modifications, livraisons, devis-internet, hr }
   const sumBadges = (tabs) => tabs.reduce((s, t) => s + (badges[t.view] || 0), 0)
 
   // Re-lit le localStorage (sous-onglet actif) quand il change ailleurs (barre du

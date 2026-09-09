@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabase'
 import { countUnreadTasks } from './tasks'
 import { countConversationBadges, countDevisInternetNonTraites } from './conversations'
@@ -14,12 +14,19 @@ import { todayISO } from './dates'
 // Compteurs de notif pour le mini-rail de la bande gauche (desktop).
 // Rafraîchis au montage + toutes les 180 s + au retour sur la fenêtre.
 // Volontairement léger (pas de temps réel) : c'est juste un repère « il y a des notifs ».
-export function useNavBadges(user) {
+export function useNavBadges(user, activeView = '') {
   const [badges, setBadges] = useState({})
+  // Dernier rafraîchissement : changer d'écran relit les pastilles, mais pas
+  // plus d'une fois toutes les 20 secondes. Sans ça, « À valider » pouvait
+  // afficher un chiffre vieux de trois minutes — le temps qu'on aille voir,
+  // il ne correspondait plus à rien.
+  const dernier = useRef(0)
   useEffect(() => {
     if (!user) return
     let cancelled = false
-    async function refresh() {
+    async function refresh(force = false) {
+      if (!force && Date.now() - dernier.current < 20000) return
+      dernier.current = Date.now()
       const out = {}
       const set = (k, v) => { out[k] = Number(v) || 0 }
       await Promise.all([
@@ -53,7 +60,12 @@ export function useNavBadges(user) {
           const ouverts = new Set((tous || []).map(o => o.name))
           const noms = new Set()
           for (const [c, info] of Object.entries(f || {})) {
-            if (/^WH.*\/MO\//i.test(c)) { if (ouverts.has(c)) noms.add(c); continue }
+            // ⚠️ On ne vérifie PAS que l'ordre est dans `ouverts` : cette liste
+            // s'arrête aux 500 ordres les plus récents, sur plus de 5 000
+            // ouverts. Une coche posée sur un ordre plus ancien n'était donc pas
+            // comptée, et la pastille annonçait moins que l'écran. On compte
+            // exactement ce que « À valider » retient (même règle, même ligne).
+            if (/^WH.*\/MO\//i.test(c)) { noms.add(c); continue }
             if (!c.startsWith('PREP:')) continue
             for (const n of (info && info.ordres) || []) if (ouverts.has(n)) noms.add(n)
           }
@@ -80,10 +92,11 @@ export function useNavBadges(user) {
       if (!cancelled) setBadges(out)
     }
     refresh()
-    const t = setInterval(refresh, 180000)
-    const onFocus = () => refresh()
+    const t = setInterval(() => refresh(true), 180000)
+    const onFocus = () => refresh(true)
     window.addEventListener('focus', onFocus)
     return () => { cancelled = true; clearInterval(t); window.removeEventListener('focus', onFocus) }
-  }, [user?.id])
+    // `activeView` : changer d'écran relit les pastilles (bridé à 20 s plus haut)
+  }, [user?.id, activeView])
   return badges
 }
