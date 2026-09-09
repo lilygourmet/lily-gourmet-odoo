@@ -631,16 +631,11 @@ export async function takeReleveLine(key, envId) {
 // caisses arrivent apres coup. Ici on ne fait qu'ECRIRE le resultat — aucune ligne n'est
 // creee, et les caisses deja vertes ne sont pas touchees (comme un import normal).
 export async function relancerRapprochement() {
-  const { data: libres, error } = await supabase
-    .from('caisse_releve_lignes')
-    .select('key, ligne_date, amount, label, type, releve_url')
-    .is('used_by', null)
-    .not('ignored', 'is', true)
-    .not('label', 'ilike', '%lanacash%')   // lignes TPE : jamais des enveloppes
-    .not('label', 'ilike', '%LNC%')
-    .not('label', 'ilike', '%TPE%')
-    .limit(5000)
-  if (error) throw error
+  // La MÊME liste que l'écran « Reçus banque non liés » : lignes libres, hors ignorées et
+  // hors TPE, et surtout DÉDOUBLONNÉES. Sans ça le calcul voyait encore les fausses lignes
+  // fabriquées par l'ancien lecteur de PDF : deux candidates au lieu d'une, donc une caisse
+  // laissée « à confirmer » alors qu'il n'y a qu'un seul virement.
+  const libres = await loadAllFreeReleveLines()
   const txns = (libres || [])
     .filter(l => l.ligne_date && l.amount != null)
     .map(l => ({
