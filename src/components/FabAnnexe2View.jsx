@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
@@ -256,6 +256,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   // Le détail d'un article (sa cascade) n'arrive qu'à son ouverture.
   const [details, setDetails] = useState({})
   const ouvert = chemin[0] || null
+  // Ce qu'on est déjà allé chercher d'avance, pour ne pas y retourner.
+  const precharges = useRef(new Set())
 
   const recharger = () => setTour(t => t + 1)
   useEffect(() => {
@@ -281,6 +283,19 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       .catch(() => { /* l'onglet « À faire » n'a pas à en souffrir */ })
     return () => { vivant = false }
   }, [tour])
+
+  // Les fiches des premiers articles à faire sont chargées d'avance : quand on
+  // clique, la recette est déjà là au lieu d'un squelette d'une seconde.
+  // Trois suffisent — au-delà on ferait travailler Odoo pour rien.
+  useEffect(() => {
+    for (const a of (articles || []).slice(0, 3)) {
+      if (precharges.current.has(a.produit)) continue
+      precharges.current.add(a.produit)
+      loadArticleFabAnnexe(a.produit)
+        .then(d => { if (d) setDetails(x => (x[a.produit] ? x : { ...x, [a.produit]: d })) })
+        .catch(() => { precharges.current.delete(a.produit) })
+    }
+  }, [articles])
 
   useEffect(() => {
     if (!ouvert || details[ouvert]) return
