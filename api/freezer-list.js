@@ -1924,6 +1924,43 @@ async function composantsDesGS(uid) {
   return dedans
 }
 
+/**
+ * Les ordres ouverts de l'annexe, rangés par article — et les doublons de
+ * règle mini/maxi mis de côté.
+ *
+ * • nés d'une règle Odoo (« OP/… ») : Odoo relance la même chaque matin tant
+ *   que le stock est bas → c'est un DOUBLON. On garde le nombre le PLUS HAUT,
+ *   jamais la somme, et l'écran fait annuler les autres.
+ * • nés d'une commande client (« S12345 ») : ils appartiennent à des clients
+ *   différents, ils s'ADDITIONNENT. On n'y touche JAMAIS.
+ */
+function rangerOrdresAnnexe(ouverts, net) {
+  const estRegle = o => {
+    const orig = String(o.origin || '').trim()
+    return /^OP\//.test(orig) && !/\bS\d{4,}\b/.test(orig)
+  }
+  const parProduit = {}
+  for (const o of ouverts) {
+    const n = net(Array.isArray(o.product_id) ? o.product_id[1] : '')
+    if (n) (parProduit[n] ||= []).push(o)
+  }
+  const ordres = {}
+  const doublons = []
+  for (const [n, liste] of Object.entries(parProduit)) {
+    const regles = liste.filter(estRegle)
+    let jetes = new Set()
+    if (regles.length > 1) {
+      const trie = [...regles].sort((a, b) => (b.product_qty || 0) - (a.product_qty || 0))
+      jetes = new Set(trie.slice(1).map(o => o.name))
+      doublons.push(...jetes)
+    }
+    // l'ordre montré : le plus récent qui reste (liste triée par id décroissant)
+    const montre = liste.find(o => !jetes.has(o.name)) || liste[0]
+    ordres[n] = { name: montre.name, qty: montre.product_qty, state: montre.state, origin: montre.origin || '' }
+  }
+  return { ordres, doublons }
+}
+
 export default async function handler(req, res) {
   try {
     // création de l'ordre de glaçage (POST), quand l'équipe a fait sa tournée
@@ -2333,6 +2370,18 @@ export default async function handler(req, res) {
       if (!lieux.length) return res.status(200).json({ racines: [], recettes: {} })
 
       const net = n => String(n || '').replace(/^\[\d+\]\s*/, '').trim()
+
+      // « À valider Annexe » n'a besoin QUE des ordres ouverts. Lui servir tout
+      // l'arbre — 45 000 lignes de nomenclature, 269 Ko, huit lectures d'Odoo —
+      // coûtait une seconde et demie pour rien. (Layla, 2026-09-09.)
+      if (req.query.quoi === 'ordres') {
+        const ouvertsSeuls = await odooSearchRead(uid, 'mrp.production', [
+          ['location_src_id', 'in', lieux.map(l => l.id)],
+          ['state', 'not in', ['done', 'cancel']],
+        ], ['name', 'product_id', 'product_qty', 'state', 'origin'], { limit: 500, order: 'id desc' })
+        res.setHeader('Cache-Control', 'no-store')
+        return res.status(200).json(rangerOrdresAnnexe(ouvertsSeuls, net))
+      }
       // Odoo écrit les liens sur le MODÈLE (« Sm- PR Le Citron Framboise »)
       // alors que l'atelier fabrique des VARIANTES (« … (10) ») : sans ça on
       // perd des chaînes entières.
@@ -2602,29 +2651,7 @@ export default async function handler(req, res) {
       //   et l'écran fait annuler les autres dans Odoo.
       // • nés d'une commande client (« S12345 ») : ils appartiennent à des
       //   clients différents, ils s'ADDITIONNENT. On n'y touche JAMAIS.
-      const estRegle = o => {
-        const orig = String(o.origin || '').trim()
-        return /^OP\//.test(orig) && !/\bS\d{4,}\b/.test(orig)
-      }
-      const parProduit = {}
-      for (const o of ouverts) {
-        const n = net(Array.isArray(o.product_id) ? o.product_id[1] : '')
-        if (n) (parProduit[n] ||= []).push(o)
-      }
-      const ordres = {}
-      const doublons = []
-      for (const [n, liste] of Object.entries(parProduit)) {
-        const regles = liste.filter(estRegle)
-        let jetes = new Set()
-        if (regles.length > 1) {
-          const trie = [...regles].sort((a, b) => (b.product_qty || 0) - (a.product_qty || 0))
-          jetes = new Set(trie.slice(1).map(o => o.name))
-          doublons.push(...jetes)
-        }
-        // l'ordre montré : le plus récent qui reste (liste triée par id décroissant)
-        const montre = liste.find(o => !jetes.has(o.name)) || liste[0]
-        ordres[n] = { name: montre.name, qty: montre.product_qty, state: montre.state, origin: montre.origin || '' }
-      }
+      const { ordres, doublons } = rangerOrdresAnnexe(ouverts, net)
 
       top('stocks et min/max')
       const photos = {}

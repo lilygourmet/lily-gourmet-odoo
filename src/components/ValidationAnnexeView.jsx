@@ -4,7 +4,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres } from '../lib/fabricationProd'
-import { loadArbreAnnexe } from '../lib/fabricationAnnexe'
+import { loadOrdresAnnexe } from '../lib/fabricationAnnexe'
 import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs, setFait } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 import { AjoutIngredient } from './ValidationView'
@@ -77,7 +77,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     ;(async () => {
       try {
         const [arbre, journal, gardees] = await Promise.all([
-          loadArbreAnnexe(tour > 0),   // après une création : sans le cache
+          loadOrdresAnnexe(),          // les ordres seuls : l'arbre n'a rien à faire ici
           // Une semaine, pas le seul jour : ce qui a été déclaré hier et pas
           // validé doit rester sous les yeux. Les ordres déjà validés ou
           // annulés sont écartés juste après, comme avant.

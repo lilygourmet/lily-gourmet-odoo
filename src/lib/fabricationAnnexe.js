@@ -18,6 +18,16 @@ export async function loadArbreAnnexe(frais = false) {
   return await r.json()
 }
 
+/**
+ * Les seuls ordres ouverts, sans l'arbre : c'est tout ce dont « À valider
+ * Annexe » a besoin. L'arbre complet pèse 269 Ko et huit lectures d'Odoo.
+ */
+export async function loadOrdresAnnexe() {
+  const r = await fetch('/api/freezer-list?mode=annexe&quoi=ordres&cb=' + Date.now())
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  return await r.json()
+}
+
 /** Les articles que l'équipe ne fait jamais et qu'on a rangés hors de l'écran. */
 export async function loadMasques(atelier = 'annexe') {
   const { data, error } = await supabase.from('prod_masques').select('nom').eq('atelier', atelier)
