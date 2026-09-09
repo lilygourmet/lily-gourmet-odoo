@@ -497,3 +497,27 @@ describe('marquerDoublons — orthographe proche à un jour', () => {
     expect(out).toHaveLength(2)
   })
 })
+
+describe('clients connus sous deux raisons sociales', () => {
+  const L4 = (key, date, label) => ({
+    key, ligne_date: date, amount: 17000, label,
+    releve_url: `releves/${key}.pdf`, created_at: '2026-07-01T10:00:00',
+  })
+
+  it('reconnaît la Société Financière Internationale comme Citibank', () => {
+    expect(nomDeLigne('VIRT RECU SOCIETE FINANCIERE INTERNATIONALE'))
+      .toBe(nomDeLigne('VIRT RECU CITIBANK EUROPE PLC'))
+  })
+
+  it('fusionne les deux écritures du même paiement', () => {
+    const out = marquerDoublons([
+      L4('a', '2026-06-05', 'VIRT RECU CITIBANK 2012323926 EUROPE PLC FI'),
+      L4('b', '2026-06-06', 'VIRT RECU SOCIETE FINANCIERE INTERNATIONALE'),
+    ])
+    expect(out).toHaveLength(1)
+  })
+
+  it('ne touche pas aux autres clients', () => {
+    expect(nomDeLigne('VIRT RECU SOCIETE GENERALE MAROC')).toBe('GENERALE MAROC SOCIETE')
+  })
+})

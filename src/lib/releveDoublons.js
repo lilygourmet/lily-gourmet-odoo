@@ -8,12 +8,22 @@
 // Mots présents dans tous les libellés bancaires : ils ne disent rien du client.
 const MOTS_BANQUE = /^(VIR|VIRT|VIREMENT|VIREMENTS|INST|RECU|RECUE|EMIS|MME|MLLE|MR|MONSIEUR|MADAME|DE|DU|DES|LA|LE|LES|ET|PAR|SUR|WEB|VERS|COMPTE|REGUL|REMISE|CHEQUE|CHQ|ENC|VERSEMENT|ESPECE|ESPECES|PAYM|CARTE)$/
 
+// Le même payeur porte parfois deux raisons sociales selon le document. Vécu :
+// « CITIBANK EUROPE PLC » et « SOCIETE FINANCIERE INTERNATIONALE » sont le même client.
+// Quand un libellé porte l'un de ces noms, il DEVIENT le nom du client : le reste du
+// libellé (sigles, références) ne dit rien de plus et empêchait les deux de se reconnaître.
+const CLIENTS_CONNUS = [
+  [/CITIBANK|SOCIETE\s+FINANCIERE\s+INTERNATIONALE/, 'CITIBANK EUROPE'],
+]
+
 // Nom « utile » d'un libellé : que les mots du client, triés (l'ordre varie d'un relevé à l'autre).
 // « VIRT RECU MME SELMA BENOMAR » → « BENOMAR SELMA »
 export function nomDeLigne(label) {
-  return (label || '')
+  const propre = (label || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toUpperCase().replace(/[^A-Z0-9 ]/g, ' ')
+  for (const [motif, nom] of CLIENTS_CONNUS) if (motif.test(propre)) return nom
+  return propre
     .split(/\s+/)
     .filter(w => w.length >= 3 && !/\d/.test(w) && !MOTS_BANQUE.test(w))
     .sort()
