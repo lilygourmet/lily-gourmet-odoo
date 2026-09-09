@@ -250,3 +250,30 @@ describe('parseBmciReleve — le libellé reste sur son opération', () => {
     expect(par(500).label).toContain('ASMAE SAIR')
   })
 })
+
+// Protection anti-doublon du rapprochement : une caisse DÉJÀ verte réserve une ligne libre
+// de même date et même montant, pour qu'un ré-import ne la propose pas deux fois. Mais
+// quand on rejoue le calcul sur les seules lignes LIBRES (bouton « Relancer »), la caisse
+// verte a déjà la sienne : elle vole celle d'une autre caisse. D'où le filtre appliqué dans
+// relancerRapprochement — ce test en fixe la raison.
+describe('reconcileEnvelopes — une caisse verte réserve une ligne libre', () => {
+  const ligne = { credit: 392, dateIso: '2026-07-17', type: 'virement_recu', label: 'VIR INST RECU 2324371 FARHANE HAJAR' }
+  const verte = {
+    id: 'V', amount_cash: 392, payment_method: 'virement', releve_status: 'trouve',
+    session_date: '2026-07-17', note_proof: '2026-07-17 · VIR INST RECU 2321144 FARHANE HAJAR',
+  }
+  const grise = {
+    id: 'G', amount_cash: 392, payment_method: 'virement', releve_status: null,
+    proof_url: null, session_date: '2026-07-17', virement_client: 'Hajar farhane',
+  }
+
+  it('affame la caisse grise quand la verte est dans le lot', () => {
+    const { results } = reconcileEnvelopes([verte, grise], [ligne], {})
+    expect(results.find(r => r.env.id === 'G').status).toBe('absent')
+  })
+
+  it('rapproche la caisse grise quand on ne passe que les caisses en attente', () => {
+    const { results } = reconcileEnvelopes([grise], [ligne], {})
+    expect(results.find(r => r.env.id === 'G').status).toBe('trouve')
+  })
+})
