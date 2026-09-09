@@ -392,3 +392,27 @@ describe('marquerDoublons — jumeau fabriqué dans le même PDF', () => {
     expect(out).toHaveLength(2)
   })
 })
+
+// L'extrait et le relevé ne datent pas une opération pareil : le même virement de 500 dh
+// de TAZI NYBELE est daté du 14/07 sur l'extrait et du 17/07 sur le relevé. Exiger le même
+// jour empêchait de reconnaître la ligne dont la jumelle est déjà rattachée à une caisse.
+describe('memeOperation — extrait et relevé datent différemment', () => {
+  const extrait = { amount: 500, ligne_date: '2026-07-14', label: 'VIR INST RECU TAZI NYBELE', releve_url: 'releves/extrait.pdf' }
+  const releve = { amount: 500, ligne_date: '2026-07-17', label: 'VIR INST RECU TAZI NYBELE 2320471 260717385317', releve_url: 'releves/releve.pdf' }
+
+  it('reconnaît la même opération à 3 jours entre deux documents', () => {
+    expect(memeOperation(extrait, releve)).toBe(true)
+  })
+
+  it('refuse au-delà de 3 jours', () => {
+    expect(memeOperation(extrait, { ...releve, ligne_date: '2026-07-19' })).toBe(false)
+  })
+
+  it('exige le même jour à l\'intérieur d\'un même document', () => {
+    expect(memeOperation(extrait, { ...releve, releve_url: 'releves/extrait.pdf' })).toBe(false)
+  })
+
+  it('refuse deux clients différents, même à 1 jour', () => {
+    expect(memeOperation(extrait, { ...releve, ligne_date: '2026-07-15', label: 'VIR INST RECU OUKHADDA AYA' })).toBe(false)
+  })
+})
