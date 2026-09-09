@@ -18,6 +18,22 @@ import {
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 const propre = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').trim()
 
+/**
+ * La taille lue dans le nom : « indiv » vaut 1, « 10 pers » et « 20 cm » leur
+ * nombre, « (5) » aussi. 0 quand il n'y en a pas.
+ */
+const tailleDe = nom => {
+  const n = String(nom || '')
+  if (/\bindiv/i.test(n)) return 1
+  const m = n.match(/(\d+(?:[.,]\d+)?)\s*(?:cm|pers)\b/i) || n.match(/\((\d+)\)/)
+  return m ? Number(String(m[1]).replace(',', '.')) : 0
+}
+
+/** Le nom sans sa taille : ce qui met les tailles d'un même article côte à côte. */
+const baseDe = nom => propre(nom)
+  .replace(/\bindiv\w*|\d+(?:[.,]\d+)?\s*(?:cm|pers)\b|\(\d+\)/gi, '')
+  .replace(/\s{2,}/g, ' ').trim().toLowerCase()
+
 /** Grammes ou pièces en entier ; les kilos gardent leurs décimales. */
 const qte = (v, u) => {
   const n = Number(v) || 0
@@ -137,6 +153,9 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
   const [filtre, setFiltre] = useState('')
   const [enCours, setEnCours] = useState('')
   const [figes, setFiges] = useState(null)   // l'article dont on règle les figés
+  // Les gâteaux sont repliés : 277 lignes d'un coup, personne n'y voit rien.
+  // On ouvre celui sur lequel on travaille. (Layla, 2026-09-09.)
+  const [ouverts, setOuverts] = useState(() => new Set())
 
   useEffect(() => {
     let vivant = true
@@ -166,7 +185,15 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
     for (const l of lignes || []) {
       if (!base.some(a => a.produit === l.produit)) base.push({ ...l, suivi: true, pour: [] })
     }
-    return parGateauMere(base, filtre, true)
+    // Dans un gâteau, les tailles d'un même article se suivent, de la plus
+    // petite à la plus grande : indiv, 5 pers, 10 pers…
+    return parGateauMere(base, filtre, true).map(g => ({
+      ...g,
+      articles: [...g.articles].sort((x, y) =>
+        baseDe(x.produit).localeCompare(baseDe(y.produit), 'fr')
+        || tailleDe(x.produit) - tailleDe(y.produit)
+        || x.produit.localeCompare(y.produit, 'fr')),
+    }))
   }, [tout, lignes, filtre])
 
   const combien = useMemo(
@@ -242,13 +269,31 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
               {!tout && ' — lecture d’Odoo en cours…'}
             </div>
 
-            {groupes.map(g => (
-              <section key={g.nom} className="mb-4">
-                <h2 className="font-serif italic text-[17px] text-bordeaux mb-1.5 pb-1 border-b border-cream-deep">
-                  {g.nom.replace(/^(E-|MI-|V-)\s*/, '')}
-                  <span className="not-italic font-sans text-[12px] text-ink-mute"> · {g.articles.length}</span>
-                </h2>
-                {g.articles.map(l => {
+            {groupes.map(g => {
+              // Une recherche ouvre tout : sinon on cherche et on ne voit rien.
+              const ouvert = !!filtre.trim() || ouverts.has(g.nom)
+              const aRefaire = g.articles.filter(
+                l => l.suivi && l.stock !== undefined && Number(l.stock) <= Number(l.mini)).length
+              return (
+              <section key={g.nom} className="mb-2">
+                <button onClick={() => setOuverts(o => {
+                  const n = new Set(o)
+                  if (n.has(g.nom)) n.delete(g.nom); else n.add(g.nom)
+                  return n
+                })}
+                  className="w-full flex items-center gap-2 text-left py-2 border-b border-cream-deep">
+                  <span className="text-ink-mute text-[13px] w-4">{ouvert ? '▾' : '▸'}</span>
+                  <span className="flex-1 min-w-0 font-serif italic text-[17px] text-bordeaux leading-tight">
+                    {g.nom.replace(/^(E-|MI-|V-)\s*/, '')}
+                  </span>
+                  {aRefaire > 0 && (
+                    <span className="rounded-full bg-bordeaux text-cream text-[11px] font-bold px-2 py-0.5">
+                      {aRefaire} à refaire
+                    </span>
+                  )}
+                  <span className="text-[12px] text-ink-mute">{g.articles.length}</span>
+                </button>
+                {ouvert && g.articles.map(l => {
                   const unite = l.unite || ''
                   const sousLeMini = l.stock !== undefined && Number(l.stock) <= Number(l.mini)
                   return (
@@ -311,7 +356,8 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
                   )
                 })}
               </section>
-            ))}
+              )
+            })}
 
             {!groupes.length && (
               <p className="py-8 text-center text-ink-mute text-[14px]">Aucun article de ce nom.</p>
