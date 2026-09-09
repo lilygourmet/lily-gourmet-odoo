@@ -75,6 +75,7 @@ describe('parGateauMere', () => {
     { produit: 'SM- Pr Cheesecake indiv', pour: ['E- Cheesecake'] },
     { produit: 'SM- Cheesecake indiv', pour: ['E- Cheesecake'] },
     { produit: 'SM- Cheesecake 10 pers', pour: ['E- Cheesecake'] },
+    { produit: 'F- Framboise Congelée', pour: ['E- Le Citron Framboise'] },
   ]
 
   it('range chaque article sous CHAQUE gâteau qu’il sert', () => {
@@ -109,6 +110,11 @@ describe('parGateauMere', () => {
     expect(noms).toContain('SM- Pr Cheesecake indiv')
     expect(noms).not.toContain('SM- Cheesecake indiv')
     expect(noms).toContain('SM- Cheesecake 10 pers')
+  })
+
+  it('laisse les fruits dehors', () => {
+    const noms = parGateauMere(arts, '').flatMap(g => g.articles.map(a => a.produit))
+    expect(noms).not.toContain('F- Framboise Congelée')
   })
 
   it('filtre sur la recherche', () => {

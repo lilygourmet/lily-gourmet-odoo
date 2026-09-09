@@ -86,6 +86,9 @@ export function parGateauMere(articles, cherche) {
   const groupes = new Map()
   for (const a of articles || []) {
     if (estPreparation(a.produit)) continue
+    // Un « F- » est un fruit, pas une fabrication : sa nomenclature ne dit que
+    // « 1 kg de framboise fraîche donne 1 kg de congelée ». (Layla, 2026-09-09.)
+    if (/^\s*(\[\d+\]\s*)?f\s*-/i.test(a.produit)) continue
     if (avecPr.has(cleGateau(a.produit)) && !estPr(a.produit)) continue
     if (q && !a.produit.toLowerCase().includes(q)) continue
     const oues = (a.pour || []).length ? a.pour : ['Le reste']
