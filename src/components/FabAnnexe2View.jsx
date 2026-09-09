@@ -217,6 +217,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   // Ce que le pâtissier a déclaré dans cette séance : { produit: { fois } }
   const [faits, setFaits] = useState({})
   const [sortie, setSortie] = useState(null)
+  const [gateau, setGateau] = useState(null)
   // Verrou contre le double appui : une création d'ordre Odoo prend
   // plusieurs secondes, et deux appuis feraient deux ordres.
   const [envoi, setEnvoi] = useState(false)
@@ -277,6 +278,12 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
 
   // ---------- la liste ----------
   if (chemin.length === 0) {
+    // « Déclarer » s'ouvre sur les gâteaux, pas sur les 140 articles : on
+    // choisit son gâteau, puis sa taille. Une recherche saute l'étape et
+    // montre les articles directement. (Layla, 2026-09-09.)
+    const groupes = onglet === 'declarer' ? parGateauMere(tout, cherche) : []
+    const ouvertG = cherche.trim() ? null : groupes.find(g => g.nom === gateau)
+    const vus = cherche.trim() ? groupes : ouvertG ? [ouvertG] : []
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader {...nav} />
@@ -329,7 +336,34 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                 className="w-full h-11 rounded-xl border border-cream-deep bg-cream-warm px-3
                            text-[15px] text-ink outline-none focus:border-bordeaux mb-3" />
               {!tout && !erreur && <Skeleton rows={4} />}
-              {parGateauMere(tout, cherche).map(g => (
+
+              {!cherche.trim() && !ouvertG && (
+                <div className="grid gap-2.5"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))' }}>
+                  {groupes.map(g => (
+                    <button key={g.nom} onClick={() => setGateau(g.nom)}
+                      className="text-left rounded-2xl border border-cream-deep bg-cream-warm
+                                 overflow-hidden shadow-sm hover:border-bordeaux/40 flex flex-col">
+                      <Vignette photo={g.photo} libelle={g.nom} gros taille="w-full aspect-square" />
+                      <div className="px-2 py-1.5 flex flex-col gap-0.5 flex-1">
+                        <div className="text-[12px] font-extrabold leading-[1.25]">
+                          {g.nom.replace(/^(E-|MI-|V-)\s*/, '')}
+                        </div>
+                        <div className="mt-auto pt-0.5 text-[10.5px] text-ink-mute">
+                          {g.articles.length} article{g.articles.length > 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {ouvertG && (
+                <button onClick={() => setGateau(null)}
+                  className="text-[13px] text-ink-mute font-bold mb-3">← Tous les gâteaux</button>
+              )}
+
+              {vus.map(g => (
                 <section key={g.nom} className="mb-5">
                   <h2 className="flex items-center gap-2.5 mb-2">
                     <Vignette photo={g.photo} libelle={g.nom}
@@ -363,7 +397,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                   </div>
                 </section>
               ))}
-              {tout && !parGateauMere(tout, cherche).length && (
+              {tout && !groupes.length && (
                 <p className="text-center text-[13px] text-ink-mute py-8">Rien à ce nom-là.</p>
               )}
             </>
