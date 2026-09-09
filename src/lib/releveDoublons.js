@@ -114,12 +114,15 @@ export function memeOperation(a, b) {
   // relevé ne datent pas une opération pareil (l'un lit la date d'opération, l'autre celle
   // de valeur) : entre deux documents, on tolère 3 jours. Vécu : « VIR INST RECU TAZI
   // NYBELE », 500 dh, daté du 14/07 sur l'extrait et du 17/07 sur le relevé.
-  // La tolérance ne vaut que si on SAIT que les deux viennent de documents différents ;
-  // dans le doute (document inconnu d'un côté), on exige le même jour.
-  const docsDifferents = !!a.releve_url && !!b.releve_url && a.releve_url !== b.releve_url
+  // Le même jour n'est exigé que DANS un même document : là, deux jours différents sont
+  // deux opérations. Sinon on tolère 3 jours — l'extrait et le relevé ne datent pas une
+  // opération pareil, et le document est souvent inconnu (une caisse rapprochée de longue
+  // date n'a gardé aucun PDF). Exiger le même jour dans ce cas laissait la jumelle d'un
+  // dépôt déjà rattaché traîner dans « Reçus banque non liés ».
+  const memeDocConnu = !!a.releve_url && !!b.releve_url && a.releve_url === b.releve_url
   const jours = (a.ligne_date && b.ligne_date)
     ? Math.abs((new Date(a.ligne_date) - new Date(b.ligne_date)) / 86400000) : null
-  if (jours == null || jours > (docsDifferents ? 3 : 0)) return false
+  if (jours == null || jours > (memeDocConnu ? 0 : 3)) return false
   // Même client, même montant, le MÊME JOUR = un seul virement, même si les n° diffèrent.
   // Sur ces relevés un libellé s'étale sur 5-6 lignes dans le PDF, et le lecteur rattache
   // parfois les morceaux à l'opération voisine : vu un n° 2321144 enregistré avec la
