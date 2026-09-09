@@ -4,7 +4,8 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
   loadHistoriqueAnnexe, parJour, bloquants, declares, parGateauMere, noeudAu,
-  declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe, foisDuNoeud } from '../lib/fabAnnexe'
+  declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe, foisDuNoeud,
+  lignesRecette } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
 import { todayISO } from '../lib/dates'
@@ -254,11 +255,11 @@ function LigneQte({ nom, valeur, unite, onValeur, gras }) {
   )
 }
 
-function Recette({ noeud, fois, onFois }) {
+function Recette({ noeud, lignes, fois, onFois }) {
   const parRecette = noeud.tourneeTaille || 1
   return (
     <div className="divide-y divide-cream-deep/50">
-      {(noeud.recette || []).map((l, i) => {
+      {lignes.map((l, i) => {
         const f = facteurAtelier(l.produit)
         return (
           <LigneQte key={i} nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
@@ -856,7 +857,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               className="h-11 px-3 rounded-xl border border-gold bg-gold/10
                          text-[13px] font-extrabold text-gold">×2</button>
           </div>
-          <Recette noeud={noeud} fois={fois} onFois={majFois} />
+          <Recette noeud={noeud} lignes={lignesRecette(noeud, enfants)}
+            fois={fois} onFois={majFois} />
         </>
       )}
 

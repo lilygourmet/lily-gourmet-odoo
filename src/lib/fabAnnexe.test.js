@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { bloquants, noeudAu, enfantsDe, parGateauMere, parJour, tourneesSuggerees } from './fabAnnexe'
+import { bloquants, noeudAu, enfantsDe, parGateauMere, parJour, tourneesSuggerees,
+  lignesRecette } from './fabAnnexe'
 
 // Un tiramisu tel que l'API le renvoie, en plus court.
 const tiramisu = {
@@ -188,5 +189,34 @@ describe('tourneesSuggerees', () => {
     // et non deux (28) — on ne fabrique pas au-delà du maxi.
     expect(tourneesSuggerees({ tournee: 14, reste: 25 })).toBe(1.5)
     expect(tourneesSuggerees({ tournee: 14, reste: 41 })).toBe(2.5)
+  })
+})
+
+describe('lignesRecette', () => {
+  const fond = {
+    produit: 'SM- Fond Citron Framboise (1)',
+    recette: [
+      { produit: 'SM. Biscuit amande gingembre', qty: 638, unite: 'g' },
+      { produit: 'SM. Confit de framboise prod', qty: 435, unite: 'g' },
+      { produit: 'MP- Sucre Granule', qty: 100, unite: 'g' },
+    ],
+  }
+
+  it('n’écrit pas deux fois ce qui est listé en composant juste en dessous', () => {
+    const enfants = [
+      { produit: 'SM. Biscuit amande gingembre' },
+      { produit: 'SM. Confit de framboise prod' },
+    ]
+    expect(lignesRecette(fond, enfants).map(l => l.produit)).toEqual(['MP- Sucre Granule'])
+  })
+
+  it('garde toute la recette quand rien n’est listé en dessous', () => {
+    expect(lignesRecette(fond, []).length).toBe(3)
+    expect(lignesRecette(fond, null).length).toBe(3)
+  })
+
+  it('ne casse pas sur un article sans recette', () => {
+    expect(lignesRecette({}, [{ produit: 'x' }])).toEqual([])
+    expect(lignesRecette(null, null)).toEqual([])
   })
 })

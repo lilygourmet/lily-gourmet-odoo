@@ -177,6 +177,20 @@ export function tourneesSuggerees(article) {
 }
 
 /**
+ * Les lignes de recette à AFFICHER : celles qui ne sont pas déjà écrites juste
+ * en dessous, dans « Ce qu'il faut avoir » ou « Aussi dans la recette ».
+ *
+ * Le fond de citron framboise listait ses trois préparations DEUX FOIS — une
+ * fois dans sa recette, une fois dans ses composants (Layla, 2026-09-09).
+ * Vaut pour toutes les recettes, à tous les niveaux : c'est la liste du bas
+ * qui gagne, elle porte le stock, le blocage et le chevron pour l'ouvrir.
+ */
+export function lignesRecette(noeud, enfants) {
+  const enBas = new Set((enfants || []).map(c => c.produit))
+  return (noeud?.recette || []).filter(l => !enBas.has(l.produit))
+}
+
+/**
  * Combien de fois la recette, par défaut, quand on OUVRE un composant.
  *
  * ⚠️ Un article à quantité FIGÉE ne se fait pas par tournée : on en produit
