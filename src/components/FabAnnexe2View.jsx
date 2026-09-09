@@ -598,7 +598,12 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       photo={racine ? article.photo : null}
       titre={racine ? article.libelle : propre(noeud.produit)}
       sous={racine
-        ? `Tournée de ${qte(article.tournee, article.unite)}`
+        // « Tournée de … » ne vaut que pour la tournée de référence : dès qu'on
+        // en choisit plusieurs, le chiffre est ce QU'ON FAIT, pas ce que fait
+        // une tournée. (Layla, 2026-09-09.)
+        ? (foisArticle === 1
+            ? `Tournée de ${qte(article.tournee, article.unite)}`
+            : `Je fais ${qte(article.tournee, article.unite)} · ${nb(foisArticle)} tournée${foisArticle > 1 ? 's' : ''}`)
         : noeud.besoin > noeud.stock
           ? `Il en faut ${qte(noeud.besoin - noeud.stock, noeud.unite)} pour ${propre(parent)}`
           : `Tu en as ${qte(noeud.stock, noeud.unite)} — pour prendre de l'avance`}>
