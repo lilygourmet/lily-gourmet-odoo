@@ -121,4 +121,20 @@ describe('parGateauMere', () => {
     expect(parGateauMere(arts, 'sirop')).toHaveLength(1)
     expect(parGateauMere(arts, 'rien du tout')).toHaveLength(0)
   })
+
+  // Dès qu'on tape, on cherche un composant précis : tout est fouillé.
+  it('la recherche retrouve AUSSI ce que la liste cache', () => {
+    const trouve = q => parGateauMere(arts, q).flatMap(g => g.articles.map(a => a.produit))
+    expect(trouve('creme beurre')).toContain('SM. Creme au beurre nature')
+    expect(trouve('framboise')).toContain('F- Framboise Congelée')
+    expect(trouve('cheesecake indiv')).toContain('SM- Cheesecake indiv')
+  })
+
+  it('pardonne les fautes et les mots inversés', () => {
+    const trouve = q => parGateauMere(arts, q).flatMap(g => g.articles.map(a => a.produit))
+    expect(trouve('beurre creme')).toContain('SM. Creme au beurre nature')
+    expect(trouve('crème')).toContain('SM. Creme au beurre nature')
+    expect(trouve('framboize')).toContain('F- Framboise Congelée')
+    expect(trouve('imbibage sirop')).toContain('Sm. sirop imbibage')
+  })
 })

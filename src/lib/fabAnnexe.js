@@ -8,6 +8,7 @@
 import { addFabProd, rattacherOrdre, loadFabProd, loadNoms } from './fabricationProd'
 import { creerOfPrepa } from './fabrication'
 import { todayISO } from './dates'
+import { correspond } from './recherche'
 
 /** L'état du jour. Jamais mis en cache : Layla doit voir ses corrections tout de suite. */
 export async function loadFabAnnexe() {
@@ -77,7 +78,7 @@ const cleGateau = nom =>
   sansPrefixe(nom).replace(/^pr\s*-?\s*/i, '').replace(/\W+/g, '').toLowerCase()
 
 export function parGateauMere(articles, cherche) {
-  const q = String(cherche || '').trim().toLowerCase()
+  const q = String(cherche || '').trim()
   // Quand un « Pr » existe, lui seul a une case : l'étape d'avant s'ouvre
   // depuis sa recette, où on voit son stock. Les tailles restent distinctes
   // — un « Pr » 10 pers ne cache pas l'indiv. (Layla, 2026-09-09.)
@@ -85,12 +86,19 @@ export function parGateauMere(articles, cherche) {
     (articles || []).filter(a => estPr(a.produit)).map(a => cleGateau(a.produit)))
   const groupes = new Map()
   for (const a of articles || []) {
-    if (estPreparation(a.produit)) continue
-    // Un « F- » est un fruit, pas une fabrication : sa nomenclature ne dit que
-    // « 1 kg de framboise fraîche donne 1 kg de congelée ». (Layla, 2026-09-09.)
-    if (/^\s*(\[\d+\]\s*)?f\s*-/i.test(a.produit)) continue
-    if (avecPr.has(cleGateau(a.produit)) && !estPr(a.produit)) continue
-    if (q && !a.produit.toLowerCase().includes(q)) continue
+    // Dès qu'on tape, on cherche PARTOUT : les préparations, les fruits et les
+    // deux étapes d'un couple « Pr » compris — on vient chercher un composant
+    // précis, pas parcourir les gâteaux. Sans rien de tapé, la liste garde ses
+    // raccourcis. Fautes de frappe et mots inversés acceptés. (Layla, 2026-09-09.)
+    if (q) {
+      if (!correspond(a.produit, q)) continue
+    } else {
+      if (estPreparation(a.produit)) continue
+      // Un « F- » est un fruit, pas une fabrication : sa nomenclature ne dit que
+      // « 1 kg de framboise fraîche donne 1 kg de congelée ».
+      if (/^\s*(\[\d+\]\s*)?f\s*-/i.test(a.produit)) continue
+      if (avecPr.has(cleGateau(a.produit)) && !estPr(a.produit)) continue
+    }
     const oues = (a.pour || []).length ? a.pour : ['Le reste']
     for (const g of oues) {
       const e = groupes.get(g) || { nom: g, photo: g === 'Le reste' ? null : g, articles: [] }
