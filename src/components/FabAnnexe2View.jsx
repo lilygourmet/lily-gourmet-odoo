@@ -4,7 +4,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
   loadHistoriqueAnnexe, parJour, bloquants, declares, parGateauMere, noeudAu,
-  declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe } from '../lib/fabAnnexe'
+  declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe, foisDuNoeud } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
 import { todayISO } from '../lib/dates'
@@ -582,8 +582,16 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   // Les matières premières achetées : rien à fabriquer, rien à cliquer, mais
   // elles font partie de la recette — sans l'eau du robinet, on ne la fait pas.
   const achetes = (enfants || []).filter(c => !c.fige && !c.fabrique)
-  const fois = faits[noeud.produit]?.fois ?? noeud.tournees ?? 1
+  const fois = faits[noeud.produit]?.fois ?? foisDuNoeud(noeud)
   const majFois = f => setFaits(x => ({ ...x, [noeud.produit]: { fois: Math.max(0.01, Math.round(f * 10000) / 10000), brouillon: true } }))
+  // Un article à quantité FIGÉE se règle en QUANTITÉ, pas en tournées : sa
+  // recette est écrite pour une unité, « une tournée » n'y veut rien dire.
+  // Le pas suit l'unité — 10 g, 100 g de kg, 1 pièce (Layla, 2026-09-09).
+  const parRecette = noeud.tourneeTaille || 1
+  const aLaQte = !!noeud.aLaQuantite
+  const pasFois = aLaQte
+    ? (noeud.unite === 'u' ? 1 : /^kg$/i.test(noeud.unite) ? 0.1 : 10) / parRecette
+    : 0.5
 
   // Envoyer la fournée à « À valider ». Sorti du bouton pour être appelé aussi
   // par « C'est fait » quand on ne pose pas la question du rendement.
@@ -632,7 +640,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     return (
       <Cadre {...nav} onRetour={() => setSortie(null)} photo={racine ? article.photo : null}
         titre={racine ? article.libelle : propre(noeud.produit)}
-        sous={racine ? 'Tournée montée' : `Recette × ${nb(fois)}`}>
+        sous={racine ? 'Tournée montée'
+          : aLaQte ? `Pour ${qte(parRecette * fois, noeud.unite)}` : `Recette × ${nb(fois)}`}>
         <div className="px-4 py-6 text-center">
           <div className="text-[15px] font-bold">
             {racine
@@ -782,20 +791,24 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       {!racine && (
         <>
           <div className="flex items-center gap-2 px-4 py-3 border-t border-cream-deep/60">
-            <button onClick={() => majFois(Math.max(0.5, fois - 0.5))} disabled={fois <= 0.5}
+            <button onClick={() => majFois(Math.max(pasFois, fois - pasFois))} disabled={fois <= pasFois}
               className="w-11 h-11 rounded-xl border border-cream-deep bg-cream-warm
                          text-[22px] font-extrabold text-bordeaux leading-none disabled:opacity-35">−</button>
             <div className="flex-1 text-center">
               <div className="text-[15px] font-extrabold">
-                {fois === 0.5 ? '½' : nb(fois)} tournée{fois > 1 ? 's' : ''}
+                {aLaQte
+                  ? qte(parRecette * fois, noeud.unite)
+                  : `${fois === 0.5 ? '½' : nb(fois)} tournée${fois > 1 ? 's' : ''}`}
               </div>
               <div className="text-[11.5px] text-ink-mute">
-                {qte((noeud.tourneeTaille || 1) * fois, noeud.unite)}
-                {fois !== noeud.tournees && noeud.tournees
-                  ? ` · conseillé : ${nb(noeud.tournees)}` : ''}
+                {aLaQte ? 'à la quantité' : qte(parRecette * fois, noeud.unite)}
+                {fois !== foisDuNoeud(noeud)
+                  ? ` · conseillé : ${aLaQte
+                      ? qte(parRecette * foisDuNoeud(noeud), noeud.unite)
+                      : nb(foisDuNoeud(noeud))}` : ''}
               </div>
             </div>
-            <button onClick={() => majFois(fois + 0.5)}
+            <button onClick={() => majFois(fois + pasFois)}
               className="w-11 h-11 rounded-xl border border-cream-deep bg-cream-warm
                          text-[22px] font-extrabold text-bordeaux leading-none">+</button>
             <button onClick={() => majFois(fois * 2)}
@@ -945,6 +958,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
             {/* Plus de « Tout y est » sur une tournée montée : le bouton dit
                 déjà quoi faire (Layla, 2026-09-09). */}
             {racine ? ''
+              : aLaQte ? `Pour ${qte(parRecette * fois, noeud.unite)}`
               : fois === noeud.tournees ? "Recette d'origine" : `Recette × ${nb(fois)}`}
             {!racine && noeud.besoin <= noeud.stock && (
               <div className="text-[11.5px] text-ink-mute mt-0.5">Tu n'en as pas besoin maintenant</div>

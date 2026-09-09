@@ -174,6 +174,22 @@ export function tourneesSuggerees(article) {
 }
 
 /**
+ * Combien de fois la recette, par défaut, quand on OUVRE un composant.
+ *
+ * ⚠️ Un article à quantité FIGÉE ne se fait pas par tournée : on en produit
+ * exactement ce qui manque. Sa recette Odoo est écrite pour une seule unité
+ * (la crème légère : 0,328 g de lait POUR 1 g de crème), donc il faut la
+ * multiplier par la quantité à sortir — sinon l'écran affichait « 1 tournée
+ * de 1 g » et une recette d'un gramme (Layla, 2026-09-09).
+ */
+export function foisDuNoeud(c) {
+  if (c?.aLaQuantite && c.tourneeTaille) {
+    return Math.max(0.01, Math.round((c.produira / c.tourneeTaille) * 10000) / 10000)
+  }
+  return c?.tournees ?? 1
+}
+
+/**
  * Ce qu'il faut vraiment, pour le nombre de tournées choisi. Les quantités de
  * l'API valent pour UNE tournée ; ici on les met à l'échelle, et on recalcule
  * ce que chaque composant demande à son tour.
