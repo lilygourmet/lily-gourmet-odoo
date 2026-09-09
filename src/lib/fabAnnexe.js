@@ -310,7 +310,11 @@ export function noeudAu(articles, chemin, foisDe) {
     // biscuit affichait la recette de 1 960 — « il m'affiche une autre
     // recette » (Layla, 2026-09-09). L'article de tête est déjà à l'échelle
     // (`pourFois`), on ne le remet pas deux fois.
-    const fois = noeud !== article && foisDe ? foisDe(noeud) : null
+    // ⚠️ TOUJOURS, pas seulement quand une quantité a été tapée : la quantité
+    // PROPOSÉE compte autant. Sans ça la liste annonçait « 9 000 g de génoise »
+    // et la fiche s'ouvrait sur 4 500.
+    const fois = noeud === article ? null
+      : ((foisDe && foisDe(noeud)) ?? foisDuNoeud(noeud))
     const enfants = fois > 0
       ? enfantsPour(noeud, (noeud.tourneeTaille || 1) * fois)
       : enfantsDe(noeud)

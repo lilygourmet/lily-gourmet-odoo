@@ -334,6 +334,20 @@ describe('descendre — la quantité réglée suit dans les fiches du dessous', 
     expect(z.besoin).toBe(26)
   })
 
+  it('la fiche ouvre sur la quantité annoncée, MÊME sans réglage à la main', () => {
+    // Le gâteau est réglé sur 2 tournées : le biscuit passe à 3 920 g, il en
+    // manque 628, donc une demi-tournée (2 200 g) est proposée. Le zeste
+    // affiché sous le biscuit doit valoir cette demi-tournée — 6,5 g pour
+    // 2 200 g — et non la quantité d'origine. C'est le bug des « 9 000 g de
+    // génoise » dont la fiche s'ouvrait sur 4 500 (Layla, 2026-09-09).
+    const gros = [pourFois(arbre()[0], 2)]
+    const biscuit = descendre(gros, chemin).noeud
+    expect(biscuit.besoin).toBe(3920)
+    expect(biscuit.tournees).toBe(0.5)
+    const zeste = descendre(gros, [...chemin, 'SM. Citron zest']).noeud
+    expect(zeste.besoin).toBe(6.5)
+  })
+
   it('la quantité par défaut d’un étage suit celle du dessus', () => {
     // Fond réglé sur 2 → il manque 628 g de biscuit → une demi-tournée
     // (2 200 g) est proposée, et le zeste vaut 6,5 g pour cette demi-tournée.
