@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reconcileEnvelopes } from './releveBmci'
+import { reconcileEnvelopes, parseBmciReleve } from './releveBmci'
 
 // Une enveloppe déjà justifiée par une PREUVE PHOTO manuelle (proof_url sans
 // releve_status) ne doit pas être re-rapprochée à l'import du relevé, et son
@@ -195,5 +195,58 @@ describe('reconcileEnvelopes — chèque encaissé un mois et demi après', () =
   it('valide seul une remise à 47 jours', () => {
     const { results } = reconcileEnvelopes([envCheque], [remise], {})
     expect(results.find(r => r.env.id === 776).status).toBe('trouve')
+  })
+})
+
+// Page réelle d'un relevé BMCI (17/07/2026) : chaque virement porte un libellé de 5 lignes
+// SOUS sa ligne de montant. La dernière ligne (« 215469570/1XXXXX ») est donc plus proche
+// de l'opération SUIVANTE — et se retrouvait collée sur elle. Vécu : cette référence, qui
+// termine le virement de CHRYSTEL AMELIE, est apparue sur celui de FARHANE HAJAR.
+describe('parseBmciReleve — le libellé reste sur son opération', () => {
+  const X = { dop: 50, det: 160, dv: 400, deb: 500, cre: 600 }
+  const items = [
+    { page: 1, y: 800, x: X.dop, str: 'Date op' },
+    { page: 1, y: 800, x: X.det, str: 'Détails' },
+    { page: 1, y: 800, x: X.dv, str: 'Date valeur' },
+    { page: 1, y: 800, x: X.deb, str: 'Débit' },
+    { page: 1, y: 800, x: X.cre, str: 'Crédit' },
+  ]
+  // 3 virements, chacun suivi de ses 5 lignes de références.
+  const ops = [
+    { y: 700, nom: 'VIR INST RECU CHRYSTEL AMELIE', montant: '400,00',
+      refs: ['2322373', '000215469570', '05020260717000215469570', '050013MAD00000120260720000215', '215469570/1XXXXX'] },
+    { y: 640, nom: 'VIR INST RECU YASMINA IMANI', montant: '1.000,00',
+      refs: ['2322777', '000215480541', '05020260717000215480541', '050013MAD00000120260720000215', '215480541/1XXXXX'] },
+    { y: 580, nom: 'VIR INST RECU ASMAE SAIR', montant: '500,00',
+      refs: ['2322947', '260717107600', '23020260717260717107600', '230013MAD00000120260720260717', '20260717143512679411'] },
+  ]
+  for (const o of ops) {
+    items.push({ page: 1, y: o.y, x: X.dop, str: '17/07/2026' })
+    items.push({ page: 1, y: o.y, x: X.det, str: o.nom })
+    items.push({ page: 1, y: o.y, x: X.dv, str: '17/07/2026' })
+    items.push({ page: 1, y: o.y, x: X.cre, str: o.montant })
+    o.refs.forEach((r, i) => items.push({ page: 1, y: o.y - 10 * (i + 1), x: X.det, str: r }))
+  }
+  const parsed = parseBmciReleve(items)
+  const par = m => parsed.find(t => t.credit === m)
+
+  it('lit les 3 virements', () => {
+    expect(parsed.map(t => t.credit).sort((a, b) => a - b)).toEqual([400, 500, 1000])
+  })
+
+  it('garde la dernière référence sur SON virement', () => {
+    expect(par(400).label).toContain('215469570/1XXXXX')
+    expect(par(1000).label).not.toContain('215469570/1XXXXX')
+  })
+
+  it("ne prend pas les références du virement suivant", () => {
+    expect(par(400).label).not.toContain('2322777')
+    expect(par(1000).label).not.toContain('2322947')
+  })
+
+  it('garde le nom du client sur chaque virement', () => {
+    expect(par(400).label).toContain('CHRYSTEL AMELIE')
+    expect(par(1000).label).toContain('YASMINA IMANI')
+    expect(par(500).label).toContain('ASMAE SAIR')
   })
 })
