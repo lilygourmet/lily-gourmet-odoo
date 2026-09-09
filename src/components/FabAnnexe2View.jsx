@@ -184,7 +184,7 @@ const Titre = ({ children }) => (
 // recette en veut 1,2, c'est faire une recette et demie — pas forcer sur le
 // sucre.
 // ------------------------------------------------------------
-function LigneQte({ nom, valeur, unite, onValeur, gras }) {
+function LigneQte({ nom, valeur, unite, onValeur, gras, sous }) {
   const suffixe = ' ' + unite
   const brut = qte(valeur, unite)
   const affiche = brut.endsWith(suffixe) ? brut.slice(0, -suffixe.length) : brut
@@ -200,7 +200,13 @@ function LigneQte({ nom, valeur, unite, onValeur, gras }) {
   }
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
-      <span className={`flex-1 min-w-0 text-[14px] ${gras ? 'font-extrabold' : ''}`}>{nom}</span>
+      <span className="flex-1 min-w-0">
+        <span className={`text-[14px] ${gras ? 'font-extrabold' : ''}`}>{nom}</span>
+        {/* Le repère à la pièce : « 160 g par u ». Sans lui on ne lisait que le
+            total, et il fallait diviser de tête pour savoir ce que mange UNE
+            pièce (Layla, 2026-09-09). */}
+        {sous && <span className="block text-[11px] text-ink-mute">{sous}</span>}
+      </span>
       <input value={txt} inputMode="decimal" aria-label={'Quantité de ' + nom}
         onChange={e => setTxt(e.target.value)} onBlur={valider}
         onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
@@ -220,6 +226,7 @@ function Recette({ noeud, fois, onFois }) {
         const f = facteurAtelier(l.produit)
         return (
           <LigneQte key={i} nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
+            sous={parRecette ? `${qte((l.qty * f) / parRecette, l.unite)} par ${noeud.unite}` : null}
             onValeur={v => onFois(v / f / l.qty)} />
         )
       })}
