@@ -1272,7 +1272,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
    * « N cm cakedesign » / formes : les cremes et bases se comptent en KILOS, on
    * ne va pas sortir 1135 etiquettes pour 1135 g de pate a sucre.
    */
-  const imprimerEtiquettesFab = async (produit, qty) => {
+  // `uniteQty` : dans quelle unité `qty` est exprimée, quand l'appelant le sait.
+  // Sans elle on la déduit de la recette — ce qui ne marche pas pour un article
+  // absent des recettes de l'écran : la crème au beurre nature finition est
+  // envoyée en GRAMMES, la recette était introuvable, l'unité retombait sur kg
+  // et l'étiquette annonçait 1 000 000 g pour 1 000 g.
+  const imprimerEtiquettesFab = async (produit, qty, uniteQty = null) => {
     const montage = estMontageCD(produit)
     const prepa = !montage && estPrepaEtiquetee(produit)
     if (!montage && !prepa) return
@@ -1294,7 +1299,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const j = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: '2-digit' })
       // Sur une préparation, le poids en gros en bas — là où le montage porte
       // son numéro de commande : on lit le bac de loin sans le peser.
-      const unite = (recettes[produit] || {}).unite || 'kg'
+      const unite = uniteQty || (recettes[produit] || {}).unite || 'kg'
       const poids = prepa ? qteLisible(enKg(Number(qty) || 0, unite).q, 'kg') : undefined
       const [r] = await sendEtiquettes([buildZplInfo({
         entete: j.charAt(0).toUpperCase() + j.slice(1),
@@ -1310,10 +1315,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   }
 
   /** Pose ou retire la coche d'UN ordre (ou d'une clé, faute d'ordre). */
-  const marquerOrdre = async (cle, produit, qty) => {
+  const marquerOrdre = async (cle, produit, qty, uniteQty = null) => {
     const on = !faits[cle]
     const avant = faits[cle]
-    if (on) imprimerEtiquettesFab(produit, qty)
+    if (on) imprimerEtiquettesFab(produit, qty, uniteQty)
     const ordres = /^WH.*\/MO\//i.test(cle) ? [cle] : ((avant && avant.ordres) || [])
     setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty, ordres }; else delete n[cle]; return n })
 
@@ -1367,7 +1372,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         quand: new Date().toISOString().slice(0, 19).replace('T', ' '),
       }],
     } : d))
-    return marquerOrdre(cree.name, ARTICLE_FINITION, q)
+    // « g » explicite : cet article n'a pas de recette dans l'écran, l'étiquette
+    // prendrait sinon des kilos pour des grammes.
+    return marquerOrdre(cree.name, ARTICLE_FINITION, q, 'g')
   }
 
   /**

@@ -4,7 +4,12 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies, loadStocksNegatifs, setFait } from '../lib/fabrication'
-import { todayISO } from '../lib/dates'
+import { todayISO, jourLocal } from '../lib/dates'
+
+// Une date d'Odoo (« 2026-09-09 11:33:00 », sans fuseau, donc UTC) ramenée au
+// jour LOCAL. Sans le « Z », JavaScript la lirait comme une heure marocaine et
+// se tromperait d'un jour aux mêmes heures qu'on cherche justement à corriger.
+const jourOdooLocal = q => jourLocal(String(q || '').replace(' ', 'T') + 'Z')
 
 // ====== « À valider » : la page dédiée ======
 // Tout ce que l'équipe a marqué « fait » (montages, préparations, tournées de
@@ -166,7 +171,12 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         // veille — les ordres prévus pour aujourd'hui n'étaient plus cochés
         // d'avance et l'équipe de nuit devait tout recocher à la main.
         const jour = todayISO()
-        setSel(ouverts.filter(x => !x.quand || String(x.quand).slice(0, 10) <= jour).map(x => x.name))
+        // ⚠️ `quand` vient d'Odoo, donc en UTC : le découper brut compare une
+        // date UTC à une date marocaine. Un ordre prévu demain à 00h30 est
+        // stocké aujourd'hui 23h30 UTC — il se retrouvait coché d'avance, et la
+        // carte affichait « prévu le 10 septembre » en orange avec sa case déjà
+        // cochée. On repasse donc la date en heure locale avant de comparer.
+        setSel(ouverts.filter(x => !x.quand || jourOdooLocal(x.quand) <= jour).map(x => x.name))
         garderEcran('valider', ouverts)
         // Ce qui avait été corrigé ailleurs, sans écraser ce qu'on tape ici.
         const vivants = new Set(ouverts.map(x => x.name))
