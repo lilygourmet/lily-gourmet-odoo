@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD } from '../lib/fabrication'
+import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms } from '../lib/fabrication'
 import { buildZplInfo } from '../lib/etiquettes'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
@@ -288,7 +288,7 @@ function BoutonFait({ fait, onClick, bloque = null, sansNomenclature = false }) 
 }
 
 // Une ligne de « déjà déclaré » : le gâteau, ou une de ses crèmes en dessous.
-function LigneDeclaree({ o, onRetirer, petit = false }) {
+function LigneDeclaree({ o, onRetirer, petit = false, par = '' }) {
   const pese = /^(g|kg)$/i.test(norm(o.unite))
   return (
     <div className="flex items-center gap-3">
@@ -297,6 +297,10 @@ function LigneDeclaree({ o, onRetirer, petit = false }) {
           {o.taille || propre(o.produit)} <span className="text-[12.5px] font-medium">{o.parfum}</span>
         </div>
         <div className="text-[11px] text-ink-mute font-mono">{o.name}</div>
+        {/* Qui l'a déclaré, et à quelle heure. L'app l'enregistrait depuis
+            toujours sans jamais le montrer. Absent pour ce qui est déjà validé :
+            la coche est effacée à la validation, l'auteur avec. */}
+        {par && <div className="text-[11px] text-ink-soft">{par}</div>}
       </div>
       <span className={(petit ? 'text-[13.5px]' : 'text-[15px]') + ' font-extrabold text-ink-mute whitespace-nowrap'}>
         {pese ? qteLisible(enKg(o.qty, o.unite).q, 'kg') : `×${nb(o.qty)}`}
@@ -393,11 +397,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // prochain clic. Ce compteur ne sert qu'à redemander le calcul quand la liste
   // est arrivée — il est dans les dépendances des mémos qui s'appuient dessus.
   const [basesPretes, setBasesPretes] = useState(0)
+  const [noms, setNoms] = useState({})          // { idUtilisateur : « Prénom Nom » }
 
   useEffect(() => {
     loadBasesChoisies()
       .then(l => { basesEnPlus = l || []; setBasesPretes(v => v + 1) })
       .catch(() => { })
+    loadNoms().then(setNoms).catch(() => { })
   }, [])
 
   // Odoo fait foi : un ordre annulé (ou validé) là-bas rend sa coche caduque,
@@ -834,6 +840,18 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     }
     return [...parJour.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1))
   }, [data, dejaDeclares, faits])
+
+  // « par Meriem · 14h02 » sous une ligne de l'historique. Vide pour ce qui est
+  // déjà validé : la coche — et donc l'auteur — est effacée à la validation.
+  const declarePar = ordre => {
+    const info = faits[ordre]
+    if (!info || !info.fait_le) return ''
+    // `fait_le` porte déjà son fuseau (…+00:00) : surtout pas `dt`, qui lui
+    // ajoute un « Z » et rend la date invalide.
+    const heure = new Date(info.fait_le).toLocaleTimeString('fr-FR', { ...CASA, hour: '2-digit', minute: '2-digit' })
+    const qui = noms[info.fait_par] || ''
+    return qui ? `par ${qui} · ${heure}` : heure
+  }
 
   // Retirer un ordre de la liste : soit il a sa propre coche, soit il vient
   // d'une préparation cochée par son nom.
@@ -1508,10 +1526,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                   </div>
                   {lignesDuJour.map(o => (
                     <div key={o.name} className="border border-[#cfe0b8] bg-[#EAF3DE] rounded-xl px-3.5 py-2.5 mb-1.5">
-                      <LigneDeclaree o={o} onRetirer={() => retirer(o)} />
+                      <LigneDeclaree o={o} onRetirer={() => retirer(o)} par={declarePar(o.name)} />
                       {o.enfants.map(e => (
                         <div key={e.name} className="ml-4 pl-3 mt-1.5 border-l-2 border-[#cfe0b8]">
-                          <LigneDeclaree o={e} petit onRetirer={() => retirer(e)} />
+                          <LigneDeclaree o={e} petit onRetirer={() => retirer(e)} par={declarePar(e.name)} />
                         </div>
                       ))}
                     </div>

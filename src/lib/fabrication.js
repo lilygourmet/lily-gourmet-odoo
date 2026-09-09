@@ -50,6 +50,20 @@ export async function loadStocksNegatifs() {
   return (await r.json()).articles || []
 }
 
+/**
+ * Le nom des gens, par identifiant — pour dire QUI a déclaré une fabrication.
+ * L'app enregistrait déjà l'auteur de chaque coche sans jamais le montrer :
+ * « d'où sortent ces articles ? » (Layla, 2026-09-08) n'avait pas de réponse à
+ * l'écran. Silencieux : sans les noms on affiche juste l'heure.
+ */
+export async function loadNoms() {
+  const { data, error } = await supabase.from('profiles').select('id, username, full_name')
+  if (error) return {}
+  const out = {}
+  for (const p of data || []) out[p.id] = p.full_name || p.username || ''
+  return out
+}
+
 /** Juste les ordres Odoo encore ouverts (rapide : une seule question à Odoo). */
 export async function loadOrdres() {
   const r = await fetch('/api/freezer-list?mode=ordres')
