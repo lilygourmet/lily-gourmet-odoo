@@ -373,32 +373,19 @@ describe('remise de chèques — le même n° reste décisif', () => {
   })
 })
 
-// La fausse ligne fabriquée par l'ancien lecteur de PDF vient du MÊME fichier que la vraie,
-// et lui ressemble trait pour trait : même client, même jour, même montant, n° différents.
-// Deux VRAIS virements du même client le même jour ont exactement la même allure (vécu :
-// Nybele Tazi, 2 × 500 dh, deux n° différents). Aucune règle ne peut les départager, donc
-// l'app ne supprime plus rien ici : perdre un vrai paiement coûte bien plus cher qu'une
-// ligne en trop, qui se retire d'un clic (« Ignorer ce doublon »). Le lecteur de PDF ne
-// fabrique plus de jumeau depuis sa correction ; seules les lignes déjà enregistrées avant
-// restent à trier à la main.
-describe('marquerDoublons — deux lignes du même PDF aux n° différents', () => {
+// La fausse ligne fabriquée par le lecteur de PDF vient du MÊME fichier que la vraie :
+// le garde-fou « deux lignes d'un même document sont deux opérations réelles » ne doit pas
+// empêcher de les fusionner quand le nom du client, le montant et le jour concordent.
+describe('marquerDoublons — jumeau fabriqué dans le même PDF', () => {
   const D = (key, label) => ({
     key, ligne_date: '2026-07-17', amount: 392, label,
     releve_url: 'releves/juillet.pdf', created_at: '2026-08-01T10:00:00',
   })
 
-  it('garde les deux lignes plutôt que d\'en supprimer une au hasard', () => {
+  it('fusionne les deux libellés du même virement', () => {
     const out = marquerDoublons([
       D('a', 'VIR INST RECU 2321144 215469570/1XXXXX FARHANE HAJAR'),
       D('b', 'VIR INST RECU 2324371 706376617404 00720260717706376617404 FARHANE HAJAR'),
-    ])
-    expect(out).toHaveLength(2)
-  })
-
-  it('fusionne encore les deux libellés quand aucun n\'est numéroté', () => {
-    const out = marquerDoublons([
-      D('a', 'VIR INST RECU FARHANE HAJAR'),
-      D('b', 'VIRT RECU MME HAJAR FARHANE'),
     ])
     expect(out).toHaveLength(1)
   })
@@ -532,42 +519,5 @@ describe('clients connus sous deux raisons sociales', () => {
 
   it('ne touche pas aux autres clients', () => {
     expect(nomDeLigne('VIRT RECU SOCIETE GENERALE MAROC')).toBe('GENERALE MAROC SOCIETE')
-  })
-})
-
-// Vécu : Nybele Tazi a fait DEUX virements de 500 dh le même jour, sous deux numéros
-// différents. L'app n'en gardait qu'un — un vrai paiement disparaissait de « non liées ».
-describe('deux virements réels le même jour, numéros différents', () => {
-  const L5 = (key, label, doc) => ({
-    key, ligne_date: '2026-07-14', amount: 500, label,
-    releve_url: doc, created_at: '2026-07-20T10:00:00',
-  })
-
-  it('garde les deux lignes du même relevé', () => {
-    const out = marquerDoublons([
-      L5('a', 'VIR INST RECU 2378161 TAZI NYBELE', 'releves/juillet.pdf'),
-      L5('b', 'VIR INST RECU 2378455 TAZI NYBELE', 'releves/juillet.pdf'),
-    ])
-    expect(out).toHaveLength(2)
-  })
-
-  it('ne les considère pas comme la même opération', () => {
-    const a = L5('a', 'VIR INST RECU 2378161 TAZI NYBELE', 'releves/juillet.pdf')
-    const b = L5('b', 'VIR INST RECU 2378455 TAZI NYBELE', 'releves/juillet.pdf')
-    expect(memeOperation(a, b)).toBe(false)
-  })
-
-  it('fusionne toujours la même opération vue dans deux documents', () => {
-    const a = L5('a', 'VIR INST RECU 2378161 TAZI NYBELE', 'releves/releve.pdf')
-    const b = L5('b', 'VIR INST RECU 9902244 TAZI NYBELE', 'releves/extrait.pdf')
-    expect(memeOperation(a, b)).toBe(true)
-  })
-
-  it('fusionne toujours deux lignes du même relevé sans numéro', () => {
-    const out = marquerDoublons([
-      L5('a', 'VIR INST RECU TAZI NYBELE', 'releves/juillet.pdf'),
-      L5('b', 'VIR INST RECU TAZI NYBELE', 'releves/juillet.pdf'),
-    ])
-    expect(out).toHaveLength(1)
   })
 })

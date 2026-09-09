@@ -510,13 +510,16 @@ function NonLieSection() {
   const [ignoreReason, setIgnoreReason] = useState('')
   const [parMois, setParMois] = useState(false)       // regrouper les lignes par mois
   const [replies, setReplies] = useState([])          // mois repliés
+  const [voirMasquees, setVoirMasquees] = useState(false)  // afficher aussi les lignes cachées
   async function reload() {
     setLines(null)
-    const loader = view === 'linked' ? loadAllLinkedReleveLines : view === 'ignored' ? loadIgnoredReleveLines : loadAllFreeReleveLines
-    try { setLines(await loader()) } catch { setLines([]) }
+    const charger = view === 'linked' ? loadAllLinkedReleveLines
+      : view === 'ignored' ? loadIgnoredReleveLines
+      : () => loadAllFreeReleveLines(voirMasquees)
+    try { setLines(await charger()) } catch { setLines([]) }
     try { setPendingEnvs(await loadPendingBanqueEnvelopes()) } catch { setPendingEnvs([]) }
   }
-  useEffect(() => { reload() }, [view])
+  useEffect(() => { reload() }, [view, voirMasquees])
   async function handleLink(env, line) {
     let deja = []
     if (env.deja_rapprochee) {
@@ -638,6 +641,7 @@ function NonLieSection() {
             <div style={{ fontSize: 11, color: '#8a7a70', display: 'flex', alignItems: 'center', gap: 6 }}>
               {l.ligne_date}
               {l.banque && <span style={{ padding: '1px 7px', borderRadius: 999, background: '#F4F0EA', color: '#4a3a30' }}>{l.banque}</span>}
+              {l.masquee && <span style={{ padding: '1px 7px', borderRadius: 999, background: '#EDE4F6', color: '#5b2a86' }}>masquée : {l.masquee}</span>}
             </div>
             <div style={{ fontSize: 13, color: '#1a0f0a' }}>{l.label || '—'}</div>
             {l.doublon_probable && (
@@ -720,6 +724,12 @@ function NonLieSection() {
           <Calendar size={14} /> {parMois ? 'Tout afficher' : 'Par mois'}
         </button>
       </div>
+      {view === 'free' && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 12, color: '#4a3a30', cursor: 'pointer' }}>
+          <input type="checkbox" checked={voirMasquees} onChange={e => setVoirMasquees(e.target.checked)} />
+          Voir les lignes que l'app a masquées (doublons, dépôts déjà rattachés) — au cas où deux vraies opérations se ressemblent
+        </label>
+      )}
       <input type="search" value={q} onChange={e => setQ(e.target.value)}
         placeholder="🔍 montant, nom, date…"
         style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 12, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10 }} />

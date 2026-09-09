@@ -394,7 +394,11 @@ export async function loadReleveImports(limit = 50) {
 }
 
 // Toutes les lignes du relevé encore libres (reçues en banque, non liées à Odoo).
-export async function loadAllFreeReleveLines() {
+// avecMasquees : renvoie AUSSI les lignes que l'app cache (doublons, jumelles d'un dépôt
+// déjà rattaché…), marquées `masquee: '<raison>'`. C'est le filet de sécurité de Layla :
+// quand la banque enregistre deux VRAIES opérations que rien ne distingue (même client,
+// même jour, même montant, n° différents), elle peut voir la ligne cachée et la lier.
+export async function loadAllFreeReleveLines(avecMasquees = false) {
   const { data, error } = await supabase
     .from('caisse_releve_lignes')
     .select('*')
@@ -463,11 +467,12 @@ export async function loadAllFreeReleveLines() {
   // (« N » / « N° ») → même MONTANT + même n° de versement (unique) → on garde 1 ligne.
   const seen = new Set()
   const out = []
+  const masquees = []
   for (const r of (data || [])) {
-    if (dejaPrise(r)) continue                        // jumelle déjà rattachée à une caisse
+    if (dejaPrise(r)) { masquees.push({ ...r, masquee: 'déjà rattachée à une caisse' }); continue }
     const sig = signatureDepot(r.amount, r.label)
     const k = sig || `row|${r.key || r.id}`
-    if (seen.has(k)) continue
+    if (seen.has(k)) { masquees.push({ ...r, masquee: 'même n° d\'opération' }); continue }
     seen.add(k); out.push(r)
   }
   // 3e source : caisses justifiées par une PREUVE MANUELLE (photo du bordereau), sans
@@ -482,11 +487,15 @@ export async function loadAllFreeReleveLines() {
     .limit(5000)
   for (const caisse of (preuves || [])) {
     const i = out.findIndex(l => memeDepotSansNumero(l, caisse))
-    if (i >= 0) out.splice(i, 1)
+    if (i >= 0) masquees.push({ ...out.splice(i, 1)[0], masquee: 'caisse justifiée par une photo' })
   }
   // Doublons sans n° d'opération : même montant + même nom vu sous 2 dates (opération /
   // valeur) dans 2 imports → on n'en garde qu'une ; orthographe proche → on la signale.
-  return marquerDoublons(out)
+  const gardees = marquerDoublons(out)
+  if (!avecMasquees) return gardees
+  const vues = new Set(gardees.map(l => l.key))
+  for (const l of out) if (!vues.has(l.key)) masquees.push({ ...l, masquee: 'doublon (même montant, même client)' })
+  return [...gardees, ...masquees].sort((a, b) => String(b.ligne_date).localeCompare(String(a.ligne_date)))
 }
 
 // Ignore (ou réactive) une ligne de relevé « à lier », avec une raison facultative.
