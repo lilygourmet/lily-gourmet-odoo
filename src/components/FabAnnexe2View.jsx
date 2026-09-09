@@ -106,6 +106,16 @@ function rangTaille(nom) {
   return 1000
 }
 
+// L'URGENCE : à quel point on est descendu sous le mini du Stock Prod.
+// 0 = plus rien, 1 = pile au mini. Plus c'est bas, plus ça presse. Un article
+// sans mini ne presse que s'il est à zéro. (Layla, 2026-09-09.)
+const urgence = a => {
+  const mini = Number(a?.mini) || 0
+  const stock = Number(a?.stock) || 0
+  if (mini > 0) return Math.max(0, stock / mini)
+  return stock > 0 ? 1 : 0
+}
+
 function parGateau(articles) {
   const groupes = []
   for (const a of articles || []) {
@@ -118,11 +128,18 @@ function parGateau(articles) {
     g.articles.push(a)
   }
   for (const g of groupes) {
+    // Dans un gâteau, l'ordre reste celui des TAILLES : on monte du plus petit
+    // au plus grand, c'est ainsi qu'on travaille.
     g.articles.sort((x, y) => rangTaille(x.produit) - rangTaille(y.produit)
       || String(x.produit).localeCompare(String(y.produit), 'fr'))
     g.ruptures = g.articles.filter(a => a.etat === 'rupture').length
+    // Un gâteau est aussi pressant que son article le plus bas sous son mini.
+    g.urgence = Math.min(...g.articles.map(urgence))
   }
-  return groupes
+  // Les gâteaux, eux, sont classés par URGENCE : le plus descendu sous son mini
+  // arrive en premier, c'est par lui qu'on commence la journée.
+  return groupes.sort((a, b) => a.urgence - b.urgence
+    || String(a.nom).localeCompare(String(b.nom), 'fr'))
 }
 
 // ------------------------------------------------------------
@@ -942,22 +959,22 @@ function CarteArticle({ a, onOuvrir }) {
 
       <div className="px-2 py-1.5 flex flex-col gap-0.5 flex-1">
         <div className="text-[12px] font-extrabold leading-[1.25]">{court || a.libelle}</div>
-        {/* L'état EN TOUTES LETTRES et les mini/maxi : le passage aux tuiles les
-            avait fait disparaître au profit d'une pastille de couleur, et on ne
-            savait plus de quel seuil on parlait (Layla, 2026-09-09). */}
+        {/* Quatre lignes, pas une de plus : le titre, l'état, ce qu'il reste,
+            ce qu'il faut faire. Les mini/maxi et le nombre de tournées ont été
+            retirés — ils encombraient sans servir au coup d'œil (Layla,
+            2026-09-09). L'urgence, elle, se lit à la position dans la liste. */}
         <div className={`text-[10.5px] font-extrabold leading-tight
           ${a.etat === 'rupture' ? 'text-danger' : 'text-gold'}`}>
           {a.etat === 'rupture' ? 'Rupture' : 'À refaire'}
         </div>
         <div className="text-[10.5px] text-ink-mute leading-tight">
           en stock {qte(a.stock, a.unite)}
-          <span className="block">mini {nb(a.mini)} / maxi {nb(a.maxi)}</span>
           {a.dejaFait > 0 && (
             <span className="block text-success font-bold">déjà fait {qte(a.dejaFait, a.unite)}</span>
           )}
         </div>
         <div className="mt-auto pt-1 text-[11.5px] font-extrabold text-gold leading-tight">
-          {sug === 0.5 ? '½' : sug === 1.5 ? '1½' : sug}× · {qte(a.tournee * sug, a.unite)}
+          à faire {qte(a.tournee * sug, a.unite)}
         </div>
       </div>
     </button>
