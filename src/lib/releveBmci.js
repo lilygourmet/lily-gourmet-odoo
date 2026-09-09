@@ -97,8 +97,9 @@ function detectFormat(items) {
 
 const DR = /^\d{2}\/\d{2}\/\d{4}$/
 
-// BMCI relevé : le montant est au milieu de son libellé (en-tête au-dessus, suite en dessous).
-function parseBmciReleve(items) {
+// BMCI relevé : le libellé commence SUR la ligne du montant et se poursuit EN DESSOUS,
+// sur 4 à 5 lignes (n° d'opération, références, code MAD…). Jamais au-dessus.
+export function parseBmciReleve(items) {
   const a = {}
   // Plafond des libellés, PAR PAGE : au-dessus, c'est l'en-tête, pas une opération.
   // L'en-tête de colonnes (« Débit ») n'est imprimé que sur la 1re page ; les pages
@@ -134,8 +135,16 @@ function parseBmciReleve(items) {
     const hy = hyByPage[it.page] ?? bandeauY ?? a.hy
     if ((hy != null && it.y >= hy) || it.x >= lmax || DR.test(it.str) || parseAmount(it.str) != null) continue
     const c = bp[it.page]; if (!c) continue
-    let b = c[0], bd = Math.abs(it.y - b.y)
-    for (const ar of c) { const d = Math.abs(it.y - ar.y); if (d < bd) { bd = d; b = ar } }
+    // Le morceau appartient à la DERNIÈRE opération commencée au-dessus de lui. « Le plus
+    // proche » coupait la poire en deux : la dernière ligne d'un libellé étant plus près
+    // de l'opération SUIVANTE, elle lui était donnée. Vécu : « 215469570/1XXXXX », qui
+    // termine le virement de CHRYSTEL AMELIE, s'est retrouvé sur celui de FARHANE HAJAR.
+    let b = null
+    for (const ar of c) {
+      if (ar.y < it.y - 1.5) continue        // opération SOUS le morceau : pas la sienne
+      if (!b || ar.y < b.y) b = ar           // la plus basse parmi celles au-dessus
+    }
+    if (!b) continue                          // rien au-dessus : reste d'en-tête, on ignore
     b.frags.push({ y: it.y, x: it.x, s: it.str })
   }
   return ars.map(ar => {
