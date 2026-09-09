@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fabrication CD — peser au lieu de calculer</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--cream:#fcfbf8;--warm:#F7F2EA;--line:#e5d8c3;--bordeaux:#993556;--ink:#2b2118;
+    --soft:#5b4d40;--mute:#9a8b7a;--ok:#5c7a3f;--okbg:#EAF3DE;--rouge:#b03a3a;--rougebg:#FCEEE8;
+    --or:#b58f3c;--orbg:#FBF3DF}
+  *{box-sizing:border-box}
+  body{margin:0;background:#efeae1;color:var(--ink);font-family:Geist,system-ui,sans-serif;padding:18px 12px 60px}
+  .wrap{max-width:470px;margin:0 auto}
+  .etape{margin:0 0 30px}
+  .etape>h2{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:17px;margin:0 0 3px;color:var(--bordeaux)}
+  .etape>p.q{margin:0 0 10px;font-size:13px;color:var(--soft);line-height:1.5}
+  .etape>p.q b{color:var(--ink)}
+  .ecran{background:var(--cream);border:1px solid #d9cfbf;border-radius:20px;padding:13px 11px 16px;box-shadow:0 3px 14px rgba(90,70,45,.09)}
+  .bloc{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:11px}
+  .tete{padding:12px 13px;border-bottom:1px solid var(--line)}
+  .tete b{display:block;font-size:16px;font-weight:800;line-height:1.2}
+  .tete small{display:block;font-size:12px;color:var(--mute);margin-top:3px}
+
+  .saisie{padding:16px 13px 14px;text-align:center}
+  .saisie .qq{font-size:15px;font-weight:700;margin-bottom:3px}
+  .saisie .sq{font-size:12px;color:var(--mute);margin-bottom:13px}
+  .champ{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px}
+  .champ button{width:50px;height:58px;border:1px solid var(--line);border-radius:14px;background:#fff;
+    font-size:25px;font-weight:800;color:var(--bordeaux);font-family:inherit;cursor:pointer;line-height:1}
+  .champ input{width:130px;height:58px;border:2px solid var(--bordeaux);border-radius:14px;text-align:center;
+    font-family:Fraunces,Georgia,serif;font-size:29px;outline:none;background:#fff;color:var(--ink)}
+  .champ .u{font-size:14px;color:var(--mute);font-weight:700}
+  .ec{font-size:12.5px;color:var(--mute);min-height:18px;margin-bottom:12px}
+  .ec b{color:var(--or)}
+  .val{width:100%;background:var(--ok);border:0;color:#fff;border-radius:14px;padding:14px;
+    font-size:15px;font-weight:800;font-family:inherit;cursor:pointer}
+
+  .calc{background:var(--orbg);border-top:1px solid #ecdfc0;padding:12px 13px}
+  .cl{display:flex;align-items:baseline;gap:8px;padding:5px 0;font-size:13.5px}
+  .cl .n{flex:1;color:var(--soft)}
+  .cl .v{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .cl.res{border-top:2px solid var(--or);margin-top:5px;padding-top:9px}
+  .cl.res .n{font-weight:800;color:var(--ink)}
+  .cl.res .v{font-size:19px;color:var(--or);font-family:Fraunces,Georgia,serif}
+
+  .odoo{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:11px}
+  .odoo .oh{background:var(--bordeaux);color:#fff;padding:10px 13px;font-size:13.5px;font-weight:800}
+  .odoo .oh small{display:block;font-weight:500;opacity:.85;font-size:11.5px;margin-top:2px}
+  .ol{display:flex;align-items:baseline;gap:8px;padding:8px 13px;border-top:1px solid #f7f2e8;font-size:13px}
+  .ol .on{flex:1}.ol .oq{font-weight:800;white-space:nowrap}
+  .tag{font-size:10px;font-weight:800;border-radius:6px;padding:2px 6px;white-space:nowrap}
+  .tag.p{background:var(--okbg);color:var(--ok)}
+  .tag.r{background:var(--rougebg);color:var(--rouge)}
+
+  .note{margin:9px 0 0;font-size:11.5px;color:var(--mute);line-height:1.5;padding:0 3px}
+  .note b{color:var(--bordeaux)}
+  .q2{background:#fffdf6;border:1px solid #e8dcbb;border-radius:16px;padding:12px 13px;margin:0 0 12px}
+  .q2 b.t{display:block;color:var(--or);font-size:13.5px;margin-bottom:5px}
+  .q2 p{margin:0 0 7px;font-size:12.5px;line-height:1.5;color:var(--soft)}
+  .q2 p:last-child{margin:0}
+  .princ{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 13px;margin-bottom:22px}
+  .princ b.t{display:block;font-size:14px;margin-bottom:8px;color:var(--bordeaux)}
+  .princ p{margin:0 0 8px;font-size:13px;line-height:1.6;color:var(--soft)}
+  .princ p:last-child{margin:0}
+  .princ code{background:var(--warm);padding:1px 6px;border-radius:5px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="princ">
+  <b class="t">Le principe : peser plutôt que calculer</b>
+  <p>Aujourd'hui, Odoo déduit ce qui a été consommé <b>en appliquant la recette</b>. Si le sirop dit
+  180 g par gâteau, dix gâteaux consomment 1 800 g — que ce soit vrai ou non.</p>
+  <p>Ce que tu proposes : <b>on pèse ce qui reste</b>. Le bac contenait 2 790 g, il en reste 1 200 →
+  <b>1 590 g ont servi</b>. C'est la réalité, pas une règle de trois.</p>
+</div>
+
+<!-- 1 -->
+<section class="etape">
+  <h2>1. Elle fait la crème au beurre nature</h2>
+  <p class="q">Comme dans Fabrication Annexe 2 : la recette annonce un poids, elle dit ce qu'elle a
+  vraiment obtenu.</p>
+  <div class="ecran"><div class="bloc">
+    <div class="tete"><b>Crème au beurre nature</b><small>Recette faite × 1</small></div>
+    <div class="saisie">
+      <div class="qq">Combien ça a donné, au final ?</div>
+      <div class="sq">La recette en annonce 5 425 g</div>
+      <div class="champ"><button onclick="pas('a',-10)">−</button>
+        <input id="a" value="5280" inputmode="decimal" oninput="maj()"><span class="u">g</span>
+        <button onclick="pas('a',10)">+</button></div>
+      <div class="ec" id="ae"></div>
+      <button class="val">Envoyer à « À valider »</button>
+    </div>
+  </div></div>
+</section>
+
+<!-- 2 -->
+<section class="etape">
+  <h2>2. Elle fait le sirop</h2>
+  <p class="q">Même chose. Ce poids devient <b>le point de départ</b> : c'est ce qu'il y a dans le bac.</p>
+  <div class="ecran"><div class="bloc">
+    <div class="tete"><b>Sirop d'imbibage</b><small>Recette faite × 1</small></div>
+    <div class="saisie">
+      <div class="qq">Combien ça a donné, au final ?</div>
+      <div class="sq">La recette en annonce 2 790 g</div>
+      <div class="champ"><button onclick="pas('b',-10)">−</button>
+        <input id="b" value="2790" inputmode="decimal" oninput="maj()"><span class="u">g</span>
+        <button onclick="pas('b',10)">+</button></div>
+      <div class="ec" id="be"></div>
+      <button class="val">Envoyer à « À valider »</button>
+    </div>
+  </div></div>
+</section>
+
+<!-- 3 -->
+<section class="etape">
+  <h2>3. Elle a monté les 20 cm praliné</h2>
+  <p class="q">Ici le changement : au lieu de calculer, <b>l'app demande de peser ce qui reste dans le bac</b>.
+  <b>Essaie les champs</b> — le calcul suit.</p>
+  <div class="ecran"><div class="bloc">
+    <div class="tete"><b>20 cm Vitrine praliné</b><small>Tournée montée</small></div>
+    <div class="saisie" style="padding-bottom:8px">
+      <div class="qq">Combien en sont sortis ?</div>
+      <div class="champ"><button onclick="pas('n',-1)">−</button>
+        <input id="n" value="9" inputmode="numeric" oninput="maj()"><span class="u">u</span>
+        <button onclick="pas('n',1)">+</button></div>
+    </div>
+    <div class="saisie" style="padding-top:4px">
+      <div class="qq">Pèse ce qui reste de sirop</div>
+      <div class="sq">Il y en avait <b id="b2">2 790</b> g avant</div>
+      <div class="champ"><button onclick="pas('r',-10)">−</button>
+        <input id="r" value="1200" inputmode="decimal" oninput="maj()"><span class="u">g</span>
+        <button onclick="pas('r',10)">+</button></div>
+    </div>
+    <div class="calc">
+      <div class="cl"><span class="n">Dans le bac avant</span><span class="v" id="c1">2 790 g</span></div>
+      <div class="cl"><span class="n">Ce qui reste, pesé</span><span class="v" id="c2">1 200 g</span></div>
+      <div class="cl res"><span class="n">Donc utilisé</span><span class="v" id="c3">1 590 g</span></div>
+      <div class="cl"><span class="n">La recette aurait dit</span><span class="v" id="c4">1 620 g</span></div>
+      <div class="note" id="c5"></div>
+    </div>
+    <div style="padding:12px 13px"><button class="val">Envoyer à « À valider »</button></div>
+  </div></div>
+</section>
+
+<!-- 4 -->
+<section class="etape">
+  <h2>4. Ce qui part dans Odoo</h2>
+  <p class="q">L'ordre porte <b>le poids pesé</b>, pas celui de la recette.</p>
+  <div class="ecran">
+    <div class="odoo"><div class="oh">SM- 20 cm Vitrine (Praliné)<small>Produit : <span id="o1">9</span></small></div>
+      <div class="ol"><span class="on">Sirop d'imbibage</span><span class="oq" id="o2">1 590 g</span><span class="tag r">pesé</span></div>
+      <div class="ol"><span class="on">Crème au beurre praliné</span><span class="oq">2 880 g</span><span class="tag p">recette</span></div>
+      <div class="ol"><span class="on">Génoise · amandes</span><span class="oq">3 870 g · 900 g</span><span class="tag p">recette</span></div>
+    </div>
+    <p class="note">Seul le sirop est <b>pesé</b> ; le reste suit la recette. On ne pèse que ce qui vaut
+    la peine d'être pesé.</p>
+  </div>
+</section>
+
+<div class="q2"><b class="t">⚠️ Trois choses à décider avant que je code</b>
+  <p><b>1. Quels ingrédients on pèse ?</b> Tous, ou seulement ceux qui coulent — sirops, crèmes, glaçages ?
+  Peser la génoise ou les amandes n'apporterait rien.</p>
+  <p><b>2. Et si le bac sert à deux gâteaux dans la journée ?</b> On pèse après chacun, et chaque gâteau
+  prend sa part. Mais si elle oublie de peser entre les deux, tout retombe sur le second.</p>
+  <p><b>3. Et si elle ne veut pas peser ce jour-là ?</b> Je propose de laisser le champ pré-rempli avec ce
+  que dit la recette : ne rien toucher revient au fonctionnement d'aujourd'hui.</p>
+</div>
+
+</div>
+<script>
+const g = id => document.getElementById(id)
+const val = id => Number(String(g(id).value).replace(',','.')) || 0
+const nb = n => Math.round(n).toLocaleString('fr-FR')
+function pas(id, p){ g(id).value = Math.max(0, Math.round((val(id)+p)*100)/100); maj() }
+function maj(){
+  const a = val('a'), b = val('b'), n = val('n'), r = val('r')
+  g('ae').innerHTML = a===5425 ? 'Pile la recette.' :
+    '<b>'+nb(Math.abs(a-5425))+' g de '+(a>5425?'plus':'moins')+'</b> que la recette.'
+  g('be').innerHTML = b===2790 ? 'Pile la recette.' :
+    '<b>'+nb(Math.abs(b-2790))+' g de '+(b>2790?'plus':'moins')+'</b> que la recette.'
+  g('b2').textContent = nb(b)
+  const util = Math.max(0, b - r), theo = n * 180
+  g('c1').textContent = nb(b)+' g'
+  g('c2').textContent = nb(r)+' g'
+  g('c3').textContent = nb(util)+' g'
+  g('c4').textContent = nb(theo)+' g'
+  const d = util - theo
+  g('c5').innerHTML = !n ? '' : Math.abs(d) < 1 ? 'Exactement ce que la recette prévoyait.'
+    : '<b>'+nb(Math.abs(d))+' g de '+(d>0?'plus':'moins')+'</b> que la recette — '+
+      (d>0 ? 'elle a imbibé plus généreusement.' : 'elle a eu la main légère.')
+  g('o1').textContent = n
+  g('o2').textContent = nb(util)+' g'
+}
+maj()
+</script>
+</body>
+</html>

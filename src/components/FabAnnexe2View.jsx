@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { loadFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe, bloquants, declares, noeudAu,
+import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
+  bloquants, declares, familleDe, noeudAu,
   declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
@@ -75,6 +76,22 @@ function Vignette({ photo, libelle, taille = 'w-14 h-14 rounded-xl shrink-0', gr
 // Un gâteau occupe souvent plusieurs lignes du catalogue : le Citron Framboise
 // en a quatre (le montage, puis la finition en 3 tailles). On les rassemble
 // sous le nom du gâteau vendu, que leur photo désigne déjà.
+// L'onglet « Déclarer » range par famille de préparation — pas par gâteau :
+// la crème au beurre nature sert à une dizaine de gâteaux et se retrouverait
+// dans chacun. Les plus fabriquées en tête de chaque famille.
+function parFamille(articles, cherche) {
+  const q = String(cherche || '').trim().toLowerCase()
+  const groupes = []
+  for (const a of articles || []) {
+    if (q && !a.produit.toLowerCase().includes(q)) continue
+    const nom = familleDe(a.produit)
+    let g = groupes.find(x => x.nom === nom)
+    if (!g) { g = { nom, articles: [] }; groupes.push(g) }
+    g.articles.push(a)
+  }
+  return groupes.sort((a, b) => b.articles.length - a.articles.length)
+}
+
 function parGateau(articles) {
   const groupes = []
   for (const a of articles || []) {
@@ -184,6 +201,11 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   const [envoi, setEnvoi] = useState(false)
   // Combien de tournées le pâtissier a décidé de faire, par article.
   const [foisPar, setFoisPar] = useState({})
+  // « À faire » ne montre que ce qui est sous son mini ; « Déclarer » montre
+  // tout ce que l'annexe sait faire, pour venir dire ce qu'on a fabriqué.
+  const [onglet, setOnglet] = useState('faire')
+  const [tout, setTout] = useState(null)
+  const [cherche, setCherche] = useState('')
   // Le détail d'un article (sa cascade) n'arrive qu'à son ouverture.
   const [details, setDetails] = useState({})
   const ouvert = chemin[0] || null
@@ -196,6 +218,17 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       .catch(e => { if (vivant) { setErreur(e.message || String(e)); setArticles([]) } })
     return () => { vivant = false }
   }, [tour])
+
+  // Le catalogue complet n'arrive qu'à l'ouverture de l'onglet : c'est une
+  // grosse lecture, inutile tant qu'on reste sur « À faire ».
+  useEffect(() => {
+    if (onglet !== 'declarer' || tout) return
+    let vivant = true
+    loadToutFabAnnexe()
+      .then(l => { if (vivant) setTout(l) })
+      .catch(e => { if (vivant) setErreur(e.message || String(e)) })
+    return () => { vivant = false }
+  }, [onglet, tout])
 
   useEffect(() => {
     if (!ouvert || details[ouvert]) return
@@ -221,8 +254,26 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
         <AppHeader {...nav} />
         <div className="max-w-[1000px] mx-auto px-4 py-5 pb-28">
           <h1 className="font-serif italic text-[26px] leading-tight">Fabrication Annexe 2</h1>
+
+          <div className="flex gap-2 my-3">
+            {[['faire', 'À faire'], ['declarer', 'Déclarer']].map(([k, t]) => (
+              <button key={k} onClick={() => setOnglet(k)}
+                className={`flex-1 rounded-2xl py-3 text-[14px] font-extrabold border-2
+                  ${onglet === k ? 'bg-bordeaux border-bordeaux text-cream'
+                                 : 'bg-cream-warm border-cream-deep text-ink-mute'}`}>
+                {t}
+                {k === 'faire' && articles?.length > 0 && (
+                  <span className={`ml-1.5 rounded-full px-2 py-0.5 text-[12px]
+                    ${onglet === k ? 'bg-cream/25' : 'bg-danger text-cream'}`}>{articles.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
           <p className="text-[12.5px] text-ink-mute mb-4">
-            Seul ce qui est sous le mini apparaît. Stock du Stock Prod annexe.
+            {onglet === 'faire'
+              ? 'Seul ce qui est sous le mini apparaît. Stock du Stock Prod annexe.'
+              : 'Tout ce que l’annexe sait faire. Viens dire ce que tu as fabriqué.'}
           </p>
 
           {erreur && (
@@ -231,9 +282,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               <button onClick={recharger} className="ml-3 underline font-bold">Réessayer</button>
             </div>
           )}
-          {!articles && !erreur && <Skeleton rows={3} />}
+          {onglet === 'faire' && !articles && !erreur && <Skeleton rows={3} />}
 
-          {!erreur && articles?.length === 0 && (
+          {onglet === 'faire' && !erreur && articles?.length === 0 && (
             <div className="rounded-2xl border border-cream-deep bg-cream-warm py-14 text-center">
               <div className="text-[40px] mb-2">✨</div>
               <div className="font-bold text-[16px]">Tout est au niveau</div>
@@ -241,7 +292,43 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
             </div>
           )}
 
-          {parGateau(articles).map(g => (
+          {onglet === 'declarer' && (
+            <>
+              <input value={cherche} onChange={e => setCherche(e.target.value)}
+                placeholder="Chercher — crème, sirop, biscuit…" aria-label="Chercher un article"
+                className="w-full h-11 rounded-xl border border-cream-deep bg-cream-warm px-3
+                           text-[15px] text-ink outline-none focus:border-bordeaux mb-3" />
+              {!tout && !erreur && <Skeleton rows={4} />}
+              {parFamille(tout, cherche).map(g => (
+                <section key={g.nom} className="mb-5">
+                  <h2 className="font-serif italic text-[17px] text-bordeaux mb-1.5">
+                    {g.nom} <span className="text-[12px] text-ink-mute not-italic">{g.articles.length}</span>
+                  </h2>
+                  {g.articles.map(a => (
+                    <button key={a.produit} onClick={() => setChemin([a.produit])}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 bg-cream-warm border
+                                 border-cream-deep rounded-xl mb-1.5 text-left hover:border-bordeaux/40">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0
+                        ${a.stock > 0 ? 'bg-success' : 'bg-ink-mute/40'}`} />
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-[13.5px] leading-tight">{propre(a.produit)}</span>
+                        <span className="block text-[11.5px] text-ink-mute mt-0.5">
+                          en stock {qte(a.stock, a.unite)}
+                          {a.fois > 0 && ` · fait ${a.fois}× en 6 mois`}
+                        </span>
+                      </span>
+                      <span className="text-ink-mute text-[17px]">›</span>
+                    </button>
+                  ))}
+                </section>
+              ))}
+              {tout && !parFamille(tout, cherche).length && (
+                <p className="text-center text-[13px] text-ink-mute py-8">Rien à ce nom-là.</p>
+              )}
+            </>
+          )}
+
+          {onglet === 'faire' && parGateau(articles).map(g => (
             <section key={g.cle} className="mb-5">
               {g.articles.length > 1 && (
                 <h2 className="font-serif italic text-[17px] text-bordeaux mb-1.5">{g.nom}</h2>

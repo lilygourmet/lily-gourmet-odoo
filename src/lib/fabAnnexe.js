@@ -31,6 +31,45 @@ export async function loadArticleFabAnnexe(produit) {
   return (d.articles || [])[0] || null
 }
 
+/**
+ * Tout ce que l'annexe sait fabriquer — l'onglet « Déclarer ». Sans filtre de
+ * mini : on vient y dire ce qu'on a fait, même pour un article qu'on ne suit
+ * pas. Les plus fabriqués d'abord.
+ */
+export async function loadToutFabAnnexe() {
+  const r = await fetch('/api/fab-annexe?mode=tout&cb=' + Date.now())
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+  return d.articles || []
+}
+
+/**
+ * La famille d'une préparation, lue dans son nom. Ranger par gâteau ne marche
+ * pas ici : la crème au beurre nature sert à une dizaine de gâteaux et se
+ * retrouverait partout.
+ */
+export function familleDe(nom) {
+  const n = String(nom || '').toLowerCase()
+  // ⚠️ Le préfixe fait la première distinction, et c'est la plus utile :
+  // « SM- » désigne ce qui est MONTÉ (un flan, un gianduja, un cadre), « SM. »
+  // une préparation (une crème, un sirop). Sans ça, 119 articles sur 278
+  // tombaient dans « Le reste ».
+  if (/^sm-|^smpr|^sm ?pr/i.test(String(nom || '').trim())) return 'Gâteaux et pièces montés'
+  if (/sirop|imbibage/.test(n)) return 'Sirops'
+  if (/glacage|glaçage|flocage/.test(n)) return 'Glaçages'
+  if (/ganache/.test(n)) return 'Ganaches'
+  if (/creme au beurre|crème au beurre/.test(n)) return 'Crèmes au beurre'
+  if (/chantilly|mousse|cremeux|crémeux|creme|crème|namlaka|diplomate/.test(n)) return 'Crèmes et mousses'
+  if (/biscuit|genoise|génoise|daquoise|dacquoise|sable|sablé|pate|pâte|craquelin|crumble/.test(n)) return 'Biscuits et pâtes'
+  if (/caramel|praline|praliné|amande|pecan|noisette/.test(n)) return 'Caramels et fruits secs'
+  // ⚠️ Les croustillants AVANT les fruits : « crunchy citron passion » tombait
+  // dans les confits à cause du mot « citron ».
+  if (/crunchy|croustillant|craquant|feuilletine/.test(n)) return 'Croustillants'
+  if (/confit|gelee|gélee|gélée|marmelade|citron|framboise|fruit/.test(n)) return 'Confits et fruits'
+  return 'Le reste'
+}
+
 /** La photo d'un article, servie par Odoo (souvent celle du produit vendu). */
 export const photoFabAnnexe = nom => '/api/fab-annexe?photo=' + encodeURIComponent(nom)
 

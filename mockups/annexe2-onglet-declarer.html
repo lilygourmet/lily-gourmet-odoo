@@ -1,0 +1,180 @@
+<!doctype html><html lang=fr><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Fabrication Annexe 2 — l'onglet « Déclarer »</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500&family=Geist:wght@400;500;600;700;800&display=swap" rel=stylesheet>
+<style>
+ :root{--cream:#fcfbf8;--line:#e5d8c3;--bordeaux:#993556;--ink:#2b2118;--soft:#5b4d40;
+   --mute:#9a8b7a;--ok:#5c7a3f;--or:#b58f3c;--orbg:#FBF3DF;--okbg:#EAF3DE}
+ *{box-sizing:border-box}
+ body{margin:0;background:#efeae1;color:var(--ink);font-family:Geist,system-ui,sans-serif;padding:18px 12px 60px}
+ .wrap{max-width:470px;margin:0 auto}
+ .etape{margin:0 0 30px}
+ .etape>h2{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:17px;margin:0 0 3px;color:var(--bordeaux)}
+ .etape>p.q{margin:0 0 10px;font-size:13px;color:var(--soft);line-height:1.5}
+ .etape>p.q b{color:var(--ink)}
+ .ecran{background:var(--cream);border:1px solid #d9cfbf;border-radius:20px;padding:13px 11px 16px;box-shadow:0 3px 14px rgba(90,70,45,.09)}
+ h1{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:21px;margin:0 0 11px}
+ .ong{display:flex;gap:8px;margin-bottom:13px}
+ .ong button{flex:1;padding:12px 8px;border-radius:14px;border:2px solid var(--line);background:#fff;
+   font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;color:var(--mute)}
+ .ong button.on{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+ .ong .p{background:#b03a3a;color:#fff;border-radius:99px;padding:1px 7px;font-size:12px;margin-left:5px}
+ .ong button.on .p{background:rgba(255,255,255,.3)}
+ .rech{width:100%;height:44px;border:1px solid var(--line);border-radius:12px;padding:0 13px;
+   font-family:inherit;font-size:15px;background:#fff;outline:none;margin-bottom:12px}
+ .gr{margin-bottom:16px}
+ .gr h3{font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:500;font-size:16px;
+   color:var(--bordeaux);margin:0 0 6px}
+ .li{width:100%;display:flex;align-items:center;gap:10px;padding:11px 12px;background:#fff;
+   border:1px solid var(--line);border-radius:13px;margin-bottom:6px;text-align:left;cursor:pointer;font-family:inherit}
+ .pt{width:9px;height:9px;border-radius:99px;flex:none}
+ .pt.v{background:var(--ok)} .pt.z{background:#d6cbb8}
+ .nm{flex:1;min-width:0;font-size:14px;color:var(--ink)}
+ .nm small{display:block;font-size:11.5px;color:var(--mute);margin-top:2px}
+ .ch{color:var(--mute);font-size:17px}
+ .note{margin:9px 0 0;font-size:11.5px;color:var(--mute);line-height:1.5;padding:0 3px}
+ .note b{color:var(--bordeaux)}
+ .q2{background:#fffdf6;border:1px solid #e8dcbb;border-radius:16px;padding:12px 13px;margin:0 0 12px}
+ .q2 b.t{display:block;color:var(--or);font-size:13.5px;margin-bottom:5px}
+ .q2 p{margin:0 0 7px;font-size:12.5px;line-height:1.5;color:var(--soft)}
+ .q2 p:last-child{margin:0}
+ .cmp{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}
+ .cmp>div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px 12px}
+ .cmp b{display:block;font-size:13px;margin-bottom:5px}
+ .cmp p{margin:0;font-size:12px;line-height:1.5;color:var(--soft)}
+</style></head><body><div class=wrap>
+
+<div class=cmp>
+  <div><b>Onglet « À faire »</b><p>Ce qui est passé <b>sous son mini</b>. Court, il se vide quand tout va bien.</p></div>
+  <div><b>Onglet « Déclarer »</b><p><b>Tout</b> ce qui se fabrique à l'annexe, mini ou pas. On y va quand on a fait quelque chose.</p></div>
+</div>
+
+<section class=etape>
+  <h2>1. Deux onglets en haut</h2>
+  <p class=q>Le compteur rouge ne concerne que « À faire » : c'est lui qui presse. « Déclarer » ne compte rien, il attend qu'on vienne.</p>
+  <div class=ecran>
+    <h1>Fabrication Annexe 2</h1>
+    <div class=ong><button class=on>À faire <span class=p>7</span></button><button>Déclarer</button></div>
+    <p class=note>L'onglet « À faire » reste celui d'aujourd'hui, sans changement.</p>
+  </div>
+</section>
+
+<section class=etape>
+  <h2>2. L'onglet « Déclarer »</h2>
+  <p class=q>Les <b>275 articles</b> que l'annexe fabrique, rangés <b>sous le gâteau auquel ils servent</b>.
+  Une recherche en haut, parce qu'on sait ce qu'on cherche.</p>
+  <div class=ecran>
+    <h1>Fabrication Annexe 2</h1>
+    <div class=ong><button>À faire <span class=p>7</span></button><button class=on>Déclarer</button></div>
+    <input class=rech placeholder="Chercher — crème, sirop, biscuit…">
+    
+  <section class="gr">
+    <h3>Pistache fleur d'oranger (10)</h3>
+    <button class="li">
+      <span class="pt z"></span>
+      <span class="nm">Mousse pistache<small>en stock 0 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt z"></span>
+      <span class="nm">Subleme fleur d'oranger pistache<small>en stock 0 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">Glacage pistache Finition<small>en stock 7 700 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt z"></span>
+      <span class="nm">Crémeux pistache<small>en stock 0 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">gélée mangue ananas pistache<small>en stock 1 015,3 g</small></span>
+      <span class="ch">›</span></button>
+  </section>
+  <section class="gr">
+    <h3>Pistache fleur d'oranger (1)</h3>
+    <button class="li">
+      <span class="pt z"></span>
+      <span class="nm">Mousse pistache<small>en stock 0 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt z"></span>
+      <span class="nm">Subleme fleur d'oranger pistache<small>en stock 0 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">Glacage pistache Finition<small>en stock 7 700 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt z"></span>
+      <span class="nm">Crémeux pistache<small>en stock 0 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">gélée mangue ananas pistache<small>en stock 1 015,3 g</small></span>
+      <span class="ch">›</span></button>
+  </section>
+  <section class="gr">
+    <h3>Cheesecake Exotique (10)</h3>
+    <button class="li">
+      <span class="pt z"></span>
+      <span class="nm">Mousse cheese passion<small>en stock 0 kg</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">crunchy citron passion<small>en stock 3,5 kg</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">Subleme fromage  passion<small>en stock 1 065 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">Marmelade passion mangue<small>en stock 3,4 kg</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">Crumble pistache +cheese exotique nv<small>en stock 9,4 kg</small></span>
+      <span class="ch">›</span></button>
+  </section>
+  <section class="gr">
+    <h3>Cheesecake Exotique (1)</h3>
+    <button class="li">
+      <span class="pt z"></span>
+      <span class="nm">Mousse cheese passion<small>en stock 0 kg</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">crunchy citron passion<small>en stock 3,5 kg</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">Subleme fromage  passion<small>en stock 1 065 g</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">Marmelade passion mangue<small>en stock 3,4 kg</small></span>
+      <span class="ch">›</span></button><button class="li">
+      <span class="pt v"></span>
+      <span class="nm">Crumble pistache +cheese exotique nv<small>en stock 9,4 kg</small></span>
+      <span class="ch">›</span></button>
+  </section>
+    <p class=note>Le point <b>vert</b> = il y en a en stock · <b>gris</b> = à zéro. Pas de rouge ici :
+    rien ne presse, on vient déclarer ce qu'on a fait.</p>
+  </div>
+</section>
+
+<section class=etape>
+  <h2>3. On clique — et c'est l'écran qu'on connaît déjà</h2>
+  <p class=q>Recette modifiable, cascade des composants, verrou si quelque chose manque, puis
+  <b>« combien ça a donné ? »</b> avec le pavé de calculette. <b>Rien de nouveau à apprendre.</b></p>
+  <div class=ecran>
+    <div style="background:#fff;border:1px solid var(--line);border-radius:18px;padding:13px">
+      <div style="font-size:16px;font-weight:800">Crème au beurre praliné</div>
+      <div style="font-size:12px;color:var(--mute);margin-top:3px">en stock 0 g · aucun mini réglé</div>
+      <div style="margin-top:11px;padding:10px;background:var(--orbg);border-radius:11px;font-size:12.5px;color:var(--soft)">
+        Recette pour <b>7 052 g</b> · crème au beurre nature 5 425 g · praliné noisette 1 800 g
+      </div>
+    </div>
+    <p class=note>Un article <b>sans mini</b> s'ouvre pareil. Il n'apparaîtra simplement jamais
+    dans « À faire » — c'est à toi de venir le déclarer.</p>
+  </div>
+</section>
+
+<div class=q2><b class=t>⚠️ Trois choses à décider</b>
+  <p><b>1. Le rangement.</b> Je propose <b>par gâteau</b>, comme dans « À faire ». Mais un même article sert
+  souvent à plusieurs gâteaux — la crème au beurre nature en alimente une dizaine. Faut-il plutôt
+  ranger <b>par famille</b> (les crèmes, les sirops, les biscuits, les glaçages) ?</p>
+  <p><b>2. Quels articles.</b> Les 275 que l'annexe a fabriqués en 6 mois, ou seulement ceux qui
+  descendent d'un <b>E-, MI- ou V-</b> ? Le second est plus court, mais écarte ce qui ne sert qu'à la
+  vitrine ou aux commandes.</p>
+  <p><b>3. Les plus courants d'abord ?</b> Je peux mettre en haut les <b>dix derniers déclarés</b>, pour
+  que les gestes du quotidien soient à portée de doigt.</p>
+</div>
+
+</div></body></html>

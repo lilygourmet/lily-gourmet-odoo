@@ -375,6 +375,61 @@ export default async function handler(req, res) {
 
     const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
+    // ------------------------------------------------------------
+    // L'onglet « Déclarer » : TOUT ce qui se fabrique à l'annexe, mini ou pas.
+    // Le pâtissier vient y dire ce qu'il a fait, même pour un article qu'on ne
+    // suit pas. (Layla, 2026-09-09.)
+    // ------------------------------------------------------------
+    if (req.query.mode === 'tout') {
+      const depuis = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 19).replace('T', ' ')
+      // Ce que l'annexe a fabriqué, et ce qu'elle a en stock : l'un dit le
+      // savoir-faire, l'autre ce qui est là. Les deux comptent.
+      const [ordres, quants] = await Promise.all([
+        sr('mrp.production', [['name', 'like', 'WHPDX/MO/'], ['create_date', '>=', depuis]],
+          ['product_id', 'create_date'], { limit: 12000 }),
+        sr('stock.quant', [['location_id', '=', LIEU_ANNEXE]], ['product_id', 'quantity'], { limit: 4000 }),
+      ])
+      const vus = new Map()
+      for (const o of ordres) {
+        const [id, nom] = o.product_id
+        const e = vus.get(id) || { id, nom, fois: 0, dernier: null, stock: 0 }
+        e.fois++
+        if (!e.dernier || o.create_date > e.dernier) e.dernier = o.create_date
+        vus.set(id, e)
+      }
+      for (const q of quants) {
+        const [id, nom] = q.product_id
+        const e = vus.get(id) || { id, nom, fois: 0, dernier: null, stock: 0 }
+        e.stock += q.quantity
+        vus.set(id, e)
+      }
+      // On ne garde que ce qui se FABRIQUE : une matière première achetée n'a
+      // rien à faire dans un écran de déclaration.
+      //
+      // ⚠️ Par LOTS. Demander produit et recette un par un, c'était 550 appels
+      // d'un coup : Odoo répondait 502.
+      const tousIds = [...vus.keys()]
+      const prods = []
+      for (let i = 0; i < tousIds.length; i += 200) {
+        prods.push(...await sr('product.product', [['id', 'in', tousIds.slice(i, i + 200)]],
+          ['id', 'uom_id', 'product_tmpl_id']))
+      }
+      const tmpls = [...new Set(prods.map(p => p.product_tmpl_id[0]))]
+      const avecRecette = new Set()
+      for (let i = 0; i < tmpls.length; i += 200) {
+        for (const b of await sr('mrp.bom', [['product_tmpl_id', 'in', tmpls.slice(i, i + 200)]],
+          ['product_tmpl_id'], { limit: 2000 })) avecRecette.add(b.product_tmpl_id[0])
+      }
+      const liste = prods.filter(p => avecRecette.has(p.product_tmpl_id[0])).map(p => {
+        const e = vus.get(p.id)
+        return { produit: e.nom, unite: uniteDe(p), stock: Math.round(e.stock * 100) / 100,
+          fois: e.fois, dernier: e.dernier }
+      })
+      liste.sort((a, b) => b.fois - a.fois || a.produit.localeCompare(b.produit, 'fr'))
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({ articles: liste })
+    }
+
     // Fin de tournée : le pâtissier a dit ce qu'il a monté dans chaque taille.
     // On rend un ordre par taille, sa part de cuve déjà calculée.
     if (req.method === 'POST' && req.query.mode === 'repartir') {
@@ -425,7 +480,17 @@ export default async function handler(req, res) {
     // Un seul article demandé (le pâtissier vient de l'ouvrir) : lui seul a
     // besoin de sa cascade de recettes.
     const seul = req.query.article ? String(req.query.article) : null
-    const voulus = seul ? (catalogue || []).filter(a => a.produit === seul) : (catalogue || [])
+    let voulus = seul ? (catalogue || []).filter(a => a.produit === seul) : (catalogue || [])
+    // Un article ouvert depuis « Déclarer » n'est pas forcément réglé : on lui
+    // fabrique une fiche à la volée, sans mini ni maxi ni rien de figé.
+    if (seul && !voulus.length) {
+      const p0 = await produitParNom(cache, seul)
+      const b0 = p0 && await bomDe(cache, p0)
+      if (!b0) return res.status(200).json({ articles: [] })
+      voulus = [{ produit: seul, libelle: seul, photo: null, mini: 0, maxi: 0,
+        tournee: versUnite(b0.product_qty || 1, b0.product_uom_id?.[1], p0.uom_id[1]) || 1,
+        figes: [], figes_nom: null, actif: true, horsCatalogue: true }]
+    }
 
     // Les produits et LEURS STOCKS d'un coup — deux requêtes Odoo, que le
     // catalogue en compte cinq ou deux cents. C'est tout ce dont la liste a
