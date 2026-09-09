@@ -144,6 +144,22 @@ function verifyJwt(token, secret) {
     return payload
   } catch { return null }
 }
+/**
+ * Le profil entier, moins ce qui ne doit jamais sortir de la base (le mot de
+ * passe et tout ce qui y ressemble). Si la relecture échoue, on rend ce que le
+ * login avait trouvé : mieux vaut un profil partiel qu'une porte fermée.
+ */
+async function profilComplet(supabase, user) {
+  try {
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
+    if (!data) return user
+    const secret = k => /pass|hash|secret|token|salt|\bpin\b/i.test(k)
+    return Object.fromEntries(Object.entries({ ...user, ...data }).filter(([k]) => !secret(k)))
+  } catch {
+    return user
+  }
+}
+
 async function handleLogin(req, res) {
   const jwtSecret = process.env.SUPABASE_JWT_SECRET
   if (!jwtSecret) return res.status(500).json({ error: 'SUPABASE_JWT_SECRET manquant' })
@@ -157,7 +173,13 @@ async function handleLogin(req, res) {
     })
     if (error) throw error
     if (!data || data.length === 0) return res.status(401).json({ error: 'Identifiants incorrects' })
-    const user = data[0]
+    // ⚠️ `verify_login` a une liste de colonnes FIGÉE dans sa définition SQL :
+    // les permissions ajoutées depuis n'en sortent pas. L'écran retombait alors
+    // sur `loadFreshUser`, qui relit le profil AVEC le JWT — et si cette lecture
+    // ne passe pas, l'employée se connecte sans aucun des droits qu'on vient de
+    // lui donner. On relit donc le profil complet ici, avec la clé service.
+    // (Vécu avec une employée qui ne voyait rien, 2026-09-09.)
+    const user = await profilComplet(supabase, data[0])
     const now = Math.floor(Date.now() / 1000)
     const token = signJwt({
       sub: user.id,
