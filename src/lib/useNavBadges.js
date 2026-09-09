@@ -8,7 +8,7 @@ import { compterCheckCd } from './checkCd'
 import { canCheckCd, canValiderAnnexe, isAdmin } from './auth'
 import { loadEnAttentePour, lieuxDe } from './transfertsStock'
 import { loadFabProd } from './fabricationProd'
-import { loadManques, loadOrdres, loadFaits } from './fabrication'
+import { loadManques, loadFaits, loadEtats } from './fabrication'
 import { todayISO } from './dates'
 
 // Compteurs de notif pour le mini-rail de la bande gauche (desktop).
@@ -56,20 +56,28 @@ export function useNavBadges(user, activeView = '') {
         // encore ouverts chez Odoo — inutile d'aller lire leurs composants pour
         // afficher un chiffre.
         (isAdmin(user) || user?.perm_valider_of) ? (async () => {
-          const [tous, f] = await Promise.all([loadOrdres(), loadFaits()])
-          const ouverts = new Set((tous || []).map(o => o.name))
+          // Les mêmes candidats que l'écran : les ordres nommés directement, et
+          // ceux que couvre une préparation cochée par son nom.
+          const f = await loadFaits()
           const noms = new Set()
           for (const [c, info] of Object.entries(f || {})) {
-            // ⚠️ On ne vérifie PAS que l'ordre est dans `ouverts` : cette liste
-            // s'arrête aux 500 ordres les plus récents, sur plus de 5 000
-            // ouverts. Une coche posée sur un ordre plus ancien n'était donc pas
-            // comptée, et la pastille annonçait moins que l'écran. On compte
-            // exactement ce que « À valider » retient (même règle, même ligne).
             if (/^WH.*\/MO\//i.test(c)) { noms.add(c); continue }
             if (!c.startsWith('PREP:')) continue
-            for (const n of (info && info.ordres) || []) if (ouverts.has(n)) noms.add(n)
+            for (const n of (info && info.ordres) || []) noms.add(n)
           }
-          set('fabrication-valider', noms.size)
+          if (!noms.size) { set('fabrication-valider', 0); return }
+          // ⚠️ Puis on demande leur ÉTAT à Odoo, et on écarte les validés et les
+          // annulés — c'est ce que fait l'écran. Sans cette étape la pastille
+          // annonçait « 2 » quand l'écran était vide (une coche restée sur un
+          // ordre déjà validé). Et on ne se sert PAS de la liste des ordres
+          // ouverts : elle s'arrête aux 500 plus récents sur plus de 5 000, ce
+          // qui faisait rater les coches posées sur un ordre plus ancien.
+          const etats = await loadEtats([...noms])
+          const vivants = [...noms].filter(n => {
+            const e = etats[n]
+            return e && e !== 'done' && e !== 'cancel'
+          })
+          set('fabrication-valider', vivants.length)
         })().catch(() => {}) : Promise.resolve(),
         // Les transferts qui attendent d'être réceptionnés PAR CET utilisateur.
         lieuxDe(user).length ? loadEnAttentePour(user).then(l => {

@@ -2038,6 +2038,20 @@ export default async function handler(req, res) {
     // C'est ce qui fait dire « il manque 600 g de crème » alors que la crème est
     // là — un stock négatif compte comme zéro disponible. On les montre à côté
     // de « À valider », là où la question se pose.
+    // L'état Odoo de quelques ordres, et rien d'autre. Sert à la pastille
+    // « À valider » : elle doit compter EXACTEMENT ce que l'écran affichera,
+    // donc écarter les ordres validés ou annulés — mais sans payer la lecture
+    // de tous leurs composants (`mode=manques`), bien trop lourde pour un
+    // chiffre. Et sans dépendre de `mode=ordres`, plafonné à 500 sur 5 000+.
+    if (req.query.mode === 'etats') {
+      const names = String(req.query.ordres || '').split(',').map(x => x.trim()).filter(Boolean)
+      if (!names.length) return res.status(200).json({ ordres: [] })
+      const uid = await odooAuth()
+      const mos = await odooSearchRead(uid, 'mrp.production',
+        [['name', 'in', names]], ['name', 'state'], { limit: 1000 })
+      return res.status(200).json({ ordres: mos.map(m => ({ name: m.name, etat: m.state })) })
+    }
+
     if (req.query.mode === 'stocks-negatifs') {
       const uid = await odooAuth()
       // Chaque écran ne montre QUE ses articles (demande de Layla, 2026-09-09) :

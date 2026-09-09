@@ -98,6 +98,22 @@ export async function loadStockMinMax() {
   return (await r.json()).stocks || {}
 }
 
+/**
+ * L'état Odoo de CES ordres-là, et rien d'autre. Pour la pastille « À valider » :
+ * elle doit compter exactement ce que l'écran affichera — donc sans les ordres
+ * validés ou annulés — sans payer la lecture de tous leurs composants.
+ * → { 'WHLVP/MO/202379': 'done', … }
+ */
+export async function loadEtats(ordres) {
+  const noms = [...new Set((ordres || []).filter(Boolean))]
+  if (!noms.length) return {}
+  const r = await fetch(`/api/freezer-list?mode=etats&ordres=${encodeURIComponent(noms.join(','))}`)
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  const out = {}
+  for (const o of (await r.json()).ordres || []) out[o.name] = o.etat
+  return out
+}
+
 /** Juste les ordres Odoo encore ouverts (rapide : une seule question à Odoo). */
 export async function loadOrdres() {
   const r = await fetch('/api/freezer-list?mode=ordres')
