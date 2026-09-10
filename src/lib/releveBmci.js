@@ -501,21 +501,19 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
       !used.has(x) && Math.abs(x.credit - amt) < ECART_MINI &&
       signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max)
     c.sort((a, b) => Math.abs(signedDays(a.dateIso, env.session_date)) - Math.abs(signedDays(b.dateIso, env.session_date)))
-    // Virement : priorité au NOM du client. Si aucune ligne ne porte le nom, repli sur un
-    // virement INSTANTANÉ (INST) du jour de la commande (J) ou de la veille (J-1) : l'instantané
-    // est daté du jour réel sur le relevé, et la commande est saisie le jour même ou le lendemain.
+    // Virement : c'est le NOM de la cliente qui décide. Le montant et la date ne prouvent
+    // rien — vécu : un virement de 600 dh de LEBDAR NAWAL rapproché à DEUX caisses, celles
+    // de Maryam el Bairi et d'Iraqui Yaqot, uniquement parce qu'il tombait le bon jour pour
+    // le bon montant. Les lignes rendues sans nom vérifié ne deviennent jamais vertes toutes
+    // seules (voir nomVerifie à l'étape 1) : elles passent « à confirmer ».
     if (method === 'virement') {
-      const toks = nameTokens(env.virement_client)
-      if (toks.length) {
-        const named = c.filter(x => nomDansLibelle(env.virement_client, x.label))
-        if (named.length >= 1) return named
-        // Mais JAMAIS un virement qui porte le nom d'une autre cliente : « VIR INST RECU
-        // LEBDAR NAWAL » n'est pas le virement de Maryam el Bairi, même s'il tombe le bon
-        // jour pour le bon montant. Vécu : un seul virement de 600 dh rapproché à DEUX
-        // caisses, dont aucune n'était celle de la cliente qui avait payé.
-        return c.filter(x => /INST/i.test(x.label) && !nomAutreCliente(env.virement_client, x.label) &&
-          signedDays(x.dateIso, env.session_date) >= -1 && signedDays(x.dateIso, env.session_date) <= 0)
-      }
+      const named = c.filter(x => nomDansLibelle(env.virement_client, x.label))
+      if (named.length) return named
+      // Caisse sans nom de cliente : on ne sait rien, tout candidat reste possible.
+      if (!nameTokens(env.virement_client).length) return c
+      // Caisse nommée, aucune ligne à son nom : on écarte celles qui nomment quelqu'un
+      // d'autre, et on propose le reste (libellés sans nom lisible) à confirmer.
+      return c.filter(x => !nomAutreCliente(env.virement_client, x.label))
     }
     return c
   }
@@ -534,6 +532,11 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
       // « à confirmer » plutôt que de le valider en vert sur une seule hypothèse.
       if ((env.payment_method || 'cash') === 'cheque'
         && Math.abs(signedDays(c[0].dateIso, env.session_date)) > CHEQUE_AUTO_MAX_DAYS) continue
+      // Un virement ne devient vert QUE si le libellé porte le nom de la cliente. Sans nom
+      // — sur la ligne ou sur la caisse — rien ne prouve que c'est son virement : l'étape 2
+      // le met « à confirmer », Layla tranche d'un clic.
+      if ((env.payment_method || 'cash') === 'virement'
+        && !nomDansLibelle(env.virement_client, c[0].label)) continue
       used.add(c[0]); decided.set(env.id, { status: 'trouve', line: c[0], candidates: [] }); changed = true
     }
   }
