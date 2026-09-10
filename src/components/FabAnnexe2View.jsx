@@ -233,7 +233,7 @@ const Titre = ({ children }) => (
 // recette en veut 1,2, c'est faire une recette et demie — pas forcer sur le
 // sucre.
 // ------------------------------------------------------------
-function LigneQte({ nom, valeur, unite, onValeur, gras, avant, dessous, serre }) {
+function LigneQte({ nom, valeur, unite, onValeur, gras, avant, dessous, serre, onNom }) {
   // On affiche ET on saisit en grammes ; la recette, elle, garde l'unité
   // d'Odoo — c'est elle qu'attend l'appelant.
   const u = uniteAffichee(unite)
@@ -253,10 +253,21 @@ function LigneQte({ nom, valeur, unite, onValeur, gras, avant, dessous, serre })
   return (
     <div className={`flex items-center gap-3 px-4 ${serre ? 'pt-2.5 pb-2' : 'py-2.5'}`}>
       {avant}
-      <span className="flex-1 min-w-0">
-        <span className={`text-[14px] ${gras ? 'font-extrabold' : ''}`}>{nom}</span>
-        {dessous}
-      </span>
+      {/* Toute la zone nom + stock ouvre la recette, comme avant la fusion des
+          deux listes : viser un « recette › » de onze pixels au doigt, ça ne
+          marche pas (Layla, 2026-09-10). */}
+      {onNom ? (
+        <button onClick={onNom} type="button"
+          className="flex-1 min-w-0 text-left rounded-lg -mx-1 px-1 hover:bg-cream-deep/25">
+          <span className={`text-[14px] ${gras ? 'font-extrabold' : ''}`}>{nom}</span>
+          {dessous}
+        </button>
+      ) : (
+        <span className="flex-1 min-w-0">
+          <span className={`text-[14px] ${gras ? 'font-extrabold' : ''}`}>{nom}</span>
+          {dessous}
+        </span>
+      )}
       <input value={txt} inputMode="decimal" aria-label={'Quantité de ' + nom}
         onChange={e => setTxt(e.target.value)} onBlur={valider}
         onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
@@ -274,7 +285,7 @@ function LigneQte({ nom, valeur, unite, onValeur, gras, avant, dessous, serre })
  * qu'il faut faire portent leur pastille, leur stock et s'ouvrent d'un doigt.
  * « Et pas 2 recettes » (Layla, 2026-09-10).
  */
-function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir }) {
+export function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir }) {
   const parRecette = noeud.tourneeTaille || 1
   const parNom = new Map((enfants || []).map(c => [c.produit, c]))
   const dejaFaits = declares(faits)
@@ -295,6 +306,7 @@ function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir }) {
           <div key={i}>
             <LigneQte serre nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
               onValeur={v => onFois(v / f / l.qty)}
+              onNom={() => onOuvrir(c.produit)}
               avant={<Pastille etat={ok ? 'ok' : 'manque'} />}
               dessous={
                 <span className="flex items-baseline gap-2 text-[11.5px] text-ink-mute leading-tight">
@@ -305,8 +317,7 @@ function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir }) {
                         </span>
                       : <>stock {qte(c.stock, c.unite)}{ok ? '' : ` · à faire ${qte(c.produira, c.unite)}`}</>}
                   </span>
-                  <button onClick={() => onOuvrir(c.produit)}
-                    className="shrink-0 hover:text-bordeaux">recette ›</button>
+                  <span className="shrink-0">recette ›</span>
                 </span>
               } />
           </div>
