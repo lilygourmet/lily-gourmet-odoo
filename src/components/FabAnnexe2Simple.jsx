@@ -215,9 +215,11 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
         </div>
       )}
 
-      <button onClick={onFait} disabled={bloque.length > 0}
+      {/* Éteint tant qu'il manque quelque chose — et tant que le chiffre est
+          à zéro : un bouton vert qui ne fait rien est pire qu'un bouton gris. */}
+      <button onClick={onFait} disabled={bloque.length > 0 || !(quantite > 0)}
         className={`w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold
-          ${bloque.length ? 'bg-cream-deep text-ink-mute' : 'bg-success text-cream'}`}>
+          ${bloque.length || !(quantite > 0) ? 'bg-cream-deep text-ink-mute' : 'bg-success text-cream'}`}>
         C'est fait
       </button>
     </div>

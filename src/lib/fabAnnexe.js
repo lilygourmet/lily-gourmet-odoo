@@ -403,6 +403,38 @@ export function estEtapeCreuse(noeud) {
 }
 
 /**
+ * Le nœud où l'on se trouve, et l'article de tête dont il descend.
+ *
+ * On redescend le chemin en recalculant à chaque étage : la quantité choisie
+ * en haut change les besoins du dessous, et c'est comme ça qu'on évite le bug
+ * qui a coûté le plus cher — une dose de fournée affichée au-dessus des
+ * besoins de deux.
+ */
+export function noeudDuChemin(article, chemin, quantites) {
+  if (!article) return null
+  const tete = enNoeud(pourFois(article, quantiteDe(article, quantites) / (article.tournee || 1)))
+  let noeud = tete
+  for (const nom of chemin.slice(1)) {
+    const q = quantites[noeud.produit] ?? defautDe(noeud)
+    const enfant = ingredientsPour(noeud, q).find(c => c.produit === nom)
+    if (!enfant) return { tete, noeud: null }
+    noeud = enfant
+  }
+  return { tete, noeud }
+}
+
+/** Ce qu'on propose de faire, tant que personne n'a touché au chiffre. */
+export function defautDe(noeud) {
+  if (noeud?.produira > 0) return Math.round(noeud.produira * 100) / 100
+  // ⚠️ Jamais zéro : un écran qui propose 0 a un bouton « c'est fait » qui ne
+  // fait rien, sans rien dire. À défaut de mieux, une fournée.
+  return aFaireMaintenant(noeud) || noeud?.tourneeTaille || 0
+}
+
+const quantiteDe = (article, quantites) =>
+  quantites[article.produit] ?? aFaireMaintenant(article)
+
+/**
  * Ce qui sort TOUJOURS le compte annoncé : flans, cheesecakes, biscuits,
  * génoises. Pour ceux-là, « combien ça a donné ? » était une perte de temps
  * (Layla, 2026-09-09) — on envoie la quantité prévue sans rien demander.

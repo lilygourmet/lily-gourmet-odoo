@@ -396,7 +396,7 @@ export function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir 
   )
 }
 
-export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView }) {
+export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView, onBasculer }) {
   // On affiche tout de suite la dernière liste connue, puis on la remplace dès
   // qu'Odoo répond : l'écran ne part plus d'un squelette vide à chaque retour.
   // (Layla, 2026-09-09 : « rends l'onglet plus rapide ».)
@@ -665,6 +665,16 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               </>
             )
           })()}
+
+          {/* L'écran simplifié, à l'essai. Il vit dans la TABLETTE : celle-ci
+              peut essayer pendant que les autres gardent celui-ci, et le
+              retour tient en un appui. (Layla, 2026-09-10.) */}
+          {onBasculer && (
+            <button onClick={onBasculer}
+              className="w-full mt-10 py-3 text-[13px] text-ink-mute font-bold">
+              essayer le nouvel écran
+            </button>
+          )}
         </div>
       </div>
     )

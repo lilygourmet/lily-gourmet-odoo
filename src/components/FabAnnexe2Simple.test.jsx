@@ -314,3 +314,14 @@ describe('la sortie', () => {
     expect(sansRendement('SM. Caramel')).toBe(false)
   })
 })
+
+describe('le garde-fou du zéro', () => {
+  it('« C’est fait » reste éteint quand le chiffre est à zéro', () => {
+    const onFait = vi.fn()
+    const complet = { ...tiramisu, enfants: tiramisu.enfants.map(c => ({ ...c, ok: true })) }
+    render(<Fiche noeud={complet} quantite={0} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={onFait} />)
+    fireEvent.click(screen.getByText("C'est fait"))
+    expect(onFait).not.toHaveBeenCalled()
+  })
+})
