@@ -76,15 +76,26 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     let vivant = true
     ;(async () => {
       try {
-        const [arbre, journal, gardees] = await Promise.all([
-          loadOrdresAnnexe(),          // les ordres seuls : l'arbre n'a rien à faire ici
-          // Une semaine, pas le seul jour : ce qui a été déclaré hier et pas
-          // validé doit rester sous les yeux. Les ordres déjà validés ou
-          // annulés sont écartés juste après, comme avant.
-          loadFabProdDepuis(depuisJours(7), 'annexe'),
-          loadSaisies(CLE_SAISIES).catch(() => ({})),
-        ])
+        // ⚠️ Le JOURNAL d'abord — il vient de Supabase et répond en un
+        // clin d'œil — puis TOUT le reste de front. L'écran enchaînait trois
+        // lectures d'Odoo l'une après l'autre : deux secondes d'attente pour
+        // un travail qui en prend une. (Layla, 2026-09-10 : « l'affichage est
+        // très lent ».)
+        //
+        // Une semaine, pas le seul jour : ce qui a été déclaré hier et pas
+        // validé doit rester sous les yeux. Les ordres déjà validés ou annulés
+        // sont écartés juste après, comme avant.
+        const pOrdres = loadOrdresAnnexe()
+        const pGardees = loadSaisies(CLE_SAISIES).catch(() => ({}))
+        const journal = await loadFabProdDepuis(depuisJours(7), 'annexe')
         if (!vivant) return
+        // Les états ET les recettes de tous les ordres déclarés, en UNE lecture
+        // lancée sans attendre les ordres ouverts.
+        const pDetail = loadManques([...new Set((journal || [])
+          .map(d => d.ordre).filter(Boolean))])
+        const [arbre, gardees, detailJournal] = await Promise.all([pOrdres, pGardees, pDetail])
+        if (!vivant) return
+        const parNom = new Map((detailJournal || []).map(d => [d.name, d]))
         const ordres = arbre.ordres || {}
         // un ordre par article déclaré, sans doublon ; et ce qui n'a PAS
         // d'ordre reste visible et signalé — sinon du travail déclaré
@@ -110,16 +121,11 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         // WHPDX/MO/21333 (biscuit amande gingembre, déclaré par l'atelier)
         // effacé par WHPDX/MO/21335. On demande donc leur état à Odoo pour tous
         // les ordres du journal que l'arbre ne connaît pas.
-        const inconnus = [...new Set((journal || [])
-          .map(d => d.ordre)
-          .filter(n => n && !ouvertsParNom.has(n) && !morceauOuvert.has(n)))]
-        if (inconnus.length) {
-          for (const o of await loadManques(inconnus)) {
-            if (['draft', 'confirmed', 'progress', 'to_close'].includes(o.etat)) {
-              ouvertsParNom.set(o.name, { name: o.name, qty: o.qty, state: o.etat })
-            }
+        for (const o of detailJournal || []) {
+          if (ouvertsParNom.has(o.name) || morceauOuvert.has(o.name)) continue
+          if (['draft', 'confirmed', 'progress', 'to_close'].includes(o.etat)) {
+            ouvertsParNom.set(o.name, { name: o.name, qty: o.qty, state: o.etat })
           }
-          if (!vivant) return
         }
         for (const d of journal || []) {
           // La déclaration sait à quel ordre elle se rattache. S'il n'est plus
@@ -164,9 +170,13 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           demande: Math.round(p.qty * 100) / 100, unite: p.unite, manques: [], lignes: [],
         }))
         if (!base.length) { setLignes(orphelins); return }
-        const detail = await loadManques(base.map(x => x.name))
-        if (!vivant) return
-        const parNom = new Map(detail.map(d => [d.name, d]))
+        // Presque tout est déjà là ; il ne reste à demander que les morceaux
+        // qu'Odoo a coupés, dont le nom diffère de celui du journal.
+        const aLire = base.map(x => x.name).filter(n => !parNom.has(n))
+        if (aLire.length) {
+          for (const d of await loadManques(aLire)) parNom.set(d.name, d)
+          if (!vivant) return
+        }
         const out = [...base.map(b => ({ ...b, ...(parNom.get(b.name) || { manques: [], lignes: [] }) })), ...orphelins]
         setLignes(out)
         setSel(out.filter(x => !x.sansOrdre).map(x => x.name))
