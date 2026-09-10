@@ -213,14 +213,21 @@ function BanqueSection({ user }) {
   async function handleRelancer() {
     const ok = await confirmDialog(
       'Relancer le rapprochement ?\n\nL\'app rejoue le calcul sur les lignes de relevé déjà importées. '
-      + 'Aucune ligne n\'est créée (donc aucun doublon), et les caisses déjà rapprochées ne sont pas touchées.',
+      + 'Aucune ligne n\'est créée (donc aucun doublon).\n\n'
+      + 'Elle défait aussi les rapprochements faux : une caisse verte dont le libellé de la banque '
+      + 'porte le nom d\'une AUTRE cliente repasse en attente, et sa ligne retourne dans « non liées ».',
       { confirmLabel: 'Relancer' })
     if (!ok) return
     setRelance(true)
     try {
       const r = await relancerRapprochement()
       await reload()
-      alert(`Rapprochement relancé sur ${r.lignes} ligne(s) libres :\n✓ ${r.trouve} rapprochée(s)\n⏳ ${r.a_confirmer} à confirmer`)
+      const faux = (r.annules || []).length
+        ? `\n\n↩️ ${r.annules.length} rapprochement(s) faux annulé(s) :\n`
+          + r.annules.slice(0, 10).map(a => `• ${a.client} (${a.date}) ← « ${a.label.slice(0, 45)} »`).join('\n')
+          + (r.annules.length > 10 ? `\n… et ${r.annules.length - 10} autre(s)` : '')
+        : ''
+      alert(`Rapprochement relancé sur ${r.lignes} ligne(s) libres :\n✓ ${r.trouve} rapprochée(s)\n⏳ ${r.a_confirmer} à confirmer${faux}`)
     } catch (e) { alert('Erreur : ' + (e?.message || e)) }
     setRelance(false)
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reconcileEnvelopes, parseBmciReleve } from './releveBmci'
+import { reconcileEnvelopes, parseBmciReleve, nomAutreCliente } from './releveBmci'
 
 // Une enveloppe déjà justifiée par une PREUVE PHOTO manuelle (proof_url sans
 // releve_status) ne doit pas être re-rapprochée à l'import du relevé, et son
@@ -361,5 +361,28 @@ describe('reconcileEnvelopes — repli instantané et nom d\'une autre cliente',
     const sienne = { ...caisse, id: 'L1', virement_client: 'Nawal Lebdar' }
     const { results } = reconcileEnvelopes([sienne], [ligne], {})
     expect(results[0].status).toBe('trouve')
+  })
+})
+
+// Règle qui sert à retrouver les rapprochements faux déjà enregistrés (annulerRapprochementsFaux).
+describe('nomAutreCliente — détection d\'un rapprochement faux', () => {
+  it('repère le virement de LEBDAR NAWAL collé à Maryam el Bairi', () => {
+    expect(nomAutreCliente('Maryam el bairi', 'VIR INST RECU LEBDAR NAWAL')).toBe(true)
+  })
+
+  it('repère aussi le libellé avec les références', () => {
+    expect(nomAutreCliente('Iraqui yaqot', 'VIR INST RECU 2128322 20260602129237 LEBDAR NAWAL')).toBe(true)
+  })
+
+  it('ne touche pas un rapprochement juste', () => {
+    expect(nomAutreCliente('Nawal Lebdar', 'VIR INST RECU LEBDAR NAWAL')).toBe(false)
+  })
+
+  it('ne touche pas une orthographe seulement approchante', () => {
+    expect(nomAutreCliente('Bennomar Salma', 'VIRT RECU MME SELMA BENOMAR')).toBe(false)
+  })
+
+  it('ne juge pas un libellé sans nom lisible', () => {
+    expect(nomAutreCliente('Maryam el bairi', 'VIR INST RECU 2128322 20260602129237')).toBe(false)
   })
 })
