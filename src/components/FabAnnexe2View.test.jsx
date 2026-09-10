@@ -114,46 +114,54 @@ const tiramisu = {
   ],
 }
 
-describe('ce qui va sortir du stock, pour la sortie réelle', () => {
-  it('met la recette à l’échelle de ce qui est SORTI', () => {
+describe('il manque pour aller au bout', () => {
+  it('ne montre QUE ce qui manque — pas les lignes qui suivent', () => {
     render(<SortieStock article={tiramisu} sortie={19} />)
-    // 1 300 g × 19/13 = 1 900 g ; 13 u × 19/13 = 19 u
-    expect(screen.getByText('1 900 g')).toBeTruthy()
-    expect(screen.getByText('19 u')).toBeTruthy()
+    // 19 biscuits demandés, 13 en stock → la seule ligne qui compte
+    expect(screen.getByText('Biscuit a la cuillere 5 pers')).toBeTruthy()
+    expect(screen.queryByText(/Sirop/)).toBeNull()        // 9 570 g en stock
+    expect(screen.queryByText(/Mascarpone/)).toBeNull()   // figé, et 20 kg
   })
 
-  it('laisse les figés à la fournée, quoi qu’il sorte', () => {
+  it('compte le manque sur la sortie annoncée, pas sur la tournée', () => {
     render(<SortieStock article={tiramisu} sortie={19} />)
-    expect(screen.getByText('1 040 g')).toBeTruthy()          // 1,04 kg, inchangé
-    expect(screen.getByText(/ne bouge pas/)).toBeTruthy()
+    expect(screen.getByText('manque 6 u')).toBeTruthy()
+    expect(screen.getByText(/il en faut 19 u/)).toBeTruthy()
   })
 
-  it('DIT ce qu’il faut fabriquer quand le stock ne suit pas', () => {
-    render(<SortieStock article={tiramisu} sortie={19} />)
-    // 19 biscuits demandés, 13 en stock → il faut en faire 6
-    expect(screen.getByText(/il faut en faire 6 u/)).toBeTruthy()
+  it('disparaît complètement quand tout suit', () => {
+    const { container } = render(<SortieStock article={tiramisu} sortie={13} />)
+    expect(container.textContent).toBe('')
   })
 
-  it('ne réclame rien quand le stock suit', () => {
-    render(<SortieStock article={tiramisu} sortie={13} />)
-    expect(screen.queryByText(/il faut en faire/)).toBeNull()
+  it('laisse les figés à la fournée : ils ne manquent pas parce qu’il en sort plus', () => {
+    const serre = {
+      ...tiramisu,
+      composants: tiramisu.composants.map(c => (
+        c.fige ? { ...c, stock: 1.04 } : { ...c, stock: 1e6 })),
+    }
+    render(<SortieStock article={serre} sortie={19} />)
+    // le mascarpone est pile à la fournée : rien ne manque, donc rien du tout
+    expect(screen.queryByText(/Mascarpone/)).toBeNull()
   })
 
   it('ouvre la recette de ce qui manque, quand ça se fabrique', () => {
     const onOuvrir = vi.fn()
     render(<SortieStock article={tiramisu} sortie={19} onOuvrir={onOuvrir} />)
-    fireEvent.click(screen.getByText(/il faut en faire 6 u/))
+    fireEvent.click(screen.getByText(/à faire 6 u/))
     expect(onOuvrir).toHaveBeenCalledWith('SM. Biscuit a la cuillere 5 pers')
   })
 
-  it('n’ouvre rien sur un ingrédient qu’on achète', () => {
+  it('n’ouvre rien sur un ingrédient qu’on achète, mais le signale', () => {
     const onOuvrir = vi.fn()
     const achete = {
       ...tiramisu,
       composants: [{ produit: 'MP- Sucre Granule', unite: 'g', besoin: 900, stock: 0, dejaFait: 0, fige: false, fabrique: false }],
     }
     render(<SortieStock article={achete} sortie={19} onOuvrir={onOuvrir} />)
-    fireEvent.click(screen.getByText(/il faut en faire/))
+    const ligne = screen.getByText(/manque 1 315 g/)
+    expect(ligne).toBeTruthy()
+    fireEvent.click(ligne)
     expect(onOuvrir).not.toHaveBeenCalled()
   })
 
@@ -163,7 +171,7 @@ describe('ce qui va sortir du stock, pour la sortie réelle', () => {
       composants: tiramisu.composants.map(c => (
         c.produit.includes('Biscuit') ? { ...c, dejaFait: 6 } : c)),
     }
-    render(<SortieStock article={avecFait} sortie={19} />)
-    expect(screen.queryByText(/il faut en faire/)).toBeNull()
+    const { container } = render(<SortieStock article={avecFait} sortie={19} />)
+    expect(container.textContent).toBe('')
   })
 })

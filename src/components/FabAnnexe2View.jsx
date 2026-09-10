@@ -293,38 +293,38 @@ function LigneQte({ nom, valeur, unite, onValeur, gras, avant, dessous, serre, o
 export function SortieStock({ article, sortie, onOuvrir }) {
   const prevu = article.tournee || 1
   const facteur = sortie > 0 ? sortie / prevu : 1
+  // ⚠️ On ne montre QUE ce qui manque pour compléter la sortie annoncée. Le
+  // reste est là, il n'y a rien à en dire : une liste de dix lignes vertes
+  // noierait la seule qui compte (Layla, 2026-09-10).
   const parts = (article.composants || []).map(c => {
     const besoin = c.fige ? c.besoin : c.besoin * facteur
     const dispo = (c.stock || 0) + (c.dejaFait || 0)
     return { ...c, besoinReel: besoin, manque: Math.max(0, Math.round((besoin - dispo) * 1000) / 1000) }
-  })
+  }).filter(c => c.manque > 0)
   if (!parts.length) return null
   return (
-    <div className="text-left rounded-xl border border-cream-deep bg-cream-warm mb-4 overflow-hidden">
-      <div className="px-3 pt-2.5 pb-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-mute">
-        Ce qui va sortir du stock
+    <div className="text-left rounded-xl border border-danger/40 bg-danger/5 mb-4 overflow-hidden">
+      <div className="px-3 pt-2.5 pb-1 text-[11px] font-extrabold uppercase tracking-wide text-danger">
+        Il manque pour aller au bout
       </div>
       {parts.map((c, i) => {
         // Ce qui manque et qui se FABRIQUE s'ouvre d'ici : on va en faire, on
         // remonte, la quantité tapée est toujours là.
-        const aFaire = c.manque > 0 && !c.fige && c.fabrique && onOuvrir
+        const aFaire = c.fabrique && !!onOuvrir
         const Ligne = aFaire ? 'button' : 'div'
         return (
           <Ligne key={c.produit + i} onClick={aFaire ? () => onOuvrir(c.produit) : undefined}
-            className={'w-full flex items-baseline gap-3 px-3 py-1.5 border-t border-cream-deep/50 text-left'
-              + (aFaire ? ' hover:bg-cream-deep/30' : '')}>
+            className={'w-full flex items-baseline gap-3 px-3 py-1.5 border-t border-danger/20 text-left'
+              + (aFaire ? ' hover:bg-danger/10' : '')}>
             <span className="flex-1 min-w-0">
               <span className="text-[13px]">{nomAtelier(c.produit)}</span>
-              {c.fige
-                ? <span className="block text-[11px] text-ink-mute">pour la fournée — ne bouge pas</span>
-                : c.manque > 0 && (
-                  <span className="block text-[11px] text-danger font-bold">
-                    il faut en faire {qte(c.manque, c.unite)}{aFaire ? ' — la recette ›' : ''}
-                  </span>
-                )}
+              <span className="block text-[11px] text-ink-mute">
+                {`il en faut ${qte(c.besoinReel * facteurAtelier(c.produit), c.unite)}`
+                  + (aFaire ? ' — la recette ›' : '')}
+              </span>
             </span>
-            <span className={`text-[13px] font-extrabold whitespace-nowrap ${c.manque > 0 && !c.fige ? 'text-danger' : ''}`}>
-              {qte(c.besoinReel * facteurAtelier(c.produit), c.unite)}
+            <span className="text-[13px] font-extrabold whitespace-nowrap text-danger">
+              {`${aFaire ? 'à faire' : 'manque'} ${qte(c.manque * facteurAtelier(c.produit), c.unite)}`}
             </span>
           </Ligne>
         )
