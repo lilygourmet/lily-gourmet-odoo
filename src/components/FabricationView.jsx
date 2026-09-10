@@ -1336,12 +1336,21 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // `{ fait_le: '' }` faisait perdre le produit, la quantité et les ordres —
     // la tournée ne comptait plus, et « retirer » repartait sans rien savoir.
     setFait({ name: cle, produit, qty, ordres, quand: new Date().toISOString() }, on, user?.id)
-      .catch(() => setFaits(f => {
-        const n = { ...f }
-        if (on) delete n[cle]
-        else n[cle] = avant || { fait_le: new Date().toISOString(), produit, qty, ordres }
-        return n
-      }))
+      .catch(e => {
+        setFaits(f => {
+          const n = { ...f }
+          if (on) delete n[cle]
+          else n[cle] = avant || { fait_le: new Date().toISOString(), produit, qty, ordres }
+          return n
+        })
+        // ⚠️ Le silence coûte cher : l'ordre Odoo, lui, a bien été créé. Sans
+        // coche il n'entre PAS dans « À valider » et personne ne le sait —
+        // WHLVP/MO/202481 (5,43 kg de crème au beurre nature) est resté ainsi
+        // en plan. On le dit, avec le numéro. (Layla, 2026-09-10.)
+        toast.error(on
+          ? `Coche NON enregistrée pour ${cle} — l'ordre existe dans Odoo mais n'ira pas dans « À valider ». Recoche, ou annule-le. (${e.message || e})`
+          : `Décoche non enregistrée pour ${cle} (${e.message || e})`)
+      })
   }
 
   /**
