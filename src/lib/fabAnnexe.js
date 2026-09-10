@@ -352,6 +352,90 @@ export function noeudAu(articles, chemin, foisDe) {
   return { article, noeud, parent }
 }
 
+// ============================================================
+// L'écran simplifié : dire les choses comme à l'atelier.
+// « Ils ne vont pas comprendre que 13 = une plaque de combien de grammes »
+// (Layla, 2026-09-10). Sous chaque quantité, on écrit la même chose en vrai.
+// ============================================================
+
+/** Grammes ou kilos — les seules unités qu'on sait additionner. */
+const enGrammes = (q, u) => {
+  const n = Number(q) || 0
+  if (/^kg$/i.test(String(u || '').trim())) return n * 1000
+  if (/^g$/i.test(String(u || '').trim())) return n
+  return null                                   // pièces, litres : on ne mélange pas
+}
+
+/**
+ * Le poids total d'une recette, quand elle ne parle que de poids. Un seul
+ * ingrédient compté en pièces (« 1 plaque ») et on ne dit rien : additionner
+ * des plaques et des grammes ne veut rien dire.
+ */
+export function poidsRecette(noeud) {
+  const lignes = noeud?.recette || []
+  if (!lignes.length) return null
+  let total = 0
+  for (const l of lignes) {
+    const g = enGrammes(l.qty, l.unite)
+    if (g === null) return null
+    total += g
+  }
+  return Math.round(total)
+}
+
+/**
+ * Une étape CREUSE : elle ne demande aucune décision. Sa recette n'a qu'une
+ * ligne, dans la même unité, et un pour un — c'est un changement d'étiquette,
+ * comme « Genoise Vanille KG CD » qui n'est qu'une tournée de « KG commun ».
+ *
+ * ⚠️ Découper une plaque en 13 biscuits N'EST PAS une étape creuse : il y a
+ * une décision — combien on découpe. « Si je fais 4 plaques et que je décide
+ * d'en couper 26 ? » (Layla, 2026-09-10.)
+ */
+export function estEtapeCreuse(noeud) {
+  const lignes = noeud?.recette || []
+  if (lignes.length !== 1) return false
+  const l = lignes[0]
+  const sortie = noeud.tourneeTaille || 0
+  if (!(sortie > 0) || !(Number(l.qty) > 0)) return false
+  const memeUnite = String(l.unite || '').toLowerCase() === String(noeud.unite || '').toLowerCase()
+  return memeUnite && Math.abs(Number(l.qty) - sortie) < 0.001
+}
+
+/**
+ * Ce qu'une quantité veut dire en vrai, sous le gros chiffre.
+ * « 4 plaques » → « 2 800 g de pâte » ; « 13 biscuits » → « 1 plaque ».
+ * Rien à dire ? on ne dit rien, plutôt qu'une phrase pour meubler.
+ */
+export function enClair(noeud, quantite) {
+  const fois = (noeud?.tourneeTaille || 0) > 0 ? quantite / noeud.tourneeTaille : 0
+  if (!(fois > 0)) return ''
+  const bouts = []
+  // Le poids n'aide que sur ce qui se compte en PIÈCES : dire « 3 920 g font
+  // 4 840 g » à propos d'un caramel déjà pesé en grammes n'apprend rien, et
+  // sème le doute. Et « en tout » plutôt que « de pâte » : une ganache, une
+  // chantilly, un caramel ne sont pas de la pâte.
+  const poids = /^(g|kg)$/i.test(String(noeud.unite || '').trim()) ? null : poidsRecette(noeud)
+  if (poids) bouts.push(`${Math.round(poids * fois).toLocaleString('fr-FR')} g en tout`)
+  for (const l of noeud.recette || []) {
+    if (enGrammes(l.qty, l.unite) !== null) continue        // déjà dans le poids
+    const q = Math.round(Number(l.qty) * fois * 100) / 100
+    if (!(q > 0)) continue
+    const mot = nomCourt(l.produit)
+    // « 2 plaques », pas « 2 plaque » : l'écran est lu par des gens qui
+    // butent déjà sur les mots, on ne va pas leur écrire de travers.
+    bouts.push(`${q.toLocaleString('fr-FR')} ${q > 1 && !/s$/i.test(mot) ? mot + 's' : mot}`)
+  }
+  return bouts.join(' · ')
+}
+
+/** « SM. Biscuit a la cuillere (plaque) » → « plaque ». */
+const nomCourt = nom => {
+  const n = String(nom || '').replace(/^\s*(\[[^\]]*\]\s*)?(SM|MP|MI|GS|RA|GM|CD|E|F|V)[-./\s]\s*/i, '')
+  const par = n.match(/\(([^)]+)\)\s*$/)
+  return (par ? par[1] : n).trim().toLowerCase()
+}
+
 /**
  * Ce qui a été RÉELLEMENT PESÉ pour cette fournée, prêt à imposer à l'ordre
  * Odoo. La recette de l'article est écrite pour une tournée ; `fois` dit
