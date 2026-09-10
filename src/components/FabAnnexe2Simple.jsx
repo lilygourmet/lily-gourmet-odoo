@@ -16,9 +16,9 @@
 // chiffre, ce qu'il veut dire en vrai : « 4 plaques · 2 800 g en tout ».
 // ============================================================
 import { useState } from 'react'
-import { enClair, declares, bloquants, aFaireMaintenant,
+import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant,
   decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe } from '../lib/fabAnnexe'
-import { nb, qte, propre } from '../lib/ecranSimple'
+import { nb, qte, dose, propre } from '../lib/ecranSimple'
 
 /** La photo d'un article, servie par Odoo. */
 const photoDe = photoFabAnnexe
@@ -248,6 +248,8 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       <Ingredients noeud={aPeser} quantite={quantitePesee}
         dejaFaits={dejaFaits} onOuvrir={onOuvrir} />
 
+      {!decoupe && <PourUn noeud={noeud} quantite={quantite} />}
+
       {decoupe && (
         <div className="mt-6 pt-5 border-t-4 border-cream-deep">
           <div className="text-center text-[15px] font-bold text-ink-mute">
@@ -358,6 +360,67 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * Ce qu'une pièce prend d'un ingrédient. En grammes, sauf quand la pièce prend
+ * moins d'UNE unité : un cadre de forêt noire ne prend pas « 0,09 biscuit »,
+ * il en faut « 1 pour 11 » — c'est la même phrase que l'ancien écran, et c'est
+ * ce que dit un pâtissier.
+ */
+const parPiece = (v, unite) => {
+  const n = Number(v) || 0
+  return /^u$/i.test(String(unite || '').trim()) && n > 0 && n < 1
+    ? `1 pour ${nb(Math.round(1 / n))}`
+    : dose(n, unite)
+}
+
+/**
+ * LA PESÉE DU MONTAGE : ce qu'on met sur UN gâteau.
+ *
+ * Le total dit ce qu'on sort du frigo ; celui-ci dit le geste — « 38 g de
+ * glaçage sur chaque individuel ». C'est le tableau « Pour 1 … » de l'ancien
+ * écran, que Layla a réclamé le 2026-09-11.
+ *
+ * Ne s'affiche que pour un MONTAGE compté en pièces : « pour 1 » d'un caramel
+ * pesé en grammes ne veut rien dire, et une pâte à plaque ne se dose pas à la
+ * pièce. Et jamais pour une seule pièce : la liste du dessus le dit déjà.
+ *
+ * ⚠️ La CUVE ne fait qu'une ligne, sous son nom : « la mousse du royal, ce
+ * n'est pas lait 149 g, gélatine 9 g, crème 447 g — c'est La mousse, 800 g »
+ * (Layla, 2026-09-10).
+ */
+export function PourUn({ noeud, quantite }) {
+  const enPieces = /^u$/i.test(String(noeud?.unite || '').trim())
+  const montage = enfantsDe(noeud).some(c => c.fabrique)
+  if (!enPieces || !montage || !(quantite > 1)) return null
+  const liste = ingredientsPour(noeud, quantite)
+  const cuve = liste.filter(c => c.fige && !c.fabrique)
+  const lignes = liste.filter(c => !(c.fige && !c.fabrique))
+    .map(c => ({ nom: propre(c.produit), valeur: parPiece(c.besoin / quantite, c.unite) }))
+  if (cuve.length) {
+    // Une cuve ne se pèse qu'en grammes : c'est la seule unité commune à ses
+    // ingrédients, et c'est celle de la balance.
+    const g = cuve.reduce((t, c) =>
+      t + (Number(c.besoin) || 0) * (/^kg$/i.test(String(c.unite || '').trim()) ? 1000 : 1), 0)
+    lignes.push({ nom: noeud.figesNom || 'La cuve', valeur: dose(g / quantite, 'g') })
+  }
+  if (!lignes.length) return null
+  return (
+    <div className="mt-6 rounded-2xl border-2 border-cream-deep bg-cream-warm overflow-hidden">
+      <div className="px-4 py-2.5 text-[13px] font-extrabold uppercase tracking-wide
+                      text-ink-mute border-b border-cream-deep">
+        Pour 1 {propre(noeud.libelle || noeud.produit)}
+      </div>
+      {lignes.map((l, i) => (
+        <div key={l.nom + i}
+          className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40 first:border-t-0">
+          <span className="flex-1 min-w-0 text-[16px]">{l.nom}</span>
+          <span className="shrink-0 text-[19px] font-extrabold tabular-nums">{l.valeur}</span>
+        </div>
+      ))}
     </div>
   )
 }

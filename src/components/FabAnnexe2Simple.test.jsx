@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { CasesAFaire, Cases, Fiche, Clavier, Onglets, Sortie } from './FabAnnexe2Simple'
+import { CasesAFaire, Cases, Fiche, Clavier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
 import { sansRendement } from '../lib/fabAnnexe'
 import { propre } from '../lib/ecranSimple'
 
@@ -352,7 +352,9 @@ describe('en préparer d’avance', () => {
     const onOuvrir = vi.fn()
     render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
       faits={[]} onOuvrir={onOuvrir} onFait={() => {}} />)
-    fireEvent.click(screen.getByText('Amaretti orange Tiramisu'))
+    // Le nom apparaît deux fois depuis la pesée du montage : la LISTE d'abord,
+    // le tableau « Pour 1 … » ensuite. C'est la ligne de la liste qui s'ouvre.
+    fireEvent.click(screen.getAllByText('Amaretti orange Tiramisu')[0])
     expect(onOuvrir).toHaveBeenCalledWith('SM Amaretti orange Tiramisu')
   })
 
@@ -448,5 +450,96 @@ describe('les cases de « Déclarer »', () => {
   it('le dit quand la recherche ne donne rien', () => {
     render(<Cases items={[]} onOuvrir={() => {}} vide="Rien à ce nom-là." />)
     expect(screen.getByText('Rien à ce nom-là.')).toBeTruthy()
+  })
+})
+
+// ====== La pesée du montage ======
+// « Tu as oublié d'intégrer les pesées des montages » (Layla, 2026-09-11).
+// Ses vrais chiffres : Sm- PR Le Citron Framboise (1), fournée de 31, avec
+// 1 178 g de glaçage rose — soit 38 g par gâteau.
+
+const citronFini = {
+  produit: 'Sm- PR Le Citron Framboise (1)',
+  libelle: 'Citron Framboise · fini (individuel)', unite: 'u',
+  tourneeTaille: 31, pourQuantite: 31, recette: [],
+  figesNom: 'Monté sur place',
+  enfants: [
+    { produit: 'Sm- Le Citron Framboise (1)', unite: 'u', besoin: 31, stock: 40, fabrique: true, ok: true },
+    { produit: 'SM. Glacage Rose Finition', unite: 'g', besoin: 1178, stock: 9000, fabrique: true, ok: true },
+    { produit: 'SM- Chantilly rose pipée (1)', unite: 'u', besoin: 31, stock: 40, fabrique: true, ok: true },
+  ],
+}
+
+describe('la pesée du montage', () => {
+  it('dit ce qu’on met sur UN gâteau', () => {
+    render(<PourUn noeud={citronFini} quantite={31} />)
+    expect(screen.getByText(/Pour 1 Citron Framboise · fini \(individuel\)/)).toBeTruthy()
+    expect(screen.getByText('38 g')).toBeTruthy()
+    expect(screen.getAllByText('1 u').length).toBe(2)
+  })
+
+  it('suit la quantité : deux fois plus de gâteaux, même dose par pièce', () => {
+    render(<PourUn noeud={citronFini} quantite={62} />)
+    expect(screen.getByText('38 g')).toBeTruthy()
+  })
+
+  it('la CUVE ne fait qu’une ligne, sous son nom', () => {
+    const aMonter = {
+      produit: 'Sm- Le Citron Framboise (1)', libelle: 'Citron Framboise · à monter (individuel)',
+      unite: 'u', tourneeTaille: 58, pourQuantite: 58, recette: [],
+      figesNom: 'La crème légère vanille citron',
+      enfants: [
+        { produit: 'SM- Fond Citron Framboise (1)', unite: 'u', besoin: 58, stock: 60, fabrique: true, ok: true },
+        { produit: 'SM. Lait', unite: 'g', besoin: 2000, stock: 0, fabrique: false, fige: true, ok: true },
+        { produit: 'SM. Crème', unite: 'g', besoin: 3278, stock: 0, fabrique: false, fige: true, ok: true },
+      ],
+    }
+    render(<PourUn noeud={aMonter} quantite={58} />)
+    expect(screen.getByText('La crème légère vanille citron')).toBeTruthy()
+    expect(screen.queryByText('Lait')).toBeNull()
+    expect(screen.getByText('91 g')).toBeTruthy()   // (2 000 + 3 278) / 58
+  })
+
+  it('ne dit rien pour une seule pièce : la liste du dessus le dit déjà', () => {
+    const { container } = render(<PourUn noeud={citronFini} quantite={1} />)
+    expect(container.textContent).toBe('')
+  })
+
+  it('ne dit rien d’un caramel pesé en grammes', () => {
+    const caramel = { produit: 'SM. Caramel', unite: 'g', tourneeTaille: 3920, recette: [],
+      enfants: [{ produit: 'SM. Sucre cuit', unite: 'g', besoin: 1000, fabrique: true, ok: true }] }
+    const { container } = render(<PourUn noeud={caramel} quantite={3920} />)
+    expect(container.textContent).toBe('')
+  })
+
+  it('ne dit rien d’une plaque : sa pâte ne se dose pas à la pièce', () => {
+    const { container } = render(<PourUn noeud={{ ...plaque, unite: 'u' }} quantite={4} />)
+    expect(container.textContent).toBe('')
+  })
+
+  it('la fiche d’un montage la montre', () => {
+    render(<Fiche noeud={citronFini} quantite={31} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText(/Pour 1 Citron Framboise/)).toBeTruthy()
+    // Le total reste dans la liste du dessus : 1 178 g à sortir du frigo.
+    expect(screen.getByText(/1.178 g/)).toBeTruthy()
+  })
+})
+
+describe('quand une pièce en prend moins d’une', () => {
+  it('« 1 pour 11 » plutôt que « 0,09 u »', () => {
+    // Le cadre de forêt noire : 8 biscuits viennois pour 88 pièces.
+    const cadre = {
+      produit: 'SM- cadre foret noir grand Production', libelle: 'Black Forest · cadre',
+      unite: 'u', tourneeTaille: 88, pourQuantite: 88, recette: [],
+      enfants: [
+        { produit: 'SM. Biscuit vieniess cacao', unite: 'u', besoin: 8, stock: 2, fabrique: true, ok: false },
+        { produit: 'SM. chantilly mascarpone Production', unite: 'g', besoin: 2200, stock: 0, fabrique: true, ok: false },
+      ],
+    }
+    render(<PourUn noeud={cadre} quantite={88} />)
+    expect(screen.getByText('1 pour 11')).toBeTruthy()
+    expect(screen.getByText('25 g')).toBeTruthy()
+    expect(screen.queryByText(/0,09/)).toBeNull()
   })
 })

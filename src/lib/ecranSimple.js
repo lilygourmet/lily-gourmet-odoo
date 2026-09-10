@@ -40,6 +40,22 @@ export const qte = (v, u) => {
 }
 
 /**
+ * La dose POUR UNE PIÈCE : « 38 g » de glaçage sur un gâteau.
+ *
+ * Contrairement à `qte`, on garde ici la précision : sous le gramme, arrondir
+ * à l'entier écrirait « 0 g » de gélatine là où il en faut 0,4. Au-dessus, un
+ * chiffre après la virgule suffit à la balance.
+ */
+export const dose = (v, u) => {
+  const kg = /^kg$/i.test(String(u || '').trim())
+  const n = (Number(v) || 0) * (kg ? 1000 : 1)
+  const mot = kg ? 'g' : (u || '')
+  if (n === 0) return `0 ${mot}`.trim()
+  if (Math.abs(n) < 1) return `${nb(Number(n.toPrecision(2)))} ${mot}`.trim()
+  return `${nb(Math.round(n * 10) / 10)} ${mot}`.trim()
+}
+
+/**
  * Le nom débarrassé de ce qui ne se lit pas : « SM- Tiramisu 15cm » devient
  * « Tiramisu 15cm ». Les préfixes d'Odoo ne veulent rien dire à l'atelier.
  */

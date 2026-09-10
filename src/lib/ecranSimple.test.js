@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { ecranSimple, basculerEcran, qte } from './ecranSimple'
+import { ecranSimple, basculerEcran, qte, dose } from './ecranSimple'
 
 // Le choix vit dans la tablette : une peut essayer, l'autre garder l'ancien.
 function fausseMemoire() {
@@ -55,5 +55,27 @@ describe('les quantités, comme l’atelier les lit', () => {
   it('les grammes et les pièces restent entiers', () => {
     expect(lu(1494.4, 'g')).toBe('1 494 g')
     expect(lu(13, 'u')).toBe('13 u')
+  })
+})
+
+describe('la dose pour une pièce', () => {
+  const lu = (v, u) => dose(v, u).replace(/\u202f|\u00a0/g, ' ')
+
+  it('le glaçage rose : 1 178 g pour 31 gâteaux = 38 g', () => {
+    expect(lu(1178 / 31, 'g')).toBe('38 g')
+  })
+
+  it('garde les toutes petites doses : 0,4 g de gélatine, pas « 0 g »', () => {
+    expect(lu(0.42, 'g')).toBe('0,42 g')
+    expect(lu(0.0031, 'kg')).toBe('3,1 g')
+  })
+
+  it('une pièce reste une pièce', () => {
+    expect(lu(1, 'u')).toBe('1 u')
+  })
+
+  it('un chiffre après la virgule suffit à la balance', () => {
+    expect(lu(90.9655, 'g')).toBe('91 g')
+    expect(lu(38.24, 'g')).toBe('38,2 g')
   })
 })
