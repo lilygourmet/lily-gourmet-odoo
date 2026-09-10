@@ -4,7 +4,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
   loadHistoriqueAnnexe, parJour, bloquants, declares, parGateauMere, noeudAu,
-  declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe, foisDuNoeud,
+  declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe, foisDuNoeud, sansRendement,
   enfantsPour, parTourneeEntiere } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
@@ -33,8 +33,6 @@ const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 
 // Ceux à qui on NE demande PAS « combien ça a donné ? ». Ils sortent toujours
 // le compte annoncé par la recette : la question ne faisait que ralentir
 // l'atelier (Layla, 2026-09-09). Couvre aussi les bases de flan, par « flan ».
-const SANS_RENDEMENT = /flan|cheese\s*cake|biscuit|g[ée]noise/i
-const sansRendement = nom => SANS_RENDEMENT.test(String(nom || ''))
 // À l'atelier on ne pèse pas 201,04 g : grammes et pièces en entiers, seuls
 // les kg gardent leurs décimales.
 // L'atelier pèse en GRAMMES, toujours : « 2,1 kg » oblige à convertir de tête

@@ -106,10 +106,14 @@ export function Clavier({ titre, valeur, unite, onValider, onFermer }) {
             className="h-16 rounded-2xl bg-cream-warm border-2 border-cream-deep
                        text-[27px] font-extrabold active:bg-cream-deep">⌫</button>
         </div>
+        {/* Une coche, pas un mot : le clavier se referme sur le nombre, il ne
+            valide pas le travail. Deux boutons « C'est bon » à l'écran, c'est
+            un piège à doigt. */}
         <button onClick={() => bon && onValider(n)} disabled={!bon}
-          className={`w-full mt-3 rounded-2xl py-4 text-[20px] font-extrabold
+          aria-label="Valider le nombre"
+          className={`w-full mt-3 rounded-2xl py-4 text-[27px] font-extrabold leading-none
             ${bon ? 'bg-success text-cream' : 'bg-cream-deep text-ink-mute'}`}>
-          C'est bon
+          ✓
         </button>
       </div>
     </div>
@@ -305,6 +309,44 @@ function Partage({ noeud, decoupe, cuites, coupes }) {
       {p.manque > 0
         ? `il manque ${nb(p.manque)} ${mot(p.manque)}`
         : bouts.join(' · ')}
+    </div>
+  )
+}
+
+/**
+ * « Il en est sorti combien ? » — la dernière question, posée UNE fois, au
+ * moment où on sait la réponse. Le chiffre proposé est celui qu'on visait :
+ * quand rien n'a bougé, c'est un seul appui.
+ *
+ * Pas de « 200 g de moins que prévu » : le caramel perd à la cuisson, la crème
+ * au beurre aussi. Le dire, c'est faire croire à une faute (Layla,
+ * 2026-09-10).
+ */
+export function Sortie({ noeud, valeur, onValeur, onValider, envoi }) {
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        <img src={photoDe(noeud.photo || noeud.produit)} alt="" loading="lazy"
+          className="w-16 h-16 rounded-2xl object-cover bg-cream-deep shrink-0" />
+        <div className="text-[22px] font-extrabold leading-[1.1]">
+          {propre(noeud.libelle || noeud.produit)}
+        </div>
+      </div>
+
+      <div className="text-center text-[19px] font-extrabold mt-8 mb-3">
+        Il en est sorti combien ?
+      </div>
+      <GrosChiffre titre="il en est sorti" valeur={valeur} unite={noeud.unite}
+        pas={pasDe(noeud.unite)} onChange={onValeur} />
+      {noeud.unite !== 'u' && (
+        <div className="text-center text-[15px] text-ink-mute mt-1">{noeud.unite}</div>
+      )}
+
+      <button onClick={onValider} disabled={!(valeur > 0) || envoi}
+        className={`w-full mt-8 rounded-2xl py-5 text-[20px] font-extrabold
+          ${valeur > 0 && !envoi ? 'bg-success text-cream' : 'bg-cream-deep text-ink-mute'}`}>
+        {envoi ? 'en cours…' : "C'est bon"}
+      </button>
     </div>
   )
 }

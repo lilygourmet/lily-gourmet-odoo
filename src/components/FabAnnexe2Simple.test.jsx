@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { CasesAFaire, Fiche, Clavier } from './FabAnnexe2Simple'
+import { CasesAFaire, Fiche, Clavier, Sortie } from './FabAnnexe2Simple'
+import { sansRendement } from '../lib/fabAnnexe'
 import { propre } from '../lib/ecranSimple'
 
 // ====== L'écran simplifié, lu par des gens qui lisent peu ======
@@ -229,7 +230,7 @@ describe('le clavier', () => {
     const onValider = ouvrir()
     fireEvent.click(screen.getByText('2'))
     fireEvent.click(screen.getByText('6'))
-    fireEvent.click(screen.getByText("C'est bon"))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
     expect(onValider).toHaveBeenCalledWith(26)
   })
 
@@ -238,7 +239,7 @@ describe('le clavier', () => {
     fireEvent.click(screen.getByText('5'))
     fireEvent.click(screen.getByText('0'))
     fireEvent.click(screen.getByLabelText('Effacer'))
-    fireEvent.click(screen.getByText("C'est bon"))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
     expect(onValider).toHaveBeenCalledWith(5)
   })
 
@@ -247,7 +248,7 @@ describe('le clavier', () => {
     fireEvent.click(screen.getByText('1'))
     fireEvent.click(screen.getByText(','))
     fireEvent.click(screen.getByText('5'))
-    fireEvent.click(screen.getByText("C'est bon"))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
     expect(onValider).toHaveBeenCalledWith(1.5)
   })
 
@@ -255,7 +256,7 @@ describe('le clavier', () => {
     const onValider = ouvrir()
     fireEvent.click(screen.getByText('7'))
     fireEvent.click(screen.getByLabelText('Effacer'))
-    fireEvent.click(screen.getByText("C'est bon"))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
     expect(onValider).not.toHaveBeenCalled()
   })
 
@@ -263,6 +264,53 @@ describe('le clavier', () => {
     render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
       faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
     fireEvent.click(screen.getByLabelText('Changer à faire'))
-    expect(screen.getByText("C'est bon")).toBeTruthy()
+    expect(screen.getByLabelText('Valider le nombre')).toBeTruthy()
+  })
+})
+
+// ====== « Il en est sorti combien ? » ======
+// Le caramel, la crème au beurre, la crème citron perdent à la cuisson : le
+// chiffre réel n'est pas celui de la recette, et ce n'est pas une faute.
+
+describe('la sortie', () => {
+  const caramel = { produit: 'SM. Caramel', libelle: 'Caramel', unite: 'g' }
+
+  it('propose ce qu’on visait : un seul appui quand rien n’a bougé', () => {
+    const onValider = vi.fn()
+    render(<Sortie noeud={caramel} valeur={3920} onValeur={() => {}}
+      onValider={onValider} envoi={false} />)
+    expect(screen.getByText(/3.920/)).toBeTruthy()
+    fireEvent.click(screen.getByText("C'est bon"))
+    expect(onValider).toHaveBeenCalled()
+  })
+
+  it('ne dit RIEN de l’écart : perdre à la cuisson n’est pas une faute', () => {
+    render(<Sortie noeud={caramel} valeur={3700} onValeur={() => {}}
+      onValider={() => {}} envoi={false} />)
+    expect(screen.queryByText(/moins|plus|prévu|écart/i)).toBeNull()
+  })
+
+  it('le clavier corrige le chiffre', () => {
+    const onValeur = vi.fn()
+    render(<Sortie noeud={caramel} valeur={3920} onValeur={onValeur}
+      onValider={() => {}} envoi={false} />)
+    fireEvent.click(screen.getByLabelText('Changer il en est sorti'))
+    fireEvent.click(screen.getByText('2'))
+    fireEvent.click(screen.getByText('6'))
+    fireEvent.click(screen.getByText('0'))
+    fireEvent.click(screen.getByText('0'))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
+    expect(onValeur).toHaveBeenCalledWith(2600)
+  })
+
+  it('répond au doigt : « en cours… » pendant l’envoi', () => {
+    render(<Sortie noeud={caramel} valeur={3920} onValeur={() => {}}
+      onValider={() => {}} envoi />)
+    expect(screen.getByText('en cours…')).toBeTruthy()
+  })
+
+  it('la question ne se pose pas pour un biscuit : il sort toujours son compte', () => {
+    expect(sansRendement('SM. Biscuit a la cuillere 5 pers')).toBe(true)
+    expect(sansRendement('SM. Caramel')).toBe(false)
   })
 })

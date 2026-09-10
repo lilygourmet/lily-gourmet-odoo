@@ -403,6 +403,17 @@ export function estEtapeCreuse(noeud) {
 }
 
 /**
+ * Ce qui sort TOUJOURS le compte annoncé : flans, cheesecakes, biscuits,
+ * génoises. Pour ceux-là, « combien ça a donné ? » était une perte de temps
+ * (Layla, 2026-09-09) — on envoie la quantité prévue sans rien demander.
+ *
+ * Tout le reste se pèse à la sortie : un caramel, une crème au beurre, une
+ * crème citron PERDENT à la cuisson (Layla, 2026-09-10). Rendre moins n'est
+ * pas une erreur, et l'écran ne doit ni s'en alarmer ni le faire remarquer.
+ */
+export const sansRendement = nom => /flan|cheese\s*cake|biscuit|g[ée]noise/i.test(String(nom || ''))
+
+/**
  * L'article de tête vu comme un nœud de recette. L'API ne donne `recette` et
  * `tourneeTaille` qu'aux COMPOSANTS ; à la tête, la recette c'est la liste des
  * composants pour une fournée. Sans cette mise à plat, l'écran simple aurait
