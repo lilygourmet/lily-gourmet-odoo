@@ -8,7 +8,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 // Odoo compte les centimes, la banque arrondit : même seuil que partout ailleurs pour
 // décider que deux montants sont LE MÊME montant.
-import { ECART_MINI, nomDeLigne, similarite } from './releveDoublons'
+import { ECART_MINI, nomDeLigne, nomFiable, similarite } from './releveDoublons'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -377,6 +377,13 @@ export function nomDansLibelle(client, label) {
   return similarite(nomDeLigne(label), nomDeLigne(client)) >= 0.85
 }
 
+// Le libellé porte-t-il le nom d'une AUTRE cliente que celle de la caisse ? Un libellé
+// sans nom lisible (« VIR INST RECU 2128322 20260602129237 ») ne dit rien : ce n'est pas
+// « une autre », et le repli sur l'heure et le montant garde tout son sens.
+export function nomAutreCliente(client, label) {
+  return nomFiable(nomDeLigne(label)) && !nomDansLibelle(client, label)
+}
+
 // Fenêtre de dates par moyen (en jours). Virement : ±5 (instantané/classique).
 // Espèces : dépôt le jour même ou APRÈS l'encaissement boutique — JAMAIS avant
 // (on ne peut pas déposer un argent pas encore encaissé) → min 0.
@@ -502,7 +509,11 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
       if (toks.length) {
         const named = c.filter(x => nomDansLibelle(env.virement_client, x.label))
         if (named.length >= 1) return named
-        return c.filter(x => /INST/i.test(x.label) &&
+        // Mais JAMAIS un virement qui porte le nom d'une autre cliente : « VIR INST RECU
+        // LEBDAR NAWAL » n'est pas le virement de Maryam el Bairi, même s'il tombe le bon
+        // jour pour le bon montant. Vécu : un seul virement de 600 dh rapproché à DEUX
+        // caisses, dont aucune n'était celle de la cliente qui avait payé.
+        return c.filter(x => /INST/i.test(x.label) && !nomAutreCliente(env.virement_client, x.label) &&
           signedDays(x.dateIso, env.session_date) >= -1 && signedDays(x.dateIso, env.session_date) <= 0)
       }
     }
