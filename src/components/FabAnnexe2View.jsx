@@ -37,20 +37,20 @@ const SANS_RENDEMENT = /flan|cheese\s*cake|biscuit|g[ée]noise/i
 const sansRendement = nom => SANS_RENDEMENT.test(String(nom || ''))
 // À l'atelier on ne pèse pas 201,04 g : grammes et pièces en entiers, seuls
 // les kg gardent leurs décimales.
-const qte = (v, u) => {
-  const n = Number(v) || 0
-  if (!/^kg$/i.test(String(u || '').trim())) return `${nb(Math.round(n))} ${u || ''}`.trim()
-  // Personne ne pèse « 0,06 kg » de gélatine : sous le kilo, on dit 57 g.
-  return n < 1 ? `${nb(Math.round(n * 1000))} g` : `${nb(Math.round(n * 100) / 100)} kg`
-}
+// L'atelier pèse en GRAMMES, toujours : « 2,1 kg » oblige à convertir de tête
+// au-dessus de la balance. Toutes les recettes d'Annexe 2 s'écrivent donc en
+// grammes, quelle que soit l'unité d'Odoo (Layla, 2026-09-10).
+const estKg = u => /^kg$/i.test(String(u || '').trim())
+const enGrammes = (v, u) => (Number(v) || 0) * (estKg(u) ? 1000 : 1)
+const uniteAffichee = u => (estKg(u) ? 'g' : String(u || ''))
+const qte = (v, u) => `${nb(Math.round(enGrammes(v, u)))} ${uniteAffichee(u)}`.trim()
 // Dans le rappel « pour 1 … », les doses sont minuscules : arrondir à l'entier
 // écrivait « 0 g » de gélatine là où il en faut 0,4. On garde deux chiffres
 // significatifs tant que l'entier ne dirait rien. (Layla, 2026-09-09.)
 const qteFine = (v, u) => {
-  const enKg = /^kg$/i.test(String(u || '').trim())
-  const n = (Number(v) || 0) * (enKg ? 1000 : 1)
+  const n = enGrammes(v, u)
   if (n === 0 || Math.abs(n) >= 1) return qte(v, u)
-  return `${nb(Number(n.toPrecision(2)))} ${enKg ? 'g' : (u || '')}`.trim()
+  return `${nb(Number(n.toPrecision(2)))} ${uniteAffichee(u)}`.trim()
 }
 const propre = n => String(n || '')
   .replace(/^(SM[.\- ]?|MP[.\- ]?|E-)\s*/i, '').replace(/\s{2,}/g, ' ').trim()
@@ -234,7 +234,10 @@ const Titre = ({ children }) => (
 // sucre.
 // ------------------------------------------------------------
 function LigneQte({ nom, valeur, unite, onValeur, gras }) {
-  const suffixe = ' ' + unite
+  // On affiche ET on saisit en grammes ; la recette, elle, garde l'unité
+  // d'Odoo — c'est elle qu'attend l'appelant.
+  const u = uniteAffichee(unite)
+  const suffixe = ' ' + u
   const brut = qte(valeur, unite)
   const affiche = brut.endsWith(suffixe) ? brut.slice(0, -suffixe.length) : brut
   const [txt, setTxt] = useState(affiche)
@@ -245,7 +248,7 @@ function LigneQte({ nom, valeur, unite, onValeur, gras }) {
     if (txt === affiche) return          // rien tapé : pas de recalcul
     const v = Number(String(txt).replace(/[\s\u00a0\u202f]/g, '').replace(',', '.'))
     if (!(v > 0)) { setTxt(affiche); return }
-    onValeur(v)
+    onValeur(estKg(unite) ? v / 1000 : v)
   }
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
@@ -258,7 +261,7 @@ function LigneQte({ nom, valeur, unite, onValeur, gras }) {
         className={`w-[86px] h-10 text-right px-2 rounded-lg border bg-cream-warm text-ink
           text-[15px] font-bold focus:outline-none focus:border-bordeaux
           ${gras ? 'border-gold border-2' : 'border-cream-deep'}`} />
-      <span className="text-[12px] text-ink-mute w-5">{unite}</span>
+      <span className="text-[12px] text-ink-mute w-5">{u}</span>
     </div>
   )
 }
@@ -734,13 +737,26 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     // ce genre de recette ».)
     if (!/^u$/i.test(racine ? article.unite : noeud.unite)) return null
 
-    // ⚠️ Un CADRE se monte d'un bloc : on ne pèse pas pour une part, on remplit
-    // le cadre. Ses quantités valent donc pour le cadre ENTIER, et le titre dit
-    // combien de pièces il en sort — « Pour 1 cadre = 46 u » (Layla,
-    // 2026-09-09). `brut`, pas `article` : `pourFois` a multiplié la tournée
-    // par le nombre de cadres choisi.
-    const estCadre = /\bcadre\b/i.test(racine ? article.produit : noeud.produit)
-    const parCadre = !estCadre ? 1
+    // ⚠️ CE QU'ON PRÉPARE EN UNE FOIS. On ne pèse pas pour une part : on
+    // remplit un cadre, on étale une plaque. Ces quantités-là valent donc pour
+    // le BLOC entier, et le titre dit ce qu'il en sort — « Pour 1 cadre =
+    // 46 u », « Pour 1 plaque = 14 u » (Layla, 2026-09-09 et 2026-09-10).
+    //
+    // Deux cas de bloc :
+    //  · le nom dit « cadre » ;
+    //  · la recette n'est faite QUE de matières premières — c'est un mélange
+    //    qu'on coule ou qu'on étale, puis qu'on découpe (le biscuit brownie).
+    // Un MONTAGE, lui, se fait pièce par pièce : le fond de citron framboise
+    // pose son biscuit, son confit et son crunchy un par un — pour celui-là,
+    // « pour 1 » garde tout son sens.
+    const nomNoeud = racine ? article.produit : noeud.produit
+    const estCadre = /\bcadre\b/i.test(nomNoeud)
+    const enBloc = estCadre || !(enfants || []).some(c => c.fabrique)
+    const motBloc = estCadre ? 'cadre'
+      : /plaque|biscuit/i.test(nomNoeud) ? 'plaque' : 'tournée'
+    // `brut`, pas `article` : `pourFois` a multiplié la tournée par le nombre
+    // de fournées choisi.
+    const parCadre = !enBloc ? 1
       : (racine ? Number(brut.tournee) : Number(noeud.tourneeTaille)) || 1
 
     // Ce qu'une pièce demande. Quand il en entre MOINS D'UNE — un cadre de
@@ -749,7 +765,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     // tournée. « 1 tournée pour 88 » (Layla, 2026-09-09).
     const dose = (nom, parPiece, unite, tourneeTaille) => ({
       nom,
-      valeur: !estCadre && /^u$/i.test(unite) && parPiece < 1 && tourneeTaille > 0
+      valeur: !enBloc && /^u$/i.test(unite) && parPiece < 1 && tourneeTaille > 0
         ? `1 tournée pour ${nb(Math.round(tourneeTaille / parPiece))}`
         : qteFine(parPiece * parCadre, unite),
     })
@@ -765,8 +781,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
       if (!(total > 0) || !lignes.length) return null
       return {
-        titre: estCadre
-          ? `Pour 1 cadre = ${nb(parCadre)} ${brut.unite}`
+        titre: enBloc
+          ? `Pour 1 ${motBloc} = ${qte(parCadre, brut.unite)}`
           : `Pour 1 ${propre(article.libelle)}`,
         lignes: lignes.map(c => dose(
           nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
@@ -777,8 +793,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     // La taille de tournée d'un composant se lit dans la liste du dessous.
     const tailleDe = nom => (enfants || []).find(c => c.produit === nom)?.tourneeTaille
     return {
-      titre: estCadre
-        ? `Pour 1 cadre = ${nb(parCadre)} ${noeud.unite}`
+      titre: enBloc
+        ? `Pour 1 ${motBloc} = ${qte(parCadre, noeud.unite)}`
         : `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`,
       lignes: noeud.recette.map(l => dose(
         nomAtelier(l.produit),
