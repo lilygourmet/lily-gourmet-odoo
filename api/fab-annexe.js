@@ -782,6 +782,12 @@ export default async function handler(req, res) {
         continue
       }
 
+      const composants = await composantsDe(cache, p, a.tournee, a.figes || [], 0, [], lots, achetes, declare)
+      // Une CUVE, c'est ce qui ne se divise pas : les figés réglés pour
+      // l'article, ou n'importe quelle mousse — même quand elle a son propre
+      // article et qu'on ne l'a jamais cochée. (Layla, 2026-09-10 : « branche-la
+      // à tous les articles avec des mousses ».)
+      const aUneCuve = (a.figes || []).length > 0 || composants.some(c => c.fige)
       articles.push({
         produit: a.produit,
         libelle: a.libelle || a.produit,
@@ -799,11 +805,11 @@ export default async function handler(req, res) {
         // en individuels ») ne sont PAS calculées ici : chacune coûte une
         // dizaine d'allers-retours vers Odoo, et l'écran de fin multi-tailles
         // n'est pas encore fait. `detailTaille` est prêt pour ce jour-là.
-        composants: await composantsDe(cache, p, a.tournee, a.figes || [], 0, [], lots, achetes, declare),
+        composants,
         // Les tailles plus petites où finir la même cuve. Seulement quand il y
         // a une cuve, justement : un article sans rien de figé n'a pas de
         // reste à placer.
-        tailles: (a.figes || []).length
+        tailles: aUneCuve
           ? autresTailles(tout, a).map(x => ({
             produit: x.produit, libelle: x.libelle || x.produit,
             tournee: x.tournee, rang: x.rang || tailleDuNom(x.produit),
