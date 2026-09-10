@@ -141,3 +141,34 @@ describe('ingredientsPour', () => {
     expect(ingredientsPour(deux, 4)[0].besoin).toBe(50)
   })
 })
+
+describe('un ingrédient cité deux fois', () => {
+  const gianduja = {
+    produit: 'SM- Gianduja 10 pers', unite: 'u', tourneeTaille: 34, pourQuantite: 34,
+    recette: [
+      { produit: 'MP- Crème whipping', qty: 2704, unite: 'g' },
+      { produit: 'MP- Crème whipping', qty: 4550, unite: 'g' },
+    ],
+    enfants: [],
+  }
+
+  it('ne fait qu’une ligne : on le pèse une fois', () => {
+    const l = ingredientsPour(gianduja, 34)
+    expect(l.length).toBe(1)
+    expect(l[0].besoin).toBe(7254)
+  })
+
+  it('le blocage se rejuge sur le total', () => {
+    const deux = {
+      produit: 'SM. X', unite: 'u', tourneeTaille: 1, pourQuantite: 1, recette: [],
+      enfants: [
+        { produit: 'SM. Confit', unite: 'g', besoin: 100, stock: 150, fabrique: true, ok: true },
+        { produit: 'SM. Confit', unite: 'g', besoin: 100, stock: 150, fabrique: true, ok: true },
+      ],
+    }
+    const l = ingredientsPour(deux, 1)
+    expect(l.length).toBe(1)
+    expect(l[0].besoin).toBe(200)
+    expect(l[0].ok).toBe(false)
+  })
+})
