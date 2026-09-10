@@ -9,9 +9,9 @@
 // l'écran, et tout s'y traite : recevoir (en corrigeant la quantité si besoin)
 // ou refuser. Plus besoin d'aller dans l'onglet Transferts. (Layla, 2026-09-10.)
 //
-// Il ne bloque rien : on voit l'écran derrière, et « réduire » le renvoie en
-// bande fine en haut — sans quoi une équipe qui attend une caisse pas encore
-// arrivée aurait le milieu de son écran occupé toute la journée.
+// Il ne bloque rien : on voit l'écran derrière, et « réduire 30 min » le renvoie
+// en bande fine en haut — puis il revient au milieu, et on peut le réduire
+// encore, en boucle, jusqu'à ce que la caisse soit reçue ou refusée.
 //
 // ⚠️ Jamais pour les administrateurs : ce n'est pas eux qui vont chercher les
 // caisses au frigo. Ils gardent l'onglet Transferts, avec la liste complète.
@@ -23,11 +23,21 @@ import { toast } from '../lib/toast'
 const fmt = n => (Number(n) || 0).toString().replace('.', ',')
 const RELECTURE_MS = 120000   // 2 min : assez pour suivre, assez peu pour ne rien coûter
 const DEFILE_MS = 6000
+// « Réduire » met le rappel de côté une demi-heure, puis il revient au milieu —
+// et on peut le réduire encore, en boucle. Le temps qu'une caisse arrive du
+// labo, sans qu'on puisse l'enterrer pour la journée. (Layla, 2026-09-10.)
+const REDUIT_MS = 30 * 60 * 1000
+const CLE_REDUIT = 'lg:rappel-reduit'
+// Dans la mémoire de l'onglet : survit au changement d'écran (l'en-tête est
+// reconstruit à chaque fois), pas à la fermeture de l'app.
+const finReduit = () => {
+  try { return Number(sessionStorage.getItem(CLE_REDUIT) || 0) } catch { return 0 }
+}
 
 export default function RappelTransferts({ user, onNavigate }) {
   const [liste, setListe] = useState([])
   const [i, setI] = useState(0)
-  const [reduit, setReduit] = useState(false)
+  const [reduit, setReduit] = useState(() => finReduit() > Date.now())
   const [recu, setRecu] = useState(null)     // la quantité tapée, si on l'a corrigée
   const [busy, setBusy] = useState(false)
   const admin = user?.role === 'admin'
@@ -42,6 +52,14 @@ export default function RappelTransferts({ user, onNavigate }) {
     const t = setInterval(lire, RELECTURE_MS)
     return () => { vivant = false; clearInterval(t) }
   }, [user, admin])
+
+  // La demi-heure écoulée, le rappel revient tout seul au milieu, sans qu'on
+  // ait à changer d'écran.
+  useEffect(() => {
+    if (!reduit) return undefined
+    const t = setTimeout(() => setReduit(false), Math.max(1000, finReduit() - Date.now()))
+    return () => clearTimeout(t)
+  }, [reduit])
 
   // Le défilement ne tourne que s'il y a plusieurs lignes, et jamais pendant
   // qu'on corrige une quantité — la ligne changerait sous les doigts.
@@ -82,10 +100,19 @@ export default function RappelTransferts({ user, onNavigate }) {
     setBusy(false)
   }
 
+  const reduire = () => {
+    try { sessionStorage.setItem(CLE_REDUIT, String(Date.now() + REDUIT_MS)) } catch { /* privé */ }
+    setReduit(true)
+  }
+  const rouvrir = () => {
+    try { sessionStorage.removeItem(CLE_REDUIT) } catch { /* privé */ }
+    setReduit(false)
+  }
+
   // Réduit : la bande fine d'avant, en haut. Toujours là, mais hors du chemin.
   if (reduit) {
     return (
-      <button onClick={() => setReduit(false)}
+      <button onClick={rouvrir}
         className="block w-full text-left bg-danger text-cream px-4 py-2 hover:brightness-110"
         title="Revoir le rappel">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
@@ -148,9 +175,9 @@ export default function RappelTransferts({ user, onNavigate }) {
                        disabled:opacity-60">
             refuser
           </button>
-          <button onClick={() => setReduit(true)}
+          <button onClick={reduire}
             className="flex-1 rounded-xl border border-cream/50 py-2.5 text-[13px] font-bold">
-            réduire
+            réduire 30 min
           </button>
         </div>
 
