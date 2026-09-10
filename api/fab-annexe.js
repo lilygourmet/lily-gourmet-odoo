@@ -729,6 +729,12 @@ export default async function handler(req, res) {
     // Un seul article demandé (le pâtissier vient de l'ouvrir) : lui seul a
     // besoin de sa cascade de recettes.
     const seul = req.query.article ? String(req.query.article) : null
+    // ⚠️ `details=1` : la cascade de TOUS les articles à faire, d'un coup. Un
+    // clic sur un article coûtait une seconde d'attente, treize fois par
+    // matinée. Les recettes sont gardées dix minutes et le cache est partagé
+    // dans la requête : les calculer ensemble coûte à peine plus qu'un seul.
+    // (Layla, 2026-09-10 : « c'est trop lent à travailler ».)
+    const tousLesDetails = req.query.details === '1'
     let voulus = seul ? (catalogue || []).filter(a => a.produit === seul) : (catalogue || [])
     // Un article ouvert depuis « Déclarer » n'est pas forcément réglé : on lui
     // fabrique une fiche à la volée, sans mini ni maxi ni rien de figé.
@@ -776,7 +782,7 @@ export default async function handler(req, res) {
       if (!seul && !aFaire) continue
 
       // La liste n'affiche que l'état : ni recette, ni cascade, ni tailles.
-      if (!seul) {
+      if (!seul && !tousLesDetails) {
         articles.push({
           produit: a.produit, libelle: a.libelle || a.produit,
           photo: a.photo || gateauDe(a.produit),
