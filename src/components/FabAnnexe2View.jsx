@@ -583,17 +583,23 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   if (!noeud) { setChemin([]); return null }
 
   const racine = chemin.length === 1
-  const fois = faits[noeud.produit]?.fois ?? foisDuNoeud(noeud)
+  // Un article à quantité FIGÉE se règle en QUANTITÉ, pas en tournées : sa
+  // recette est écrite pour une unité, « une tournée » n'y veut rien dire.
+  const parRecette = noeud.tourneeTaille || 1
+  const aLaQte = !!noeud.aLaQuantite
   // Ce qu'il manque VRAIMENT pour le parent : le besoin, moins ce qu'on a en
   // stock et ce qui a déjà été déclaré aujourd'hui.
   const manqueDuNoeud = Math.max(0,
     Math.round(((noeud.besoin || 0) - (noeud.stock || 0) - (noeud.dejaFait || 0)) * 1000) / 1000)
+  // Ce que l'écran propose : JUSTE CE QU'IL FAUT. « Si je veux une tournée je
+  // clique une tournée » (Layla, 2026-09-10). Deux exceptions, qui gardent leur
+  // compte de tournées : ce qui ne se fait que par tournées entières — un
+  // cadre, une plaque, un biscuit — et ce qui se règle déjà à la quantité.
+  const foisConseille = (manqueDuNoeud > 0 && !aLaQte && !parTourneeEntiere(noeud))
+    ? Math.max(0.01, Math.round((manqueDuNoeud / parRecette) * 10000) / 10000)
+    : foisDuNoeud(noeud)
+  const fois = faits[noeud.produit]?.fois ?? foisConseille
   const majFois = f => setFaits(x => ({ ...x, [noeud.produit]: { fois: Math.max(0.01, Math.round(f * 10000) / 10000), brouillon: true } }))
-  // Un article à quantité FIGÉE se règle en QUANTITÉ, pas en tournées : sa
-  // recette est écrite pour une unité, « une tournée » n'y veut rien dire.
-  // Le pas suit l'unité — 10 g, 100 g de kg, 1 pièce (Layla, 2026-09-09).
-  const parRecette = noeud.tourneeTaille || 1
-  const aLaQte = !!noeud.aLaQuantite
   // Un cadre, une plaque, un biscuit : tournées ENTIÈRES, pas de demi
   // (Layla, 2026-09-10).
   const pasFois = aLaQte
@@ -951,8 +957,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                 {qte(parRecette * fois, noeud.unite)}
               </div>
               <div className="text-[11.5px] text-ink-mute">
-                {fois !== foisDuNoeud(noeud)
-                  ? `conseillé : ${qte(parRecette * foisDuNoeud(noeud), noeud.unite)}` : ''}
+                {fois !== foisConseille
+                  ? `conseillé : ${qte(parRecette * foisConseille, noeud.unite)}` : ''}
               </div>
             </div>
             <button onClick={() => majFois(fois + pasFois)}
@@ -963,15 +969,14 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                          text-[13px] font-extrabold text-gold">×2</button>
           </div>
 
-          {/* Par défaut on fait une TOURNÉE ENTIÈRE — c'est la règle. Mais
-              quand la tournée dépasse largement le besoin, on doit pouvoir
-              n'en faire que ce qu'il faut : la recette se met à l'échelle
-              exacte. « Pourquoi ça ne me donne pas la recette de 2 080 g ? »
-              (Layla, 2026-09-10.) */}
-          {manqueDuNoeud > 0 && Math.abs(parRecette * fois - manqueDuNoeud) > 0.001 && (
-            <button onClick={() => majFois(manqueDuNoeud / parRecette)}
+          {/* L'écran propose ce qu'il FAUT ; la tournée entière est à un clic.
+              (Layla, 2026-09-10 : « si je veux une tournée je clique une
+              tournée ».) Rien à proposer quand on y est déjà. */}
+          {!aLaQte && Math.abs(fois - Math.max(1, Math.ceil(fois))) > 0.001 && (
+            <button onClick={() => majFois(Math.max(1, Math.ceil(fois)))}
               className="w-full px-4 pb-3 text-left text-[12.5px] text-bordeaux font-bold">
-              ou juste ce qu'il faut — {qte(manqueDuNoeud, noeud.unite)}
+              ou {Math.ceil(fois) > 1 ? `${Math.ceil(fois)} tournées entières` : 'une tournée entière'}
+              {' '}— {qte(parRecette * Math.max(1, Math.ceil(fois)), noeud.unite)}
             </button>
           )}
 
