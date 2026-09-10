@@ -23,6 +23,17 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, decoupeDe,
   sansRendement } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 
+/**
+ * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
+ * sienne. « Mettre les photos des SM liées au E- ou MI- ou V- » (Layla,
+ * 2026-09-11) — une crème ou un biscuit photographié seul ne se reconnaît pas,
+ * le gâteau si.
+ *
+ * Effet de bord bienvenu : 52 photos de gâteaux au lieu de 284 photos
+ * d'articles, donc bien plus de coups dans le cache du navigateur.
+ */
+const photoGateau = a => (a.pour && a.pour[0]) || a.photo || a.produit
+
 export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activeView, onBasculer }) {
   const [articles, setArticles] = useState(() => dernierEcran('fab_annexe2'))
   const [details, setDetails] = useState(() =>
@@ -172,7 +183,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               {tout === null && <Skeleton rows={3} />}
               {trouves && (
                 <Cases vide="Rien à ce nom-là."
-                  items={trouves.map(a => ({ cle: a.produit, photo: a.photo, libelle: a.libelle }))}
+                  items={trouves.map(a => ({ cle: a.produit, photo: photoGateau(a), libelle: a.libelle }))}
                   onOuvrir={ouvrir} />
               )}
               {!trouves && ouvertG && (
@@ -180,7 +191,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                   <button onClick={() => setGateau(null)}
                     className="text-[14px] text-ink-mute font-bold mb-3">← Tous les gâteaux</button>
                   <Cases vide="Rien ici."
-                    items={ouvertG.articles.map(a => ({ cle: a.produit, photo: a.photo, libelle: a.libelle }))}
+                    items={ouvertG.articles.map(a => ({ cle: a.produit, photo: ouvertG.photo || photoGateau(a), libelle: a.libelle }))}
                     onOuvrir={ouvrir} />
                 </>
               )}

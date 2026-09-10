@@ -12,6 +12,7 @@
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js'
+import { waitUntil } from '@vercel/functions'
 import { versUnite } from '../src/lib/unites.js'
 
 const LIEU_ANNEXE = 62          // stock.location « WHPDX/Stock Prod annexe »
@@ -815,10 +816,27 @@ export default async function handler(req, res) {
   try {
     if (req.query.photo) {
       const b64 = await photoDe(String(req.query.photo))
-      if (!b64) return res.status(404).end()
+      if (!b64) {
+        // ⚠️ Une photo ABSENTE se garde en cache elle aussi : sans ça, chaque
+        // ouverture de « Déclarer » redemandait à Odoo les images qui
+        // n'existent pas — le plus lent, pour rien.
+        res.setHeader('Cache-Control', 'public, max-age=3600')
+        return res.status(404).end()
+      }
       res.setHeader('Content-Type', 'image/png')
-      res.setHeader('Cache-Control', 'public, max-age=86400')
+      // Une photo de produit ne change quasiment jamais. Une semaine de cache,
+      // c'est autant d'allers-retours Odoo en moins à chaque écran.
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
       return res.status(200).send(Buffer.from(b64, 'base64'))
+    }
+
+    // Le cron d'atelier appelle `?details=1` toutes les 10 minutes. Qu'il
+    // réchauffe AUSSI le squelette de « Déclarer » : sans ça, la première
+    // personne à ouvrir l'onglet payait ses quatre secondes toutes les demi-
+    // heures. Ça ne coûte rien — c'est la même invocation, après la réponse.
+    if (req.query.details) {
+      const p = Promise.resolve(squeletteTout()).catch(e => console.warn('[tout]', e?.message || e))
+      try { waitUntil(p) } catch { /* pas de contexte Vercel */ }
     }
 
     const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
