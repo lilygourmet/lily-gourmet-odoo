@@ -138,8 +138,14 @@ export async function loadTransferts(famille) {
  */
 export async function loadEnAttentePour(user) {
   if (!lieuxDe(user).length) return []
+  // ⚠️ TOUTES les colonnes, pas une liste choisie : `confirmTransfert` a besoin
+  // d'`odoo_product_id`, et sans lui il croyait l'article non relié à Odoo. Il
+  // enregistrait alors la réception, sautait le bon Odoo et ne laissait AUCUNE
+  // erreur — 5 transferts reçus le 2026-09-10 sans bon, en silence. Une liste
+  // de colonnes qui doit rester d'accord avec une fonction à l'autre bout du
+  // fichier est un piège : on prend tout (200 lignes au plus).
   const { data, error } = await supabase
-    .from('transferts_mp').select('id, matiere, qty_envoye, unite, sens, famille, transfer_date, envoye_par')
+    .from('transferts_mp').select('*')
     .eq('statut', 'en_attente')
     .order('transfer_date', { ascending: true })
     .limit(200)
@@ -268,11 +274,29 @@ export async function confirmTransfert(t, qtyRecu, user, { refuse = false } = {}
   if (error) throw error
 
   // Refusé, ou rien à passer : pas de bon Odoo, mais l'expéditeur est prévenu.
-  if (refuse || !(qty > 0) || !t.odoo_product_id) {
+  if (refuse || !(qty > 0)) {
     notifier(t.sens, t.famille,
       messageReception(t, qty, { refuse: true, par: user?.full_name || null }), user).catch(() => {})
     return null
   }
+
+  // ⚠️ L'article Odoo manque ? Ce n'est PAS une raison de sauter le bon en
+  // silence : l'appelant ne l'a peut-être simplement pas chargé. On relit la
+  // ligne, et si elle n'a vraiment pas d'article, on le DIT — dans `odoo_error`
+  // et à l'écran. C'est ce silence qui a coûté 5 bons le 2026-09-10.
+  let produitOdoo = t.odoo_product_id
+  if (!produitOdoo) {
+    const { data } = await supabase.from('transferts_mp')
+      .select('odoo_product_id').eq('id', t.id).maybeSingle()
+    produitOdoo = data?.odoo_product_id || null
+  }
+  if (!produitOdoo) {
+    const msg = `${t.matiere} n'est relié à aucun article Odoo : reçu, mais sans bon de transfert.`
+    await supabase.from('transferts_mp').update({ odoo_error: msg }).eq('id', t.id)
+    notifier(t.sens, t.famille, messageReception(t, qty, {}), user).catch(() => {})
+    throw new Error(msg)
+  }
+  t = { ...t, odoo_product_id: produitOdoo }
   const ref = await envoyerVersOdoo(t, qty, user)
   // Le WhatsApp part une fois que c'est DANS Odoo : il annonce ce qui est
   // réellement entré en stock, avec le numéro du bon. Il ne doit jamais faire
