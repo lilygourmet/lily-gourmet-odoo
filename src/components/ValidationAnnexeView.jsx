@@ -45,6 +45,22 @@ const propre = n => String(n || '')
   .replace(/^(E-|V-|MI-|N-|SM[.\- ]?|Sm[.\- ]?|SMT?[.\- ]?)\s*/i, '')
   .replace(/\s*(finition|production)\s*$/i, '').replace(/\s{2,}/g, ' ').trim()
 
+/**
+ * « └ pour Base CBS 23 cm » — le gâteau qui a demandé cette préparation.
+ *
+ * Elle lui est RÉSERVÉE : une autre taille ne s'en sert pas, elle refait la
+ * sienne (Layla, 2026-09-10). Rien ne s'affiche quand la fournée a été
+ * déclarée pour elle-même : la ligne dirait deux fois la même chose.
+ */
+export function PourQui({ pour }) {
+  if (!pour) return null
+  return (
+    <div className="text-[11.5px] text-ink-mute">
+      └ pour <b className="text-ink">{propre(pour)}</b>
+    </div>
+  )
+}
+
 const sansLesNoms = (obj, noms) =>
   Object.fromEntries(Object.entries(obj).filter(([n]) => !noms.has(n)))
 
@@ -144,7 +160,9 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
             // quantité qui n'a rien à voir. Vécu le 04/09 : 9 425 g déclarés,
             // l'écran proposait les 7 680 g de l'ordre WHPDX/MO/21184.
             if (!parOrdre.has(encoreLa.name)) {
-              parOrdre.set(encoreLa.name, { name: encoreLa.name, article: d.article, prevu: encoreLa.qty, declare: 0, demande: encoreLa.qty, etat: encoreLa.state })
+              // `pour` : le gâteau pour lequel la préparation a été faite. Il
+              // est réservé à lui, l'écran le dit (Layla, 2026-09-10).
+              parOrdre.set(encoreLa.name, { name: encoreLa.name, article: d.article, pour: d.pour || null, prevu: encoreLa.qty, declare: 0, demande: encoreLa.qty, etat: encoreLa.state })
             }
             const e = parOrdre.get(encoreLa.name)
             e.declare = Math.round((e.declare + (Number(d.qty) || 0)) * 100) / 100
@@ -156,7 +174,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           // ordres ou qu'il lie à des ordres dans Odoo : l'app crée ses propres
           // ordres » — Layla, le 2026-09-04. Une déclaration sans ordre reste
           // sans ordre, et se voit comme telle.
-          const p = sans.get(d.article) || { article: d.article, qty: 0, unite: d.unite, ids: [], quand: 0 }
+          const p = sans.get(d.article) || { article: d.article, pour: d.pour || null, qty: 0, unite: d.unite, ids: [], quand: 0 }
           p.qty += Number(d.qty) || 0
           p.ids.push(d.id)
           p.quand = Math.max(p.quand, new Date(d.fait_le || 0).getTime() || 0)
@@ -164,7 +182,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         }
         const base = [...parOrdre.values()]
         const orphelins = [...sans.values()].map(p => ({
-          name: 'sans-ordre:' + p.article, article: p.article, sansOrdre: true, ids: p.ids,
+          name: 'sans-ordre:' + p.article, article: p.article, pour: p.pour, sansOrdre: true, ids: p.ids,
           // « tout juste déclaré » : calculé ICI, au chargement, pas au rendu.
           toutRecent: Date.now() - p.quand < 120000,
           demande: Math.round(p.qty * 100) / 100, unite: p.unite, manques: [], lignes: [],
@@ -422,6 +440,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                 <div className="flex items-center gap-3 px-3.5 py-3 bg-white">
                   <div className="flex-1 min-w-0">
                     <div className="text-[16px] font-bold">{propre(l.article)} — {qte(l.demande, l.unite)}</div>
+                    <PourQui pour={l.pour} />
                     {/* La déclaration s'enregistre AVANT que l'ordre parte dans
                         Odoo : pendant quelques secondes elle est légitimement
                         « sans ordre ». Accuser tout de suite était faux — vécu
@@ -458,6 +477,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                   onChange={e => setSel(v => (e.target.checked ? [...v, l.name] : v.filter(x => x !== l.name)))} />
                 <div className="flex-1 min-w-0">
                   <div className="text-[16px] font-bold">{propre(l.article)} — {qte(l.demande, l.unite)}</div>
+                  <PourQui pour={l.pour} />
                   <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.lieu ? ' · ' + l.lieu : ''}</div>
                   {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > new Date().toISOString().slice(0, 10) ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
                     prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}

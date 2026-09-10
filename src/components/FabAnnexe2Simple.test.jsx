@@ -345,6 +345,36 @@ describe('ce qui manque', () => {
   })
 })
 
+describe('en préparer d’avance', () => {
+  it('un ingrédient DÉJÀ EN STOCK s’ouvre quand même', () => {
+    // « Je peux rajouter quelque chose de la recette même si déjà en stock »
+    // (Layla, 2026-09-10). Le nouvel écran l'avait perdu.
+    const onOuvrir = vi.fn()
+    render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={onOuvrir} onFait={() => {}} />)
+    fireEvent.click(screen.getByText('Amaretti orange Tiramisu'))
+    expect(onOuvrir).toHaveBeenCalledWith('SM Amaretti orange Tiramisu')
+  })
+
+  it('et il le dit : « en faire › » sur ce qui est déjà là', () => {
+    render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    // Deux composants en stock sur les trois du tiramisu.
+    expect(screen.getAllByText('en faire ›').length).toBe(2)
+  })
+
+  it('une matière première ne s’ouvre pas : il n’y a rien à fabriquer', () => {
+    const onOuvrir = vi.fn()
+    const avecMp = { ...tiramisu, enfants: [
+      { produit: 'MP- Sucre Granule', unite: 'g', besoin: 300, stock: 0, fabrique: false, ok: true },
+    ] }
+    render(<Fiche noeud={avecMp} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={onOuvrir} onFait={() => {}} />)
+    fireEvent.click(screen.getByText('Sucre Granule'))
+    expect(onOuvrir).not.toHaveBeenCalled()
+  })
+})
+
 describe('ce qu’on ne montre pas', () => {
   const gianduja = {
     produit: 'SM- Gianduja indiv', libelle: 'Gianduja indiv', unite: 'u',

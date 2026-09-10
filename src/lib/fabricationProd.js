@@ -73,8 +73,11 @@ export async function loadFabProd(jour, atelier = 'prod') {
   const lire = champs => supabase.from('prod_fabrications').select(champs)
     .eq('jour', jour).eq('atelier', atelier).order('fait_le', { ascending: true })
   const base = 'id, article, qty, unite, fois, fait_par, fait_le'
-  // `ordre` dit à quel ordre Odoo la déclaration se rattache. La colonne peut
-  // ne pas exister (SQL pas encore lancé) : on retombe sur l'ancienne lecture.
+  // `ordre` dit à quel ordre Odoo la déclaration se rattache, `pour` pour quel
+  // gâteau elle a été faite. Ces colonnes peuvent ne pas exister (SQL pas
+  // encore lancé) : on retombe sur l'ancienne lecture.
+  const avecPour = await lire(base + ', ordre, ordre_cree, pour')
+  if (!avecPour.error) return avecPour.data || []
   const avec = await lire(base + ', ordre, ordre_cree')
   if (!avec.error) return avec.data || []
   const { data, error } = await lire(base)
@@ -104,6 +107,8 @@ export async function loadFabProdDepuis(depuis, atelier = 'prod') {
     .gte('jour', depuis).eq('atelier', atelier)
     .order('fait_le', { ascending: false }).limit(5000)
   const base = 'id, jour, article, qty, unite, fois, fait_par, fait_le'
+  const avecPour = await lire(base + ', ordre, ordre_cree, pour')
+  if (!avecPour.error) return avecPour.data || []
   const avec = await lire(base + ', ordre, ordre_cree')
   if (!avec.error) return avec.data || []
   const { data, error } = await lire(base)
@@ -117,22 +122,31 @@ export async function loadFabProdDepuis(depuis, atelier = 'prod') {
  * si la recette change plus tard dans Odoo.
  */
 export async function addFabProd(jour, article, qty, unite, userId, fois = null, atelier = 'prod',
-  ordre = null, ordreCree = false) {
+  ordre = null, ordreCree = false, pour = null) {
   const base = { jour, article, qty, unite, fois, atelier, fait_par: userId || null, fait_le: new Date().toISOString() }
   const champs = 'id, article, qty, unite, fois, fait_par, fait_le'
-  // Les colonnes `ordre` / `ordre_cree` peuvent ne pas exister encore (SQL à
-  // lancer) : on retente sans elles plutôt que de bloquer la déclaration.
-  if (ordre) {
+  // Les colonnes `ordre` / `ordre_cree` / `pour` peuvent ne pas exister encore
+  // (SQL à lancer) : on retente sans elles plutôt que de bloquer la
+  // déclaration. On perd le lien, jamais le travail de l'atelier.
+  //
+  // `pour` = le gâteau pour lequel cette fournée a été faite : « la ganache
+  // déclarée garde le lien pour Base CBS 23 cm » (Layla, 2026-09-10).
+  const essais = []
+  if (ordre && pour) essais.push({ ordre, ordre_cree: !!ordreCree, pour })
+  if (ordre) essais.push({ ordre, ordre_cree: !!ordreCree })
+  if (pour) essais.push({ pour })
+  essais.push({})
+  let dernier = null
+  for (const sup of essais) {
+    const enPlus = Object.keys(sup).map(k => ', ' + k).join('')
     const { data, error } = await supabase.from('prod_fabrications')
-      .insert({ ...base, ordre, ordre_cree: !!ordreCree })
-      .select(champs + ', ordre, ordre_cree').single()
+      .insert({ ...base, ...sup }).select(champs + enPlus).single()
     if (!error) return data
-    if (!/ordre/.test(error.message || '')) throw error
+    dernier = error
+    // Une colonne absente se rattrape ; le reste (droits, contrainte) non.
+    if (!/ordre|pour|column|schema cache/i.test(error.message || '')) throw error
   }
-  const { data, error } = await supabase.from('prod_fabrications')
-    .insert(base).select(champs).single()
-  if (error) throw error
-  return data
+  throw dernier
 }
 
 /**

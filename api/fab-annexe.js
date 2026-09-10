@@ -383,6 +383,64 @@ function ajustementsFiges(bom, produit, figes, tournee) {
  * qu'un composant fabriqué manque. Un composant en stock suffisant arrête la
  * descente : inutile de savoir de quoi il est fait, on l'a.
  */
+/**
+ * Ce qui a été déclaré aujourd'hui, rangé par destinataire.
+ *
+ * Une préparation faite DEPUIS un gâteau lui est réservée : « la ganache
+ * déclarée garde le lien pour Base CBS 23 cm — et du coup le 18 cm demande à
+ * faire la sienne » (Layla, 2026-09-10). Sans ça, le 18 cm voyait la ganache
+ * du 23 cm et ne demandait plus rien : deux gâteaux, une seule ganache.
+ *
+ * ⚠️ Une déclaration VALIDÉE ne compte plus : sa production est entrée dans le
+ * stock Odoo, la compter en plus la ferait compter DEUX FOIS.
+ *
+ * Rend `{ total, libre, pour }` — `total` pour l'état d'un article (ce qui
+ * existe, réservé ou non), `libre` + `pour[gâteau]` pour ses composants.
+ */
+export function partagerDeclarations(faits, clos = new Set()) {
+  const total = {}
+  const libre = {}
+  const pour = {}
+  for (const f of faits || []) {
+    if (f.ordre && clos.has(f.ordre)) continue
+    const q = Number(f.qty) || 0
+    total[f.article] = (total[f.article] || 0) + q
+    if (f.pour) {
+      const par = pour[f.pour] || (pour[f.pour] = {})
+      par[f.article] = (par[f.article] || 0) + q
+    } else {
+      libre[f.article] = (libre[f.article] || 0) + q
+    }
+  }
+  return { total, libre, pour }
+}
+
+/** Ce dont dispose UN gâteau : le libre, plus ce qui lui est réservé. */
+export function disponiblePour(declare, tete) {
+  const out = { ...(declare?.libre || {}) }
+  for (const [nom, q] of Object.entries(declare?.pour?.[tete] || {})) {
+    out[nom] = (out[nom] || 0) + q
+  }
+  return out
+}
+
+/**
+ * Combien produire d'un composant qui se fait à la QUANTITÉ (pas par fournée).
+ *
+ * Ce qui manque, d'abord. Mais JAMAIS zéro : on ouvre aussi un composant qu'on
+ * a déjà, pour en préparer d'avance — « je peux rajouter quelque chose de la
+ * recette même si déjà en stock » (Layla, 2026-09-10). L'écran propose alors
+ * ce que la recette demande.
+ *
+ * Ce qui se compte en pièces s'arrondit au-dessus : on ne fait pas 1,4 fond.
+ */
+export function aProduire(manque, besoin, unite) {
+  const q = manque > 0 ? manque : besoin
+  if (!(q > 0)) return 0
+  return /^u$/i.test(String(unite || '').trim())
+    ? Math.ceil(q) : Math.round(q * 1000) / 1000
+}
+
 export async function composantsDe(cache, produit, quantite, figes, profondeur = 0, vus = [], lots = {}, achetes = new Set(), declare = {}) {
   const bom = await bomDe(cache, produit)
   // Une recette qui se contiendrait elle-même tournerait sans fin : on ne
@@ -465,6 +523,13 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
       const parTournee = lots[nom] || parRecette
       c.tourneeTaille = parTournee
       const manque = besoin - stock - dejaFait
+      // La fournée est une DÉCISION de Layla, prise dans « Mini / maxi
+      // Annexe » : « ça dépend de ce qui a été décidé dans le mini et maxi,
+      // s'il y a tournée ou pas » (2026-09-10). Pas de tournée au catalogue =
+      // pas de fournée : on fait exactement ce qu'il faut. Avant, l'écran
+      // proposait 1 000 g de zeste de citron pour une recette qui en demande
+      // 12, et 5 458 g de glaçage rose pour 1 178.
+      const auCatalogue = lots[nom] > 0
       // ⚠️ Une « tournée » de 1 g ou de 1 kg n'est pas une tournée : la recette
       // Odoo est alors écrite POUR UNE UNITÉ (0,328 g de lait pour 1 g de crème
       // légère). Ces préparations se comptent en QUANTITÉ, comme les figées —
@@ -472,7 +537,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
       // « 2 737 tournées » de crème légère. Une tournée de 1 PIÈCE, elle, est
       // bien une tournée (la plaque de biscuit à la cuillère).
       // (Analyse du circuit, Layla, 2026-09-09.)
-      const aLaQuantite = fige || (parTournee <= 1 && !/^u$/i.test(c.unite))
+      const aLaQuantite = fige || !auCatalogue || parTournee <= 1
       if (aLaQuantite) {
         // ⚠️ EXCEPTION à « toujours une tournée entière » : un article à
         // quantité FIGÉE ne se fait pas par tournée — la cuve part en entier
@@ -482,7 +547,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
         // 2026-09-09). Avant, l'écran annonçait « 1 tournée = 5 492 g ».
         c.aLaQuantite = true
         c.tournees = 1
-        c.produira = Math.max(0, Math.round(manque * 1000) / 1000)
+        c.produira = aProduire(manque, besoin, c.unite)
       } else if (manque > 0) {
         // Au DEMI près, comme les gâteaux : une demi-tournée de gâteaux ne
         // demande pas une tournée entière de fonds. « La quantité doit
@@ -807,26 +872,30 @@ export default async function handler(req, res) {
     // Le journal dit ce que l'atelier a DÉJÀ déclaré aujourd'hui : le stock
     // Odoo ne remonte qu'à la validation, et sans lui l'écran redemanderait la
     // tournée entière à quelqu'un qui vient de la faire.
-    const [{ data: tout, error }, { data: faits }] = await Promise.all([
+    // ⚠️ `pour` peut ne pas exister encore (SQL `fab_prod_pour.sql` pas lancé) :
+    // on retombe sur l'ancienne lecture plutôt que de perdre TOUT le journal —
+    // sans lui, l'écran redemanderait à l'atelier ce qu'il vient de faire.
+    const lireFaits = async () => {
+      const ou = c => sb.from('prod_fabrications').select(c)
+        .eq('jour', jour).eq('atelier', 'annexe')
+      const avec = await ou('article, qty, ordre, pour')
+      if (!avec.error) return avec.data
+      const sans = await ou('article, qty, ordre')
+      return sans.data
+    }
+    const [{ data: tout, error }, faits] = await Promise.all([
       sb.from('fab_annexe_articles').select('*').order('produit'),
-      sb.from('prod_fabrications').select('article, qty, ordre').eq('jour', jour).eq('atelier', 'annexe'),
+      lireFaits(),
     ])
     if (error) throw new Error(`Catalogue illisible : ${error.message}`)
 
-    // ⚠️ Une déclaration VALIDÉE ne compte plus : sa production est entrée
-    // dans le stock Odoo, la compter en plus la ferait compter DEUX FOIS —
-    // 22 suprêmes amandes validés en auraient valu 44.
     const ordres = [...new Set((faits || []).map(f => f.ordre).filter(Boolean))]
     const clos = new Set()
     if (ordres.length) {
       const mos = await sr('mrp.production', [['name', 'in', ordres]], ['name', 'state'])
       for (const m of mos) if (m.state === 'done' || m.state === 'cancel') clos.add(m.name)
     }
-    const declare = {}
-    for (const f of faits || []) {
-      if (f.ordre && clos.has(f.ordre)) continue
-      declare[f.article] = (declare[f.article] || 0) + (Number(f.qty) || 0)
-    }
+    const declare = partagerDeclarations(faits, clos)
 
     const catalogue = (tout || []).filter(a => a.actif)
     const lots = Object.fromEntries((tout || []).filter(a => a.tournee > 0).map(a => [a.produit, a.tournee]))
@@ -891,7 +960,9 @@ export default async function handler(req, res) {
       if (!p) { articles.push({ ...a, absent: true }); continue }
       const stock = stocks[p.id] || 0
 
-      const dejaFait = declare[a.produit] || 0
+      // Ce qui existe DÉJÀ de cet article, réservé à un gâteau ou non : il a
+      // bien été fabriqué, il compte pour son propre mini/maxi.
+      const dejaFait = declare.total[a.produit] || 0
       const { reste, aFaire } = etatArticle(a, stock, dejaFait)
       if (!seul && !aFaire) continue
 
@@ -907,7 +978,10 @@ export default async function handler(req, res) {
         continue
       }
 
-      const composants = await composantsDe(cache, p, a.tournee, a.figes || [], 0, [], lots, achetes, declare)
+      // Ses composants, eux, ne voient QUE ce qui est libre et ce qui lui est
+      // réservé : la ganache faite pour le 23 cm ne dispense pas le 18 cm.
+      const composants = await composantsDe(cache, p, a.tournee, a.figes || [], 0, [], lots, achetes,
+        disponiblePour(declare, a.produit))
       // Une CUVE, c'est ce qui ne se divise pas : les figés réglés pour
       // l'article, ou n'importe quelle mousse — même quand elle a son propre
       // article et qu'on ne l'a jamais cochée. (Layla, 2026-09-10 : « branche-la

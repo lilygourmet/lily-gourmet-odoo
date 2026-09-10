@@ -763,6 +763,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView,
         : await declarer({
             produit: noeud.produit, unite: noeud.unite, fois, qty: n,
             ajustements: peseesDe(noeud, fois),
+            // Réservée au gâteau depuis lequel elle a été ouverte.
+            pour: article.produit,
           }, user?.id)
       toast(r.erreur
         ? `Enregistré, mais Odoo a refusé : ${r.erreur}`

@@ -247,7 +247,11 @@ function echelle(c, facteur) {
     if (c.fige || c.aLaQuantite) {
       out.aLaQuantite = true
       out.tournees = 1
-      out.produira = Math.max(0, Math.round((besoin - dispo) * 1000) / 1000)
+      // Même règle que le serveur (`aProduire`) : ce qui se compte en pièces
+      // s'arrondit au-dessus — on ne fabrique pas 1,4 fond de tarte.
+      const reste = Math.max(0, besoin - dispo)
+      out.produira = /^u$/i.test(String(c.unite || '').trim())
+        ? Math.ceil(reste) : Math.round(reste * 1000) / 1000
     } else {
       // Toujours des fournées ENTIÈRES : plus de demi nulle part
       // (Layla, 2026-09-10).
@@ -639,11 +643,15 @@ export function peseesDe(noeud, fois) {
  * création prend plusieurs secondes, et une coupure ne doit pas effacer le
  * travail de l'atelier. L'ordre se rattache après coup.
  */
-export async function declarer({ produit, qty, unite, fois = null, ajustements = null }, userId) {
+export async function declarer({ produit, qty, unite, fois = null, ajustements = null, pour = null }, userId) {
   // ⚠️ Dans CET ordre, et pas de front : si le journal n'est pas écrit, il ne
   // faut pas d'ordre Odoo tout seul dans la nature, que l'app ne saurait plus
   // rattacher ni retirer. La demi-seconde gagnée ne vaut pas un ordre orphelin.
-  const ligne = await addFabProd(todayISO(), produit, qty, unite, userId, fois, 'annexe')
+  // `pour` : le gâteau depuis lequel cette préparation a été ouverte. Elle lui
+  // est alors RÉSERVÉE — le 18 cm ne se sert pas de la ganache faite pour le
+  // 23 cm (Layla, 2026-09-10).
+  const ligne = await addFabProd(todayISO(), produit, qty, unite, userId, fois, 'annexe',
+    null, false, pour)
   const of = await creerOfPrepa(produit, qty, userId, [], unite, 'annexe', ajustements)
   // En mode test (?test=1) Odoo n'écrit rien : pas de numéro à rattacher.
   if (of?.name && !of.error && !of.test) await rattacherOrdre(ligne.id, of.name, !of.deja)

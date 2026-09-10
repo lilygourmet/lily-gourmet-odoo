@@ -101,6 +101,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     return declarer({
       produit: noeud.produit, unite: noeud.unite, fois, qty,
       ajustements: peseesDe(noeud, fois),
+      // Faite DEPUIS ce gâteau, donc réservée à lui : une autre taille
+      // redemandera la sienne (Layla, 2026-09-10).
+      pour: tete.produit,
     }, user?.id)
   }
 

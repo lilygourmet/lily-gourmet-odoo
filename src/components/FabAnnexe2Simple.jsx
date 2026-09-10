@@ -297,7 +297,14 @@ function EnClair({ noeud, quantite }) {
   return <div className="text-center text-[15px] font-bold text-bordeaux mt-0.5">{dit}</div>
 }
 
-/** Ce qu'il faut : ce qui se fabrique d'abord, ce qui se pèse ensuite. */
+/**
+ * Ce qu'il faut : ce qui se fabrique d'abord, ce qui se pèse ensuite.
+ *
+ * ⚠️ Tout ce qui se FABRIQUE s'ouvre, même en stock : « je peux rajouter
+ * quelque chose de la recette même si déjà en stock » (Layla, 2026-09-10).
+ * Ce qui manque porte son gros bouton rouge avec la quantité ; ce qui est là
+ * s'ouvre d'un doigt sur la ligne, avec un discret « en faire › ».
+ */
 function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
   const liste = ingredientsPour(noeud, quantite)
   if (!liste.length) return null
@@ -306,9 +313,9 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
       {liste.map((c, i) => {
         const fait = c.dejaFait > 0 || dejaFaits.includes(c.produit)
         const manque = !c.pese && !c.ok && !fait && c.fabrique
-        return (
-          <div key={c.produit + i}
-            className="flex items-center gap-3 py-3 border-t border-cream-deep">
+        const rang = 'w-full text-left flex items-center gap-3 py-3 border-t border-cream-deep'
+        const dedans = (
+          <>
             <span className={`w-3 h-3 rounded shrink-0 ${manque ? 'bg-danger' : 'bg-success'}`} />
             <span className={`flex-1 min-w-0 text-[17px] ${manque ? 'text-danger font-bold' : ''}`}>
               {propre(c.produit)}
@@ -317,8 +324,11 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
                   tenu à l'annexe — 47 tonnes de sucre, une gélatine à −7 590 g :
                   l'afficher ne ferait que semer le doute. */}
               {c.fabrique && (
-                <span className="block text-[12.5px] text-ink-mute font-normal">
-                  {fait ? 'fait à l\'instant' : `en stock ${qte(c.stock, c.unite)}`}
+                <span className="flex items-baseline gap-2 text-[12.5px] text-ink-mute font-normal">
+                  <span className="flex-1 min-w-0 truncate">
+                    {fait ? 'fait à l\'instant' : `en stock ${qte(c.stock, c.unite)}`}
+                  </span>
+                  {!manque && <span className="shrink-0 font-bold">en faire ›</span>}
                 </span>
               )}
             </span>
@@ -327,19 +337,25 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
                 (Layla, 2026-09-10). Le nombre reste gros, le mot reste petit. */}
             {manque
               ? (
-                <button onClick={() => onOuvrir(c.produit)}
-                  className="shrink-0 rounded-xl border-2 border-danger text-danger
-                             px-3 py-1.5 text-right leading-tight">
+                <span className="shrink-0 rounded-xl border-2 border-danger text-danger
+                                 px-3 py-1.5 text-right leading-tight">
                   <span className="block text-[11px] font-bold">à faire ›</span>
                   <span className="block text-[17px] font-extrabold tabular-nums">
                     {qte(c.besoin, c.unite)}
                   </span>
-                </button>
+                </span>
               )
               : <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
                 {qte(c.besoin, c.unite)}
               </span>}
-          </div>
+          </>
+        )
+        // Une matière première ne s'ouvre pas : il n'y a rien à fabriquer.
+        if (!c.fabrique) return <div key={c.produit + i} className={rang}>{dedans}</div>
+        return (
+          <button key={c.produit + i} onClick={() => onOuvrir(c.produit)} className={rang}>
+            {dedans}
+          </button>
         )
       })}
     </div>
