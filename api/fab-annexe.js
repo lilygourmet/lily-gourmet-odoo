@@ -83,6 +83,11 @@ function memo(cle, faire) {
 export function etatArticle(a, stock, dejaFait = 0) {
   const dispo = Math.max(0, stock || 0) + (dejaFait || 0)
   const reste = Math.max(0, (a.maxi || 0) - dispo)
+  // ⚠️ Un MAXI à zéro, c'est « pas de cible » : l'article est au catalogue pour
+  // la taille de sa tournée, quand il apparaît comme composant d'un autre. Le
+  // proposer tout seul donnait « Crème légère vanille citron — à faire 1 g »
+  // (Layla, 2026-09-10). Mettre un maxi suffit à le faire revenir.
+  if (!((a.maxi || 0) > 0)) return { dispo, reste: 0, aFaire: false }
   return { dispo, reste, aFaire: dispo <= (a.mini || 0) || (dejaFait > 0 && reste > 0) }
 }
 

@@ -34,9 +34,19 @@ describe('etatArticle', () => {
     expect(etatArticle(caramel, 500, 0).aFaire).toBe(false)
   })
 
+  it('un maxi à ZÉRO ne se propose jamais tout seul', () => {
+    // « SM. Crème légère vanille citron — à faire 1 g » : elle est au catalogue
+    // pour la taille de sa tournée, pas pour être fabriquée d'elle-même.
+    const sansCible = { mini: 0, maxi: 0 }
+    expect(etatArticle(sansCible, 0, 0)).toMatchObject({ aFaire: false, reste: 0 })
+    expect(etatArticle(sansCible, -1390, 0)).toMatchObject({ aFaire: false, reste: 0 })
+    // il suffit de lui donner un maxi pour qu'il revienne
+    expect(etatArticle({ mini: 0, maxi: 500 }, 0, 0).aFaire).toBe(true)
+  })
+
   it('un stock NÉGATIF compte zéro, il ne crée pas de reliquat fantôme', () => {
     // Vécu : crème légère à −1 390 g, maxi 0 → « il reste 1 390 g à faire ».
-    const creme = { mini: 0, maxi: 0 }
-    expect(etatArticle(creme, -1390, 0)).toMatchObject({ reste: 0, aFaire: true })
+    const creme = { mini: 0, maxi: 900 }
+    expect(etatArticle(creme, -1390, 0)).toMatchObject({ reste: 900, aFaire: true })
   })
 })
