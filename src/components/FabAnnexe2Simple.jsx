@@ -17,7 +17,8 @@
 // ============================================================
 import { useState } from 'react'
 import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant,
-  decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe } from '../lib/fabAnnexe'
+  decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe,
+  quantitePourDose } from '../lib/fabAnnexe'
 import { nb, qte, dose, propre, nomAtelier, facteurAtelier } from '../lib/ecranSimple'
 
 /** La photo d'un article, servie par Odoo. */
@@ -246,7 +247,10 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       <EnClair noeud={aPeser} quantite={quantitePesee} />
 
       <Ingredients noeud={aPeser} quantite={quantitePesee}
-        dejaFaits={dejaFaits} onOuvrir={onOuvrir} />
+        dejaFaits={dejaFaits} onOuvrir={onOuvrir}
+        onQuantite={decoupe ? onCuites : onQuantite} />
+
+      <QuantiteFigee noeud={aPeser} quantite={quantitePesee} />
 
       {!decoupe && <PourUn noeud={noeud} quantite={quantite} />}
 
@@ -302,67 +306,109 @@ function EnClair({ noeud, quantite }) {
 /**
  * Ce qu'il faut : ce qui se fabrique d'abord, ce qui se pèse ensuite.
  *
- * ⚠️ Tout ce qui se FABRIQUE s'ouvre, même en stock : « je peux rajouter
- * quelque chose de la recette même si déjà en stock » (Layla, 2026-09-10).
- * Ce qui manque porte son gros bouton rouge avec la quantité ; ce qui est là
- * s'ouvre d'un doigt sur la ligne, avec un discret « en faire › ».
+ * Deux gestes par ligne, deux zones :
+ *   • le NOM, à gauche → ouvre l'ingrédient. Tout ce qui se fabrique s'ouvre,
+ *     même en stock : « je peux rajouter quelque chose de la recette même si
+ *     déjà en stock » (Layla, 2026-09-10).
+ *   • la DOSE, à droite → le clavier. La retaper remet TOUTE la recette à
+ *     l'échelle : 1,5 kg de sucre là où elle en veut 1,2, c'est une recette et
+ *     demie (choix A de Layla).
+ *
+ * ⚠️ Les quantités FIGÉES n'y sont pas : elles ont leur bloc à part, parce
+ * qu'elles ne suivent pas la sortie réelle.
  */
-function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
-  const liste = ingredientsPour(noeud, quantite)
+function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
+  const [dose, setDose] = useState(null)
+  const liste = ingredientsPour(noeud, quantite).filter(c => !(c.fige && !c.fabrique))
   if (!liste.length) return null
+  const enPieces = /^u$/i.test(String(noeud?.unite || '').trim())
   return (
     <div className="mt-5">
       {liste.map((c, i) => {
         const fait = c.dejaFait > 0 || dejaFaits.includes(c.produit)
         const manque = !c.pese && !c.ok && !fait && c.fabrique
-        const rang = 'w-full text-left flex items-center gap-3 py-3 border-t border-cream-deep'
-        const dedans = (
-          <>
-            <span className={`w-3 h-3 rounded shrink-0 ${manque ? 'bg-danger' : 'bg-success'}`} />
-            <span className={`flex-1 min-w-0 text-[17px] ${manque ? 'text-danger font-bold' : ''}`}>
-              {/* ⚠️ « Masse gélatine », pas « Gélatine en poudre » : l'atelier
-                  pèse la masse (poudre + 6 fois son eau), Odoo compte la
-                  poudre. Sans cette règle, on pèse SEPT FOIS trop peu. */}
-              {nomAtelier(c.produit)}
-              {/* Le stock ne se dit que de ce qui se FABRIQUE : « on peut voir
-                  si erreur » (Layla). Celui des matières premières n'est pas
-                  tenu à l'annexe — 47 tonnes de sucre, une gélatine à −7 590 g :
-                  l'afficher ne ferait que semer le doute. */}
-              {c.fabrique && (
-                <span className="flex items-baseline gap-2 text-[12.5px] text-ink-mute font-normal">
-                  <span className="flex-1 min-w-0 truncate">
-                    {fait ? 'fait à l\'instant' : `en stock ${qte(c.stock, c.unite)}`}
-                  </span>
-                  {!manque && <span className="shrink-0 font-bold">en faire ›</span>}
-                </span>
-              )}
-            </span>
-            {/* Ce qui manque garde SA QUANTITÉ : sans elle, le bouton prenait
-                la place du besoin et on ne savait plus combien il en faut
-                (Layla, 2026-09-10). Le nombre reste gros, le mot reste petit. */}
-            {manque
-              ? (
-                <span className="shrink-0 rounded-xl border-2 border-danger text-danger
-                                 px-3 py-1.5 text-right leading-tight">
-                  <span className="block text-[11px] font-bold">à faire ›</span>
-                  <span className="block text-[17px] font-extrabold tabular-nums">
-                    {qte(c.besoin * facteurAtelier(c.produit), c.unite)}
-                  </span>
-                </span>
-              )
-              : <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
-                {qte(c.besoin * facteurAtelier(c.produit), c.unite)}
-              </span>}
-          </>
-        )
-        // Une matière première ne s'ouvre pas : il n'y a rien à fabriquer.
-        if (!c.fabrique) return <div key={c.produit + i} className={rang}>{dedans}</div>
+        const nom = nomAtelier(c.produit)
+        const combien = qte(c.besoin * facteurAtelier(c.produit), c.unite)
         return (
-          <button key={c.produit + i} onClick={() => onOuvrir(c.produit)} className={rang}>
-            {dedans}
-          </button>
+          <div key={c.produit + i}
+            className="flex items-center gap-2 py-3 border-t border-cream-deep">
+            <button onClick={() => c.fabrique && onOuvrir(c.produit)}
+              className="flex-1 min-w-0 text-left flex items-center gap-3">
+              <span className={`w-3 h-3 rounded shrink-0 ${manque ? 'bg-danger' : 'bg-success'}`} />
+              <span className={`flex-1 min-w-0 text-[17px] ${manque ? 'text-danger font-bold' : ''}`}>
+                {/* ⚠️ « Masse gélatine », pas « Gélatine en poudre » : l'atelier
+                    pèse la masse (poudre + 6 fois son eau), Odoo compte la
+                    poudre. Sans cette règle, on pèse SEPT FOIS trop peu. */}
+                {nom}
+                {/* Le stock ne se dit que de ce qui se FABRIQUE : « on peut voir
+                    si erreur » (Layla). Celui des matières premières n'est pas
+                    tenu à l'annexe — 47 tonnes de sucre, une gélatine à
+                    −7 590 g : l'afficher ne ferait que semer le doute. */}
+                {c.fabrique && (
+                  <span className="flex items-baseline gap-2 text-[12.5px] font-normal">
+                    <span className={`flex-1 min-w-0 truncate ${manque ? 'text-danger' : 'text-ink-mute'}`}>
+                      {fait ? 'fait à l\'instant' : `en stock ${qte(c.stock, c.unite)}`}
+                    </span>
+                    <span className={`shrink-0 font-bold ${manque ? 'text-danger' : 'text-ink-mute'}`}>
+                      {manque ? 'à faire ›' : 'en faire ›'}
+                    </span>
+                  </span>
+                )}
+              </span>
+            </button>
+            {/* La dose, qu'on peut retaper — le nombre reste gros et lisible. */}
+            <button onClick={() => setDose({ ...c, nom, combien })}
+              className={`shrink-0 rounded-xl px-3 py-1.5 text-[19px] font-extrabold tabular-nums
+                ${manque ? 'border-2 border-danger text-danger' : ''}`}>
+              {combien}
+            </button>
+          </div>
         )
       })}
+      {dose && (
+        <Clavier titre={dose.nom} unite={/^kg$/i.test(String(dose.unite || '').trim()) ? 'g' : dose.unite}
+          valeur={Math.round(nombreDe(dose.combien))}
+          onFermer={() => setDose(null)}
+          onValider={v => {
+            onQuantite(quantitePourDose({
+              quantite, besoin: dose.besoin, saisi: v, unite: dose.unite,
+              facteur: facteurAtelier(dose.produit), enPieces,
+            }))
+            setDose(null)
+          }} />
+      )}
+    </div>
+  )
+}
+
+/** « 1 900 g » → 1900. Le clavier part du nombre affiché, pas de son texte. */
+const nombreDe = txt => Number(String(txt).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0
+
+/**
+ * LES QUANTITÉS FIGÉES : la cuve. Elle part en entier sur la fournée et ne
+ * bouge pas avec la sortie réelle — d'où son bloc à part, sous son nom
+ * (« La mousse », « La crème citron »).
+ */
+export function QuantiteFigee({ noeud, quantite }) {
+  const figes = ingredientsPour(noeud, quantite).filter(c => c.fige && !c.fabrique)
+  if (!figes.length) return null
+  return (
+    <div className="mt-6 rounded-2xl border-2 border-cream-deep overflow-hidden">
+      <div className="px-4 py-2.5 bg-cream-deep/40">
+        <div className="text-[16px] font-extrabold">{noeud.figesNom || 'La cuve'}</div>
+        <div className="text-[12.5px] text-ink-mute mt-0.5">
+          Pour la fournée entière — ne bouge pas avec ce qui sort vraiment
+        </div>
+      </div>
+      {figes.map((c, i) => (
+        <div key={c.produit + i}
+          className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40">
+          <span className="flex-1 min-w-0 text-[16px]">{nomAtelier(c.produit)}</span>
+          <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
+            {qte(c.besoin * facteurAtelier(c.produit), c.unite)}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -464,7 +510,7 @@ function Partage({ noeud, decoupe, cuites, coupes }) {
  * au beurre aussi. Le dire, c'est faire croire à une faute (Layla,
  * 2026-09-10).
  */
-export function Sortie({ noeud, valeur, onValeur, onValider, envoi }) {
+export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees }) {
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -482,6 +528,23 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi }) {
         pas={pasDe(noeud.unite)} onChange={onValeur} />
       {noeud.unite !== 'u' && (
         <div className="text-center text-[15px] text-ink-mute mt-1">{noeud.unite}</div>
+      )}
+
+      {pesees && Object.keys(pesees).length > 0 && (
+        <div className="mt-7 rounded-2xl border-2 border-cream-deep overflow-hidden">
+          <div className="px-4 py-2.5 bg-cream-deep/40 text-[13px] font-extrabold
+                          uppercase tracking-wide text-ink-mute">
+            Ce qui sort du stock — ce que tu as pesé
+          </div>
+          {Object.entries(pesees).map(([nom, q]) => (
+            <div key={nom} className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40">
+              <span className="flex-1 min-w-0 text-[16px]">{nomAtelier(nom)}</span>
+              <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
+                {qte(q * facteurAtelier(nom), (noeud.recette || []).find(l => l.produit === nom)?.unite)}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
 
       <button onClick={onValider} disabled={!(valeur > 0) || envoi}

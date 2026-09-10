@@ -609,6 +609,24 @@ export function aFaireMaintenant(article) {
 }
 
 /**
+ * Retaper la dose d'un ingrédient remet TOUTE la recette à l'échelle — le
+ * « choix A » de Layla (2026-09-07) : mettre 1,5 kg de sucre là où la recette
+ * en veut 1,2, c'est faire une recette et demie, pas forcer sur le sucre.
+ *
+ * `saisi` arrive comme l'écran l'écrit : en GRAMMES (même pour une ligne en
+ * kilos) et déjà multiplié par la règle d'atelier — 560 g de masse gélatine
+ * valent 80 g de poudre chez Odoo.
+ */
+export function quantitePourDose({ quantite, besoin, saisi, unite, facteur = 1, enPieces = false }) {
+  const dansLUnite = /^kg$/i.test(String(unite || '').trim()) ? saisi / 1000 : saisi
+  const vrai = dansLUnite / (facteur || 1)
+  if (!(besoin > 0) || !(vrai > 0) || !(quantite > 0)) return quantite
+  const q = quantite * (vrai / besoin)
+  // On ne fabrique pas 13,4 gâteaux : ce qui se compte en pièces reste entier.
+  return enPieces ? Math.max(1, Math.round(q)) : Math.max(0.001, Math.round(q * 1000) / 1000)
+}
+
+/**
  * Ce qui a été RÉELLEMENT PESÉ pour cette fournée, prêt à imposer à l'ordre
  * Odoo. La recette de l'article est écrite pour une tournée ; `fois` dit
  * combien on en a fait.

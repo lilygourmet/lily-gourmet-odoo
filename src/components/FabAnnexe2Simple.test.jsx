@@ -327,13 +327,13 @@ describe('le garde-fou du zéro', () => {
 })
 
 describe('ce qui manque', () => {
-  it('le bouton porte le besoin de la recette', () => {
-    // Sans ça, le bouton prenait la place du chiffre : on voyait qu'il
-    // manquait quelque chose, sans savoir combien il en faut.
+  it('montre le besoin de la recette juste à côté du bouton', () => {
+    // Sans ce chiffre, on voyait qu'il manquait quelque chose sans savoir
+    // combien il en faut. Il est à droite, gros, et se retape au clavier.
     render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
       faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
-    const bouton = screen.getByText('à faire ›').closest('button')
-    expect(bouton.textContent).toMatch(/13 u/)
+    expect(screen.getByText('à faire ›')).toBeTruthy()
+    expect(screen.getByText('13 u')).toBeTruthy()
   })
 
   it('et il ouvre toujours l’ingrédient qui manque', () => {
@@ -583,5 +583,96 @@ describe('la masse gélatine', () => {
     }
     render(<PourUn noeud={gateau} quantite={13} />)
     expect(screen.getByText('7 g')).toBeTruthy()             // 13 × 7 / 13
+  })
+})
+
+// ====== Les trois blocs repris de l'ancien écran (Layla, 2026-09-11) ======
+
+describe('retaper une dose', () => {
+  const glacage = {
+    produit: 'SM. Glacage Rose Finition', libelle: 'Glaçage Rose', unite: 'g',
+    tourneeTaille: 5458, pourQuantite: 5458, recette: [],
+    enfants: [
+      { produit: 'MP- Sucre Granule', unite: 'g', besoin: 1200, stock: 0, fabrique: false, ok: true },
+    ],
+  }
+
+  it('remet TOUTE la recette à l’échelle', () => {
+    const onQuantite = vi.fn()
+    render(<Fiche noeud={glacage} quantite={5458} onQuantite={onQuantite}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    fireEvent.click(screen.getByText(/1.200 g/))
+    fireEvent.click(screen.getByText('1'))
+    fireEvent.click(screen.getByText('8'))
+    fireEvent.click(screen.getByText('0'))
+    fireEvent.click(screen.getByText('0'))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
+    // 1 800 g de sucre au lieu de 1 200 : une recette et demie.
+    expect(onQuantite).toHaveBeenCalledWith(8187)
+  })
+
+  it('n’empêche pas d’ouvrir l’ingrédient : deux zones, deux gestes', () => {
+    const onOuvrir = vi.fn()
+    render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={onOuvrir} onFait={() => {}} />)
+    fireEvent.click(screen.getByText('à faire ›'))
+    expect(onOuvrir).toHaveBeenCalledWith('SM. Biscuit a la cuillere 5 pers')
+  })
+})
+
+describe('la quantité figée', () => {
+  const royal = {
+    produit: 'SM- Royal Chocolat 15 cm', libelle: 'Royal Chocolat 15 cm', unite: 'u',
+    tourneeTaille: 13, pourQuantite: 13, recette: [], figesNom: 'La mousse',
+    enfants: [
+      { produit: 'SM. Craquant Royal', unite: 'g', besoin: 1040, stock: 2000, fabrique: true, ok: true },
+      { produit: 'MP- Crème whipping', unite: 'g', besoin: 4470, stock: 0, fabrique: false, fige: true, ok: true },
+      { produit: 'MP- Gelatine en poudre', unite: 'g', besoin: 90, stock: 0, fabrique: false, fige: true, ok: true },
+    ],
+  }
+
+  it('a son bloc à part, sous son nom, et dit qu’elle ne bouge pas', () => {
+    render(<Fiche noeud={royal} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    // « La mousse » est nommée deux fois, et c'est voulu : ici pour la
+    // fournée entière (4 470 g), et dans « Pour 1 … » pour une pièce.
+    expect(screen.getAllByText('La mousse').length).toBe(2)
+    expect(screen.getByText(/ne bouge pas/)).toBeTruthy()
+    expect(screen.getByText(/4.470 g/)).toBeTruthy()
+    // La règle d'atelier vaut aussi dans la cuve : 90 g de poudre = 630 g pesés.
+    expect(screen.getByText('630 g')).toBeTruthy()
+  })
+
+  it('ses ingrédients ne sont PAS répétés dans la liste du dessus', () => {
+    render(<Fiche noeud={royal} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getAllByText('Masse gélatine').length).toBe(1)
+  })
+})
+
+describe('ce qui sort du stock', () => {
+  const sirop = {
+    produit: "SM. Sirop d'imbibage cafe Tiramisu", libelle: 'Sirop café', unite: 'g',
+    tourneeTaille: 2790,
+    recette: [
+      { produit: 'MP- Sucre Granule', qty: 500, unite: 'g' },
+      { produit: 'MP- Gelatine en poudre', qty: 20, unite: 'g' },
+    ],
+    enfants: [],
+  }
+
+  it('récapitule ce qu’on a pesé, avant d’envoyer', () => {
+    render(<Sortie noeud={sirop} valeur={2600} onValeur={() => {}} onValider={() => {}}
+      envoi={false} pesees={{ 'MP- Sucre Granule': 500, 'MP- Gelatine en poudre': 20 }} />)
+    expect(screen.getByText(/Ce qui sort du stock/)).toBeTruthy()
+    expect(screen.getByText('500 g')).toBeTruthy()
+    expect(screen.getByText('Masse gélatine')).toBeTruthy()
+    expect(screen.getByText('140 g')).toBeTruthy()        // 20 × 7
+  })
+
+  it('ne dit rien quand il n’y a rien à récapituler', () => {
+    render(<Sortie noeud={sirop} valeur={2600} onValeur={() => {}} onValider={() => {}}
+      envoi={false} pesees={null} />)
+    expect(screen.queryByText(/Ce qui sort du stock/)).toBeNull()
   })
 })

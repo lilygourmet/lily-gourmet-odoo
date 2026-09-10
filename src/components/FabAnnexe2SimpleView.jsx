@@ -251,6 +251,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
           ? (
             <Sortie noeud={noeud} valeur={sortie} envoi={envoi}
               onValeur={v => setSortie(v)}
+              // Ce qui sort du stock : la dose RÉELLEMENT pesée, celle qu'on
+              // impose à l'ordre Odoo. Seulement pour une préparation — un
+              // montage, lui, laisse Odoo recalculer au prorata de sa sortie.
+              pesees={noeud.produit === tete.produit ? null
+                : peseesDe(noeud, noeud.tourneeTaille > 0 ? q / noeud.tourneeTaille : 1)}
               onValider={() => envoyer(noeud, tete, sortie)} />
           )
           : (
