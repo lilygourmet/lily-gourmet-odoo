@@ -282,6 +282,58 @@ function LigneQte({ nom, valeur, unite, onValeur, gras, avant, dessous, serre, o
 }
 
 /**
+ * Ce que la fournée va réellement consommer, une fois qu'on a dit combien il en
+ * est sorti. La recette suit la sortie — « c'est toujours j'ai remis » (Layla,
+ * 2026-09-10) — sauf les figés, qui restent à la fournée.
+ *
+ * Là où le stock ne suit pas, on le DIT : il faut en faire d'abord, sinon Odoo
+ * déduira ce qu'on n'a pas et le compteur partira en négatif. C'est ce qui a
+ * mis le biscuit amande gingembre à −5 508 g.
+ */
+export function SortieStock({ article, sortie, onOuvrir }) {
+  const prevu = article.tournee || 1
+  const facteur = sortie > 0 ? sortie / prevu : 1
+  const parts = (article.composants || []).map(c => {
+    const besoin = c.fige ? c.besoin : c.besoin * facteur
+    const dispo = (c.stock || 0) + (c.dejaFait || 0)
+    return { ...c, besoinReel: besoin, manque: Math.max(0, Math.round((besoin - dispo) * 1000) / 1000) }
+  })
+  if (!parts.length) return null
+  return (
+    <div className="text-left rounded-xl border border-cream-deep bg-cream-warm mb-4 overflow-hidden">
+      <div className="px-3 pt-2.5 pb-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-mute">
+        Ce qui va sortir du stock
+      </div>
+      {parts.map((c, i) => {
+        // Ce qui manque et qui se FABRIQUE s'ouvre d'ici : on va en faire, on
+        // remonte, la quantité tapée est toujours là.
+        const aFaire = c.manque > 0 && !c.fige && c.fabrique && onOuvrir
+        const Ligne = aFaire ? 'button' : 'div'
+        return (
+          <Ligne key={c.produit + i} onClick={aFaire ? () => onOuvrir(c.produit) : undefined}
+            className={'w-full flex items-baseline gap-3 px-3 py-1.5 border-t border-cream-deep/50 text-left'
+              + (aFaire ? ' hover:bg-cream-deep/30' : '')}>
+            <span className="flex-1 min-w-0">
+              <span className="text-[13px]">{nomAtelier(c.produit)}</span>
+              {c.fige
+                ? <span className="block text-[11px] text-ink-mute">pour la fournée — ne bouge pas</span>
+                : c.manque > 0 && (
+                  <span className="block text-[11px] text-danger font-bold">
+                    il faut en faire {qte(c.manque, c.unite)}{aFaire ? ' — la recette ›' : ''}
+                  </span>
+                )}
+            </span>
+            <span className={`text-[13px] font-extrabold whitespace-nowrap ${c.manque > 0 && !c.fige ? 'text-danger' : ''}`}>
+              {qte(c.besoinReel * facteurAtelier(c.produit), c.unite)}
+            </span>
+          </Ligne>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
  * LA recette, en une seule liste — pas deux. Les ingrédients qu'on pèse et les
  * morceaux qu'on fabrique se suivent dans l'ordre de la nomenclature ; ceux
  * qu'il faut faire portent leur pastille, leur stock et s'ouvrent d'un doigt.
@@ -352,7 +404,10 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   const [chemin, setChemin] = useState([])
   // Ce que le pâtissier a déclaré dans cette séance : { produit: { fois } }
   const [faits, setFaits] = useState({})
-  const [sortie, setSortie] = useState(null)
+  // La quantité obtenue, PAR ARTICLE : on doit pouvoir descendre fabriquer le
+  // biscuit qui manque et remonter valider sans avoir rien perdu.
+  // (Layla, 2026-09-10 : « toujours dans la même page pour valider au final ».)
+  const [sorties, setSorties] = useState({})
   const [gateau, setGateau] = useState(null)
   const [qteTxt, setQteTxt] = useState(null)
   const [histoOuvert, setHistoOuvert] = useState(false)
@@ -637,6 +692,13 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   if (!noeud) { setChemin([]); return null }
 
   const racine = chemin.length === 1
+  const sortie = sorties[noeud.produit] ?? null
+  const setSortie = v => setSorties(x => {
+    const n = { ...x }
+    if (v === null) delete n[noeud.produit]
+    else n[noeud.produit] = typeof v === 'function' ? v(n[noeud.produit] ?? '') : v
+    return n
+  })
   // Un article à quantité FIGÉE se règle en QUANTITÉ, pas en tournées : sa
   // recette est écrite pour une unité, « une tournée » n'y veut rien dire.
   const parRecette = noeud.tourneeTaille || 1
@@ -764,6 +826,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
             {n === 0 ? '' : ecart === 0 ? 'Pile ce qui était prévu.'
               : <><b className="text-gold">{qte(Math.abs(ecart), cible.unite)} de {ecart > 0 ? 'plus' : 'moins'}</b> que prévu.</>}
           </div>
+
+          {racine && <SortieStock article={article} sortie={n}
+            onOuvrir={p => setChemin([...chemin, p])} />}
 
           {!racine && (
             <div className="text-left rounded-xl border border-cream-deep bg-cream-warm mb-4">

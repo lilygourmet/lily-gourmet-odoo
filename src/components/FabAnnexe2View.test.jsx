@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { Recette } from './FabAnnexe2View'
+import { Recette, SortieStock } from './FabAnnexe2View'
 
 // ====== La recette d'un composant, telle que l'atelier la voit ======
 // Écran refait plusieurs fois en deux jours ; à chaque fois quelque chose se
@@ -94,5 +94,76 @@ describe('la recette d’un composant', () => {
     fireEvent.change(champ, { target: { value: '1820' } })
     fireEvent.blur(champ)
     expect(onFois).toHaveBeenCalledWith(1)      // 1 820 g = une fois la recette
+  })
+})
+
+// ====== « J'en ai fait 19 » — ce que la fournée consomme vraiment ======
+// Tournée de 13 tiramisus, il en sort 19. La recette suit (« c'est toujours
+// j'ai remis »), sauf la mousse. Et là où le stock ne suit pas, il faut le
+// DIRE : c'est ce qui a mis le biscuit amande gingembre à −5 508 g.
+
+const tiramisu = {
+  produit: 'SM- Tiramisu 15cm',
+  libelle: 'Tiramisu 15 cm',
+  unite: 'u',
+  tournee: 13,
+  composants: [
+    { produit: 'MP- Mascarpone', unite: 'kg', besoin: 1.04, stock: 20, dejaFait: 0, fige: true, fabrique: false },
+    { produit: "SM. Sirop d'imbibage cafe Tiramisu", unite: 'g', besoin: 1300, stock: 9570, dejaFait: 0, fige: false, fabrique: true },
+    { produit: 'SM. Biscuit a la cuillere 5 pers', unite: 'u', besoin: 13, stock: 13, dejaFait: 0, fige: false, fabrique: true },
+  ],
+}
+
+describe('ce qui va sortir du stock, pour la sortie réelle', () => {
+  it('met la recette à l’échelle de ce qui est SORTI', () => {
+    render(<SortieStock article={tiramisu} sortie={19} />)
+    // 1 300 g × 19/13 = 1 900 g ; 13 u × 19/13 = 19 u
+    expect(screen.getByText('1 900 g')).toBeTruthy()
+    expect(screen.getByText('19 u')).toBeTruthy()
+  })
+
+  it('laisse les figés à la fournée, quoi qu’il sorte', () => {
+    render(<SortieStock article={tiramisu} sortie={19} />)
+    expect(screen.getByText('1 040 g')).toBeTruthy()          // 1,04 kg, inchangé
+    expect(screen.getByText(/ne bouge pas/)).toBeTruthy()
+  })
+
+  it('DIT ce qu’il faut fabriquer quand le stock ne suit pas', () => {
+    render(<SortieStock article={tiramisu} sortie={19} />)
+    // 19 biscuits demandés, 13 en stock → il faut en faire 6
+    expect(screen.getByText(/il faut en faire 6 u/)).toBeTruthy()
+  })
+
+  it('ne réclame rien quand le stock suit', () => {
+    render(<SortieStock article={tiramisu} sortie={13} />)
+    expect(screen.queryByText(/il faut en faire/)).toBeNull()
+  })
+
+  it('ouvre la recette de ce qui manque, quand ça se fabrique', () => {
+    const onOuvrir = vi.fn()
+    render(<SortieStock article={tiramisu} sortie={19} onOuvrir={onOuvrir} />)
+    fireEvent.click(screen.getByText(/il faut en faire 6 u/))
+    expect(onOuvrir).toHaveBeenCalledWith('SM. Biscuit a la cuillere 5 pers')
+  })
+
+  it('n’ouvre rien sur un ingrédient qu’on achète', () => {
+    const onOuvrir = vi.fn()
+    const achete = {
+      ...tiramisu,
+      composants: [{ produit: 'MP- Sucre Granule', unite: 'g', besoin: 900, stock: 0, dejaFait: 0, fige: false, fabrique: false }],
+    }
+    render(<SortieStock article={achete} sortie={19} onOuvrir={onOuvrir} />)
+    fireEvent.click(screen.getByText(/il faut en faire/))
+    expect(onOuvrir).not.toHaveBeenCalled()
+  })
+
+  it('compte ce qui a déjà été déclaré du jour', () => {
+    const avecFait = {
+      ...tiramisu,
+      composants: tiramisu.composants.map(c => (
+        c.produit.includes('Biscuit') ? { ...c, dejaFait: 6 } : c)),
+    }
+    render(<SortieStock article={avecFait} sortie={19} />)
+    expect(screen.queryByText(/il faut en faire/)).toBeNull()
   })
 })
