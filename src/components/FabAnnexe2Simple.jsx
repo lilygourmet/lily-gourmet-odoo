@@ -427,6 +427,18 @@ const parPiece = (v, unite) => {
 }
 
 /**
+ * Le mot de l'atelier, dans la recette du bas : une mousse s'appelle
+ * « Mousse », qu'Odoo l'ait baptisée « Mousse Gianduja », « La mousse » ou
+ * « SM. Mousse cheese passion ». « Si y a mousse, l'appeler mousse » (Layla,
+ * 2026-09-11) — celle qui monte le gâteau sait de quelle mousse il s'agit,
+ * c'est la sienne.
+ *
+ * Ne vaut QUE pour ce bloc-là : la liste du haut et le bloc des quantités
+ * figées gardent les vrais noms, ce sont eux qu'on va chercher au frigo.
+ */
+const motDeLAtelier = nom => (/mousse/i.test(String(nom || '')) ? 'Mousse' : nom)
+
+/**
  * LA PESÉE DU MONTAGE : ce qu'on met sur UN gâteau.
  *
  * Le total dit ce qu'on sort du frigo ; celui-ci dit le geste — « 38 g de
@@ -449,7 +461,7 @@ export function PourUn({ noeud, quantite }) {
   const cuve = liste.filter(c => c.fige && !c.fabrique)
   const lignes = liste.filter(c => !(c.fige && !c.fabrique))
     .map(c => ({
-      nom: nomAtelier(c.produit),
+      nom: motDeLAtelier(nomAtelier(c.produit)),
       valeur: parPiece(c.besoin * facteurAtelier(c.produit) / quantite, c.unite),
     }))
   if (cuve.length) {
@@ -457,7 +469,10 @@ export function PourUn({ noeud, quantite }) {
     // ingrédients, et c'est celle de la balance.
     const g = cuve.reduce((t, c) =>
       t + (Number(c.besoin) || 0) * (/^kg$/i.test(String(c.unite || '').trim()) ? 1000 : 1), 0)
-    lignes.push({ nom: noeud.figesNom || 'La cuve', valeur: dose(g / quantite, 'g') })
+    lignes.push({
+      nom: motDeLAtelier(noeud.figesNom || 'La cuve'),
+      valeur: dose(g / quantite, 'g'),
+    })
   }
   if (!lignes.length) return null
   return (

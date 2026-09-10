@@ -634,9 +634,9 @@ describe('la quantité figée', () => {
   it('a son bloc à part, sous son nom, et dit qu’elle ne bouge pas', () => {
     render(<Fiche noeud={royal} quantite={13} onQuantite={() => {}}
       faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
-    // « La mousse » est nommée deux fois, et c'est voulu : ici pour la
-    // fournée entière (4 470 g), et dans « Pour 1 … » pour une pièce.
-    expect(screen.getAllByText('La mousse').length).toBe(2)
+    // Le bloc du haut garde le vrai nom ; celui du bas dit « Mousse ».
+    expect(screen.getByText('La mousse')).toBeTruthy()
+    expect(screen.getByText('Mousse')).toBeTruthy()
     expect(screen.getByText(/ne bouge pas/)).toBeTruthy()
     expect(screen.getByText(/4.470 g/)).toBeTruthy()
     // La règle d'atelier vaut aussi dans la cuve : 90 g de poudre = 630 g pesés.
@@ -674,5 +674,57 @@ describe('ce qui sort du stock', () => {
     render(<Sortie noeud={sirop} valeur={2600} onValeur={() => {}} onValider={() => {}}
       envoi={false} pesees={null} />)
     expect(screen.queryByText(/Ce qui sort du stock/)).toBeNull()
+  })
+})
+
+describe('le mot « Mousse » dans la recette du bas', () => {
+  const gianduja = {
+    produit: 'SM- Gianduja indiv', libelle: 'Gianduja indiv', unite: 'u',
+    tourneeTaille: 90, pourQuantite: 90, recette: [], figesNom: 'Mousse Gianduja',
+    enfants: [
+      { produit: 'SM. Cremeux gianduja indiv Production', unite: 'u', besoin: 90, stock: 151, fabrique: true, ok: true },
+      { produit: 'MP- Crème whipping', unite: 'g', besoin: 6800, stock: 0, fabrique: false, fige: true, ok: true },
+    ],
+  }
+
+  it('« Mousse Gianduja » devient « Mousse »', () => {
+    render(<PourUn noeud={gianduja} quantite={90} />)
+    expect(screen.getByText('Mousse')).toBeTruthy()
+    expect(screen.queryByText('Mousse Gianduja')).toBeNull()
+  })
+
+  it('un ingrédient FABRIQUÉ qui est une mousse aussi', () => {
+    const cheesecake = {
+      produit: 'SM- Cheesecake Exotique indiv', libelle: 'Cheesecake Exotique indiv',
+      unite: 'u', tourneeTaille: 80, pourQuantite: 80, recette: [],
+      enfants: [
+        { produit: 'SM. Mousse cheese passion', unite: 'g', besoin: 2880, stock: 0, fabrique: true, ok: false },
+        { produit: 'SM. Marmelade passion mangue', unite: 'g', besoin: 2000, stock: 3400, fabrique: true, ok: true },
+      ],
+    }
+    render(<PourUn noeud={cheesecake} quantite={80} />)
+    expect(screen.getByText('Mousse')).toBeTruthy()
+    expect(screen.getByText('Marmelade passion mangue')).toBeTruthy()
+  })
+
+  it('ce qui n’est pas une mousse garde son nom', () => {
+    const tarte = {
+      produit: 'SM- Tarte citron gin 23 cm', libelle: 'Tarte citron gingembre · 23 cm',
+      unite: 'u', tourneeTaille: 18, pourQuantite: 18, recette: [], figesNom: 'La crème citron',
+      enfants: [
+        { produit: 'SM. Biscuit digestive', unite: 'g', besoin: 3780, stock: 0, fabrique: true, ok: false },
+        { produit: 'MP- Beurre entremets', unite: 'g', besoin: 2730, stock: 0, fabrique: false, fige: true, ok: true },
+      ],
+    }
+    render(<PourUn noeud={tarte} quantite={18} />)
+    expect(screen.getByText('La crème citron')).toBeTruthy()
+    expect(screen.queryByText('Mousse')).toBeNull()
+  })
+
+  it('la liste du haut, elle, garde les vrais noms', () => {
+    render(<Fiche noeud={gianduja} quantite={90} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    // Le bloc des quantités figées : « Mousse Gianduja », le nom du frigo.
+    expect(screen.getByText('Mousse Gianduja')).toBeTruthy()
   })
 })
