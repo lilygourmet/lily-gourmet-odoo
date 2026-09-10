@@ -322,6 +322,20 @@ export async function noterConsommation(ordre, mesures) {
   await saveSaisies(cle, { ...gardees, notes })
 }
 
+/**
+ * Change ce qu'un ordre doit produire. Le réappro vise le maxi ; c'est l'atelier
+ * qui décide. Les composants suivent au prorata côté serveur.
+ */
+export async function changerQtyOrdre(ordre, qty, actorId) {
+  const r = await fetch('/api/freezer-list?mode=qty-ordre', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ordre, qty, actorId, test: estModeTest() }),
+  })
+  const d = await r.json()
+  if (!r.ok || d.error) throw new Error(d.error || `erreur ${r.status}`)
+  return d
+}
+
 /** Ce qui manque pour fabriquer ces ordres Odoo (lecture seule, génoise ignorée). */
 export async function loadManques(ordres) {
   if (!ordres.length) return []

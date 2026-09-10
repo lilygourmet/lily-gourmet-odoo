@@ -1961,6 +1961,20 @@ function rangerOrdresAnnexe(ouverts, net) {
   return { ordres, doublons }
 }
 
+/**
+ * Les nouvelles quantités des composants quand on change ce qu'un ordre doit
+ * produire : chacun suit le même rapport. Sortie en fonction pure pour être
+ * testée — le prorata est ce qui décide de ce qui sortira du stock.
+ */
+export function proratage(moves, avant, apres) {
+  if (!(avant > 0) || !(apres > 0)) return []
+  const f = apres / avant
+  return (moves || []).map(m => ({
+    id: m.id,
+    qty: Math.round((m.product_uom_qty || 0) * f * 1000) / 1000,
+  }))
+}
+
 export default async function handler(req, res) {
   try {
     // création de l'ordre de glaçage (POST), quand l'équipe a fait sa tournée
@@ -2177,6 +2191,51 @@ export default async function handler(req, res) {
           .map(a => ({ ...a, qty: Math.round(a.qty * 100) / 100 }))
           .sort((a, b) => a.qty - b.qty),
       })
+    }
+
+    // Changer ce qu'un ordre doit produire. « Ça me remonte à 8 alors que je
+    // n'en veux que 6 » (Layla, 2026-09-10) : le réappro vise le maxi, mais
+    // c'est elle qui décide. Tant que rien n'est produit dessus.
+    if (req.method === 'POST' && req.query.mode === 'qty-ordre') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const nom = String(body.ordre || '')
+      const qty = Number(body.qty)
+      if (!nom || !(qty > 0)) return res.status(400).json({ error: 'ordre ou quantité manquants' })
+      if (body.test) return res.status(200).json({ test: true })
+      const uid = await odooAuth()
+      const [mo] = await odooSearchRead(uid, 'mrp.production', [['name', '=', nom]],
+        ['id', 'name', 'state', 'product_qty', 'qty_producing'], { limit: 1 })
+      if (!mo) return res.status(200).json({ error: 'ordre introuvable : ' + nom })
+      if (!['draft', 'confirmed'].includes(mo.state)) {
+        return res.status(200).json({ error: `ordre ${mo.state} : on n'y touche plus` })
+      }
+      // ⚠️ NULL ≠ 0 en base : `qty_producing` se lit, il ne se filtre pas.
+      if (Number(mo.qty_producing) > 0) {
+        return res.status(200).json({ error: 'une quantité est déjà déclarée sur cet ordre' })
+      }
+      const avant = mo.product_qty || 0
+      const moves = await odooSearchRead(uid, 'stock.move',
+        [['raw_material_production_id', '=', mo.id]], ['id', 'product_uom_qty'], { limit: 200 })
+      await odooCall(uid, 'mrp.production', 'write', [[mo.id], { product_qty: qty }])
+      // ⚠️ Odoo ne recalcule RIEN tout seul par l'API : on relit, et si les
+      // composants n'ont pas suivi, on les met au prorata nous-mêmes. Sans ça
+      // un ordre de 6 consommerait les ingrédients de 8.
+      const apres = await odooSearchRead(uid, 'stock.move',
+        [['raw_material_production_id', '=', mo.id]], ['id', 'product_uom_qty'], { limit: 200 })
+      const parId = new Map(apres.map(m => [m.id, m.product_uom_qty]))
+      const bouge = moves.some(m => Math.abs((parId.get(m.id) ?? m.product_uom_qty) - m.product_uom_qty) > 0.0001)
+      let recalcules = 0
+      if (!bouge) {
+        for (const p of proratage(moves, avant, qty)) {
+          try {
+            await odooCall(uid, 'stock.move', 'write', [[p.id], { product_uom_qty: p.qty }])
+            recalcules++
+          } catch { /* un composant récalcitrant ne doit pas tout arrêter */ }
+        }
+      }
+      console.log(`[qty-ordre] ${nom} : ${avant} → ${qty} par ${body.actorId || '?'}`
+        + (recalcules ? ` (${recalcules} composant(s) remis au prorata)` : ''))
+      return res.status(200).json({ ordre: nom, avant, qty, recalcules })
     }
 
     if (req.method === 'POST' && req.query.mode === 'annuler-ordre') {

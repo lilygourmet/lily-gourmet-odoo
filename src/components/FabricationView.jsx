@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation } from '../lib/fabrication'
+import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation, changerQtyOrdre } from '../lib/fabrication'
 import { buildZplInfo, estMontageCD, estPrepaEtiquetee } from '../lib/etiquettes'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
@@ -327,7 +327,7 @@ function LigneDeclaree({ o, onRetirer, petit = false, par = '' }) {
   )
 }
 
-function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
+function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider, onQty }) {
   const stock = o.stockApp != null ? o.stockApp : (o.stock ? o.stock.dispo : null)
   // Une préparation se pèse (8 kg de sirop), un gâteau se compte (×3) : « ×8 »
   // pour 8 kg de sirop se lit comme 8 pièces.
@@ -353,7 +353,16 @@ function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
       {(o.stockAssez ?? (o.stock && o.stock.assez)) && <span className="text-[9.5px] sm:text-[10.5px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#EAF3DE] text-ok whitespace-nowrap">déjà en stock</span>}
       {o.recetteVide && <span className="text-[9.5px] sm:text-[10.5px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#FCEEE8] text-danger">pas de recette dans Odoo</span>}
       {o.enRetard && <span className="text-[9.5px] sm:text-[10.5px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#FFF7E0] text-[#854F0B]">en retard</span>}
-      <span className={'text-[15px] sm:text-[18px] font-extrabold text-bordeaux whitespace-nowrap ' + (fait ? 'line-through opacity-60' : '')}>{combien}</span>
+      {/* Le réappro vise le maxi ; c'est l'atelier qui décide. Un appui sur la
+          quantité permet de la corriger avant de faire (Layla, 2026-09-10). */}
+      {onQty && !fait ? (
+        <button onClick={e => { e.stopPropagation(); onQty(o) }}
+          title="Changer la quantité à faire"
+          className="text-[15px] sm:text-[18px] font-extrabold text-bordeaux whitespace-nowrap
+                     underline decoration-dotted underline-offset-4">{combien}</button>
+      ) : (
+        <span className={'text-[15px] sm:text-[18px] font-extrabold text-bordeaux whitespace-nowrap ' + (fait ? 'line-through opacity-60' : '')}>{combien}</span>
+      )}
       <BoutonFait fait={fait} onClick={onFait} bloque={bloque} />
       {fait && onValider && (
         <button onClick={e => { e.stopPropagation(); onValider() }}
@@ -363,7 +372,7 @@ function Gateau({ o, on, onToggle, fait, onFait, bloque, onValider }) {
   )
 }
 
-function Groupe({ titre, list, sel, onToggle, faits, onFait, bloqueGateau, onValider }) {
+function Groupe({ titre, list, sel, onToggle, faits, onFait, bloqueGateau, onValider, onQty }) {
   if (!list.length) return null
   const parfums = [...new Set(list.map(o => o.parfum || '—'))].sort()
   return (
@@ -371,7 +380,7 @@ function Groupe({ titre, list, sel, onToggle, faits, onFait, bloqueGateau, onVal
       <div className="text-[12.5px] font-bold text-ink-mute mt-4 mb-1.5">{titre}</div>
       {parfums.map(p => list.filter(o => (o.parfum || '—') === p).map(o => (
         <Gateau key={o.name} o={o} on={sel.includes(o.name)} onToggle={() => onToggle(o.name)}
-          fait={!!faits[o.name]} onFait={() => onFait(o.name, o.produit, o.qty)} bloque={bloqueGateau(o)} onValider={onValider} />
+          fait={!!faits[o.name]} onFait={() => onFait(o.name, o.produit, o.qty)} bloque={bloqueGateau(o)} onValider={onValider} onQty={onQty} />
       )))}
     </>
   )
@@ -392,6 +401,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [sel, setSel] = useState([])                      // noms d'OF cochés
   const [histoireOuverte, setHistoireOuverte] = useState(false)   // fenêtre « Historique », fermée par défaut
   const [pesee, setPesee] = useState(null)                        // le bac de sirop à peser avant de cocher
+  const [qtyOrdre, setQtyOrdre] = useState(null)                  // le gâteau dont on corrige la quantité
   const [soldeEnCours, setSoldeEnCours] = useState(false)
   const [ouvertes, setOuvertes] = useState({})
   const [lots, setLots] = useState({})       // combien de tournées on déclare, base par base
@@ -1437,6 +1447,25 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     await marquer(p.ordre, p.produit, p.qty)
   }
 
+  /**
+   * Corriger ce qu'un ordre doit produire. Le réappro vise le maxi et lance 8 ;
+   * si on n'en veut que 6, c'est ici. Les composants suivent au prorata côté
+   * serveur — sinon l'ordre de 6 consommerait les ingrédients de 8.
+   */
+  const enregistrerQty = async () => {
+    const o = qtyOrdre
+    const n = Number(String(o.txt).replace(',', '.'))
+    setQtyOrdre(null)
+    if (!(n > 0) || n === o.qty) return
+    try {
+      const r = await changerQtyOrdre(o.name, n, user?.id)
+      toast.success(r.test
+        ? 'Mode test : rien changé dans Odoo'
+        : `${propre(o.produit)} : ${nb(o.qty)} → ${nb(n)}`)
+      setRechargement(v => v + 1)
+    } catch (e) { toast.error('Pas changé : ' + (e.message || e)) }
+  }
+
   const effacer = () => { setSel([]); setPageRecette(false) }
 
   // téléphone : la recette occupe tout l'écran
@@ -1614,7 +1643,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
               )}
 
               <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquerGateau} bloqueGateau={bloquantsGateau}
- />
+                onQty={o => setQtyOrdre({ ...o, txt: String(o.qty) })} />
               <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquerGateau} bloqueGateau={bloquantsGateau}
  />
 
@@ -1641,6 +1670,32 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           Ce qui est déjà validé porte « validé ✓ » et n'a plus de bouton.
           Fenêtre en `vh` et non `dvh`, en trois zones figé/défile/figé : sur la
           tablette, `dvh` déborde et le bas devient inatteignable. */}
+      {qtyOrdre && (
+        <div className="fixed inset-0 z-[70] bg-ink/40 flex items-start justify-center p-3 pt-16"
+          onPointerDown={e => { if (e.target === e.currentTarget) setQtyOrdre(null) }}>
+          <div className="bg-cream rounded-2xl w-full max-w-[380px] shadow-2xl p-4 text-center">
+            <b className="text-[15px]">{propre(qtyOrdre.produit)}</b>
+            <p className="text-[12.5px] text-ink-mute mt-1 mb-3">
+              Combien en faire ? L'app en propose {nb(qtyOrdre.qty)} pour remonter au maxi.
+            </p>
+            <input inputMode="decimal" autoFocus aria-label="Quantité à faire"
+              value={qtyOrdre.txt}
+              onChange={e => setQtyOrdre(q => ({ ...q, txt: e.target.value.replace(/[^\d.,]/g, '') }))}
+              onKeyDown={e => { if (e.key === 'Enter') enregistrerQty() }}
+              className="w-[130px] h-14 rounded-xl border-2 border-bordeaux bg-cream-warm
+                         text-center font-serif text-[28px] text-ink outline-none" />
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setQtyOrdre(null)}
+                className="bg-cream-warm rounded-xl px-4 py-3 text-[13px] font-bold">annuler</button>
+              <button onClick={enregistrerQty}
+                className="flex-1 bg-bordeaux text-cream rounded-xl py-3 text-[14px] font-extrabold">
+                enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Peser plutôt que calculer : le bac contenait 2 790 g, il en reste
           1 200 → 1 590 g ont servi. C'est la réalité, pas une règle de trois.
           Trois zones figé/défile/figé et `vh` : sur la tablette, `dvh` déborde
