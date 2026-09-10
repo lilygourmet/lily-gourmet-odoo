@@ -618,14 +618,31 @@ function RecapModal({ qty, precision = {}, articleInfo, customLines = [], onChan
   const isEmpty = lines.length === 0 && customLines.length === 0
 
   return (
-    <div className="fixed inset-0 h-[100dvh] z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+    // ⚠️ `vh` et non `dvh` : sur la tablette, `dvh` déborde de l'écran visible
+    // et tout ce qui touche le bas passe derrière la barre de navigation.
+    // Voir le même piège sur les autres écrans.
+    <div className="fixed inset-0 h-[100vh] z-[80] bg-ink/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
          onClick={onClose}>
-      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden shadow-2xl border border-line"
+      <div className="bg-cream rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[88vh] flex flex-col overflow-hidden shadow-2xl border border-line"
            onClick={e => e.stopPropagation()}>
         <div className="bg-cream border-b border-line px-5 py-3 flex items-center justify-between flex-shrink-0">
           <h3 className="font-fraunces italic text-[18px] text-ink">Récapitulatif</h3>
           <button onClick={onClose}
                   className="w-8 h-8 rounded-full border border-line text-ink-mute hover:bg-bordeaux hover:text-cream hover:border-bordeaux flex items-center justify-center">×</button>
+        </div>
+
+        {/* Le bouton d'envoi est EN HAUT, pas en bas : sur la tablette, une
+            barre collée en bas finit derrière la navigation du système et
+            devient intouchable — c'est la cinquième fois que ça arrive
+            (Layla, 2026-09-10). En haut, rien ne peut le cacher. */}
+        <div className="bg-cream border-b border-line px-5 py-3 flex-shrink-0">
+          <button
+            onClick={onSend}
+            disabled={sending || isEmpty}
+            className="lg-btn w-full"
+          >
+            {sending ? 'Envoi...' : 'Envoyer la demande à l\'économe'}
+          </button>
         </div>
 
         <div className="px-5 py-4 space-y-4 flex-1 overflow-y-auto overscroll-contain">
@@ -669,16 +686,10 @@ function RecapModal({ qty, precision = {}, articleInfo, customLines = [], onChan
           )}
         </div>
 
-        <div className="bg-cream border-t border-line px-5 py-3 flex-shrink-0"
-             style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
-          <button
-            onClick={onSend}
-            disabled={sending || isEmpty}
-            className="lg-btn w-full"
-          >
-            {sending ? 'Envoi...' : 'Envoyer la demande à l\'économe'}
-          </button>
-        </div>
+        {/* Une marge basse quand même : la liste ne doit pas finir collée au
+            bord, où la barre du système mange les dernières lignes. */}
+        <div className="flex-shrink-0"
+             style={{ height: 'calc(0.5rem + env(safe-area-inset-bottom))' }} />
       </div>
     </div>
   )
