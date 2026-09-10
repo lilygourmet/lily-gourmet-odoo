@@ -9,7 +9,6 @@ const InventaireView = lazy(() => import('./components/InventaireView'))
 const FabricationView = lazy(() => import('./components/FabricationView'))
 const PrepaView = lazy(() => import('./components/PrepaView'))
 const FabricationProdView = lazy(() => import('./components/FabricationProdView'))
-const FabricationAnnexeView = lazy(() => import('./components/FabricationAnnexeView'))
 const FabAnnexe2View = lazy(() => import('./components/FabAnnexe2View'))
 const ValidationView = lazy(() => import('./components/ValidationView'))
 const MinMaxCdView = lazy(() => import('./components/MinMaxCdView'))
@@ -389,7 +388,6 @@ function App() {
     if (activeView === 'fabrication-glacage') return <PrepaView key="glacage" quoi="glacage" {...navProps} />
     if (activeView === 'fabrication-pate-sucre') return <PrepaView key="pate-sucre" quoi="pate-sucre" {...navProps} />
     if (activeView === 'fabrication-prod') return <FabricationProdView {...navProps} />
-    if (activeView === 'fabrication-annexe') return <FabricationAnnexeView {...navProps} />
     if (activeView === 'fabrication-annexe-2') return <FabAnnexe2View {...navProps} />
     if (activeView === 'fabrication-valider') return <ValidationView {...navProps} />
     if (activeView === 'minmax-cd') return <MinMaxCdView {...navProps} />

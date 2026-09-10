@@ -25,7 +25,6 @@ const TAB_DEFS = [
   { view: 'fabrication',       emoji: '🏭', label: 'Fabrication CD',     can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_cd) },
   { view: 'fabrication-glacage', emoji: '🍥', label: 'Fabrication Glaçage', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_glacage) },
   { view: 'fabrication-pate-sucre', emoji: '🎂', label: 'Fabrication Pâte à sucre', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_pate_sucre) },
-  { view: 'fabrication-annexe', emoji: '🥧', label: 'Fabrication Annexe', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_annexe) },
   { view: 'fabrication-annexe-2', emoji: '🥧', label: 'Fabrication Annexe 2', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_annexe) },
   { view: 'fabrication-prod', emoji: '🥣', label: 'Fabrication Prod', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_prod) },
   { view: 'valider-annexe',      emoji: '🏭', label: 'À valider Annexe',   can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_annexe) },
