@@ -1,8 +1,8 @@
 // Toutes les queries Supabase isolées pour le module Caisse
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
-import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, ECART_MINI } from './releveDoublons'
-import { reconcileEnvelopes } from './releveBmci'
+import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI } from './releveDoublons'
+import { reconcileEnvelopes, nomAutreCliente } from './releveBmci'
 export { ECART_MINI }
 
 // ============================================================
@@ -640,6 +640,9 @@ export async function takeReleveLine(key, envId) {
 // caisses arrivent apres coup. Ici on ne fait qu'ECRIRE le resultat — aucune ligne n'est
 // creee, et les caisses deja vertes ne sont pas touchees (comme un import normal).
 export async function relancerRapprochement() {
+  // D'ABORD défaire les rapprochements faux : leurs lignes retournent dans « non liées » et
+  // leurs caisses redeviennent cherchables, donc le calcul qui suit peut les refaire bien.
+  const annules = await annulerRapprochementsFaux()
   // La MÊME liste que l'écran « Reçus banque non liés » : lignes libres, hors ignorées et
   // hors TPE, et surtout DÉDOUBLONNÉES. Sans ça le calcul voyait encore les fausses lignes
   // fabriquées par l'ancien lecteur de PDF : deux candidates au lieu d'une, donc une caisse
@@ -651,7 +654,7 @@ export async function relancerRapprochement() {
       dateIso: l.ligne_date, credit: Number(l.amount), label: l.label || '', type: l.type,
       _key: l.key, _url: l.releve_url,       // pour retrouver la ligne à marquer prise
     }))
-  if (!txns.length) return { trouve: 0, a_confirmer: 0, lignes: 0 }
+  if (!txns.length) return { trouve: 0, a_confirmer: 0, lignes: 0, annules }
 
   // Mêmes bornes qu'à l'import : les espèces et chèques se déposent jusqu'à 120 j après la vente.
   const dates = txns.map(t => t.dateIso).sort()
@@ -688,7 +691,7 @@ export async function relancerRapprochement() {
       aConfirmer++
     }
   }
-  return { trouve, a_confirmer: aConfirmer, lignes: txns.length }
+  return { trouve, a_confirmer: aConfirmer, lignes: txns.length, annules }
 }
 
 // Retire la preuve manuelle d'une enveloppe (photo/PDF uploadée) -> repasse en attente.
@@ -776,6 +779,44 @@ export async function loadConfirmedReleveLines() {
     .not('note_proof', 'is', null)
   if (error) throw error
   return (data || []).map(r => r.note_proof)
+}
+
+// Défait les rapprochements que l'app a faits À TORT : une caisse VERTE dont le libellé
+// bancaire gardé porte le nom d'une AUTRE cliente. Vécu : un virement de LEBDAR NAWAL
+// servait de preuve à la caisse de Maryam el Bairi ET à celle d'Iraqui Yaqot, parce que
+// l'ancien repli validait sur le seul montant et la seule date.
+//
+// Trois prudences, pour ne jamais défaire un rapprochement juste :
+//   - seulement les VIREMENTS : un versement d'espèces ou une remise de chèques ne porte
+//     aucun nom de cliente, il n'y a rien à comparer ;
+//   - seulement quand la caisse porte elle-même un nom lisible, sinon on ne peut rien
+//     affirmer ;
+//   - jamais une caisse liée à PLUSIEURS lignes (remise splittée, « 🔗 2 virements =
+//     1 ligne ») : le libellé y est composite, le nom ne s'y lit pas.
+// Défaire est sans risque : la caisse repasse en attente et la ligne retourne dans
+// « non liées » — c'est exactement ce que fait le bouton « délier » à la main.
+export async function annulerRapprochementsFaux() {
+  const { data, error } = await supabase
+    .from('caisse_enveloppes')
+    .select('id, virement_client, note_proof, session_date, amount_cash')
+    .eq('releve_status', 'trouve')
+    .eq('payment_method', 'virement')
+    .not('note_proof', 'is', null)
+    .limit(5000)
+  if (error) throw error
+  const annules = []
+  for (const env of (data || [])) {
+    const np = env.note_proof
+    if (np.includes('  |  ') || np.includes('🔗')) continue   // plusieurs lignes : on ne juge pas
+    const sep = np.indexOf(' · ')
+    if (sep < 0) continue
+    const label = np.slice(sep + 3)
+    if (!nomFiable(nomDeLigne(env.virement_client))) continue  // caisse sans nom : on ne juge pas
+    if (!nomAutreCliente(env.virement_client, label)) continue
+    await clearEnveloppeReleve(env.id)
+    annules.push({ client: env.virement_client, date: env.session_date, montant: env.amount_cash, label })
+  }
+  return annules
 }
 
 // Annule un rapprochement : remet l'enveloppe à zéro ET libère la ligne du relevé
