@@ -189,7 +189,12 @@ export const parTourneeEntiere = nom =>
   /\b(cadres?|plaques?|biscuits?)\b/i.test(String(nom || ''))
 
 const estFige = (nom, figes) =>
-  (figes || []).includes(nom) || /\bmousses?\b/i.test(String(nom || ''))
+  // ⚠️ Comparaison NETTOYÉE, jamais brute : Odoo écrit « MP- Lait UHT » avec
+  // une espace INSÉCABLE. Un `includes()` sur le nom brut disait « non » sur
+  // deux noms qui se lisent pareil, et le lait du royal n'était pas figé —
+  // Odoo le consommait au prorata au lieu de la cuve entière.
+  // (Trouvé le 2026-09-10.)
+  (figes || []).some(f => net(f) === net(nom)) || /\bmousses?\b/i.test(String(nom || ''))
 
 function ajustementsFiges(bom, produit, figes, tournee) {
   if (!bom) return {}                  // article sans recette : rien à imposer

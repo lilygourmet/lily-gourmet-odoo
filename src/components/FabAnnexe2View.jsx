@@ -798,15 +798,35 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       // Les quantités FIGÉES y figurent — Layla les cite en premier dans son
       // exemple : la cuve part en entier sur la tournée, mais celui qui monte
       // veut savoir ce qu'il en met sur une pièce.
-      const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
-      if (!(total > 0) || !lignes.length) return null
+      //
+      // ⚠️ Mais elles ne font qu'UNE ligne : la mousse du royal, ce n'est pas
+      // « lait 149 g, gélatine 9 g, crème 447 g, chocolat 104 g… », c'est
+      // « La mousse — 800 g ». On monte une cuve, on ne pèse pas ses cinq
+      // ingrédients à la pièce (Layla, 2026-09-10). Le nom vient de la colonne
+      // « figés » du catalogue — « La mousse », « La crème citron ».
+      const cuve = figes.filter(c => Number(c.besoin) > 0)
+      const ligneCuve = cuve.length ? [{
+        nom: article.figesNom,
+        valeur: qteFine(cuve.reduce((t, c) =>
+          t + enGrammes((c.besoin * facteurAtelier(c.produit)) / total, c.unite), 0) * parCadre, 'g'),
+        poids: cuve.reduce((t, c) =>
+          t + enGrammes((c.besoin * facteurAtelier(c.produit)) / total, c.unite), 0) * parCadre,
+      }] : []
+      const lignes = [...autres, ...achetes].filter(c => Number(c.besoin) > 0)
+      if (!(total > 0) || !(lignes.length + ligneCuve.length)) return null
       return avecTotal({
         titre: !enBloc ? `Pour 1 ${propre(article.libelle)}`
           : motBloc ? `Pour 1 ${motBloc} = ${qte(parCadre, brut.unite)}`
           : `Pour ${qte(parCadre, brut.unite)}`,
-        lignes: lignes.map(c => dose(
-          nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
-          (c.besoin * facteurAtelier(c.produit)) / total, c.unite, c.tourneeTaille, c.produit)),
+        lignes: [
+          ...autres.filter(c => Number(c.besoin) > 0).map(c => dose(
+            nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
+            (c.besoin * facteurAtelier(c.produit)) / total, c.unite, c.tourneeTaille, c.produit)),
+          ...ligneCuve,
+          ...achetes.filter(c => Number(c.besoin) > 0).map(c => dose(
+            nomAtelier(c.produit),
+            (c.besoin * facteurAtelier(c.produit)) / total, c.unite, c.tourneeTaille, c.produit)),
+        ],
       })
     }
     if (!(noeud.recette || []).length) return null
