@@ -152,17 +152,24 @@ describe('il manque pour aller au bout', () => {
     expect(onOuvrir).toHaveBeenCalledWith('SM. Biscuit a la cuillere 5 pers')
   })
 
-  it('n’ouvre rien sur un ingrédient qu’on achète, mais le signale', () => {
-    const onOuvrir = vi.fn()
+  it('ne parle pas des matières premières : elles se commandent, pas se font', () => {
     const achete = {
       ...tiramisu,
       composants: [{ produit: 'MP- Sucre Granule', unite: 'g', besoin: 900, stock: 0, dejaFait: 0, fige: false, fabrique: false }],
     }
-    render(<SortieStock article={achete} sortie={19} onOuvrir={onOuvrir} />)
-    const ligne = screen.getByText(/manque 1 315 g/)
-    expect(ligne).toBeTruthy()
-    fireEvent.click(ligne)
-    expect(onOuvrir).not.toHaveBeenCalled()
+    const { container } = render(<SortieStock article={achete} sortie={19} />)
+    expect(container.textContent).toBe('')
+  })
+
+  it('un stock NÉGATIF compte zéro, pas comme une dette', () => {
+    // Vécu : gélatine à −7,51 kg → « manque 52 773 g » pour 202 g demandés.
+    const negatif = {
+      ...tiramisu,
+      composants: [{ produit: 'SM. Biscuit a la cuillere 5 pers', unite: 'u', besoin: 13, stock: -100, dejaFait: 0, fige: false, fabrique: true }],
+    }
+    render(<SortieStock article={negatif} sortie={19} onOuvrir={() => {}} />)
+    expect(screen.getByText(/il en faut 19 u/)).toBeTruthy()
+    expect(screen.getByText('à faire 19 u')).toBeTruthy()   // 19, pas 119
   })
 
   it('compte ce qui a déjà été déclaré du jour', () => {

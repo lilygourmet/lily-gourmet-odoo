@@ -298,9 +298,15 @@ export function SortieStock({ article, sortie, onOuvrir }) {
   // noierait la seule qui compte (Layla, 2026-09-10).
   const parts = (article.composants || []).map(c => {
     const besoin = c.fige ? c.besoin : c.besoin * facteur
-    const dispo = (c.stock || 0) + (c.dejaFait || 0)
+    // ⚠️ Un stock NÉGATIF compte zéro : c'est un compteur faux, pas une dette.
+    // La gélatine à −7,51 kg faisait annoncer « manque 52 773 g » pour une
+    // recette qui en demande 202 (Layla, 2026-09-10).
+    const dispo = Math.max(0, c.stock || 0) + (c.dejaFait || 0)
     return { ...c, besoinReel: besoin, manque: Math.max(0, Math.round((besoin - dispo) * 1000) / 1000) }
-  }).filter(c => c.manque > 0)
+  // Et seulement ce qui SE FABRIQUE : une matière première qui manque se
+  // commande, elle n'a rien à faire dans « ce qu'il reste à faire » — et ses
+  // compteurs sont les plus faux de tous.
+  }).filter(c => c.manque > 0 && c.fabrique)
   if (!parts.length) return null
   return (
     <div className="text-left rounded-xl border border-danger/40 bg-danger/5 mb-4 overflow-hidden">
@@ -310,7 +316,7 @@ export function SortieStock({ article, sortie, onOuvrir }) {
       {parts.map((c, i) => {
         // Ce qui manque et qui se FABRIQUE s'ouvre d'ici : on va en faire, on
         // remonte, la quantité tapée est toujours là.
-        const aFaire = c.fabrique && !!onOuvrir
+        const aFaire = !!onOuvrir
         const Ligne = aFaire ? 'button' : 'div'
         return (
           <Ligne key={c.produit + i} onClick={aFaire ? () => onOuvrir(c.produit) : undefined}
