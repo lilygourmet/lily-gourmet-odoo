@@ -142,7 +142,6 @@ function parGateau(articles) {
     // au plus grand, c'est ainsi qu'on travaille.
     g.articles.sort((x, y) => rangTaille(x.produit) - rangTaille(y.produit)
       || String(x.produit).localeCompare(String(y.produit), 'fr'))
-    g.ruptures = g.articles.filter(a => a.etat === 'rupture').length
     // Un gâteau est aussi pressant que son article le plus bas sous son mini.
     g.urgence = Math.min(...g.articles.map(urgence))
   }
@@ -521,13 +520,12 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                       <Vignette photo={g.photo} libelle={g.nom} gros taille="w-full aspect-square" />
                       <div className="px-2 py-1.5 flex flex-col gap-0.5 flex-1">
                         <div className="text-[12px] font-extrabold leading-[1.25]">{g.nom}</div>
+                        {/* Le compte des ruptures a été retiré : la tuile dit
+                            déjà combien il y a à faire, et chaque article porte
+                            son état une fois le gâteau ouvert (Layla,
+                            2026-09-10). */}
                         <div className="mt-auto pt-0.5 text-[10.5px] text-ink-mute">
                           {g.articles.length} à faire
-                          {g.ruptures > 0 && (
-                            <span className="block text-danger font-bold">
-                              {g.ruptures} rupture{g.ruptures > 1 ? 's' : ''}
-                            </span>
-                          )}
                         </div>
                       </div>
                     </button>
