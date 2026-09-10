@@ -437,6 +437,31 @@ const nomCourt = nom => {
 }
 
 /**
+ * Le chiffre à mettre dans la pastille : ce qu'on va faire MAINTENANT.
+ *
+ * Jamais un nombre qu'une fournée ne peut pas atteindre — annoncer « 352 »
+ * quand la recette en fait 88 décourage sans rien apprendre. On propose donc
+ * ce qu'il faut, borné par une fournée ; le besoin total s'écrit sous le nom.
+ * (Layla, 2026-09-10.)
+ *
+ * ⚠️ Ce qui ne se fait QUE par fournées entières — un cadre, une plaque, un
+ * biscuit — reste sur un multiple de sa fournée, jamais un compte bâtard.
+ */
+export function aFaireMaintenant(article) {
+  const besoin = article?.reste > 0 ? article.reste : (article?.tournee || 0)
+  const fournee = article?.tournee || 0
+  if (!(fournee > 0)) return Math.max(0, Math.round(besoin))
+  // ⚠️ `parTourneeEntiere` attend l'ARTICLE, pas son nom — côté serveur, la
+  // fonction du même nom prend une chaîne. Lui passer le nom renvoyait
+  // toujours « non », et une plaque se serait faite à moitié.
+  //
+  // UNE fournée à la fois, jamais quatre : le « + » est là pour en faire plus,
+  // et un cadre ne se remplit pas à moitié.
+  if (parTourneeEntiere(article)) return Math.round(fournee)
+  return Math.max(1, Math.round(Math.min(besoin, fournee)))
+}
+
+/**
  * Ce qui a été RÉELLEMENT PESÉ pour cette fournée, prêt à imposer à l'ordre
  * Odoo. La recette de l'article est écrite pour une tournée ; `fois` dit
  * combien on en a fait.

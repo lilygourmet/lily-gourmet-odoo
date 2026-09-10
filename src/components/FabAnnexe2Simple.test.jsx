@@ -56,6 +56,21 @@ describe('l’accueil', () => {
     expect(onOuvrir).toHaveBeenCalledWith('SM- Tiramisu 15cm')
   })
 
+  it('la pastille dit ce qu’on fait MAINTENANT, le besoin total va dessous', () => {
+    // Cadre forêt noir : il en faut 352, la recette en fait 88 à la fois.
+    const cadre = { produit: 'SM- cadre foret noir grand Production',
+      libelle: 'Cadre forêt noir', reste: 352, tournee: 88 }
+    render(<CasesAFaire articles={[cadre]} onOuvrir={() => {}} />)
+    expect(screen.getByText('88')).toBeTruthy()
+    expect(screen.getByText(/il en faut 352/)).toBeTruthy()
+  })
+
+  it('ne répète pas le besoin quand une fournée suffit', () => {
+    const royal = { produit: 'SM- Royal Chocolat 15 cm', libelle: 'Royal 15 cm', reste: 13, tournee: 13 }
+    render(<CasesAFaire articles={[royal]} onOuvrir={() => {}} />)
+    expect(screen.queryByText(/il en faut/)).toBeNull()
+  })
+
   it('le dit quand il n’y a rien, sans jargon', () => {
     render(<CasesAFaire articles={[]} onOuvrir={() => {}} />)
     expect(screen.getByText(/Rien à faire/)).toBeTruthy()

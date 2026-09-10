@@ -15,7 +15,7 @@
 // Ce qui reste : le STOCK — « on peut voir si erreur » — et sous chaque gros
 // chiffre, ce qu'il veut dire en vrai : « 4 plaques · 2 800 g en tout ».
 // ============================================================
-import { enClair, enfantsDe, declares, bloquants } from '../lib/fabAnnexe'
+import { enClair, enfantsDe, declares, bloquants, aFaireMaintenant } from '../lib/fabAnnexe'
 import { nb, qte, propre } from '../lib/ecranSimple'
 
 /** La photo d'un article, servie par Odoo. */
@@ -47,11 +47,20 @@ export function CasesAFaire({ articles, onOuvrir }) {
               className="w-full aspect-square object-cover bg-cream-deep" />
             <span className="absolute left-2 top-2 rounded-full bg-danger text-cream
                              px-3 py-1 text-[19px] font-extrabold tabular-nums">
-              {nb(Math.round(a.reste || a.tournee || 0))}
+              {nb(aFaireMaintenant(a))}
             </span>
           </div>
-          <div className="px-3 py-2 text-[16px] font-bold leading-tight">
-            {propre(a.libelle || a.produit)}
+          <div className="px-3 py-2">
+            <div className="text-[16px] font-bold leading-tight">
+              {propre(a.libelle || a.produit)}
+            </div>
+            {/* Le besoin total sous le nom, quand une fournée n'y suffit pas :
+                la pastille dit quoi faire maintenant, cette ligne dit pourquoi. */}
+            {a.reste > aFaireMaintenant(a) && (
+              <div className="text-[12.5px] text-ink-mute mt-0.5">
+                il en faut {nb(Math.round(a.reste))}
+              </div>
+            )}
           </div>
         </button>
       ))}
