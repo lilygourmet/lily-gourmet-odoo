@@ -18,7 +18,7 @@
 import { useState } from 'react'
 import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant,
   decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe } from '../lib/fabAnnexe'
-import { nb, qte, dose, propre } from '../lib/ecranSimple'
+import { nb, qte, dose, propre, nomAtelier, facteurAtelier } from '../lib/ecranSimple'
 
 /** La photo d'un article, servie par Odoo. */
 const photoDe = photoFabAnnexe
@@ -320,7 +320,10 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
           <>
             <span className={`w-3 h-3 rounded shrink-0 ${manque ? 'bg-danger' : 'bg-success'}`} />
             <span className={`flex-1 min-w-0 text-[17px] ${manque ? 'text-danger font-bold' : ''}`}>
-              {propre(c.produit)}
+              {/* ⚠️ « Masse gélatine », pas « Gélatine en poudre » : l'atelier
+                  pèse la masse (poudre + 6 fois son eau), Odoo compte la
+                  poudre. Sans cette règle, on pèse SEPT FOIS trop peu. */}
+              {nomAtelier(c.produit)}
               {/* Le stock ne se dit que de ce qui se FABRIQUE : « on peut voir
                   si erreur » (Layla). Celui des matières premières n'est pas
                   tenu à l'annexe — 47 tonnes de sucre, une gélatine à −7 590 g :
@@ -343,12 +346,12 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
                                  px-3 py-1.5 text-right leading-tight">
                   <span className="block text-[11px] font-bold">à faire ›</span>
                   <span className="block text-[17px] font-extrabold tabular-nums">
-                    {qte(c.besoin, c.unite)}
+                    {qte(c.besoin * facteurAtelier(c.produit), c.unite)}
                   </span>
                 </span>
               )
               : <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
-                {qte(c.besoin, c.unite)}
+                {qte(c.besoin * facteurAtelier(c.produit), c.unite)}
               </span>}
           </>
         )
@@ -399,7 +402,10 @@ export function PourUn({ noeud, quantite }) {
   const liste = ingredientsPour(noeud, quantite)
   const cuve = liste.filter(c => c.fige && !c.fabrique)
   const lignes = liste.filter(c => !(c.fige && !c.fabrique))
-    .map(c => ({ nom: propre(c.produit), valeur: parPiece(c.besoin / quantite, c.unite) }))
+    .map(c => ({
+      nom: nomAtelier(c.produit),
+      valeur: parPiece(c.besoin * facteurAtelier(c.produit) / quantite, c.unite),
+    }))
   if (cuve.length) {
     // Une cuve ne se pèse qu'en grammes : c'est la seule unité commune à ses
     // ingrédients, et c'est celle de la balance.

@@ -543,3 +543,45 @@ describe('quand une pièce en prend moins d’une', () => {
     expect(screen.queryByText(/0,09/)).toBeNull()
   })
 })
+
+// ====== La règle d'atelier : la masse gélatine ======
+// Odoo compte la POUDRE, l'atelier pèse la MASSE (1 de poudre pour 6 d'eau).
+// Sans cette règle, on pèse SEPT FOIS trop peu — et la mousse ne prend pas.
+
+describe('la masse gélatine', () => {
+  const glacage = {
+    produit: 'SM. Glacage Rose Finition', libelle: 'Glaçage Rose', unite: 'g',
+    tourneeTaille: 5458, pourQuantite: 5458, recette: [],
+    enfants: [
+      { produit: 'MP- Gelatine en poudre', unite: 'g', besoin: 80, stock: 0, fabrique: false, ok: true },
+      { produit: 'MP- Sucre Granule', unite: 'kg', besoin: 1.2, stock: 0, fabrique: false, ok: true },
+    ],
+  }
+
+  it('s’appelle « Masse gélatine » et vaut sept fois la poudre', () => {
+    render(<Fiche noeud={glacage} quantite={5458} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText('Masse gélatine')).toBeTruthy()
+    expect(screen.getByText('560 g')).toBeTruthy()          // 80 × 7
+    expect(screen.queryByText(/Gelatine en poudre/)).toBeNull()
+  })
+
+  it('ne touche à rien d’autre', () => {
+    render(<Fiche noeud={glacage} quantite={5458} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText(/1.200 g/)).toBeTruthy()
+  })
+
+  it('vaut aussi dans la pesée du montage', () => {
+    const gateau = {
+      produit: 'SM- Royal Chocolat 15 cm', libelle: 'Royal Chocolat 15 cm', unite: 'u',
+      tourneeTaille: 13, pourQuantite: 13, recette: [],
+      enfants: [
+        { produit: 'SM. Craquant Royal', unite: 'g', besoin: 1040, stock: 2000, fabrique: true, ok: true },
+        { produit: 'MP- Gelatine en poudre', unite: 'g', besoin: 13, stock: 0, fabrique: false, ok: true },
+      ],
+    }
+    render(<PourUn noeud={gateau} quantite={13} />)
+    expect(screen.getByText('7 g')).toBeTruthy()             // 13 × 7 / 13
+  })
+})

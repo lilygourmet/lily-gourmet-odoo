@@ -1,9 +1,9 @@
 // ============================================================
 // « Fabrication Annexe 2 », version simplifiée — l'écran complet.
 //
-// Il ne remplace rien : la tablette choisit. L'interrupteur est en bas de la
-// liste, dans l'écran (Layla, 2026-09-10) — on essaie, et on revient d'un
-// appui si ça ne va pas.
+// Il a remplacé l'ancien écran le 2026-09-11, après essai à l'atelier. Les
+// deux règles qui n'existaient que là-bas ont été reprises ici : la MASSE
+// GÉLATINE (×7) et l'historique par date. L'ancien code reste dans git.
 //
 // Trois écrans en tout, jamais plus :
 //   1. les cases — une photo, un chiffre
@@ -18,10 +18,12 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { CasesAFaire, Cases, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
-import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, decoupeDe,
-  noeudDuChemin, defautDe, parGateauMere, peseesDe, declarer, envoyerAValider,
-  sansRendement } from '../lib/fabAnnexe'
+import HistoriqueAnnexe from './HistoriqueAnnexe'
+import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, loadHistoriqueAnnexe,
+  decoupeDe, noeudDuChemin, defautDe, parGateauMere, peseesDe, declarer,
+  envoyerAValider, sansRendement } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
+import { todayISO } from '../lib/dates'
 
 /**
  * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
@@ -34,7 +36,7 @@ import { dernierEcran, garderEcran } from '../lib/fabrication'
  */
 const photoGateau = a => (a.pour && a.pour[0]) || a.photo || a.produit
 
-export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activeView, onBasculer }) {
+export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activeView }) {
   const [articles, setArticles] = useState(() => dernierEcran('fab_annexe2'))
   const [details, setDetails] = useState(() =>
     Object.fromEntries((dernierEcran('fab_annexe2') || []).map(a => [a.produit, a])))
@@ -53,10 +55,19 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [tout, setTout] = useState(() => dernierEcran('fab_annexe2_tout'))
   const [cherche, setCherche] = useState('')
   const [gateau, setGateau] = useState(null)
+  // L'historique : un bouton, par date (Layla, 2026-09-09).
+  const [histo, setHisto] = useState(null)
+  const [histoOuvert, setHistoOuvert] = useState(false)
 
   const ouvert = chemin[0] || null
   const nav = { user, onLogout, onNavigate, activeView }
   const recharger = () => setTour(t => t + 1)
+
+  useEffect(() => {
+    let vivant = true
+    loadHistoriqueAnnexe().then(h => { if (vivant) setHisto(h) }).catch(() => {})
+    return () => { vivant = false }
+  }, [tour])
 
   useEffect(() => {
     let vivant = true
@@ -163,12 +174,20 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       ? [...new Map(groupes.flatMap(g => g.articles).map(a => [a.produit, a])).values()]
       : null
     const ouvrir = p => { setFaits({}); setQuantites({}); setCuites({}); setChemin([p]) }
+    const dujour = (histo || []).filter(l => (l.jour || todayISO()) === todayISO()).length
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader {...nav} />
         <div className="max-w-[1000px] mx-auto px-4 py-5 pb-28">
           {erreur && <p className="text-danger text-[14px] mb-3">{erreur}</p>}
           <Onglets onglet={onglet} onChange={k => { setOnglet(k); setGateau(null); setCherche('') }} />
+          <button onClick={() => setHistoOuvert(true)}
+            className="w-full mb-4 rounded-2xl border-2 border-cream-deep bg-cream-warm
+                       py-3 text-[15px] font-bold text-ink-mute">
+            🕓 Ce qui a été fait
+            {dujour > 0 && <span className="text-ink"> · {dujour}</span>}
+          </button>
+          {histoOuvert && <HistoriqueAnnexe histo={histo} onFermer={() => setHistoOuvert(false)} />}
 
           {onglet === 'faire' && (articles === null
             ? <Skeleton rows={4} />
@@ -202,11 +221,6 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               )}
             </>
           )}
-
-          <button onClick={onBasculer}
-            className="w-full mt-10 py-3 text-[13px] text-ink-mute font-bold">
-            revenir à l'ancien écran
-          </button>
         </div>
       </div>
     )

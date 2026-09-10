@@ -1,26 +1,9 @@
 // ============================================================
-// L'écran simplifié de Fabrication Annexe 2 : gros chiffres, pas de mot
-// « tournée », le strict nécessaire à l'écran. Pensé pour des gens qui lisent
-// peu — c'est l'atelier qui s'en sert, pas le bureau. (Layla, 2026-09-10.)
-//
-// Le choix vit dans la TABLETTE, pas dans le compte : une tablette peut
-// essayer pendant qu'une autre garde l'ancien écran, et revenir en arrière
-// tient en un appui. Rien n'est remplacé tant que Layla n'a pas tranché.
+// Comment l'écran de Fabrication Annexe 2 écrit les nombres et les noms :
+// gros chiffres, grammes partout, noms débarrassés des préfixes d'Odoo. Pensé
+// pour des gens qui lisent peu — c'est l'atelier qui s'en sert, pas le bureau.
+// (Layla, 2026-09-10.)
 // ============================================================
-
-const CLE = 'lg:annexe2-simple'
-
-/** Cette tablette est-elle passée à l'écran simplifié ? */
-export function ecranSimple() {
-  try { return localStorage.getItem(CLE) === '1' } catch { return false }
-}
-
-/** Bascule d'un écran à l'autre, et rend le nouvel état. */
-export function basculerEcran() {
-  const neuf = !ecranSimple()
-  try { localStorage.setItem(CLE, neuf ? '1' : '0') } catch { /* navigation privée */ }
-  return neuf
-}
 
 /** Un nombre comme on l'écrit en français : 2 800, 1,5. */
 export const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
@@ -62,3 +45,25 @@ export const dose = (v, u) => {
 export const propre = nom => String(nom || '')
   .replace(/^\s*(\[[^\]]*\]\s*)?(SM|MP|MI|GS|RA|GM|CD|E|F|V)\s*[-./]?\s*/i, '')
   .replace(/\s{2,}/g, ' ').trim()
+
+/**
+ * LES RÈGLES D'ATELIER : ce que le pâtissier pèse n'est pas toujours ce
+ * qu'Odoo compte.
+ *
+ * `MP- Gelatine en poudre` se pèse en MASSE — 1 part de poudre pour 6 d'eau,
+ * donc ×7. Odoo ne connaît que la poudre et ne déduira que la poudre ; sur la
+ * balance, c'est la masse qu'on fait. Vaut pour TOUTES les recettes, présentes
+ * et futures (règle de Layla). Un autre ingrédient de ce genre = une ligne à
+ * ajouter ici.
+ */
+const REGLES_ATELIER = [
+  { quand: /gelatine en poudre/i, nom: 'Masse gélatine', facteur: 7 },
+]
+
+const regleAtelier = nom => REGLES_ATELIER.find(r => r.quand.test(String(nom || '')))
+
+/** Le nom sous lequel l'atelier connaît l'ingrédient. */
+export const nomAtelier = nom => regleAtelier(nom)?.nom || propre(nom)
+
+/** Par combien multiplier ce qu'Odoo compte pour obtenir ce qu'on pèse. */
+export const facteurAtelier = nom => regleAtelier(nom)?.facteur || 1
