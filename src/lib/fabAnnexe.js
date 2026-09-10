@@ -11,9 +11,17 @@ import { todayISO } from './dates'
 import { correspond } from './recherche'
 import { supabase } from './supabase'
 
-/** L'état du jour. Jamais mis en cache : Layla doit voir ses corrections tout de suite. */
+/**
+ * L'état du jour, AVEC la recette de chaque article. Jamais mis en cache :
+ * Layla doit voir ses corrections tout de suite.
+ *
+ * Tout arrive d'un coup parce que ça ne coûte plus rien : depuis que le stock
+ * du lieu se lit en une fois, la liste complète met le même temps qu'un seul
+ * article. Chaque clic devient instantané au lieu d'une seconde d'attente.
+ * (Layla, 2026-09-10 : « c'est trop lent à travailler ».)
+ */
 export async function loadFabAnnexe() {
-  const r = await fetch('/api/fab-annexe?cb=' + Date.now())
+  const r = await fetch('/api/fab-annexe?details=1&cb=' + Date.now())
   if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
   const d = await r.json()
   if (d.error) throw new Error(d.error)
