@@ -15,7 +15,9 @@
 // Ce qui reste : le STOCK — « on peut voir si erreur » — et sous chaque gros
 // chiffre, ce qu'il veut dire en vrai : « 4 plaques · 2 800 g en tout ».
 // ============================================================
-import { enClair, enfantsDe, declares, bloquants, aFaireMaintenant } from '../lib/fabAnnexe'
+import { useState } from 'react'
+import { enClair, declares, bloquants, aFaireMaintenant,
+  decoupeDe, partageDecoupe, ingredientsPour, nomCourt } from '../lib/fabAnnexe'
 import { nb, qte, propre } from '../lib/ecranSimple'
 
 /** La photo d'un article, servie par Odoo. */
@@ -69,20 +71,102 @@ export function CasesAFaire({ articles, onOuvrir }) {
 }
 
 /**
+ * Le clavier-calculette. Le « + » et le « − » vont de 1 en 1 ou de 50 g en
+ * 50 g ; pour passer de 3 920 à 2 600, ça ferait vingt-six appuis. On tape le
+ * nombre. « Garde le clavier calculette pour tous les chiffres si besoin de
+ * modifier » (Layla, 2026-09-10) — donc TOUT chiffre modifiable s'ouvre ici.
+ *
+ * Pas de calcul, pas d'opérateurs : des touches, une virgule, une gomme.
+ */
+export function Clavier({ titre, valeur, unite, onValider, onFermer }) {
+  const [txt, setTxt] = useState(String(valeur ?? ''))
+  const taper = k => setTxt(t => {
+    if (k === ',') return t.includes(',') ? t : (t || '0') + ','
+    // Le premier chiffre tapé REMPLACE la valeur proposée : elle vient
+    // corriger, pas rallonger. Taper « 26 » sur « 13 » doit donner 26.
+    return (t === String(valeur ?? '') ? '' : t) + k
+  })
+  const n = Number(String(txt).replace(',', '.'))
+  const bon = txt !== '' && Number.isFinite(n) && n >= 0
+
+  return (
+    <div className="fixed inset-0 z-50 bg-ink/50 flex items-end" onClick={onFermer}>
+      <div className="w-full bg-cream rounded-t-3xl p-4 pb-8" onClick={e => e.stopPropagation()}>
+        <div className="text-[15px] font-bold text-ink-mute text-center">{titre}</div>
+        <div className="text-center font-extrabold tabular-nums text-[46px] leading-tight my-2">
+          {txt || '0'}<span className="text-[19px] text-ink-mute ml-2">{unite === 'u' ? '' : unite}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {['7', '8', '9', '4', '5', '6', '1', '2', '3', ',', '0'].map(k => (
+            <button key={k} onClick={() => taper(k)}
+              className="h-16 rounded-2xl bg-cream-warm border-2 border-cream-deep
+                         text-[27px] font-extrabold active:bg-cream-deep">{k}</button>
+          ))}
+          <button onClick={() => setTxt(t => t.slice(0, -1))} aria-label="Effacer"
+            className="h-16 rounded-2xl bg-cream-warm border-2 border-cream-deep
+                       text-[27px] font-extrabold active:bg-cream-deep">⌫</button>
+        </div>
+        <button onClick={() => bon && onValider(n)} disabled={!bon}
+          className={`w-full mt-3 rounded-2xl py-4 text-[20px] font-extrabold
+            ${bon ? 'bg-success text-cream' : 'bg-cream-deep text-ink-mute'}`}>
+          C'est bon
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Le gros chiffre, avec son « − », son « + » et le clavier sous le doigt.
+ * Un seul endroit pour tous les nombres de l'écran : le geste est le même
+ * partout, et une correction de comportement les corrige tous.
+ */
+export function GrosChiffre({ titre, valeur, unite, pas = 1, onChange }) {
+  const [clavier, setClavier] = useState(false)
+  return (
+    <>
+      <div className="flex items-center justify-center gap-4">
+        <button onClick={() => onChange(Math.max(0, Math.round((valeur - pas) * 100) / 100))}
+          disabled={valeur <= 0} aria-label={`Moins ${titre}`}
+          className="w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
+                     text-[34px] font-extrabold text-bordeaux leading-none disabled:opacity-30">−</button>
+        <button onClick={() => setClavier(true)} aria-label={`Changer ${titre}`}
+          className="min-w-[130px] text-center font-extrabold tabular-nums text-[54px] leading-none">
+          {nb(valeur)}
+        </button>
+        <button onClick={() => onChange(Math.round((valeur + pas) * 100) / 100)}
+          aria-label={`Plus ${titre}`}
+          className="w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
+                     text-[34px] font-extrabold text-bordeaux leading-none">+</button>
+      </div>
+      {clavier && (
+        <Clavier titre={titre} valeur={valeur} unite={unite}
+          onValider={v => { onChange(v); setClavier(false) }}
+          onFermer={() => setClavier(false)} />
+      )}
+    </>
+  )
+}
+
+/**
  * La fiche : combien on en fait, et ce qu'il faut pour ça.
  *
  * Le gros chiffre est la QUANTITÉ, jamais un nombre de tournées. Dessous, la
  * même chose en vrai. Chaque ingrédient porte son stock — pour voir une erreur
  * — et ce qui manque porte son propre bouton « à faire › », parce que c'est à
  * l'atelier de choisir par où commencer.
+ *
+ * Cas particulier, la DÉCOUPE : une plaque donne 13 biscuits. Deux chiffres
+ * sur le même écran — ce qu'on cuit, ce qu'on coupe — parce que ce sont deux
+ * décisions, et qu'aller-retour entre deux écrans pour ça n'a aucun sens.
  */
-export function Fiche({ noeud, quantite, onQuantite, faits, onOuvrir, onFait }) {
-  const enfants = enfantsDe(noeud)
+export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait }) {
+  const decoupe = onCuites ? decoupeDe(noeud) : null
   const dejaFaits = declares(faits)
-  const bloque = bloquants(noeud, dejaFaits)
-  const pas = /^(g|kg)$/i.test(String(noeud.unite || '').trim())
-    ? (/(^kg$)/i.test(noeud.unite) ? 0.5 : 50) : 1
-  const dit = enClair(noeud, quantite)
+  // En découpe, la plaque se fait ICI : elle ne bloque pas, elle est l'écran.
+  const bloque = decoupe ? [] : bloquants(noeud, dejaFaits)
+  const aPeser = decoupe ? decoupe.enfant : noeud
+  const quantitePesee = decoupe ? cuites : quantite
 
   return (
     <div>
@@ -94,56 +178,133 @@ export function Fiche({ noeud, quantite, onQuantite, faits, onOuvrir, onFait }) 
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-4 mt-5">
-        <button onClick={() => onQuantite(Math.max(pas, quantite - pas))}
-          disabled={quantite <= pas} aria-label="Moins"
-          className="w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
-                     text-[34px] font-extrabold text-bordeaux leading-none disabled:opacity-30">−</button>
-        <div className="min-w-[130px] text-center font-extrabold tabular-nums text-[54px] leading-none">
-          {nb(quantite)}
+      {decoupe && (
+        <div className="mt-5 text-center text-[15px] font-bold text-ink-mute">
+          {motPluriel(decoupe.enfant.produit, cuites)} à cuire
         </div>
-        <button onClick={() => onQuantite(quantite + pas)} aria-label="Plus"
-          className="w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
-                     text-[34px] font-extrabold text-bordeaux leading-none">+</button>
+      )}
+      <div className={decoupe ? 'mt-1' : 'mt-5'}>
+        <GrosChiffre titre={decoupe ? 'à cuire' : 'à faire'}
+          valeur={quantitePesee} unite={aPeser.unite} pas={pasDe(aPeser.unite)}
+          onChange={decoupe ? onCuites : onQuantite} />
       </div>
-      <div className="text-center text-[15px] text-ink-mute mt-1">
-        {noeud.unite === 'u' ? 'à faire' : `${noeud.unite} à faire`}
-      </div>
-      {dit && <div className="text-center text-[15px] font-bold text-bordeaux mt-0.5">{dit}</div>}
+      {!decoupe && (
+        <div className="text-center text-[15px] text-ink-mute mt-1">
+          {noeud.unite === 'u' ? 'à faire' : `${noeud.unite} à faire`}
+        </div>
+      )}
+      <EnClair noeud={aPeser} quantite={quantitePesee} />
 
-      <div className="mt-5">
-        {(enfants || []).map((c, i) => {
-          const fait = c.dejaFait > 0 || dejaFaits.includes(c.produit)
-          const manque = !c.ok && !fait && c.fabrique
-          return (
-            <div key={c.produit + i}
-              className="flex items-center gap-3 py-3 border-t border-cream-deep">
-              <span className={`w-3 h-3 rounded shrink-0 ${manque ? 'bg-danger' : 'bg-success'}`} />
-              <span className={`flex-1 min-w-0 text-[17px] ${manque ? 'text-danger font-bold' : ''}`}>
-                {propre(c.produit)}
-                <span className="block text-[12.5px] text-ink-mute font-normal">
-                  {fait ? 'fait à l\'instant' : `en stock ${qte(c.stock, c.unite)}`}
-                </span>
-              </span>
-              {manque
-                ? (
-                  <button onClick={() => onOuvrir(c.produit)}
-                    className="shrink-0 rounded-xl border-2 border-danger text-danger
-                               px-3 py-2 text-[14px] font-extrabold">à faire ›</button>
-                )
-                : <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
-                  {qte(c.besoin, c.unite)}
-                </span>}
-            </div>
-          )
-        })}
-      </div>
+      <Ingredients noeud={aPeser} quantite={quantitePesee}
+        dejaFaits={dejaFaits} onOuvrir={onOuvrir} />
+
+      {decoupe && (
+        <div className="mt-6 pt-5 border-t-4 border-cream-deep">
+          <div className="text-center text-[15px] font-bold text-ink-mute">
+            {motPluriel(noeud.produit, quantite)} à couper
+          </div>
+          <div className="mt-1">
+            <GrosChiffre titre="à couper" valeur={quantite} unite={noeud.unite} pas={1}
+              onChange={onQuantite} />
+          </div>
+          <Partage noeud={noeud} decoupe={decoupe} cuites={cuites} coupes={quantite} />
+        </div>
+      )}
 
       <button onClick={onFait} disabled={bloque.length > 0}
         className={`w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold
           ${bloque.length ? 'bg-cream-deep text-ink-mute' : 'bg-success text-cream'}`}>
         C'est fait
       </button>
+    </div>
+  )
+}
+
+/** Le pas du « + » : la pièce, 50 g, un demi-kilo. */
+const pasDe = unite => /^kg$/i.test(String(unite || '').trim()) ? 0.5
+  : /^(g|gr)$/i.test(String(unite || '').trim()) ? 50 : 1
+
+/**
+ * « 4 plaques », « 26 biscuits » — le mot de la chose, accordé.
+ *
+ * ⚠️ Le mot entre parenthèses prime : « Biscuit a la cuillere (plaque) » EST
+ * une plaque, pas un biscuit. Sans ça l'écran annonçait « biscuits à cuire »
+ * au-dessus de « biscuits à couper » — les deux chiffres devenaient
+ * indiscernables.
+ */
+const motPluriel = (nom, n) => {
+  const m = nomCourt(nom).match(/\b(plaques?|cadres?|biscuits?|tartes?|feuilles?)\b/)
+  const base = m ? m[1].replace(/s$/, '') : 'pièce'
+  return n > 1 ? base + 's' : base
+}
+
+/** Ce que la quantité veut dire en vrai — rien quand il n'y a rien à dire. */
+function EnClair({ noeud, quantite }) {
+  const dit = enClair(noeud, quantite)
+  if (!dit) return null
+  return <div className="text-center text-[15px] font-bold text-bordeaux mt-0.5">{dit}</div>
+}
+
+/** Ce qu'il faut : ce qui se fabrique d'abord, ce qui se pèse ensuite. */
+function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
+  const liste = ingredientsPour(noeud, quantite)
+  if (!liste.length) return null
+  return (
+    <div className="mt-5">
+      {liste.map((c, i) => {
+        const fait = c.dejaFait > 0 || dejaFaits.includes(c.produit)
+        const manque = !c.pese && !c.ok && !fait && c.fabrique
+        return (
+          <div key={c.produit + i}
+            className="flex items-center gap-3 py-3 border-t border-cream-deep">
+            <span className={`w-3 h-3 rounded shrink-0 ${manque ? 'bg-danger' : 'bg-success'}`} />
+            <span className={`flex-1 min-w-0 text-[17px] ${manque ? 'text-danger font-bold' : ''}`}>
+              {propre(c.produit)}
+              {/* Le stock ne se dit que de ce qui se fabrique : « on peut voir
+                  si erreur » (Layla). Le stock des matières premières de
+                  l'annexe n'est pas tenu — l'afficher tromperait. */}
+              {!c.pese && (
+                <span className="block text-[12.5px] text-ink-mute font-normal">
+                  {fait ? 'fait à l\'instant' : `en stock ${qte(c.stock, c.unite)}`}
+                </span>
+              )}
+            </span>
+            {manque
+              ? (
+                <button onClick={() => onOuvrir(c.produit)}
+                  className="shrink-0 rounded-xl border-2 border-danger text-danger
+                             px-3 py-2 text-[14px] font-extrabold">à faire ›</button>
+              )
+              : <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
+                {qte(c.besoin, c.unite)}
+              </span>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Ce que la découpe fait des plaques. Une ligne, trois chiffres — combien il
+ * en faut, combien de plaques y passent, combien restent au congélateur.
+ */
+function Partage({ noeud, decoupe, cuites, coupes }) {
+  const p = partageDecoupe({
+    cuites, coupes, parPiece: decoupe.parPiece, stock: decoupe.enfant.stock,
+  })
+  const mot = n => motPluriel(decoupe.enfant.produit, n)
+  const besoin = noeud.reste > 0 ? Math.round(noeud.reste) : 0
+  const bouts = []
+  if (besoin > 0 && besoin !== coupes) bouts.push(`il en faut ${nb(besoin)}`)
+  bouts.push(`${nb(p.utilisees)} ${mot(p.utilisees)} ${p.utilisees > 1 ? 'utilisées' : 'utilisée'}`)
+  if (p.gardees > 0) bouts.push(`${nb(p.gardees)} ${p.gardees > 1 ? 'gardées' : 'gardée'}`)
+  return (
+    <div className={`text-center text-[15px] mt-0.5 font-bold
+      ${p.manque > 0 ? 'text-danger' : 'text-ink-mute'}`}>
+      {p.manque > 0
+        ? `il manque ${nb(p.manque)} ${mot(p.manque)}`
+        : bouts.join(' · ')}
     </div>
   )
 }

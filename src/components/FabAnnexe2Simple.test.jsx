@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { CasesAFaire, Fiche } from './FabAnnexe2Simple'
+import { CasesAFaire, Fiche, Clavier } from './FabAnnexe2Simple'
 import { propre } from '../lib/ecranSimple'
 
 // ====== L'écran simplifié, lu par des gens qui lisent peu ======
@@ -132,11 +132,137 @@ describe('la fiche', () => {
 
   it('le + et le − avancent par pièce, ou par 50 g', () => {
     const { onQuantite } = poser(tiramisu, 13)
-    fireEvent.click(screen.getByLabelText('Plus'))
+    fireEvent.click(screen.getByLabelText('Plus à faire'))
     expect(onQuantite).toHaveBeenCalledWith(14)
     cleanup()
     const g = poser({ ...plaque, unite: 'g', tourneeTaille: 3920, enfants: [] }, 3920)
-    fireEvent.click(screen.getByLabelText('Plus'))
+    fireEvent.click(screen.getByLabelText('Plus à faire'))
     expect(g.onQuantite).toHaveBeenCalledWith(3970)
+  })
+})
+
+// ====== La découpe : une plaque, 13 biscuits ======
+// Le seul écran de l'atelier qui porte deux décisions. Vérifié chez Odoo le
+// 2026-09-10 : la plaque sort par 4, et donne 6 « 10 pers », 13 « 5 pers » ou
+// 70 individuels.
+
+const cinqPers = {
+  produit: 'SM. Biscuit a la cuillere 5 pers', libelle: 'Biscuit cuillère 5 pers',
+  unite: 'u', tourneeTaille: 13, reste: 13,
+  recette: [{ produit: 'SM. Biscuit a la cuillere (plaque)', qty: 1, unite: 'u' }],
+  enfants: [{ ...plaque, besoin: 1, stock: 0, dejaFait: 0, fabrique: true, ok: false,
+    produira: 4, tournees: 1, pourQuantite: 4 }],
+}
+
+const poserDecoupe = (coupes = 13, cuites = 4) => {
+  const onQuantite = vi.fn(); const onCuites = vi.fn(); const onFait = vi.fn()
+  render(<Fiche noeud={cinqPers} quantite={coupes} onQuantite={onQuantite}
+    cuites={cuites} onCuites={onCuites} faits={[]} onOuvrir={() => {}} onFait={onFait} />)
+  return { onQuantite, onCuites, onFait }
+}
+
+describe('la découpe, deux chiffres sur un écran', () => {
+  it('montre ce qu’on cuit ET ce qu’on coupe', () => {
+    poserDecoupe()
+    expect(screen.getByText('plaques à cuire')).toBeTruthy()
+    expect(screen.getByText('biscuits à couper')).toBeTruthy()
+    expect(screen.getByText('4')).toBeTruthy()
+    expect(screen.getByText('13')).toBeTruthy()
+  })
+
+  it('le cas de Layla : 4 plaques, 26 biscuits → 2 utilisées, 2 gardées', () => {
+    poserDecoupe(26)
+    expect(screen.getByText(/2 plaques utilisées · 2 gardées/)).toBeTruthy()
+  })
+
+  it('dit le poids de pâte à préparer, pas le nombre de plaques tout court', () => {
+    poserDecoupe()
+    expect(screen.getByText(/2 800 g en tout/)).toBeTruthy()
+  })
+
+  it('liste les matières premières de la plaque, pas la plaque elle-même', () => {
+    poserDecoupe()
+    expect(screen.getByText('Oeufs blanc')).toBeTruthy()
+    expect(screen.queryByText('à faire ›')).toBeNull()
+  })
+
+  it('ne bloque pas « C’est fait » : la plaque se fait ici', () => {
+    const { onFait } = poserDecoupe()
+    fireEvent.click(screen.getByText("C'est fait"))
+    expect(onFait).toHaveBeenCalled()
+  })
+
+  it('prévient quand on coupe plus de plaques qu’on en a', () => {
+    poserDecoupe(39, 1)
+    expect(screen.getByText(/il manque 2 plaques/)).toBeTruthy()
+  })
+
+  it('les deux « + » ne se mélangent pas', () => {
+    const { onQuantite, onCuites } = poserDecoupe()
+    fireEvent.click(screen.getByLabelText('Plus à cuire'))
+    expect(onCuites).toHaveBeenCalledWith(5)
+    expect(onQuantite).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByLabelText('Plus à couper'))
+    expect(onQuantite).toHaveBeenCalledWith(14)
+  })
+
+  it('reste un écran simple quand ce n’est pas une découpe', () => {
+    render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.queryByText(/à cuire/)).toBeNull()
+  })
+})
+
+// ====== Le clavier-calculette ======
+// « Garde le clavier calculette pour tous les chiffres si besoin de modifier »
+// (Layla, 2026-09-10) : de 3 920 à 2 600 au « − », ce serait 26 appuis.
+
+describe('le clavier', () => {
+  const ouvrir = () => {
+    const onValider = vi.fn()
+    render(<Clavier titre="à faire" valeur={13} unite="u"
+      onValider={onValider} onFermer={() => {}} />)
+    return onValider
+  }
+
+  it('le premier chiffre remplace la valeur proposée', () => {
+    const onValider = ouvrir()
+    fireEvent.click(screen.getByText('2'))
+    fireEvent.click(screen.getByText('6'))
+    fireEvent.click(screen.getByText("C'est bon"))
+    expect(onValider).toHaveBeenCalledWith(26)
+  })
+
+  it('la gomme efface le dernier chiffre', () => {
+    const onValider = ouvrir()
+    fireEvent.click(screen.getByText('5'))
+    fireEvent.click(screen.getByText('0'))
+    fireEvent.click(screen.getByLabelText('Effacer'))
+    fireEvent.click(screen.getByText("C'est bon"))
+    expect(onValider).toHaveBeenCalledWith(5)
+  })
+
+  it('accepte la virgule, pour les kilos', () => {
+    const onValider = ouvrir()
+    fireEvent.click(screen.getByText('1'))
+    fireEvent.click(screen.getByText(','))
+    fireEvent.click(screen.getByText('5'))
+    fireEvent.click(screen.getByText("C'est bon"))
+    expect(onValider).toHaveBeenCalledWith(1.5)
+  })
+
+  it('ne valide rien quand tout est effacé', () => {
+    const onValider = ouvrir()
+    fireEvent.click(screen.getByText('7'))
+    fireEvent.click(screen.getByLabelText('Effacer'))
+    fireEvent.click(screen.getByText("C'est bon"))
+    expect(onValider).not.toHaveBeenCalled()
+  })
+
+  it('s’ouvre en tapant sur le gros chiffre', () => {
+    render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    fireEvent.click(screen.getByLabelText('Changer à faire'))
+    expect(screen.getByText("C'est bon")).toBeTruthy()
   })
 })

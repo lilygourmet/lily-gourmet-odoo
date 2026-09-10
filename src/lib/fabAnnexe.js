@@ -403,6 +403,97 @@ export function estEtapeCreuse(noeud) {
 }
 
 /**
+ * L'article de tête vu comme un nœud de recette. L'API ne donne `recette` et
+ * `tourneeTaille` qu'aux COMPOSANTS ; à la tête, la recette c'est la liste des
+ * composants pour une fournée. Sans cette mise à plat, l'écran simple aurait
+ * deux cas à traiter partout — et c'est comme ça qu'on écrit des bugs.
+ */
+export function enNoeud(article) {
+  if (!article || article.recette) return article
+  return {
+    ...article,
+    tourneeTaille: article.tournee,
+    recette: enfantsDe(article).map(c => ({
+      produit: c.produit, qty: c.besoin, unite: c.unite,
+    })),
+  }
+}
+
+/**
+ * TOUT ce qu'il faut pour la quantité choisie, en une seule liste : ce qui se
+ * fabrique (avec son stock et son manque) puis ce qui se pèse.
+ *
+ * ⚠️ Les deux ne viennent pas du même endroit et ne sont pas comptés sur la
+ * même base. Les composants fabriqués valent pour `pourQuantite` (ce que le
+ * serveur a prévu d'en produire), les lignes de recette pour une fournée. Les
+ * mélanger sans convertir, c'était afficher la dose d'une fournée au-dessus
+ * des besoins de deux — et sous une préparation ouverte depuis un gâteau, les
+ * matières premières disparaissaient tout simplement (le serveur ne les
+ * renvoie qu'à la tête).
+ */
+export function ingredientsPour(noeud, quantite) {
+  const base = noeud?.pourQuantite || noeud?.tourneeTaille || 0
+  const fabriques = enfantsDe(noeud)
+    .map(c => (base > 0 && quantite !== base ? echelle(c, quantite / base) : c))
+  const dejaLa = new Set(fabriques.map(c => c.produit))
+  const parRecette = noeud?.tourneeTaille || 0
+  const fois = parRecette > 0 ? quantite / parRecette : 1
+  const peses = (noeud?.recette || [])
+    .filter(l => !dejaLa.has(l.produit))
+    .map(l => ({
+      produit: l.produit, unite: l.unite, pese: true,
+      besoin: Math.round(Number(l.qty) * fois * 1000) / 1000,
+    }))
+  return [...fabriques, ...peses]
+}
+
+/**
+ * L'étape de DÉCOUPE : une plaque qu'on coupe en 13 biscuits.
+ *
+ * Elle se reconnaît à trois signes réunis — un seul ingrédient, qui se
+ * fabrique, et qui donne PLUSIEURS pièces. Ce n'est pas une étape creuse : il
+ * y a une décision à prendre, « je fais 4 plaques et j'en coupe 26 » (Layla,
+ * 2026-09-10). L'écran simple la montre alors sur le MÊME écran que la plaque,
+ * avec deux chiffres au lieu d'un.
+ *
+ * Rend `{ enfant, parPiece }`, ou null quand ce n'est pas une découpe.
+ */
+export function decoupeDe(noeud) {
+  const enfants = enfantsDe(noeud)
+  if (enfants.length !== 1) return null
+  const enfant = enfants[0]
+  if (!enfant.fabrique) return null
+  // Des pièces des DEUX côtés : « 3 920 g de caramel font 2 800 g de crème »
+  // n'est pas une découpe, et le double chiffre n'y voudrait rien dire.
+  const piece = u => /^u$/i.test(String(u || '').trim())
+  if (!piece(noeud?.unite) || !piece(enfant.unite)) return null
+  const ligne = (noeud?.recette || [])[0]
+  const sortie = noeud?.tourneeTaille || 0
+  if (!(sortie > 0) || !(Number(ligne?.qty) > 0)) return null
+  const parPiece = sortie / Number(ligne.qty)
+  return parPiece > 1 ? { enfant, parPiece: Math.round(parPiece * 1000) / 1000 } : null
+}
+
+/**
+ * Ce que la découpe fait des plaques : combien y passent, combien restent.
+ *
+ * `cuites` sont celles qu'on fait maintenant, `stock` celles déjà au
+ * congélateur. Couper plus que ce qu'on a n'est pas interdit — l'écran le dit,
+ * il ne bloque pas : le pâtissier voit parfois des plaques que le stock Odoo
+ * ignore.
+ */
+export function partageDecoupe({ cuites = 0, coupes = 0, parPiece = 0, stock = 0 }) {
+  const rond = x => Math.round(x * 100) / 100
+  const utilisees = parPiece > 0 ? rond(coupes / parPiece) : 0
+  const dispo = Math.max(0, cuites) + Math.max(0, stock)
+  return {
+    utilisees,
+    gardees: rond(Math.max(0, dispo - utilisees)),
+    manque: rond(Math.max(0, utilisees - dispo)),
+  }
+}
+
+/**
  * Ce qu'une quantité veut dire en vrai, sous le gros chiffre.
  * « 4 plaques » → « 2 800 g de pâte » ; « 13 biscuits » → « 1 plaque ».
  * Rien à dire ? on ne dit rien, plutôt qu'une phrase pour meubler.
@@ -430,7 +521,7 @@ export function enClair(noeud, quantite) {
 }
 
 /** « SM. Biscuit a la cuillere (plaque) » → « plaque ». */
-const nomCourt = nom => {
+export const nomCourt = nom => {
   const n = String(nom || '').replace(/^\s*(\[[^\]]*\]\s*)?(SM|MP|MI|GS|RA|GM|CD|E|F|V)[-./\s]\s*/i, '')
   const par = n.match(/\(([^)]+)\)\s*$/)
   return (par ? par[1] : n).trim().toLowerCase()
