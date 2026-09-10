@@ -350,19 +350,6 @@ function lignesPour(bom, produit) {
  * « mousse » : celles-là se cochent une à une. À l'inverse, le craquant et les
  * biscuits ne sont JAMAIS figés : six royals demandent six fois la pesée.
  */
-/**
- * Ce qui ne se fabrique QUE par tournées entières : un cadre se remplit, une
- * plaque s'étale, un biscuit se cuit d'un bloc. « Le biscuit ne peut pas se
- * faire en demi tournée » (Layla, 2026-09-10). Tout le reste — les crèmes, les
- * mousses, les montages — se fait très bien en moitié.
- *
- * ⚠️ Même règle côté écran (`echelle`, les boutons « Je fais ») : elle est
- * répétée là-bas plutôt qu'importée, pour ne pas tirer toute la bibliothèque
- * du navigateur dans la fonction serveur.
- */
-export const parTourneeEntiere = nom =>
-  /\b(cadres?|plaques?|biscuits?)\b/i.test(String(nom || ''))
-
 const estFige = (nom, figes) =>
   // ⚠️ Comparaison NETTOYÉE, jamais brute : Odoo écrit « MP- Lait UHT » avec
   // une espace INSÉCABLE. Un `includes()` sur le nom brut disait « non » sur
@@ -453,8 +440,11 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
     // le pâtissier doit la voir pour la faire.
     if (profondeur > 0 && !fige && !fabrique) return null
 
+    // `entier` : ce qui se cuit d'un bloc — un cadre, une plaque, un biscuit.
+    // L'écran s'en sert pour savoir s'il propose « juste ce qu'il manque » ou
+    // le bloc entier (Layla, 2026-09-10).
     const c = { produit: nom, unite: uniteDe(p), besoin, stock, dejaFait, fabrique, fige, ok,
-      entier: parTourneeEntiere(nom) }
+      entier: /\b(cadres?|plaques?|biscuits?)\b/i.test(nom) }
 
     // Tout ce qui se fabrique porte sa recette et sa descendance, MÊME en
     // stock : Layla veut pouvoir ouvrir un composant vert pour en préparer
@@ -499,9 +489,9 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
         // suivre » (Layla, 2026-09-09) — 29 gâteaux, 29 fonds, pas 58.
         // Toujours arrondi vers le HAUT : il faut couvrir le besoin, sinon
         // le montage se bloque à la dernière pièce.
-        // ⚠️ Sauf ce qui se cuit d'un bloc : là, c'est la tournée ENTIÈRE.
-        const pas = c.entier ? 1 : 0.5
-        c.tournees = Math.max(pas, Math.ceil(manque / parTournee / pas) * pas)
+        // ⚠️ Toujours des fournées ENTIÈRES : plus de demi nulle part
+        // (Layla, 2026-09-10).
+        c.tournees = Math.max(1, Math.ceil(manque / parTournee))
         c.produira = c.tournees * parTournee
       } else {
         // Rien à combler : on ouvre pour prendre de l'avance, donc une
@@ -911,7 +901,7 @@ export default async function handler(req, res) {
           produit: a.produit, libelle: a.libelle || a.produit,
           photo: a.photo || gateauDe(a.produit),
           unite: uniteDe(p), stock, mini: a.mini, maxi: a.maxi, tournee: a.tournee,
-          dejaFait, reste, entier: parTourneeEntiere(a.produit),
+          dejaFait, reste,
           etat: stock <= 0 ? 'rupture' : 'refaire',
         })
         continue
@@ -931,7 +921,7 @@ export default async function handler(req, res) {
         photo: a.photo || gateauDe(a.produit) || a.produit,
         unite: uniteDe(p),
         stock, mini: a.mini, maxi: a.maxi, tournee: a.tournee,
-        dejaFait, reste, entier: parTourneeEntiere(a.produit),
+        dejaFait, reste,
         etat: stock <= 0 ? 'rupture' : 'refaire',
         figes: a.figes || [],
         figesNom: a.figes_nom || 'Monté sur place',

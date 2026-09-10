@@ -176,15 +176,12 @@ export function tourneesSuggerees(article) {
   // 70 tiramisus pour une tournée de 140, et 2,775 kg de sirop pour 5,55.
   // (Vu le 2026-09-09.)
   if (!(manque > 0)) return 1
-  // Au demi près, SANS JAMAIS DÉPASSER le maxi : le suprême amandes 20 cm a un
-  // maxi de 33 pour une tournée de 22 — il y faut une tournée et demie.
-  // On arrondit vers le BAS : mieux vaut proposer un peu moins que de remplir
-  // le congélateur au-delà du maxi. « Sinon on écrira à la main »
-  // (Layla, 2026-09-09).
-  // ⚠️ Un cadre, une plaque, un biscuit ne se font pas en demi : tournées
-  // entières seulement (Layla, 2026-09-10).
-  const pas = parTourneeEntiere(article) ? 1 : 0.5
-  return Math.max(pas, Math.floor(manque / t / pas) * pas)
+  // SANS JAMAIS DÉPASSER le maxi : on arrondit vers le BAS, mieux vaut
+  // proposer un peu moins que de remplir le congélateur au-delà. « Sinon on
+  // écrira à la main » (Layla, 2026-09-09).
+  // Et toujours des fournées ENTIÈRES : plus de demi nulle part
+  // (Layla, 2026-09-10).
+  return Math.max(1, Math.floor(manque / t))
 }
 
 /**
@@ -218,10 +215,13 @@ export function foisDuNoeud(c) {
 }
 
 /**
- * Ce qui ne se fabrique QUE par tournées entières : un cadre se remplit, une
+ * Ce qui ne se fabrique QUE par blocs entiers : un cadre se remplit, une
  * plaque s'étale, un biscuit se cuit d'un bloc. « Le biscuit ne peut pas se
- * faire en demi tournée » (Layla, 2026-09-10). Le serveur pose le drapeau
- * `entier` ; cette fonction sert aux articles qui n'en ont pas encore.
+ * faire en demi tournée » (Layla, 2026-09-10).
+ *
+ * ⚠️ Sert maintenant à UNE seule chose : décider si la fiche d'un composant
+ * propose « juste ce qu'il manque » (une crème, une mousse) ou le bloc entier.
+ * Le compte des fournées, lui, est entier pour tout le monde.
  */
 export const parTourneeEntiere = c =>
   c?.entier ?? /\b(cadres?|plaques?|biscuits?)\b/i.test(String(c?.produit || ''))
@@ -249,10 +249,9 @@ function echelle(c, facteur) {
       out.tournees = 1
       out.produira = Math.max(0, Math.round((besoin - dispo) * 1000) / 1000)
     } else {
-      // Au demi près, comme le serveur : la quantité suit celle du gâteau.
-      // Sauf ce qui se cuit d'un bloc : là, c'est la tournée ENTIÈRE.
-      const pas = parTourneeEntiere(c) ? 1 : 0.5
-      out.tournees = Math.max(pas, Math.ceil((besoin - dispo) / c.tourneeTaille / pas) * pas)
+      // Toujours des fournées ENTIÈRES : plus de demi nulle part
+      // (Layla, 2026-09-10).
+      out.tournees = Math.max(1, Math.ceil((besoin - dispo) / c.tourneeTaille))
       out.produira = out.tournees * c.tourneeTaille
     }
   }
@@ -309,7 +308,12 @@ export function bloquants(noeud, dejaFaits) {
   // quantité retapée sans « c'est fait » est un brouillon, pas une fabrication.
   // Voir `declares()`.
   return enfantsDe(noeud)
-    .filter(c => !c.ok && c.fabrique && !faits.has(c.produit))
+    // ⚠️ Ce qui a DÉJÀ été déclaré aujourd'hui ne bloque plus — même si la
+    // quantité déclarée ne couvre pas tout. L'écran l'affiche en vert
+    // (« 2 u fait · en attente de validation ») et le verrou, lui, le comptait
+    // encore comme manquant : « ça doit me laisser valider vu que j'ai marqué
+    // comme fait la base » (Layla, 2026-09-10).
+    .filter(c => !c.ok && c.fabrique && !(c.dejaFait > 0) && !faits.has(c.produit))
     .map(c => c.produit)
 }
 

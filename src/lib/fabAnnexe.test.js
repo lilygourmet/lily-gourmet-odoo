@@ -175,21 +175,22 @@ describe('tourneesSuggerees', () => {
     expect(tourneesSuggerees({ tournee: 140, maxi: 140, stock: 228 })).toBe(1)
   })
 
-  it('arrondit au demi ce qu’il faut pour atteindre le maxi', () => {
-    expect(tourneesSuggerees({ tournee: 22, reste: 33 })).toBe(1.5)
+  it('des fournées ENTIÈRES, jamais une moitié', () => {
+    // 33 à rattraper sur des fournées de 22 : une seule. La demie a été
+    // retirée partout (Layla, 2026-09-10).
+    expect(tourneesSuggerees({ tournee: 22, reste: 33 })).toBe(1)
     expect(tourneesSuggerees({ tournee: 140, reste: 140 })).toBe(1)
     expect(tourneesSuggerees({ tournee: 140, reste: 280 })).toBe(2)
   })
 
-  it('jamais moins d’une demi-tournée quand il reste un fond à faire', () => {
-    expect(tourneesSuggerees({ tournee: 140, reste: 3 })).toBe(0.5)
+  it('jamais moins d’une fournée quand il reste un fond à faire', () => {
+    expect(tourneesSuggerees({ tournee: 140, reste: 3 })).toBe(1)
   })
 
   it('ne dépasse JAMAIS le maxi : on arrondit vers le bas', () => {
-    // 25 pièces à rattraper, une tournée de 14 : une tournée et demie (21)
-    // et non deux (28) — on ne fabrique pas au-delà du maxi.
-    expect(tourneesSuggerees({ tournee: 14, reste: 25 })).toBe(1.5)
-    expect(tourneesSuggerees({ tournee: 14, reste: 41 })).toBe(2.5)
+    // 25 pièces à rattraper, une fournée de 14 : une seule (14), pas deux (28).
+    expect(tourneesSuggerees({ tournee: 14, reste: 25 })).toBe(1)
+    expect(tourneesSuggerees({ tournee: 14, reste: 41 })).toBe(2)
   })
 })
 
@@ -234,11 +235,11 @@ describe('pourFois — les composants suivent la quantité', () => {
     }],
   }
 
-  it('propose une demi-tournée de composant pour une demi-tournée de gâteau', () => {
+  it('le besoin suit le gâteau, mais la fournée reste entière', () => {
     const c = pourFois(gateau, 0.5).composants[0]
-    expect(c.besoin).toBe(29)
-    expect(c.tournees).toBe(0.5)
-    expect(c.produira).toBe(29)
+    expect(c.besoin).toBe(29)          // 29 gâteaux, 29 fonds
+    expect(c.tournees).toBe(1)         // mais on ne fait pas une demi-fournée
+    expect(c.produira).toBe(58)
   })
 
   it('arrondit au demi SUPÉRIEUR : le besoin doit être couvert', () => {
@@ -362,14 +363,14 @@ describe('descendre — la quantité réglée suit dans les fiches du dessous', 
   })
 })
 
-describe('parTourneeEntiere — ce qui ne se fait pas en demi', () => {
-  it('un cadre, une plaque, un biscuit : tournées entières', () => {
+describe('parTourneeEntiere — ce qui se cuit d’un bloc', () => {
+  it('un cadre, une plaque, un biscuit', () => {
     expect(parTourneeEntiere({ produit: 'SM- cadre foret noir grand Production' })).toBe(true)
     expect(parTourneeEntiere({ produit: 'SM. Biscuit a la cuillere (plaque)' })).toBe(true)
     expect(parTourneeEntiere({ produit: 'SM. Biscuit brownie 5 pers' })).toBe(true)
   })
 
-  it('une crème, une mousse, un montage : la moitié est permise', () => {
+  it('une crème, une mousse, un montage : non', () => {
     expect(parTourneeEntiere({ produit: 'SM. Crème légère vanille citron' })).toBe(false)
     expect(parTourneeEntiere({ produit: 'SM- Fond Citron Framboise (5)' })).toBe(false)
     expect(parTourneeEntiere({ produit: 'SM- Tiramisu indiv' })).toBe(false)
@@ -379,10 +380,25 @@ describe('parTourneeEntiere — ce qui ne se fait pas en demi', () => {
     expect(parTourneeEntiere({ produit: 'SM. Biscuit brownie', entier: false })).toBe(false)
     expect(parTourneeEntiere({ produit: 'SM- Cheesecake nature', entier: true })).toBe(true)
   })
+})
 
-  it('la suggestion d’un biscuit reste un compte rond', () => {
-    // 25 plaques à rattraper sur des tournées de 14 : une seule, pas 1,5.
-    expect(tourneesSuggerees({ produit: 'SM. Biscuit brownie 5 pers', tournee: 14, reste: 25 })).toBe(1)
-    expect(tourneesSuggerees({ produit: 'SM- Fond Citron Framboise (5)', tournee: 14, reste: 25 })).toBe(1.5)
+describe('le verrou « c’est fait »', () => {
+  const flan = {
+    produit: 'SM- flan vanille 20 cm',
+    composants: [{
+      produit: 'SM- base flan vanille 20 cm',
+      fabrique: true, ok: false, besoin: 2, stock: 0, dejaFait: 2,
+    }],
+  }
+
+  it('ce qui est DÉJÀ déclaré ne bloque plus', () => {
+    // L'écran l'affiche en vert « 2 u fait · en attente de validation » : le
+    // verrou doit dire la même chose (Layla, 2026-09-10).
+    expect(bloquants(flan, [])).toEqual([])
+  })
+
+  it('mais ce qui n’est ni en stock ni déclaré bloque toujours', () => {
+    const rien = { ...flan, composants: [{ ...flan.composants[0], dejaFait: 0 }] }
+    expect(bloquants(rien, [])).toEqual(['SM- base flan vanille 20 cm'])
   })
 })

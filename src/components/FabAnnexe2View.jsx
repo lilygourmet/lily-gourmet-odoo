@@ -717,11 +717,10 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     : foisDuNoeud(noeud)
   const fois = faits[noeud.produit]?.fois ?? foisConseille
   const majFois = f => setFaits(x => ({ ...x, [noeud.produit]: { fois: Math.max(0.01, Math.round(f * 10000) / 10000), brouillon: true } }))
-  // Un cadre, une plaque, un biscuit : tournées ENTIÈRES, pas de demi
-  // (Layla, 2026-09-10).
+  // Toujours des fournées ENTIÈRES : plus de demi (Layla, 2026-09-10).
   const pasFois = aLaQte
     ? (noeud.unite === 'u' ? 1 : /^kg$/i.test(noeud.unite) ? 0.1 : 10) / parRecette
-    : parTourneeEntiere(noeud) ? 1 : 0.5
+    : 1
 
   // ⚠️ LA QUANTITÉ DOIT SUIVRE. Ce que l'API a calculé vaut pour la fournée
   // qu'elle proposait ; dès que le pâtissier change le nombre de tournées, ses
@@ -974,11 +973,11 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
 
   // Les raccourcis « Je fais » ne proposent QUE ce qui ne dépasse pas le maxi :
   // au-delà, on remplirait le congélateur pour rien. Le choix suggéré reste
-  // proposé même s'il déborde (une demi-tournée est le minimum faisable), et
+  // proposé même s'il déborde (une fournée est le minimum faisable), et
   // celui déjà choisi ne disparaît pas sous le doigt. Pour le reste, la case
   // « quantité voulue » juste en dessous : « sinon on écrira à la main »
   // (Layla, 2026-09-09).
-  const choixTournees = (parTourneeEntiere(brut) ? [1, 2, 3] : [0.5, 1, 1.5, 2, 3]).filter(f =>
+  const choixTournees = [1, 2, 3, 4].filter(f =>
     f === foisArticle
     || f === tourneesSuggerees(brut)
     || !(brut.reste > 0)
