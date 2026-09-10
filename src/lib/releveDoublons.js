@@ -91,7 +91,7 @@ const numerosContraires = (a, b) => {
 }
 // Un nom ne sert à comparer que s'il est un peu consistant : au moins 2 mots et 6 lettres.
 // Sinon (« REMISE CHEQUE A ENC 47106191 » → rien d'utile) on comparerait du bruit.
-const nomFiable = n => !!n && n.split(' ').length >= 2 && n.replace(/ /g, '').length >= 6
+export const nomFiable = n => !!n && n.split(' ').length >= 2 && n.replace(/ /g, '').length >= 6
 
 // Une remise de chèques, écrite « REMISE CHEQUE A ENC <n°> » par les deux banques.
 export function estRemiseCheque(label) {

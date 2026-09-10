@@ -330,3 +330,30 @@ describe('reconcileEnvelopes — orthographe proche du nom de la cliente', () =>
     expect(results[0].status).toBe('absent')
   })
 })
+
+// Vécu : UN virement de 600 dh de LEBDAR NAWAL rapproché à DEUX caisses, dont aucune
+// n'était la sienne. Le repli « virement instantané du bon jour » ignorait le nom.
+describe('reconcileEnvelopes — repli instantané et nom d\'une autre cliente', () => {
+  const ligne = { credit: 600, dateIso: '2026-06-02', type: 'virement_recu', label: 'VIR INST RECU LEBDAR NAWAL' }
+  const caisse = {
+    id: 'M1', amount_cash: 600, payment_method: 'virement',
+    releve_status: null, session_date: '2026-06-03', virement_client: 'Maryam el bairi',
+  }
+
+  it('ne prend pas le virement d\'une autre cliente', () => {
+    const { results } = reconcileEnvelopes([caisse], [ligne], {})
+    expect(results[0].status).toBe('absent')
+  })
+
+  it('garde le repli quand le libellé ne porte aucun nom', () => {
+    const anonyme = { ...ligne, label: 'VIR INST RECU 2128322 20260602129237' }
+    const { results } = reconcileEnvelopes([caisse], [anonyme], {})
+    expect(results[0].status).toBe('trouve')
+  })
+
+  it('rapproche toujours la vraie cliente', () => {
+    const sienne = { ...caisse, id: 'L1', virement_client: 'Nawal Lebdar' }
+    const { results } = reconcileEnvelopes([sienne], [ligne], {})
+    expect(results[0].status).toBe('trouve')
+  })
+})
