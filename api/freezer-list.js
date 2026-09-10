@@ -2388,9 +2388,18 @@ export default async function handler(req, res) {
     // recette du glaçage + stock des ingrédients
     if (req.query.mode === 'ordres') {
       const uid = await odooAuth()
-      const mos = await odooSearchRead(uid, 'mrp.production',
-        [['name', 'like', 'WHLVP/MO/'], ['state', 'in', ['confirmed', 'progress', 'to_close']]],
-        ['name', 'product_id', 'state'], { limit: 500, order: 'id desc' })
+      // ⚠️ PAS de plafond à 500 : le labo en a 820 d'ouverts. Une coche posée
+      // sur un ordre plus ancien que les 500 derniers était ignorée par
+      // « À valider », et le travail disparaissait sans un mot. On lit page
+      // par page jusqu'au bout. (Layla, 2026-09-10.)
+      const mos = []
+      for (let debut = 0; debut < 20000; debut += 500) {
+        const page = await odooSearchRead(uid, 'mrp.production',
+          [['name', 'like', 'WHLVP/MO/'], ['state', 'in', ['confirmed', 'progress', 'to_close']]],
+          ['name', 'product_id', 'state'], { limit: 500, offset: debut, order: 'id desc' })
+        mos.push(...page)
+        if (page.length < 500) break
+      }
       return res.status(200).json({
         ordres: mos.map(m => ({ name: m.name, produit: Array.isArray(m.product_id) ? m.product_id[1] : '', etat: m.state })),
       })
