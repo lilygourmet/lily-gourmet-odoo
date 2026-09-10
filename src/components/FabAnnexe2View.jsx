@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
   loadHistoriqueAnnexe, parJour, bloquants, declares, parGateauMere, noeudAu,
   declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe, foisDuNoeud,
-  lignesRecette, enfantsPour, parTourneeEntiere } from '../lib/fabAnnexe'
+  enfantsPour, parTourneeEntiere } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
 import { todayISO } from '../lib/dates'
@@ -266,15 +266,46 @@ function LigneQte({ nom, valeur, unite, onValeur, gras }) {
   )
 }
 
-function Recette({ noeud, lignes, fois, onFois }) {
+/**
+ * LA recette, en une seule liste — pas deux. Les ingrédients qu'on pèse et les
+ * morceaux qu'on fabrique se suivent dans l'ordre de la nomenclature ; ceux
+ * qu'il faut faire portent leur pastille, leur stock et s'ouvrent d'un doigt.
+ * « Et pas 2 recettes » (Layla, 2026-09-10).
+ */
+function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir }) {
   const parRecette = noeud.tourneeTaille || 1
+  const parNom = new Map((enfants || []).map(c => [c.produit, c]))
+  const dejaFaits = declares(faits)
   return (
     <div className="divide-y divide-cream-deep/50">
       {lignes.map((l, i) => {
         const f = facteurAtelier(l.produit)
-        return (
-          <LigneQte key={i} nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
+        const c = parNom.get(l.produit)
+        const ligne = (
+          <LigneQte nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
             onValeur={v => onFois(v / f / l.qty)} />
+        )
+        if (!c || !c.fabrique) return <div key={i}>{ligne}</div>
+        const fait = c.dejaFait > 0 || dejaFaits.includes(c.produit)
+        const ok = c.ok || fait
+        return (
+          <div key={i}>
+            {ligne}
+            <button onClick={() => onOuvrir(c.produit)}
+              className="w-full flex items-center gap-2 pl-4 pr-3 pb-2 -mt-1 text-left
+                         hover:bg-cream-deep/20">
+              <Pastille etat={ok ? 'ok' : 'manque'} />
+              <span className="flex-1 min-w-0 text-[11.5px] text-ink-mute">
+                {fait
+                  ? <span className="text-success font-bold">
+                      {c.dejaFait > 0 ? `${qte(c.dejaFait, c.unite)} fait` : 'fait'} · en attente de validation
+                    </span>
+                  : <>stock {qte(c.stock, c.unite)}{ok ? '' : ` · à faire ${qte(c.produira, c.unite)}`}</>}
+              </span>
+              <span className="text-[11.5px] text-ink-mute shrink-0">recette</span>
+              <span className="text-[15px] text-ink-mute">›</span>
+            </button>
+          </div>
         )
       })}
       <div className="bg-gold/10">
@@ -980,12 +1011,13 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
             </button>
           )}
 
-          <Recette noeud={noeud} lignes={lignesRecette(noeud, enfants)}
-            fois={fois} onFois={majFois} />
+          <Recette noeud={noeud} lignes={noeud.recette || []}
+            fois={fois} onFois={majFois} enfants={enfants} faits={faits}
+            onOuvrir={p => setChemin([...chemin, p])} />
         </>
       )}
 
-      {figes.length > 0 && (
+      {racine && figes.length > 0 && (
         <>
           <Titre>{article.figesNom} — quantité figée</Titre>
           <div className="flex items-center gap-3 px-4 py-2.5 bg-cream-deep/25">
@@ -1012,8 +1044,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
         </>
       )}
 
-      {autres.length > 0 && <Titre>{racine ? 'Les composants' : "Ce qu'il faut avoir"}</Titre>}
-      {autres.map(c => {
+      {racine && autres.length > 0 && <Titre>Les composants</Titre>}
+      {racine && autres.map(c => {
         // « fait » vient du serveur (ce qui est déclaré du jour), pas de la
         // mémoire de l'écran : sortir de la page et revenir ne l'efface plus.
         const fait = c.dejaFait > 0 || declares(faits).includes(c.produit)
@@ -1050,7 +1082,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
         )
       })}
 
-      {achetes.length > 0 && (
+      {racine && achetes.length > 0 && (
         <>
           <Titre>Aussi dans la recette</Titre>
           {achetes.map((f, i) => (
