@@ -768,7 +768,21 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       valeur: !enBloc && /^u$/i.test(unite) && parPiece < 1 && tourneeTaille > 0
         ? `1 tournée pour ${nb(Math.round(tourneeTaille / parPiece))}`
         : qteFine(parPiece * parCadre, unite),
+      // Ce que cette ligne pèse, pour le total du bas. `null` quand elle se
+      // compte en pièces : on n'additionne pas des grammes et des plaques.
+      poids: estKg(unite) || /^(g|gr)$/i.test(String(unite || '').trim())
+        ? enGrammes(parPiece * parCadre, unite) : null,
     })
+
+    // Le poids total de la recette — « et le total du poids de la recette »
+    // (Layla, 2026-09-10). On ne le donne que si TOUT se pèse : une plaque qui
+    // pose 8 biscuits déjà faits n'a pas de poids qui veuille dire quelque
+    // chose.
+    const avecTotal = p => {
+      const poids = p.lignes.map(l => l.poids)
+      if (!poids.length || poids.some(x => x === null)) return p
+      return { ...p, total: qte(poids.reduce((a, b) => a + b, 0), 'g') }
+    }
 
     if (racine) {
       // ⚠️ `article.tournee` est DÉJÀ le total : `pourFois` l'a multiplié par
@@ -780,26 +794,26 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       // veut savoir ce qu'il en met sur une pièce.
       const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
       if (!(total > 0) || !lignes.length) return null
-      return {
+      return avecTotal({
         titre: enBloc
           ? `Pour 1 ${motBloc} = ${qte(parCadre, brut.unite)}`
           : `Pour 1 ${propre(article.libelle)}`,
         lignes: lignes.map(c => dose(
           nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
           (c.besoin * facteurAtelier(c.produit)) / total, c.unite, c.tourneeTaille)),
-      }
+      })
     }
     if (!(noeud.recette || []).length) return null
     // La taille de tournée d'un composant se lit dans la liste du dessous.
     const tailleDe = nom => (enfants || []).find(c => c.produit === nom)?.tourneeTaille
-    return {
+    return avecTotal({
       titre: enBloc
         ? `Pour 1 ${motBloc} = ${qte(parCadre, noeud.unite)}`
         : `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`,
       lignes: noeud.recette.map(l => dose(
         nomAtelier(l.produit),
         (l.qty * facteurAtelier(l.produit)) / parRecette, l.unite, tailleDe(l.produit))),
-    }
+    })
   })()
 
   // Les raccourcis « Je fais » ne proposent QUE ce qui ne dépasse pas le maxi :
@@ -1137,6 +1151,13 @@ function Cadre({ children, pied, onRetour, photo, titre, sous, user, onLogout, o
                 <span>{l.valeur}</span>
               </div>
             ))}
+            {pied.total && (
+              <div className="flex items-baseline gap-3 text-[11.5px] font-bold
+                              mt-1 pt-1 border-t border-cream-deep/60">
+                <span className="flex-1 min-w-0">Poids total</span>
+                <span>{pied.total}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
