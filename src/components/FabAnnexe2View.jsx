@@ -233,7 +233,7 @@ const Titre = ({ children }) => (
 // recette en veut 1,2, c'est faire une recette et demie — pas forcer sur le
 // sucre.
 // ------------------------------------------------------------
-function LigneQte({ nom, valeur, unite, onValeur, gras }) {
+function LigneQte({ nom, valeur, unite, onValeur, gras, avant, dessous, serre }) {
   // On affiche ET on saisit en grammes ; la recette, elle, garde l'unité
   // d'Odoo — c'est elle qu'attend l'appelant.
   const u = uniteAffichee(unite)
@@ -251,9 +251,11 @@ function LigneQte({ nom, valeur, unite, onValeur, gras }) {
     onValeur(estKg(unite) ? v / 1000 : v)
   }
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5">
+    <div className={`flex items-center gap-3 px-4 ${serre ? 'pt-2.5 pb-2' : 'py-2.5'}`}>
+      {avant}
       <span className="flex-1 min-w-0">
         <span className={`text-[14px] ${gras ? 'font-extrabold' : ''}`}>{nom}</span>
+        {dessous}
       </span>
       <input value={txt} inputMode="decimal" aria-label={'Quantité de ' + nom}
         onChange={e => setTxt(e.target.value)} onBlur={valider}
@@ -281,30 +283,32 @@ function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir }) {
       {lignes.map((l, i) => {
         const f = facteurAtelier(l.produit)
         const c = parNom.get(l.produit)
-        const ligne = (
-          <LigneQte nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
-            onValeur={v => onFois(v / f / l.qty)} />
-        )
-        if (!c || !c.fabrique) return <div key={i}>{ligne}</div>
+        if (!c || !c.fabrique) {
+          return (
+            <LigneQte key={i} nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
+              onValeur={v => onFois(v / f / l.qty)} />
+          )
+        }
         const fait = c.dejaFait > 0 || dejaFaits.includes(c.produit)
         const ok = c.ok || fait
         return (
           <div key={i}>
-            {ligne}
-            <button onClick={() => onOuvrir(c.produit)}
-              className="w-full flex items-center gap-2 pl-4 pr-3 pb-2 -mt-1 text-left
-                         hover:bg-cream-deep/20">
-              <Pastille etat={ok ? 'ok' : 'manque'} />
-              <span className="flex-1 min-w-0 text-[11.5px] text-ink-mute">
-                {fait
-                  ? <span className="text-success font-bold">
-                      {c.dejaFait > 0 ? `${qte(c.dejaFait, c.unite)} fait` : 'fait'} · en attente de validation
-                    </span>
-                  : <>stock {qte(c.stock, c.unite)}{ok ? '' : ` · à faire ${qte(c.produira, c.unite)}`}</>}
-              </span>
-              <span className="text-[11.5px] text-ink-mute shrink-0">recette</span>
-              <span className="text-[15px] text-ink-mute">›</span>
-            </button>
+            <LigneQte serre nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
+              onValeur={v => onFois(v / f / l.qty)}
+              avant={<Pastille etat={ok ? 'ok' : 'manque'} />}
+              dessous={
+                <span className="flex items-baseline gap-2 text-[11.5px] text-ink-mute leading-tight">
+                  <span className="flex-1 min-w-0 truncate">
+                    {fait
+                      ? <span className="text-success font-bold">
+                          {c.dejaFait > 0 ? `${qte(c.dejaFait, c.unite)} fait` : 'fait'} · en attente de validation
+                        </span>
+                      : <>stock {qte(c.stock, c.unite)}{ok ? '' : ` · à faire ${qte(c.produira, c.unite)}`}</>}
+                  </span>
+                  <button onClick={() => onOuvrir(c.produit)}
+                    className="shrink-0 hover:text-bordeaux">recette ›</button>
+                </span>
+              } />
           </div>
         )
       })}
