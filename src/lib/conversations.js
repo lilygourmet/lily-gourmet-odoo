@@ -778,18 +778,38 @@ export async function countDevisInternetNonTraites() {
 
 // Numéros de commande (S…) déjà mentionnés dans NOS messages WhatsApp (agent/system).
 // Sert à savoir si un client a été contacté pour CETTE commande précise.
-export async function loadContactedOrderRefs() {
+// Les 9 derniers chiffres d'un numéro — la seule partie qui se compare.
+export const clePhone = p => String(p || '').replace(/\D/g, '').slice(-9)
+
+/**
+ * ⚠️ On NE CHARGE PLUS toute la table pour répondre « ce devis a-t-il été
+ * contacté ? ». Supabase s'arrête à 1000 lignes SANS PRÉVENIR : sur 36 073
+ * messages et 2 230 conversations, l'écran et la pastille tombaient chacun sur
+ * un millier DIFFÉRENT et se contredisaient — la pastille annonçait 3 devis à
+ * traiter, l'écran n'en montrait que 2 (Layla, 2026-09-10). On demande
+ * désormais exactement ce qu'on veut savoir, par paquets de 50.
+ */
+async function parPaquets(valeurs, taille, lire) {
+  const out = []
+  for (let i = 0; i < valeurs.length; i += taille) {
+    out.push(...await lire(valeurs.slice(i, i + taille)))
+  }
+  return out
+}
+
+// Parmi CES numéros de devis, ceux déjà cités dans un de nos messages.
+export async function loadContactedOrderRefs(noms = []) {
   const set = new Set()
-  // Borné aux 8000 messages les plus récents (id décroissant) : évite de charger
-  // TOUTE la table messages dans le navigateur ; les devis affichés sont récents.
-  const { data, error } = await supabase
-    .from('messages').select('body')
-    .in('sender_type', ['agent', 'system'])
-    .ilike('body', '%S%')
-    .order('id', { ascending: false })
-    .limit(8000)
-  if (error) return set
-  for (const m of data || []) {
+  const cibles = [...new Set((noms || []).map(n => String(n || '').trim().toUpperCase()).filter(Boolean))]
+  if (!cibles.length) return set
+  const lignes = await parPaquets(cibles, 50, async lot => {
+    const { data } = await supabase.from('messages').select('body')
+      .in('sender_type', ['agent', 'system'])
+      .or(lot.map(n => `body.ilike.%${n}%`).join(','))
+      .limit(1000)
+    return data || []
+  })
+  for (const m of lignes) {
     const matches = (m.body || '').match(/\bS\d{4,}\b/gi)
     if (matches) matches.forEach(s => set.add(s.toUpperCase()))
   }
@@ -798,12 +818,20 @@ export async function loadContactedOrderRefs() {
 
 // Téléphones (9 derniers chiffres) ayant déjà une conversation WhatsApp entamée.
 // Sert à masquer un « devis internet » dont le client est déjà en contact.
-export async function loadConversationPhoneKeys() {
-  const { data, error } = await supabase.from('conversations').select('client_phone')
+// Parmi CES numéros, ceux qui ont déjà une conversation WhatsApp. Même piège
+// des 1000 lignes que ci-dessus : on ne lit plus les 2 230 conversations.
+export async function loadConversationPhoneKeys(telephones = []) {
   const set = new Set()
-  if (error) return set
-  for (const c of data || []) {
-    const k = String(c.client_phone || '').replace(/\D/g, '').slice(-9)
+  const cles = [...new Set((telephones || []).map(clePhone).filter(k => k.length >= 9))]
+  if (!cles.length) return set
+  const lignes = await parPaquets(cles, 50, async lot => {
+    const { data } = await supabase.from('conversations').select('client_phone')
+      .or(lot.map(k => `client_phone.ilike.%${k}%`).join(','))
+      .limit(1000)
+    return data || []
+  })
+  for (const c of lignes) {
+    const k = clePhone(c.client_phone)
     if (k.length >= 9) set.add(k)
   }
   return set

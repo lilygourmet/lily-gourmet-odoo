@@ -1844,14 +1844,26 @@ async function countDevisInternetNonTraitesServer(res) {
     const phoneByPartner = new Map(partners.map(p => [p.id, phoneKey(p.mobile || p.phone)]))
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    // ⚠️ On demande EXACTEMENT ce qu'on veut savoir, pour ces devis-là. Lire
+    // les tables entières ne marchait pas : Supabase s'arrête à 1000 lignes
+    // SANS PRÉVENIR, et sur 36 073 messages et 2 230 conversations la pastille
+    // et l'écran tombaient chacun sur un millier différent — la pastille
+    // annonçait 3 devis à traiter là où l'écran n'en montrait que 2. Le devis
+    // manquant (S52390) avait bel et bien sa conversation et son message.
+    // (Layla, 2026-09-10.)
+    const noms = [...new Set(orders.map(o => String(o.name || '').toUpperCase()).filter(Boolean))]
+    const tels = [...new Set([...phoneByPartner.values()].filter(k => k.length >= 9))]
     const [env, tr, msgs, convs] = await Promise.all([
       supabase.from('devis_envois').select('order_num'),
       supabase.from('devis_traitements').select('order_num, action'),
-      // 8000 messages les plus récents (comme l'onglet) : sans .order/.limit,
-      // Supabase plafonne à 1000 messages NON triés → le badge ratait des devis
-      // déjà cités dans une conversation récente et les comptait à tort.
-      supabase.from('messages').select('body').in('sender_type', ['agent', 'system']).ilike('body', '%S%').order('id', { ascending: false }).limit(8000),
-      supabase.from('conversations').select('client_phone'),
+      noms.length
+        ? supabase.from('messages').select('body').in('sender_type', ['agent', 'system'])
+          .or(noms.map(n => `body.ilike.%${n}%`).join(',')).limit(1000)
+        : { data: [] },
+      tels.length
+        ? supabase.from('conversations').select('client_phone')
+          .or(tels.map(k => `client_phone.ilike.%${k}%`).join(',')).limit(1000)
+        : { data: [] },
     ])
     const envSet = new Set((env.data || []).map(e => e.order_num))
     const trSet = new Set((tr.data || []).filter(t => ['relance', 'confirme'].includes(t.action)).map(t => t.order_num))

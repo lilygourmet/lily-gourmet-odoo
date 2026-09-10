@@ -66,16 +66,25 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
   }, [])
   const [viewMode, setViewMode] = useState(isDesktop ? '4jours' : 'jour')  // jour | 4jours | semaine
   const WINDOW = viewMode === 'jour' ? 1 : viewMode === 'semaine' ? 7 : 4
+  // ⚠️ On demande ces deux choses POUR LES DEVIS AFFICHÉS seulement. Avant on
+  // lisait les tables entières, et Supabase s'arrêtant à 1000 lignes sans
+  // prévenir, l'écran et la pastille du menu ne voyaient pas les mêmes
+  // conversations : la pastille annonçait 3 devis à traiter là où l'écran n'en
+  // montrait que 2 (Layla, 2026-09-10).
   // N° de devis (S…) déjà cités dans une conversation = ce devis précis a été contacté.
   const [contactedRefs, setContactedRefs] = useState(() => new Set())
-  useEffect(() => {
-    loadContactedOrderRefs().then(setContactedRefs).catch(() => {})
-  }, [])
   // Téléphones (9 chiffres) ayant déjà une conversation WhatsApp → client déjà en contact.
   const [convPhones, setConvPhones] = useState(() => new Set())
+  const clefsDevis = devis.map(d => d.name).sort().join(',')
+  const clefsTel = devis.map(d => d.clientPhone).sort().join(',')
   useEffect(() => {
-    loadConversationPhoneKeys().then(setConvPhones).catch(() => {})
-  }, [])
+    if (!clefsDevis) return
+    loadContactedOrderRefs(clefsDevis.split(',')).then(setContactedRefs).catch(() => {})
+  }, [clefsDevis])
+  useEffect(() => {
+    if (!clefsTel) return
+    loadConversationPhoneKeys(clefsTel.split(',')).then(setConvPhones).catch(() => {})
+  }, [clefsTel])
   const [traitements, setTraitements] = useState({})
   function reloadTraitements() { loadDevisTraitements().then(setTraitements).catch(() => {}) }
   useEffect(() => { reloadTraitements() }, [])
