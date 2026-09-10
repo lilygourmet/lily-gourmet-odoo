@@ -57,6 +57,17 @@ async function sr(model, domain, fields, opts = {}) {
 // ------------------------------------------------------------
 const DUREE_RECETTES = 10 * 60 * 1000
 const _recettes = new Map()   // clé → { t, v }
+/** Dépose une valeur déjà connue dans le cache, sans aller la chercher. */
+function poserMemo(cle, valeur) {
+  _recettes.set(cle, { t: Date.now(), v: Promise.resolve(valeur) })
+}
+
+/** Cette clé est-elle en cache ET encore fraîche ? */
+function dejaEnCache(cle) {
+  const e = _recettes.get(cle)
+  return !!e && Date.now() - e.t < DUREE_RECETTES
+}
+
 function memo(cle, faire) {
   const e = _recettes.get(cle)
   if (e && Date.now() - e.t < DUREE_RECETTES) return e.v
@@ -179,6 +190,83 @@ function bomDe(cache, produit) {
     }))
   }
   return cache.boms.get(tmpl)
+}
+
+/**
+ * Charge D'AVANCE les articles et leurs recettes, par NIVEAUX et en masse.
+ *
+ * ⚠️ C'est ici que se jouaient les douze secondes du premier chargement :
+ * `produitParNom` et `bomDe` demandaient à Odoo un article, puis sa recette,
+ * puis ses lignes — un par un, en file indienne. Une cascade de treize
+ * gâteaux, c'est plus de cent cinquante allers-retours.
+ *
+ * On descend maintenant niveau par niveau : trois requêtes groupées par
+ * niveau, quatre niveaux, une douzaine en tout. Ce qui est lu est déposé dans
+ * le cache de dix minutes, exactement là où les fonctions d'origine iraient le
+ * chercher — elles n'ont donc plus rien à demander.
+ * (Layla, 2026-09-10 : « c'est trop lent à travailler ».)
+ */
+async function amorcerRecettes(cache, noms, niveaux = 5) {
+  let aVoir = [...new Set(noms.map(n => sansRef(n)).filter(Boolean))]
+  const vus = new Set()
+  for (let i = 0; i < niveaux && aVoir.length; i++) {
+    const neufs = aVoir.filter(n => !vus.has(n) && !dejaEnCache('p:' + n))
+    for (const n of aVoir) vus.add(n)
+    if (!neufs.length) break
+    // 1) les articles, par paquets — le nom peut désigner une variante
+    const bases = [...new Set(neufs.map(n => n.replace(/\s*\([^()]*\)\s*$/, '').trim()))]
+    const prods = []
+    for (let d = 0; d < bases.length; d += 300) {
+      prods.push(...await sr('product.product', [['name', 'in', bases.slice(d, d + 300)]],
+        CHAMPS_PRODUIT, { limit: 3000 }))
+    }
+    const parNet = new Map()
+    const parName = new Map()
+    for (const p of prods) {
+      parNet.set(net(p.display_name), p)
+      if (!parName.has(p.name)) parName.set(p.name, [])
+      parName.get(p.name).push(p)
+    }
+    const choisi = {}
+    for (const n of neufs) {
+      const memes = parName.get(n) || []
+      const p = memes.length === 1 ? memes[0]
+        : (parNet.get(net(n)) || memes[0] || null)
+      choisi[n] = p || null
+      poserMemo('p:' + n, p || null)
+    }
+    // 2) leurs recettes et leurs lignes, en deux requêtes
+    const tmpls = [...new Set(Object.values(choisi).filter(Boolean)
+      .map(p => p.product_tmpl_id[0]).filter(t => !dejaEnCache('b:' + t)))]
+    if (!tmpls.length) break
+    const boms = []
+    for (let d = 0; d < tmpls.length; d += 300) {
+      boms.push(...await sr('mrp.bom', [['product_tmpl_id', 'in', tmpls.slice(d, d + 300)]],
+        ['id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 3000 }))
+    }
+    const premier = new Map()      // un seul bom par modèle, comme `bomDe`
+    for (const b of boms) if (!premier.has(b.product_tmpl_id[0])) premier.set(b.product_tmpl_id[0], b)
+    const ids = [...premier.values()].map(b => b.id)
+    const lignes = []
+    for (let d = 0; d < ids.length; d += 300) {
+      lignes.push(...await sr('mrp.bom.line', [['bom_id', 'in', ids.slice(d, d + 300)]],
+        ['bom_id', 'product_id', 'product_qty', 'product_uom_id',
+          'bom_product_template_attribute_value_ids'], { limit: 20000 }))
+    }
+    const parBom = new Map()
+    for (const l of lignes) {
+      if (!parBom.has(l.bom_id[0])) parBom.set(l.bom_id[0], [])
+      parBom.get(l.bom_id[0]).push(l)
+    }
+    const suivants = []
+    for (const t of tmpls) {
+      const b = premier.get(t)
+      if (!b) { poserMemo('b:' + t, null); continue }
+      poserMemo('b:' + t, { ...b, lignes: parBom.get(b.id) || [] })
+      for (const l of parBom.get(b.id) || []) suivants.push(sansRef(l.product_id[1]))
+    }
+    aVoir = suivants
+  }
 }
 
 /** Le stock de plusieurs articles à l'annexe, en un seul appel. */
@@ -775,6 +863,10 @@ export default async function handler(req, res) {
         tournee: versUnite(b0.product_qty || 1, b0.product_uom_id?.[1], p0.uom_id[1]) || 1,
         figes: [], figes_nom: null, actif: true, horsCatalogue: true }]
     }
+
+    // Tout ce qu'on va lire, chargé d'avance et en masse : sans ça, la cascade
+    // demandait à Odoo un article puis une recette à la fois.
+    await amorcerRecettes(cache, voulus.map(a => a.produit))
 
     // Les produits et LEURS STOCKS d'un coup — deux requêtes Odoo, que le
     // catalogue en compte cinq ou deux cents. C'est tout ce dont la liste a
