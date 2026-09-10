@@ -66,6 +66,26 @@ function memo(cle, faire) {
   return v
 }
 
+/**
+ * Faut-il montrer cet article, et que reste-t-il à produire ?
+ *
+ * • Le mini est ATTEINT, pas seulement franchi : à 11 pour un mini de 11,
+ *   l'article se montre. Un mini à 0 veut dire « ne me montre qu'à zéro ».
+ * • ⚠️ On compare au DISPONIBLE — le stock plus ce qui a déjà été déclaré
+ *   aujourd'hui. Le stock d'Odoo ne monte qu'à la validation : sans ça, le
+ *   tiramisu 15 cm restait « à refaire » avec 3 en stock et 20 déjà déclarés
+ *   (Layla, 2026-09-10 : « si j'ai fait, enlever de la liste »).
+ * • ⚠️ Un stock NÉGATIF compte zéro : c'est un compteur faux, pas une dette.
+ *   La crème légère à −1 390 g réclamait 1 390 g pour un maxi de 0.
+ * • Une tournée COMMENCÉE reste à l'écran tant que le maxi n'est pas atteint :
+ *   c'est là qu'on voit le reliquat.
+ */
+export function etatArticle(a, stock, dejaFait = 0) {
+  const dispo = Math.max(0, stock || 0) + (dejaFait || 0)
+  const reste = Math.max(0, (a.maxi || 0) - dispo)
+  return { dispo, reste, aFaire: dispo <= (a.mini || 0) || (dejaFait > 0 && reste > 0) }
+}
+
 export function creerCache() {
   return { produits: new Map(), boms: new Map(), stocks: null }
 }
@@ -710,16 +730,7 @@ export default async function handler(req, res) {
       const stock = stocks[p.id] || 0
 
       const dejaFait = declare[a.produit] || 0
-      // On vise le MAXI, pas le mini : ce qui reste pour l'atteindre est le
-      // reliquat à faire (Layla, 2026-09-08).
-      const reste = Math.max(0, a.maxi - stock - dejaFait)
-
-      // Le mini est ATTEINT, pas seulement franchi : à 11 pour un mini de 11,
-      // l'article se montre (Layla, 2026-09-08). Au-dessus, il ne sort pas.
-      // Un mini à 0 (le caramel) veut alors dire « ne me montre qu'à zéro ».
-      // ⚠️ Et une tournée COMMENCÉE reste à l'écran tant que le maxi n'est pas
-      // atteint : c'est là qu'on voit ce qu'il reste à produire.
-      const aFaire = stock <= a.mini || (dejaFait > 0 && reste > 0)
+      const { reste, aFaire } = etatArticle(a, stock, dejaFait)
       if (!seul && !aFaire) continue
 
       // La liste n'affiche que l'état : ni recette, ni cascade, ni tailles.
