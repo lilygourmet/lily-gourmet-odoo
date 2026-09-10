@@ -86,6 +86,43 @@ export function etatArticle(a, stock, dejaFait = 0) {
   return { dispo, reste, aFaire: dispo <= (a.mini || 0) || (dejaFait > 0 && reste > 0) }
 }
 
+/**
+ * La taille lue dans le nom : « indiv » vaut 1, « 10 pers », « 20 cm » et
+ * « (5) » leur nombre. 0 quand il n'y en a pas.
+ */
+export const tailleDuNom = nom => {
+  const n = String(nom || '')
+  if (/\bindiv/i.test(n)) return 1
+  const m = n.match(/(\d+(?:[.,]\d+)?)\s*(?:cm|pers)\b/i) || n.match(/\((\d+)\)/)
+  return m ? Number(String(m[1]).replace(',', '.')) : 0
+}
+
+/** Le nom sans son préfixe ni sa taille : ce qui réunit les tailles d'un gâteau. */
+export const familleDuNom = nom => String(nom || '')
+  .replace(/^\s*(\[[^\]]*\]\s*)?sm\s*[-./]?\s*/i, '')
+  .replace(/\bindiv\w*|\d+(?:[.,]\d+)?\s*(?:cm|pers)\b|\(\d+\)/gi, '')
+  .replace(/\W+/g, ' ').trim().toLowerCase()
+
+/**
+ * Les AUTRES tailles de la même cuve, plus petites que celle qu'on lance.
+ * « D'un 10 pers on peut finir en 5 pers et en individuels, d'un 5 pers
+ * seulement en individuels » (Layla, 2026-09-07).
+ *
+ * La famille du catalogue fait foi quand elle est renseignée ; sinon elle se
+ * lit dans le nom — sans quoi il faudrait la saisir à la main pour chacun des
+ * quarante articles (Layla, 2026-09-10 : « branche-la à tous les articles avec
+ * des mousses »).
+ */
+export function autresTailles(catalogue, a) {
+  const fam = x => x.famille || familleDuNom(x.produit)
+  const rang = x => (x.famille ? (x.rang || 1) : tailleDuNom(x.produit))
+  const f = fam(a)
+  if (!f) return []
+  return (catalogue || [])
+    .filter(x => x.produit !== a.produit && x.actif !== false && fam(x) === f && rang(x) < rang(a))
+    .sort((x, y) => rang(y) - rang(x))
+}
+
 export function creerCache() {
   return { produits: new Map(), boms: new Map(), stocks: null }
 }
@@ -763,6 +800,15 @@ export default async function handler(req, res) {
         // dizaine d'allers-retours vers Odoo, et l'écran de fin multi-tailles
         // n'est pas encore fait. `detailTaille` est prêt pour ce jour-là.
         composants: await composantsDe(cache, p, a.tournee, a.figes || [], 0, [], lots, achetes, declare),
+        // Les tailles plus petites où finir la même cuve. Seulement quand il y
+        // a une cuve, justement : un article sans rien de figé n'a pas de
+        // reste à placer.
+        tailles: (a.figes || []).length
+          ? autresTailles(tout, a).map(x => ({
+            produit: x.produit, libelle: x.libelle || x.produit,
+            tournee: x.tournee, rang: x.rang || tailleDuNom(x.produit),
+          }))
+          : [],
       })
     }
 
