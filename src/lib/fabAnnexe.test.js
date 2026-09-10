@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { bloquants, noeudAu, enfantsDe, parGateauMere, parJour, tourneesSuggerees,
-  lignesRecette, pourFois, enfantsPour, noeudAu as descendre } from './fabAnnexe'
+  lignesRecette, pourFois, enfantsPour, noeudAu as descendre,
+  parTourneeEntiere } from './fabAnnexe'
 
 // Un tiramisu tel que l'API le renvoie, en plus court.
 const tiramisu = {
@@ -279,7 +280,10 @@ describe('enfantsPour — les sous-composants suivent, à tous les niveaux', () 
     expect(enfantsPour(fond, 14)[0].ok).toBe(true)
     const gros = enfantsPour(fond, 28)[0]
     expect(gros.ok).toBe(false)
-    expect(gros.tournees).toBe(0.5)           // 628 g manquants sur 4 400
+    // 628 g manquants sur 4 400 : une demi-tournée suffirait, mais un BISCUIT
+    // se cuit d'un bloc — c'est la plaque entière (Layla, 2026-09-10).
+    expect(gros.tournees).toBe(1)
+    expect(gros.produira).toBe(4400)
   })
 
   it('ne touche à rien quand la quantité ne bouge pas', () => {
@@ -336,24 +340,49 @@ describe('descendre — la quantité réglée suit dans les fiches du dessous', 
 
   it('la fiche ouvre sur la quantité annoncée, MÊME sans réglage à la main', () => {
     // Le gâteau est réglé sur 2 tournées : le biscuit passe à 3 920 g, il en
-    // manque 628, donc une demi-tournée (2 200 g) est proposée. Le zeste
-    // affiché sous le biscuit doit valoir cette demi-tournée — 6,5 g pour
-    // 2 200 g — et non la quantité d'origine. C'est le bug des « 9 000 g de
-    // génoise » dont la fiche s'ouvrait sur 4 500 (Layla, 2026-09-09).
+    // manque 628, donc une plaque entière (4 400 g) est proposée — un biscuit
+    // ne se cuit pas en demi. Le zeste affiché sous le biscuit doit valoir
+    // cette plaque — 13 g. C'est le bug des « 9 000 g de génoise » dont la
+    // fiche s'ouvrait sur 4 500 (Layla, 2026-09-09).
     const gros = [pourFois(arbre()[0], 2)]
     const biscuit = descendre(gros, chemin).noeud
     expect(biscuit.besoin).toBe(3920)
-    expect(biscuit.tournees).toBe(0.5)
+    expect(biscuit.tournees).toBe(1)          // un biscuit : plaque entière
     const zeste = descendre(gros, [...chemin, 'SM. Citron zest']).noeud
-    expect(zeste.besoin).toBe(6.5)
+    expect(zeste.besoin).toBe(13)
   })
 
   it('la quantité par défaut d’un étage suit celle du dessus', () => {
-    // Fond réglé sur 2 → il manque 628 g de biscuit → une demi-tournée
-    // (2 200 g) est proposée, et le zeste vaut 6,5 g pour cette demi-tournée.
+    // Fond réglé sur 2 → il manque 628 g de biscuit → une plaque entière
+    // (4 400 g), et le zeste vaut ses 13 g pour cette plaque.
     const foisDe = c => (c.produit === 'SM- Fond Citron Framboise (5)' ? 2 : undefined)
     const b = descendre(arbre(), chemin, foisDe).noeud
-    expect(b.tournees).toBe(0.5)
-    expect(enfantsPour(b, b.tourneeTaille * b.tournees)[0].besoin).toBe(6.5)
+    expect(b.tournees).toBe(1)
+    expect(enfantsPour(b, b.tourneeTaille * b.tournees)[0].besoin).toBe(13)
+  })
+})
+
+describe('parTourneeEntiere — ce qui ne se fait pas en demi', () => {
+  it('un cadre, une plaque, un biscuit : tournées entières', () => {
+    expect(parTourneeEntiere({ produit: 'SM- cadre foret noir grand Production' })).toBe(true)
+    expect(parTourneeEntiere({ produit: 'SM. Biscuit a la cuillere (plaque)' })).toBe(true)
+    expect(parTourneeEntiere({ produit: 'SM. Biscuit brownie 5 pers' })).toBe(true)
+  })
+
+  it('une crème, une mousse, un montage : la moitié est permise', () => {
+    expect(parTourneeEntiere({ produit: 'SM. Crème légère vanille citron' })).toBe(false)
+    expect(parTourneeEntiere({ produit: 'SM- Fond Citron Framboise (5)' })).toBe(false)
+    expect(parTourneeEntiere({ produit: 'SM- Tiramisu indiv' })).toBe(false)
+  })
+
+  it('le drapeau du serveur fait foi', () => {
+    expect(parTourneeEntiere({ produit: 'SM. Biscuit brownie', entier: false })).toBe(false)
+    expect(parTourneeEntiere({ produit: 'SM- Cheesecake nature', entier: true })).toBe(true)
+  })
+
+  it('la suggestion d’un biscuit reste un compte rond', () => {
+    // 25 plaques à rattraper sur des tournées de 14 : une seule, pas 1,5.
+    expect(tourneesSuggerees({ produit: 'SM. Biscuit brownie 5 pers', tournee: 14, reste: 25 })).toBe(1)
+    expect(tourneesSuggerees({ produit: 'SM- Fond Citron Framboise (5)', tournee: 14, reste: 25 })).toBe(1.5)
   })
 })

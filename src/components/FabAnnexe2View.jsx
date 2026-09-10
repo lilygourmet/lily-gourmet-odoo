@@ -5,7 +5,7 @@ import { toast } from '../lib/toast'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, photoFabAnnexe,
   loadHistoriqueAnnexe, parJour, bloquants, declares, parGateauMere, noeudAu,
   declarer, envoyerAValider, tourneesSuggerees, pourFois, peseesDe, foisDuNoeud,
-  lignesRecette, enfantsPour } from '../lib/fabAnnexe'
+  lignesRecette, enfantsPour, parTourneeEntiere } from '../lib/fabAnnexe'
 import { estModeTest } from '../lib/modeTest'
 import { frappe } from '../lib/frappe'
 import { todayISO } from '../lib/dates'
@@ -590,9 +590,11 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   // Le pas suit l'unité — 10 g, 100 g de kg, 1 pièce (Layla, 2026-09-09).
   const parRecette = noeud.tourneeTaille || 1
   const aLaQte = !!noeud.aLaQuantite
+  // Un cadre, une plaque, un biscuit : tournées ENTIÈRES, pas de demi
+  // (Layla, 2026-09-10).
   const pasFois = aLaQte
     ? (noeud.unite === 'u' ? 1 : /^kg$/i.test(noeud.unite) ? 0.1 : 10) / parRecette
-    : 0.5
+    : parTourneeEntiere(noeud) ? 1 : 0.5
 
   // ⚠️ LA QUANTITÉ DOIT SUIVRE. Ce que l'API a calculé vaut pour la fournée
   // qu'elle proposait ; dès que le pâtissier change le nombre de tournées, ses
@@ -822,7 +824,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   // celui déjà choisi ne disparaît pas sous le doigt. Pour le reste, la case
   // « quantité voulue » juste en dessous : « sinon on écrira à la main »
   // (Layla, 2026-09-09).
-  const choixTournees = [0.5, 1, 1.5, 2, 3].filter(f =>
+  const choixTournees = (parTourneeEntiere(brut) ? [1, 2, 3] : [0.5, 1, 1.5, 2, 3]).filter(f =>
     f === foisArticle
     || f === tourneesSuggerees(brut)
     || !(brut.reste > 0)

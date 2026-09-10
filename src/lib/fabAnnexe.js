@@ -173,7 +173,10 @@ export function tourneesSuggerees(article) {
   // On arrondit vers le BAS : mieux vaut proposer un peu moins que de remplir
   // le congélateur au-delà du maxi. « Sinon on écrira à la main »
   // (Layla, 2026-09-09).
-  return Math.max(0.5, Math.floor((manque / t) * 2) / 2)
+  // ⚠️ Un cadre, une plaque, un biscuit ne se font pas en demi : tournées
+  // entières seulement (Layla, 2026-09-10).
+  const pas = parTourneeEntiere(article) ? 1 : 0.5
+  return Math.max(pas, Math.floor(manque / t / pas) * pas)
 }
 
 /**
@@ -207,6 +210,15 @@ export function foisDuNoeud(c) {
 }
 
 /**
+ * Ce qui ne se fabrique QUE par tournées entières : un cadre se remplit, une
+ * plaque s'étale, un biscuit se cuit d'un bloc. « Le biscuit ne peut pas se
+ * faire en demi tournée » (Layla, 2026-09-10). Le serveur pose le drapeau
+ * `entier` ; cette fonction sert aux articles qui n'en ont pas encore.
+ */
+export const parTourneeEntiere = c =>
+  c?.entier ?? /\b(cadres?|plaques?|biscuits?)\b/i.test(String(c?.produit || ''))
+
+/**
  * Un composant remis à l'échelle — et TOUTE sa descendance avec lui.
  *
  * C'est la seule règle de calcul du circuit, la même à tous les niveaux :
@@ -230,7 +242,9 @@ function echelle(c, facteur) {
       out.produira = Math.max(0, Math.round((besoin - dispo) * 1000) / 1000)
     } else {
       // Au demi près, comme le serveur : la quantité suit celle du gâteau.
-      out.tournees = Math.max(0.5, Math.ceil(((besoin - dispo) / c.tourneeTaille) * 2) / 2)
+      // Sauf ce qui se cuit d'un bloc : là, c'est la tournée ENTIÈRE.
+      const pas = parTourneeEntiere(c) ? 1 : 0.5
+      out.tournees = Math.max(pas, Math.ceil((besoin - dispo) / c.tourneeTaille / pas) * pas)
       out.produira = out.tournees * c.tourneeTaille
     }
   }
