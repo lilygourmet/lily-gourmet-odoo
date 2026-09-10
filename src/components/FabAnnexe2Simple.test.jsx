@@ -728,3 +728,17 @@ describe('le mot « Mousse » dans la recette du bas', () => {
     expect(screen.getByText('Mousse Gianduja')).toBeTruthy()
   })
 })
+
+describe('la recette du bas est un rappel, pas le geste du moment', () => {
+  it('elle est plus petite et en italique', () => {
+    const gianduja = {
+      produit: 'SM- Gianduja indiv', libelle: 'Gianduja indiv', unite: 'u',
+      tourneeTaille: 90, pourQuantite: 90, recette: [],
+      enfants: [{ produit: 'SM. Cremeux gianduja', unite: 'u', besoin: 90, stock: 151, fabrique: true, ok: true }],
+    }
+    const { container } = render(<PourUn noeud={gianduja} quantite={90} />)
+    expect(container.firstChild.className).toMatch(/italic/)
+    // La liste du haut, elle, garde sa taille : c'est là qu'on travaille.
+    expect(screen.getByText('Cremeux gianduja').className).toMatch(/text-\[13px\]/)
+  })
+})

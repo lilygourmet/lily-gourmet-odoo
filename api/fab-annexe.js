@@ -925,23 +925,35 @@ export default async function handler(req, res) {
 
     // Un seul article demandé (le pâtissier vient de l'ouvrir) : lui seul a
     // besoin de sa cascade de recettes.
-    const seul = req.query.article ? String(req.query.article) : null
+    // Un ou PLUSIEURS articles : « Déclarer » demande tout un gâteau d'un coup,
+    // séparés par « | ». Les calculer ensemble coûte à peine plus qu'un seul
+    // (même cache de recettes, mêmes stocks) — et le pâtissier n'attend plus à
+    // chaque clic. (Layla, 2026-09-11 : « quand on ouvre une nouvelle recette
+    // c'est lent ».)
+    const seuls = req.query.article
+      ? String(req.query.article).split('|').map(x => x.trim()).filter(Boolean) : null
+    const seul = !!seuls
     // ⚠️ `details=1` : la cascade de TOUS les articles à faire, d'un coup. Un
     // clic sur un article coûtait une seconde d'attente, treize fois par
     // matinée. Les recettes sont gardées dix minutes et le cache est partagé
     // dans la requête : les calculer ensemble coûte à peine plus qu'un seul.
     // (Layla, 2026-09-10 : « c'est trop lent à travailler ».)
     const tousLesDetails = req.query.details === '1'
-    let voulus = seul ? (catalogue || []).filter(a => a.produit === seul) : (catalogue || [])
+    const voulus = seuls
+      ? (catalogue || []).filter(a => seuls.includes(a.produit))
+      : (catalogue || [])
     // Un article ouvert depuis « Déclarer » n'est pas forcément réglé : on lui
     // fabrique une fiche à la volée, sans mini ni maxi ni rien de figé.
-    if (seul && !voulus.length) {
-      const p0 = await produitParNom(cache, seul)
-      const b0 = p0 && await bomDe(cache, p0)
-      if (!b0) return res.status(200).json({ articles: [] })
-      voulus = [{ produit: seul, libelle: seul, photo: null, mini: 0, maxi: 0,
-        tournee: versUnite(b0.product_qty || 1, b0.product_uom_id?.[1], p0.uom_id[1]) || 1,
-        figes: [], figes_nom: null, actif: true, horsCatalogue: true }]
+    if (seuls) {
+      for (const nom of seuls.filter(n => !voulus.some(a => a.produit === n))) {
+        const p0 = await produitParNom(cache, nom)
+        const b0 = p0 && await bomDe(cache, p0)
+        if (!b0) continue                    // rien à fabriquer sous ce nom
+        voulus.push({ produit: nom, libelle: nom, photo: null, mini: 0, maxi: 0,
+          tournee: versUnite(b0.product_qty || 1, b0.product_uom_id?.[1], p0.uom_id[1]) || 1,
+          figes: [], figes_nom: null, actif: true, horsCatalogue: true })
+      }
+      if (!voulus.length) return res.status(200).json({ articles: [] })
     }
 
     // Tout ce qu'on va lire, chargé d'avance et en masse : sans ça, la cascade

@@ -34,11 +34,26 @@ export async function loadFabAnnexe() {
  * l'ouverture de l'écran lente dès qu'il y avait quelques articles.
  */
 export async function loadArticleFabAnnexe(produit) {
-  const r = await fetch('/api/fab-annexe?article=' + encodeURIComponent(produit) + '&cb=' + Date.now())
+  return (await loadArticlesFabAnnexe([produit]))[0] || null
+}
+
+/**
+ * PLUSIEURS fiches d'un coup. « Déclarer » demande tout un gâteau quand on
+ * l'ouvre : ses tailles sont alors prêtes avant même qu'on tape dessus.
+ *
+ * Les calculer ensemble ne coûte presque rien de plus — même cache de
+ * recettes, mêmes stocks lus une fois. Un par un, c'était 1,4 seconde
+ * d'attente à chaque clic (Layla, 2026-09-11).
+ */
+export async function loadArticlesFabAnnexe(produits) {
+  const noms = [...new Set((produits || []).filter(Boolean))]
+  if (!noms.length) return []
+  const r = await fetch('/api/fab-annexe?article=' + encodeURIComponent(noms.join('|'))
+    + '&cb=' + Date.now())
   if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
   const d = await r.json()
   if (d.error) throw new Error(d.error)
-  return (d.articles || [])[0] || null
+  return d.articles || []
 }
 
 /**

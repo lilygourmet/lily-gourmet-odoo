@@ -475,17 +475,18 @@ export function PourUn({ noeud, quantite }) {
     })
   }
   if (!lignes.length) return null
+  // Plus petit et en italique que le reste : c'est un RAPPEL, pas le geste du
+  // moment — le geste, c'est la liste du haut. (Layla, 2026-09-11.)
   return (
-    <div className="mt-6 rounded-2xl border-2 border-cream-deep bg-cream-warm overflow-hidden">
-      <div className="px-4 py-2.5 text-[13px] font-extrabold uppercase tracking-wide
-                      text-ink-mute border-b border-cream-deep">
+    <div className="mt-6 rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden italic">
+      <div className="px-3.5 py-2 text-[12.5px] font-bold text-ink-mute border-b border-cream-deep">
         Pour 1 {propre(noeud.libelle || noeud.produit)}
       </div>
       {lignes.map((l, i) => (
         <div key={l.nom + i}
-          className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40 first:border-t-0">
-          <span className="flex-1 min-w-0 text-[16px]">{l.nom}</span>
-          <span className="shrink-0 text-[19px] font-extrabold tabular-nums">{l.valeur}</span>
+          className="flex items-baseline gap-3 px-3.5 py-1.5 border-t border-cream-deep/40 first:border-t-0">
+          <span className="flex-1 min-w-0 text-[13px]">{l.nom}</span>
+          <span className="shrink-0 text-[14px] font-bold tabular-nums">{l.valeur}</span>
         </div>
       ))}
     </div>

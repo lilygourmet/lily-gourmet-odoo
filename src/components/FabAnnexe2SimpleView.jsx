@@ -19,7 +19,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { CasesAFaire, Cases, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
 import HistoriqueAnnexe from './HistoriqueAnnexe'
-import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, loadHistoriqueAnnexe,
+import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
   decoupeDe, noeudDuChemin, defautDe, parGateauMere, peseesDe, declarer,
   envoyerAValider, sansRendement } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
@@ -96,8 +96,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   useEffect(() => {
     if (!ouvert || details[ouvert]) return
     let vivant = true
-    loadArticleFabAnnexe(ouvert)
-      .then(a => {
+    loadArticlesFabAnnexe([ouvert])
+      .then(([a]) => {
         if (!vivant) return
         if (!a) { setErreur(`« ${ouvert} » n'est plus suivi.`); setChemin([]); return }
         setDetails(d => ({ ...d, [ouvert]: a }))
@@ -105,6 +105,21 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       .catch(e => { if (vivant) { setErreur(e.message || String(e)); setChemin([]) } })
     return () => { vivant = false }
   }, [ouvert, details])
+
+  /**
+   * Charger d'avance les fiches d'un gâteau qu'on vient d'ouvrir dans
+   * « Déclarer ». Une fiche coûte 1,4 seconde ; demandées ensemble, elles
+   * coûtent à peine plus qu'une — et le clic devient instantané.
+   *
+   * En silence : si ça rate, le clic rechargera la fiche comme avant.
+   */
+  const precharger = noms => {
+    const manquants = noms.filter(n => !details[n]).slice(0, 12)
+    if (!manquants.length) return
+    loadArticlesFabAnnexe(manquants)
+      .then(l => setDetails(d => ({ ...d, ...Object.fromEntries(l.map(a => [a.produit, a])) })))
+      .catch(() => { /* le clic s'en chargera */ })
+  }
 
   const poser = (produit, q) =>
     setQuantites(x => ({ ...x, [produit]: Math.max(0, Math.round(q * 100) / 100) }))
@@ -217,7 +232,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               {!trouves && !ouvertG && tout !== null && (
                 <Cases vide="Rien à déclarer."
                   items={groupes.map(g => ({ cle: g.nom, photo: g.photo, libelle: g.nom }))}
-                  onOuvrir={setGateau} />
+                  onOuvrir={nom => {
+                    setGateau(nom)
+                    // Ses tailles seront prêtes avant qu'on tape dessus.
+                    precharger((groupes.find(g => g.nom === nom)?.articles || []).map(a => a.produit))
+                  }} />
               )}
             </>
           )}
