@@ -487,28 +487,11 @@ export function ingredientsPour(noeud, quantite) {
       produit: l.produit, unite: l.unite, pese: true,
       besoin: Math.round(Number(l.qty) * fois * 1000) / 1000,
     }))
-  return fusionner([...fabriques, ...peses])
-}
-
-/**
- * Un ingrédient cité DEUX FOIS dans une recette ne fait qu'une ligne : on le
- * pèse une fois (règle de Layla). Le Gianduja demande « Crème whipping
- * 2 704 g » puis « 4 550 g » — deux lignes de nomenclature, une seule balance.
- *
- * Ce qui part chez Odoo n'y touche pas : `peseesDe` répartit le total entre
- * les lignes d'origine, parce qu'Odoo pose sa consigne sur chacune.
- */
-function fusionner(liste) {
-  const par = new Map()
-  for (const c of liste) {
-    const e = par.get(c.produit)
-    if (!e) { par.set(c.produit, { ...c }); continue }
-    e.besoin = Math.round((e.besoin + c.besoin) * 1000) / 1000
-    // Le blocage se rejuge sur le TOTAL : deux fois 100 g avec 150 g en stock,
-    // ça manque — chaque ligne prise à part disait pourtant « c'est bon ».
-    if (e.fabrique) e.ok = (e.stock || 0) + (e.dejaFait || 0) >= e.besoin
-  }
-  return [...par.values()]
+  // ⚠️ On n'ADDITIONNE PAS deux lignes du même ingrédient : « des fois c'est
+  // utilisé dans la recette différemment » (Layla, 2026-09-10). La crème
+  // whipping du Gianduja va au crémeux ET à la mousse — deux pesées, deux
+  // moments, deux lignes.
+  return [...fabriques, ...peses]
 }
 
 /**

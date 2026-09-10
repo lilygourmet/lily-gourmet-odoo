@@ -152,23 +152,11 @@ describe('un ingrédient cité deux fois', () => {
     enfants: [],
   }
 
-  it('ne fait qu’une ligne : on le pèse une fois', () => {
+  it('garde ses DEUX lignes : ce sont deux usages dans la recette', () => {
+    // « Des fois c'est utilisé dans la recette différemment » (Layla,
+    // 2026-09-10) : la crème whipping va au crémeux ET à la mousse.
     const l = ingredientsPour(gianduja, 34)
-    expect(l.length).toBe(1)
-    expect(l[0].besoin).toBe(7254)
-  })
-
-  it('le blocage se rejuge sur le total', () => {
-    const deux = {
-      produit: 'SM. X', unite: 'u', tourneeTaille: 1, pourQuantite: 1, recette: [],
-      enfants: [
-        { produit: 'SM. Confit', unite: 'g', besoin: 100, stock: 150, fabrique: true, ok: true },
-        { produit: 'SM. Confit', unite: 'g', besoin: 100, stock: 150, fabrique: true, ok: true },
-      ],
-    }
-    const l = ingredientsPour(deux, 1)
-    expect(l.length).toBe(1)
-    expect(l[0].besoin).toBe(200)
-    expect(l[0].ok).toBe(false)
+    expect(l.length).toBe(2)
+    expect(l.map(x => x.besoin)).toEqual([2704, 4550])
   })
 })
