@@ -713,16 +713,24 @@ export default async function handler(req, res) {
       })
     }
 
+    // ⚠️ Les trois lectures d'entrée partent ENSEMBLE : le catalogue et le
+    // journal viennent de Supabase, le stock d'Odoo, et aucune n'a besoin des
+    // autres. En file indienne, c'était trois allers-retours ajoutés bout à
+    // bout avant même de commencer. (Layla, 2026-09-10 : « fais un effort ».)
+    const cache = creerCache()
+    const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
+    const stocksAmorces = stocksDe([1], cache)
+    stocksAmorces.catch(() => { /* l'erreur ressortira au vrai `await` */ })
     // Tout le catalogue : même un article qu'on n'affiche pas y donne la taille
     // de ses tournées, utile dès qu'il apparaît comme composant d'un autre.
-    const { data: tout, error } = await sb.from('fab_annexe_articles').select('*').order('produit')
+    // Le journal dit ce que l'atelier a DÉJÀ déclaré aujourd'hui : le stock
+    // Odoo ne remonte qu'à la validation, et sans lui l'écran redemanderait la
+    // tournée entière à quelqu'un qui vient de la faire.
+    const [{ data: tout, error }, { data: faits }] = await Promise.all([
+      sb.from('fab_annexe_articles').select('*').order('produit'),
+      sb.from('prod_fabrications').select('article, qty, ordre').eq('jour', jour).eq('atelier', 'annexe'),
+    ])
     if (error) throw new Error(`Catalogue illisible : ${error.message}`)
-    // Ce que l'atelier a DÉJÀ déclaré aujourd'hui, en attente dans « À valider
-    // Annexe ». Le stock Odoo ne remonte qu'à la validation : sans ça, l'écran
-    // redemanderait la tournée entière à quelqu'un qui vient de la faire.
-    const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
-    const { data: faits } = await sb.from('prod_fabrications')
-      .select('article, qty, ordre').eq('jour', jour).eq('atelier', 'annexe')
 
     // ⚠️ Une déclaration VALIDÉE ne compte plus : sa production est entrée
     // dans le stock Odoo, la compter en plus la ferait compter DEUX FOIS —
@@ -745,7 +753,6 @@ export default async function handler(req, res) {
     // congelée bloquait le confit sans qu'on puisse rien y faire.
     const achetes = new Set((tout || []).filter(a => a.achete).map(a => a.produit))
 
-    const cache = creerCache()
     const articles = []
 
     // Un seul article demandé (le pâtissier vient de l'ouvrir) : lui seul a

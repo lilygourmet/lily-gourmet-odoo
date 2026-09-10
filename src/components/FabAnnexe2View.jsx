@@ -428,8 +428,11 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
   const [tout, setTout] = useState(() => dernierEcran('fab_annexe2_tout'))
   const [cherche, setCherche] = useState('')
   const [histo, setHisto] = useState(null)
-  // Le détail d'un article (sa cascade) n'arrive qu'à son ouverture.
-  const [details, setDetails] = useState({})
+  // Les fiches, gardées d'une visite à l'autre : au retour sur l'écran, on peut
+  // ouvrir un gâteau et lire sa recette AVANT même qu'Odoo ait répondu. Elles
+  // sont remplacées dès que la vraie liste arrive. (Layla, 2026-09-10.)
+  const [details, setDetails] = useState(() =>
+    Object.fromEntries((dernierEcran('fab_annexe2') || []).map(a => [a.produit, a])))
   const ouvert = chemin[0] || null
 
   const recharger = () => setTour(t => t + 1)
