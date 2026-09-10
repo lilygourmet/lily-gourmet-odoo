@@ -345,10 +345,16 @@ describe('reconcileEnvelopes — repli instantané et nom d\'une autre cliente',
     expect(results[0].status).toBe('absent')
   })
 
-  it('garde le repli quand le libellé ne porte aucun nom', () => {
+  it('propose sans valider quand le libellé ne porte aucun nom', () => {
     const anonyme = { ...ligne, label: 'VIR INST RECU 2128322 20260602129237' }
     const { results } = reconcileEnvelopes([caisse], [anonyme], {})
-    expect(results[0].status).toBe('trouve')
+    expect(results[0].status).toBe('a_confirmer')
+  })
+
+  it('propose sans valider quand la caisse n\'a pas de nom de cliente', () => {
+    const sansNom = { ...caisse, virement_client: null }
+    const { results } = reconcileEnvelopes([sansNom], [ligne], {})
+    expect(results[0].status).toBe('a_confirmer')
   })
 
   it('rapproche toujours la vraie cliente', () => {
