@@ -325,3 +325,36 @@ describe('le garde-fou du zéro', () => {
     expect(onFait).not.toHaveBeenCalled()
   })
 })
+
+describe('ce qu’on ne montre pas', () => {
+  const gianduja = {
+    produit: 'SM- Gianduja indiv', libelle: 'Gianduja indiv', unite: 'u',
+    tourneeTaille: 90, reste: 90, recette: [],
+    enfants: [
+      { produit: 'SM. Cremeux gianduja indiv Production', unite: 'u', besoin: 90,
+        stock: 151, dejaFait: 0, fabrique: true, ok: true },
+      { produit: 'MP- Crème whipping', unite: 'kg', besoin: 0.85,
+        stock: 47.69, dejaFait: 0, fabrique: false, ok: true },
+    ],
+  }
+
+  it('pas de stock sur une matière première : celui de l’annexe n’est pas tenu', () => {
+    render(<Fiche noeud={gianduja} quantite={90} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText(/en stock 151 u/)).toBeTruthy()
+    expect(screen.queryByText(/47 690 g/)).toBeNull()
+  })
+
+  it('les kilos s’écrivent en grammes, jamais à convertir de tête', () => {
+    render(<Fiche noeud={gianduja} quantite={90} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText('850 g')).toBeTruthy()
+  })
+
+  it('un montage ne répète pas ses morceaux au-dessus de sa propre liste', () => {
+    render(<Fiche noeud={gianduja} quantite={90} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    // « 90 cremeux gianduja indiv productions · … » : la liste le dit déjà.
+    expect(screen.queryByText(/·.*production/i)).toBeNull()
+  })
+})

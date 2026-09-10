@@ -103,8 +103,15 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       const r = await envoyerUn(noeud, tete, qty)
       toast(r.erreur ? `Enregistré, mais Odoo a refusé : ${r.erreur}` : 'C\'est noté ✓')
       setSortie(null)
-      setFaits(f => ({ ...f, [noeud.produit]: { fois: 1 } }))
       setChemin(chemin.slice(0, -1))
+      if (noeud.produit === tete.produit) {
+        // L'article de tête est parti : la séance est finie, on repart propre.
+        setFaits({}); setQuantites({}); setCuites({})
+      } else {
+        // Une préparation : elle compte comme faite pour débloquer le dessus,
+        // et sa quantité reste réglée si on y revient.
+        setFaits(f => ({ ...f, [noeud.produit]: { fois: 1 } }))
+      }
       recharger()
     } catch (e) {
       toast('Échec : ' + (e.message || e))

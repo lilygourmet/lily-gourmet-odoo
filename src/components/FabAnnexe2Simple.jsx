@@ -17,11 +17,11 @@
 // ============================================================
 import { useState } from 'react'
 import { enClair, declares, bloquants, aFaireMaintenant,
-  decoupeDe, partageDecoupe, ingredientsPour, nomCourt } from '../lib/fabAnnexe'
+  decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe } from '../lib/fabAnnexe'
 import { nb, qte, propre } from '../lib/ecranSimple'
 
 /** La photo d'un article, servie par Odoo. */
-const photoDe = nom => '/api/fab-annexe?photo=' + encodeURIComponent(nom)
+const photoDe = photoFabAnnexe
 
 /**
  * L'accueil : ce qu'il y a à faire, en cases. Une photo, un nom court, et le
@@ -266,10 +266,11 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
             <span className={`w-3 h-3 rounded shrink-0 ${manque ? 'bg-danger' : 'bg-success'}`} />
             <span className={`flex-1 min-w-0 text-[17px] ${manque ? 'text-danger font-bold' : ''}`}>
               {propre(c.produit)}
-              {/* Le stock ne se dit que de ce qui se fabrique : « on peut voir
-                  si erreur » (Layla). Le stock des matières premières de
-                  l'annexe n'est pas tenu — l'afficher tromperait. */}
-              {!c.pese && (
+              {/* Le stock ne se dit que de ce qui se FABRIQUE : « on peut voir
+                  si erreur » (Layla). Celui des matières premières n'est pas
+                  tenu à l'annexe — 47 tonnes de sucre, une gélatine à −7 590 g :
+                  l'afficher ne ferait que semer le doute. */}
+              {c.fabrique && (
                 <span className="block text-[12.5px] text-ink-mute font-normal">
                   {fait ? 'fait à l\'instant' : `en stock ${qte(c.stock, c.unite)}`}
                 </span>

@@ -102,3 +102,22 @@ describe('enClair', () => {
     expect(enClair(plaque, 0)).toBe('')
   })
 })
+
+describe('le poids ne se dit pas d’un montage', () => {
+  it('« 9 000 g en tout » sous un tiramisu n’aiderait personne', () => {
+    // Un montage assemble des morceaux déjà faits ; ce n'est pas une masse
+    // qu'on prépare d'un bloc, contrairement à la pâte d'une plaque.
+    const tiramisu = {
+      produit: 'SM- Tiramisu 15cm', unite: 'u', tourneeTaille: 13,
+      composants: [
+        { produit: 'SM. Biscuit', unite: 'g', besoin: 780, fabrique: true },
+        { produit: 'MP- Sucre', unite: 'g', besoin: 300, fabrique: false },
+      ],
+      recette: [
+        { produit: 'SM. Biscuit', qty: 780, unite: 'g' },
+        { produit: 'MP- Sucre', qty: 300, unite: 'g' },
+      ],
+    }
+    expect(enClair(tiramisu, 13)).toBe('')
+  })
+})

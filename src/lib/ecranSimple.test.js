@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { ecranSimple, basculerEcran } from './ecranSimple'
+import { ecranSimple, basculerEcran, qte } from './ecranSimple'
 
 // Le choix vit dans la tablette : une peut essayer, l'autre garder l'ancien.
 function fausseMemoire() {
@@ -38,5 +38,22 @@ describe('l’interrupteur des deux écrans', () => {
     })
     expect(ecranSimple()).toBe(false)
     expect(() => basculerEcran()).not.toThrow()
+  })
+})
+
+describe('les quantités, comme l’atelier les lit', () => {
+  // `toLocaleString` sépare les milliers par une espace fine insécable ; on la
+  // ramène à une espace ordinaire pour lire le test à l'œil nu.
+  const lu = (v, u) => qte(v, u).replace(/\u202f|\u00a0/g, ' ')
+
+  it('tout en grammes : jamais un kilo à convertir de tête', () => {
+    expect(lu(2.73, 'kg')).toBe('2 730 g')
+    expect(lu(0.06, 'kg')).toBe('60 g')
+    expect(lu(47.69, 'kg')).toBe('47 690 g')
+  })
+
+  it('les grammes et les pièces restent entiers', () => {
+    expect(lu(1494.4, 'g')).toBe('1 494 g')
+    expect(lu(13, 'u')).toBe('13 u')
   })
 })

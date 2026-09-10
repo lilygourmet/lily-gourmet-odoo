@@ -25,11 +25,18 @@ export function basculerEcran() {
 /** Un nombre comme on l'écrit en français : 2 800, 1,5. */
 export const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 
-/** Grammes et pièces en entier, les kilos en grammes sous le kilo. */
+/**
+ * Une quantité comme l'atelier la lit : en GRAMMES, toujours.
+ *
+ * « 2,1 kg » oblige à convertir de tête au-dessus de la balance, et c'est là
+ * qu'on se trompe d'un facteur mille. Toutes les recettes d'Annexe 2 s'écrivent
+ * en grammes, quelle que soit l'unité d'Odoo (Layla, 2026-09-10) — même règle
+ * que l'ancien écran.
+ */
 export const qte = (v, u) => {
-  const n = Number(v) || 0
-  if (!/^kg$/i.test(String(u || '').trim())) return `${nb(Math.round(n))} ${u || ''}`.trim()
-  return n < 1 ? `${nb(Math.round(n * 1000))} g` : `${nb(Math.round(n * 100) / 100)} kg`
+  const kg = /^kg$/i.test(String(u || '').trim())
+  const n = (Number(v) || 0) * (kg ? 1000 : 1)
+  return `${nb(Math.round(n))} ${kg ? 'g' : (u || '')}`.trim()
 }
 
 /**

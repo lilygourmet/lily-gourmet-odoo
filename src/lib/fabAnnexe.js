@@ -544,6 +544,11 @@ export function partageDecoupe({ cuites = 0, coupes = 0, parPiece = 0, stock = 0
 export function enClair(noeud, quantite) {
   const fois = (noeud?.tourneeTaille || 0) > 0 ? quantite / noeud.tourneeTaille : 0
   if (!(fois > 0)) return ''
+  // ⚠️ Un MONTAGE ne dit rien ici : ni son poids total (« 9 000 g » n'est pas
+  // une masse qu'on prépare, c'est la somme de morceaux déjà faits), ni ses
+  // morceaux un par un — la liste des ingrédients, juste dessous, les dit
+  // mieux. Une ligne qui répète la suivante est une ligne à enlever.
+  if (enfantsDe(noeud).some(c => c.fabrique)) return ''
   const bouts = []
   // Le poids n'aide que sur ce qui se compte en PIÈCES : dire « 3 920 g font
   // 4 840 g » à propos d'un caramel déjà pesé en grammes n'apprend rien, et
