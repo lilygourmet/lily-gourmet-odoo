@@ -252,7 +252,9 @@ function LigneQte({ nom, valeur, unite, onValeur, gras, avant, dessous, serre, o
   }
   return (
     <div className={`flex items-center gap-3 px-4 ${serre ? 'pt-2.5 pb-2' : 'py-2.5'}`}>
-      {avant}
+      {avant !== undefined && (
+        <span className="w-7 shrink-0 flex justify-center">{avant}</span>
+      )}
       {/* Toute la zone nom + stock ouvre la recette, comme avant la fusion des
           deux listes : viser un « recette › » de onze pixels au doigt, ça ne
           marche pas (Layla, 2026-09-10). */}
@@ -289,6 +291,12 @@ export function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir 
   const parRecette = noeud.tourneeTaille || 1
   const parNom = new Map((enfants || []).map(c => [c.produit, c]))
   const dejaFaits = declares(faits)
+  // Dès qu'un morceau de la recette porte une pastille, toutes les lignes lui
+  // réservent la place : les noms restent alignés sur un axe, les ✓ sur un
+  // autre. « Arrange pour que les ingrédients soient dans le même axe »
+  // (Layla, 2026-09-10).
+  const avecPastilles = lignes.some(l => parNom.get(l.produit)?.fabrique)
+  const creux = avecPastilles ? <span aria-hidden="true" /> : undefined
   return (
     <div className="divide-y divide-cream-deep/50">
       {lignes.map((l, i) => {
@@ -297,7 +305,7 @@ export function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir 
         if (!c || !c.fabrique) {
           return (
             <LigneQte key={i} nom={nomAtelier(l.produit)} valeur={l.qty * fois * f} unite={l.unite}
-              onValeur={v => onFois(v / f / l.qty)} />
+              onValeur={v => onFois(v / f / l.qty)} avant={creux} />
           )
         }
         const fait = c.dejaFait > 0 || dejaFaits.includes(c.produit)
@@ -326,7 +334,7 @@ export function Recette({ noeud, lignes, fois, onFois, enfants, faits, onOuvrir 
       <div className="bg-gold/10">
         <LigneQte gras nom={`${propre(noeud.produit)} obtenu`}
           valeur={parRecette * fois} unite={noeud.unite}
-          onValeur={v => onFois(v / parRecette)} />
+          onValeur={v => onFois(v / parRecette)} avant={creux} />
       </div>
     </div>
   )

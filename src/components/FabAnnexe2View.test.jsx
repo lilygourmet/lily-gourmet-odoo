@@ -29,9 +29,9 @@ const enfants = [
 const poser = (extra = {}) => {
   const onOuvrir = vi.fn()
   const onFois = vi.fn()
-  render(<Recette noeud={noeud} lignes={noeud.recette} fois={2}
+  const { container } = render(<Recette noeud={noeud} lignes={noeud.recette} fois={2}
     onFois={onFois} enfants={enfants} faits={{}} onOuvrir={onOuvrir} {...extra} />)
-  return { onOuvrir, onFois }
+  return { onOuvrir, onFois, container }
 }
 
 describe('la recette d’un composant', () => {
@@ -75,6 +75,17 @@ describe('la recette d’un composant', () => {
     poser()
     expect(screen.getByText(/stock 8 800 g/)).toBeTruthy()
     expect(screen.getByText(/stock 0 u · à faire 26 u/)).toBeTruthy()
+  })
+
+  it('aligne tous les noms sur le même axe : les lignes sans pastille gardent la place', () => {
+    const { container } = poser()
+    // 4 lignes en tout, 2 portent une pastille → 2 gouttières vides.
+    expect(container.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2)
+  })
+
+  it('pas de gouttière du tout quand aucune ligne n’a de pastille', () => {
+    const { container } = poser({ enfants: [] })
+    expect(container.querySelectorAll('[aria-hidden="true"]')).toHaveLength(0)
   })
 
   it('retaper une quantité remet toute la recette à l’échelle', () => {
