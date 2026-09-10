@@ -6,6 +6,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/reveil-annexe",
+      "destination": "/api/fab-annexe?details=1"
+    },
+    {
       "source": "/api/push-send",
       "destination": "/api/push?action=send"
     },
@@ -66,6 +70,10 @@
     {
       "path": "/api/ocp-sync-lgt",
       "schedule": "*/15 6-22 * * *"
+    },
+    {
+      "path": "/api/reveil-annexe",
+      "schedule": "*/10 6-15 * * *"
     }
   ]
 }

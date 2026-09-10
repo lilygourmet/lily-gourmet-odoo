@@ -55,7 +55,10 @@ async function sr(model, domain, fields, opts = {}) {
 // d'une requête à l'autre. Les STOCKS, eux, ne sont jamais mis en cache — c'est
 // ce qui bouge, et Layla doit voir ses corrections tout de suite.
 // ------------------------------------------------------------
-const DUREE_RECETTES = 10 * 60 * 1000
+// Une demi-heure : les nomenclatures ne changent qu'à la main, et l'écran sait
+// forcer leur relecture quand Layla vient d'en corriger une. Dix minutes
+// obligeaient à tout relire plusieurs fois par matinée. (2026-09-10.)
+const DUREE_RECETTES = 30 * 60 * 1000
 const _recettes = new Map()   // clé → { t, v }
 /** Dépose une valeur déjà connue dans le cache, sans aller la chercher. */
 function poserMemo(cle, valeur) {
