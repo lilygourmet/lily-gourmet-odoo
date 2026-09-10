@@ -662,8 +662,8 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     return (
       <Cadre {...nav} onRetour={() => setSortie(null)} photo={racine ? article.photo : null}
         titre={racine ? article.libelle : propre(noeud.produit)}
-        sous={racine ? 'Tournée montée'
-          : aLaQte ? `Pour ${qte(parRecette * fois, noeud.unite)}` : `Recette × ${nb(fois)}`}>
+        sous={racine ? qte(article.tournee, article.unite)
+          : `Pour ${qte(parRecette * fois, noeud.unite)}`}>
         <div className="px-4 py-6 text-center">
           <div className="text-[15px] font-bold">
             {racine
@@ -754,8 +754,11 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     const nomNoeud = racine ? article.produit : noeud.produit
     const estCadre = /\bcadre\b/i.test(nomNoeud)
     const enBloc = estCadre || !(enfants || []).some(c => c.fabrique)
-    const motBloc = estCadre ? 'cadre'
-      : /plaque|biscuit/i.test(nomNoeud) ? 'plaque' : 'tournée'
+    // Le mot du bloc, quand il y en a un. Sinon le titre ne dit qu'une
+    // quantité : plus de « tournée » nulle part (Layla, 2026-09-10).
+    const motDeBloc = n => /\bcadre\b/i.test(n) ? 'cadre'
+      : /plaque|biscuit/i.test(n) ? 'plaque' : null
+    const motBloc = motDeBloc(nomNoeud)
     // `brut`, pas `article` : `pourFois` a multiplié la tournée par le nombre
     // de fournées choisi.
     const parCadre = !enBloc ? 1
@@ -765,10 +768,11 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
     // Black Forest ne mange qu'un onzième de plaque de biscuit viennois — le
     // chiffre s'écrirait « 0 u » : on dit alors combien de pièces couvre une
     // tournée. « 1 tournée pour 88 » (Layla, 2026-09-09).
-    const dose = (nom, parPiece, unite, tourneeTaille) => ({
+    const dose = (nom, parPiece, unite, tourneeTaille, brutNom) => ({
       nom,
       valeur: !enBloc && /^u$/i.test(unite) && parPiece < 1 && tourneeTaille > 0
-        ? `1 tournée pour ${nb(Math.round(tourneeTaille / parPiece))}`
+        && motDeBloc(brutNom || nom)
+        ? `1 ${motDeBloc(brutNom || nom)} pour ${nb(Math.round(tourneeTaille / parPiece))}`
         : qteFine(parPiece * parCadre, unite),
       // Ce que cette ligne pèse, pour le total du bas. `null` quand elle se
       // compte en pièces : on n'additionne pas des grammes et des plaques.
@@ -797,24 +801,24 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
       const lignes = [...autres, ...figes, ...achetes].filter(c => Number(c.besoin) > 0)
       if (!(total > 0) || !lignes.length) return null
       return avecTotal({
-        titre: enBloc
-          ? `Pour 1 ${motBloc} = ${qte(parCadre, brut.unite)}`
-          : `Pour 1 ${propre(article.libelle)}`,
+        titre: !enBloc ? `Pour 1 ${propre(article.libelle)}`
+          : motBloc ? `Pour 1 ${motBloc} = ${qte(parCadre, brut.unite)}`
+          : `Pour ${qte(parCadre, brut.unite)}`,
         lignes: lignes.map(c => dose(
           nomAtelier(c.produit) + (c.fige ? ' · figé' : ''),
-          (c.besoin * facteurAtelier(c.produit)) / total, c.unite, c.tourneeTaille)),
+          (c.besoin * facteurAtelier(c.produit)) / total, c.unite, c.tourneeTaille, c.produit)),
       })
     }
     if (!(noeud.recette || []).length) return null
     // La taille de tournée d'un composant se lit dans la liste du dessous.
     const tailleDe = nom => (enfants || []).find(c => c.produit === nom)?.tourneeTaille
     return avecTotal({
-      titre: enBloc
-        ? `Pour 1 ${motBloc} = ${qte(parCadre, noeud.unite)}`
-        : `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`,
+      titre: !enBloc ? `Pour 1 ${noeud.unite} de ${propre(noeud.produit)}`
+        : motBloc ? `Pour 1 ${motBloc} = ${qte(parCadre, noeud.unite)}`
+        : `Pour ${qte(parCadre, noeud.unite)}`,
       lignes: noeud.recette.map(l => dose(
         nomAtelier(l.produit),
-        (l.qty * facteurAtelier(l.produit)) / parRecette, l.unite, tailleDe(l.produit))),
+        (l.qty * facteurAtelier(l.produit)) / parRecette, l.unite, tailleDe(l.produit), l.produit)),
     })
   })()
 
@@ -843,7 +847,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
         // par le nombre de tournées choisi. Écrire « Tournée de 28 u » pour
         // deux tournées de 14 serait faux — c'est le piège corrigé le matin
         // même par l'autre session, à ne pas rouvrir.
-        ? `Tournée de ${qte(brut.tournee, brut.unite)}`
+        ? qte(brut.tournee, brut.unite)
         : noeud.besoin > noeud.stock
           ? `Il en faut ${qte(noeud.besoin - noeud.stock, noeud.unite)} pour ${propre(parent)}`
           : `Tu en as ${qte(noeud.stock, noeud.unite)} — pour prendre de l'avance`}>
@@ -863,10 +867,9 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                   onClick={() => { setQteTxt(null); setFoisPar(x => ({ ...x, [brut.produit]: f })) }}
                   className={`rounded-xl px-3 py-2 text-[12.5px] font-extrabold border
                     ${on ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-cream-warm text-ink-soft border-cream-deep'}`}>
-                  {f === 0.5 ? '½' : f === 1.5 ? '1½' : f} tournée{f > 1 ? 's' : ''}
-                  <span className={`block text-[11px] font-bold ${on ? 'text-cream/80' : 'text-ink-mute'}`}>
-                    {pieces}
-                  </span>
+                  {/* Le mot « tournée » a été retiré partout : on ne parle plus
+                      qu'en poids ou en pièces (Layla, 2026-09-10). */}
+                  {pieces}
                 </button>
               )
             })}
@@ -921,16 +924,11 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
                          text-[22px] font-extrabold text-bordeaux leading-none disabled:opacity-35">−</button>
             <div className="flex-1 text-center">
               <div className="text-[15px] font-extrabold">
-                {aLaQte
-                  ? qte(parRecette * fois, noeud.unite)
-                  : `${fois === 0.5 ? '½' : nb(fois)} tournée${fois > 1 ? 's' : ''}`}
+                {qte(parRecette * fois, noeud.unite)}
               </div>
               <div className="text-[11.5px] text-ink-mute">
-                {aLaQte ? 'à la quantité' : qte(parRecette * fois, noeud.unite)}
                 {fois !== foisDuNoeud(noeud)
-                  ? ` · conseillé : ${aLaQte
-                      ? qte(parRecette * foisDuNoeud(noeud), noeud.unite)
-                      : nb(foisDuNoeud(noeud))}` : ''}
+                  ? `conseillé : ${qte(parRecette * foisDuNoeud(noeud), noeud.unite)}` : ''}
               </div>
             </div>
             <button onClick={() => majFois(fois + pasFois)}
@@ -953,7 +951,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
             <div className="flex-1 min-w-0 text-[14px]">
               {article.figesNom}
               <div className="text-[11.5px] text-ink-mute mt-0.5">
-                Pour la tournée entière — ne bouge pas avec la sortie réelle
+                Pour la fournée entière — ne bouge pas avec la sortie réelle
               </div>
             </div>
           </div>
@@ -999,21 +997,10 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
               ? <span className="text-[11.5px] text-ink-mute shrink-0">recette</span>
               : (
                 <div className="text-right shrink-0">
-                  {/* Un article à quantité figée ne se compte pas en tournées :
-                      on en fait exactement ce qui manque (Layla, 2026-09-09). */}
-                  {c.aLaQuantite || c.fige ? (
-                    <>
-                      <div className="text-[11px] text-ink-mute">à faire</div>
-                      <div className="text-[13px] font-extrabold">{qte(c.produira, c.unite)}</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-[13px] font-extrabold">
-                        {c.tournees === 0.5 ? '½' : nb(c.tournees)} tournée{c.tournees > 1 ? 's' : ''}
-                      </div>
-                      <div className="text-[11px] text-ink-mute">= {qte(c.produira, c.unite)}</div>
-                    </>
-                  )}
+                  {/* On ne compte plus en tournées : on dit ce qu'il y a à
+                      faire, en poids ou en pièces (Layla, 2026-09-10). */}
+                  <div className="text-[11px] text-ink-mute">à faire</div>
+                  <div className="text-[13px] font-extrabold">{qte(c.produira, c.unite)}</div>
                 </div>
               )}
             <span className={`text-[17px] ${ok ? 'text-ink-mute/50' : 'text-ink-mute'}`}>›</span>
@@ -1051,9 +1038,7 @@ export default function FabAnnexe2View({ user, onLogout, onNavigate, activeView 
           <div className="flex-1 text-[13px]">
             {/* Plus de « Tout y est » sur une tournée montée : le bouton dit
                 déjà quoi faire (Layla, 2026-09-09). */}
-            {racine ? ''
-              : aLaQte ? `Pour ${qte(parRecette * fois, noeud.unite)}`
-              : fois === noeud.tournees ? "Recette d'origine" : `Recette × ${nb(fois)}`}
+            {racine ? '' : `Pour ${qte(parRecette * fois, noeud.unite)}`}
             {!racine && noeud.besoin <= noeud.stock && (
               <div className="text-[11.5px] text-ink-mute mt-0.5">Tu n'en as pas besoin maintenant</div>
             )}
