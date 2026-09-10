@@ -182,8 +182,30 @@ function bomDe(cache, produit) {
 }
 
 /** Le stock de plusieurs articles à l'annexe, en un seul appel. */
-async function stocksDe(ids) {
+/**
+ * Le stock du Stock Prod annexe.
+ *
+ * ⚠️ TOUT le lieu en UNE lecture, gardée le temps de la requête. On demandait
+ * avant les stocks article par article, à chaque niveau de chaque cascade :
+ * des centaines d'allers-retours vers Odoo pour un seul écran, d'où les neuf
+ * secondes d'attente. Le lieu entier tient en une requête. Jamais entre deux
+ * requêtes, en revanche : c'est ce qui bouge, et Layla doit voir ses
+ * corrections tout de suite. (Layla, 2026-09-10 : « c'est trop lent ».)
+ */
+async function stocksDe(ids, cache = null) {
   if (!ids.length) return {}
+  if (cache) {
+    if (!cache.stocks) {
+      cache.stocks = (async () => {
+        const q = await sr('stock.quant', [['location_id', '=', LIEU_ANNEXE]],
+          ['product_id', 'quantity'], { limit: 8000 })
+        const par = {}
+        for (const x of q) par[x.product_id[0]] = (par[x.product_id[0]] || 0) + x.quantity
+        return par
+      })()
+    }
+    return await cache.stocks
+  }
   const q = await sr('stock.quant',
     [['location_id', '=', LIEU_ANNEXE], ['product_id', 'in', ids]], ['product_id', 'quantity'])
   const par = {}
@@ -304,7 +326,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
   // Le stock de tous les composants d'un coup.
   const lignes = lignesPour(bom, produit)
   const ids = lignes.map(l => l.product_id[0])
-  const stocks = await stocksDe(ids)
+  const stocks = await stocksDe(ids, cache)
 
   const out = await Promise.all(lignes.map(async l => {
     const nom = sansRef(l.product_id[1])
@@ -751,7 +773,7 @@ export default async function handler(req, res) {
     // catalogue en compte cinq ou deux cents. C'est tout ce dont la liste a
     // besoin ; les recettes ne se chargent qu'à l'ouverture d'un article.
     const prods = await Promise.all(voulus.map(a => produitParNom(cache, a.produit)))
-    const stocks = await stocksDe(prods.filter(Boolean).map(p => p.id))
+    const stocks = await stocksDe(prods.filter(Boolean).map(p => p.id), cache)
 
     // À quel gâteau sert cette préparation ? Le catalogue le dit… quand la
     // colonne est remplie. Le 2026-09-09 elle était vide pour 7 articles sur
