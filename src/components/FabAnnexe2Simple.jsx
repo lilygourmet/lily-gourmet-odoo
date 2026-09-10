@@ -71,6 +71,52 @@ export function CasesAFaire({ articles, onOuvrir }) {
 }
 
 /**
+ * Les deux onglets. « À faire » montre le travail du jour ; « Déclarer » sert
+ * à venir dire ce qu'on a fabriqué, même un article qui n'était pas demandé.
+ * Deux gros boutons, deux mots — rien de plus.
+ */
+export function Onglets({ onglet, onChange }) {
+  return (
+    <div className="flex gap-2 mb-4">
+      {[['faire', 'À faire'], ['declarer', 'Déclarer']].map(([k, t]) => (
+        <button key={k} onClick={() => onChange(k)}
+          className={`flex-1 rounded-2xl py-4 text-[17px] font-extrabold border-2
+            ${onglet === k ? 'bg-bordeaux border-bordeaux text-cream'
+                           : 'bg-cream-warm border-cream-deep text-ink-mute'}`}>
+          {t}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Des cases photo + nom, sans chiffre : on choisit un gâteau, puis sa taille.
+ * Pas de pastille rouge ici — dans « Déclarer », rien n'est en retard, on
+ * vient juste dire ce qu'on a fait.
+ */
+export function Cases({ items, onOuvrir, vide }) {
+  if (!items?.length) {
+    return <p className="text-center text-[17px] font-bold text-ink-mute py-16">{vide}</p>
+  }
+  return (
+    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+      {items.map(it => (
+        <button key={it.cle} onClick={() => onOuvrir(it.cle)}
+          className="text-left rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden
+                     shadow-sm active:scale-[0.98] transition-transform">
+          <img src={photoDe(it.photo || it.cle)} alt="" loading="lazy"
+            className="w-full aspect-square object-cover bg-cream-deep" />
+          <div className="px-3 py-2 text-[16px] font-bold leading-tight">
+            {propre(it.libelle || it.cle)}
+          </div>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/**
  * Le clavier-calculette. Le « + » et le « − » vont de 1 en 1 ou de 50 g en
  * 50 g ; pour passer de 3 920 à 2 600, ça ferait vingt-six appuis. On tape le
  * nombre. « Garde le clavier calculette pour tous les chiffres si besoin de
@@ -276,11 +322,19 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir }) {
                 </span>
               )}
             </span>
+            {/* Ce qui manque garde SA QUANTITÉ : sans elle, le bouton prenait
+                la place du besoin et on ne savait plus combien il en faut
+                (Layla, 2026-09-10). Le nombre reste gros, le mot reste petit. */}
             {manque
               ? (
                 <button onClick={() => onOuvrir(c.produit)}
                   className="shrink-0 rounded-xl border-2 border-danger text-danger
-                             px-3 py-2 text-[14px] font-extrabold">à faire ›</button>
+                             px-3 py-1.5 text-right leading-tight">
+                  <span className="block text-[11px] font-bold">à faire ›</span>
+                  <span className="block text-[17px] font-extrabold tabular-nums">
+                    {qte(c.besoin, c.unite)}
+                  </span>
+                </button>
               )
               : <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
                 {qte(c.besoin, c.unite)}

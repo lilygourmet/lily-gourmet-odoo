@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { CasesAFaire, Fiche, Clavier, Sortie } from './FabAnnexe2Simple'
+import { CasesAFaire, Cases, Fiche, Clavier, Onglets, Sortie } from './FabAnnexe2Simple'
 import { sansRendement } from '../lib/fabAnnexe'
 import { propre } from '../lib/ecranSimple'
 
@@ -326,6 +326,25 @@ describe('le garde-fou du zéro', () => {
   })
 })
 
+describe('ce qui manque', () => {
+  it('le bouton porte le besoin de la recette', () => {
+    // Sans ça, le bouton prenait la place du chiffre : on voyait qu'il
+    // manquait quelque chose, sans savoir combien il en faut.
+    render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    const bouton = screen.getByText('à faire ›').closest('button')
+    expect(bouton.textContent).toMatch(/13 u/)
+  })
+
+  it('et il ouvre toujours l’ingrédient qui manque', () => {
+    const onOuvrir = vi.fn()
+    render(<Fiche noeud={tiramisu} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={onOuvrir} onFait={() => {}} />)
+    fireEvent.click(screen.getByText('à faire ›'))
+    expect(onOuvrir).toHaveBeenCalledWith('SM. Biscuit a la cuillere 5 pers')
+  })
+})
+
 describe('ce qu’on ne montre pas', () => {
   const gianduja = {
     produit: 'SM- Gianduja indiv', libelle: 'Gianduja indiv', unite: 'u',
@@ -356,5 +375,48 @@ describe('ce qu’on ne montre pas', () => {
       faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
     // « 90 cremeux gianduja indiv productions · … » : la liste le dit déjà.
     expect(screen.queryByText(/·.*production/i)).toBeNull()
+  })
+})
+
+// ====== « Déclarer » ======
+// « Le nouveau bouton montre à faire. Et aussi doit montrer à déclarer »
+// (Layla, 2026-09-10). On y vient dire ce qu'on a fabriqué, même un article
+// que personne n'avait demandé.
+
+describe('les deux onglets', () => {
+  it('montre les deux, et dit lequel est ouvert', () => {
+    const onChange = vi.fn()
+    render(<Onglets onglet="faire" onChange={onChange} />)
+    const declarer = screen.getByText('Déclarer')
+    expect(screen.getByText('À faire').className).toMatch(/bg-bordeaux/)
+    expect(declarer.className).not.toMatch(/bg-bordeaux/)
+    fireEvent.click(declarer)
+    expect(onChange).toHaveBeenCalledWith('declarer')
+  })
+})
+
+describe('les cases de « Déclarer »', () => {
+  const gateaux = [
+    { cle: 'E- Tiramisu', photo: 'E- Tiramisu', libelle: 'E- Tiramisu' },
+    { cle: 'E- Royal chocolat', photo: 'E- Royal chocolat', libelle: 'E- Royal chocolat' },
+  ]
+
+  it('une case par gâteau, sans pastille rouge : rien n’est en retard ici', () => {
+    render(<Cases items={gateaux} onOuvrir={() => {}} vide="Rien" />)
+    expect(screen.getByText('Tiramisu')).toBeTruthy()
+    expect(screen.getByText('Royal chocolat')).toBeTruthy()
+    expect(document.querySelector('.bg-danger')).toBeNull()
+  })
+
+  it('ouvre le gâteau qu’on touche', () => {
+    const onOuvrir = vi.fn()
+    render(<Cases items={gateaux} onOuvrir={onOuvrir} vide="Rien" />)
+    fireEvent.click(screen.getByText('Tiramisu'))
+    expect(onOuvrir).toHaveBeenCalledWith('E- Tiramisu')
+  })
+
+  it('le dit quand la recherche ne donne rien', () => {
+    render(<Cases items={[]} onOuvrir={() => {}} vide="Rien à ce nom-là." />)
+    expect(screen.getByText('Rien à ce nom-là.')).toBeTruthy()
   })
 })

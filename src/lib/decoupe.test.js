@@ -3,7 +3,7 @@
 // seule étape de l'annexe qui porte DEUX décisions sur le même écran : combien
 // je cuis, combien je coupe.
 import { describe, it, expect } from 'vitest'
-import { enNoeud, decoupeDe, partageDecoupe, ingredientsPour } from './fabAnnexe'
+import { enNoeud, decoupeDe, partageDecoupe, ingredientsPour, parGateauMere } from './fabAnnexe'
 
 const plaque = {
   produit: 'SM. Biscuit a la cuillere (plaque)', unite: 'u', fabrique: true,
@@ -158,5 +158,22 @@ describe('un ingrédient cité deux fois', () => {
     const l = ingredientsPour(gianduja, 34)
     expect(l.length).toBe(2)
     expect(l.map(x => x.besoin)).toEqual([2704, 4550])
+  })
+})
+
+describe('la recherche de « Déclarer »', () => {
+  // Vérifié sur le vrai catalogue (284 articles, 2026-09-10) : le sirop
+  // d'imbibage sert au cake citron ET au cake chocolat.
+  const tout = [
+    { produit: 'SM- Sirop Imbibage cake', pour: ['V- Cake Citron', 'V- Cake Chocolat'] },
+    { produit: 'SM- Cake citron', pour: ['V- Cake Citron'] },
+  ]
+
+  it('un article qui sert à deux gâteaux ne fait qu’une case', () => {
+    const groupes = parGateauMere(tout, 'sirop')
+    const plat = groupes.flatMap(g => g.articles)
+    expect(plat.length).toBe(2)          // deux fois, une par gâteau
+    const cases = [...new Map(plat.map(a => [a.produit, a])).values()]
+    expect(cases.length).toBe(1)         // mais une seule case à l'écran
   })
 })

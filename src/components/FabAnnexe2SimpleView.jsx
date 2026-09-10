@@ -17,9 +17,10 @@ import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { CasesAFaire, Fiche, Fil, Sortie } from './FabAnnexe2Simple'
-import { loadFabAnnexe, loadArticleFabAnnexe, decoupeDe, noeudDuChemin, defautDe,
-  peseesDe, declarer, envoyerAValider, sansRendement } from '../lib/fabAnnexe'
+import { CasesAFaire, Cases, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
+import { loadFabAnnexe, loadToutFabAnnexe, loadArticleFabAnnexe, decoupeDe,
+  noeudDuChemin, defautDe, parGateauMere, peseesDe, declarer, envoyerAValider,
+  sansRendement } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 
 export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activeView, onBasculer }) {
@@ -34,6 +35,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState(null)
   const [tour, setTour] = useState(0)
+  // « Déclarer » : tout ce que l'annexe sait faire, pour venir dire ce qu'on a
+  // fabriqué même quand rien ne le réclamait. On y descend par gâteau, comme
+  // dans l'ancien écran (Layla, 2026-09-09).
+  const [onglet, setOnglet] = useState('faire')
+  const [tout, setTout] = useState(() => dernierEcran('fab_annexe2_tout'))
+  const [cherche, setCherche] = useState('')
+  const [gateau, setGateau] = useState(null)
 
   const ouvert = chemin[0] || null
   const nav = { user, onLogout, onNavigate, activeView }
@@ -50,6 +58,16 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         setErreur(null)
       })
       .catch(e => { if (vivant) { setErreur(e.message || String(e)); setArticles([]) } })
+    return () => { vivant = false }
+  }, [tour])
+
+  // Le catalogue complet part avec le reste, sans attendre le clic sur
+  // l'onglet : quand elle y arrive, il est déjà là.
+  useEffect(() => {
+    let vivant = true
+    loadToutFabAnnexe()
+      .then(l => { if (vivant) { setTout(l); garderEcran('fab_annexe2_tout', l) } })
+      .catch(() => { /* « À faire » n'a pas à en souffrir */ })
     return () => { vivant = false }
   }, [tour])
 
@@ -120,13 +138,57 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
 
   // ---------- la liste ----------
   if (!chemin.length) {
+    // Dès qu'on tape, on cherche PARTOUT — les préparations comprises : on vient
+    // chercher un composant précis, pas parcourir les gâteaux.
+    const groupes = onglet === 'declarer' ? parGateauMere(tout, cherche) : []
+    const ouvertG = cherche.trim() ? null : groupes.find(g => g.nom === gateau)
+    // ⚠️ Un article qui sert à DEUX gâteaux est rangé sous les deux : mis à
+    // plat, il apparaissait deux fois dans la recherche (« Sirop Imbibage cake
+    // citron » ×2). Une case par article, pas une par usage.
+    const trouves = cherche.trim()
+      ? [...new Map(groupes.flatMap(g => g.articles).map(a => [a.produit, a])).values()]
+      : null
+    const ouvrir = p => { setFaits({}); setQuantites({}); setCuites({}); setChemin([p]) }
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader {...nav} />
         <div className="max-w-[1000px] mx-auto px-4 py-5 pb-28">
           {erreur && <p className="text-danger text-[14px] mb-3">{erreur}</p>}
-          {articles === null ? <Skeleton rows={4} />
-            : <CasesAFaire articles={articles} onOuvrir={p => setChemin([p])} />}
+          <Onglets onglet={onglet} onChange={k => { setOnglet(k); setGateau(null); setCherche('') }} />
+
+          {onglet === 'faire' && (articles === null
+            ? <Skeleton rows={4} />
+            : <CasesAFaire articles={articles} onOuvrir={ouvrir} />)}
+
+          {onglet === 'declarer' && (
+            <>
+              <input value={cherche} onChange={e => setCherche(e.target.value)}
+                placeholder="Chercher" aria-label="Chercher"
+                className="w-full h-14 rounded-2xl border-2 border-cream-deep bg-cream-warm
+                           px-4 mb-4 text-[17px] outline-none focus:border-bordeaux" />
+              {tout === null && <Skeleton rows={3} />}
+              {trouves && (
+                <Cases vide="Rien à ce nom-là."
+                  items={trouves.map(a => ({ cle: a.produit, photo: a.photo, libelle: a.libelle }))}
+                  onOuvrir={ouvrir} />
+              )}
+              {!trouves && ouvertG && (
+                <>
+                  <button onClick={() => setGateau(null)}
+                    className="text-[14px] text-ink-mute font-bold mb-3">← Tous les gâteaux</button>
+                  <Cases vide="Rien ici."
+                    items={ouvertG.articles.map(a => ({ cle: a.produit, photo: a.photo, libelle: a.libelle }))}
+                    onOuvrir={ouvrir} />
+                </>
+              )}
+              {!trouves && !ouvertG && tout !== null && (
+                <Cases vide="Rien à déclarer."
+                  items={groupes.map(g => ({ cle: g.nom, photo: g.photo, libelle: g.nom }))}
+                  onOuvrir={setGateau} />
+              )}
+            </>
+          )}
+
           <button onClick={onBasculer}
             className="w-full mt-10 py-3 text-[13px] text-ink-mute font-bold">
             revenir à l'ancien écran
