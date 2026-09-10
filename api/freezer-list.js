@@ -6,6 +6,7 @@
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js'
+import { waitUntil } from '@vercel/functions'
 import { versUnite } from '../src/lib/unites.js'
 
 // Ce que Check CD- a déjà contrôlé. Sans la base (SQL pas lancé, variables
@@ -962,7 +963,10 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
     moveDuFini(uid, id, prod, qty, Array.isArray(bom.product_uom_id) ? bom.product_uom_id[0] : undefined, modele),
   ])
   await odooCall(uid, 'mrp.production', 'action_confirm', [[id]])
-  await odooCall(uid, 'mrp.production', 'action_assign', [[id]]).catch(() => { })
+  // ⚠️ La RÉSERVATION ne fait attendre personne : elle est lente chez Odoo,
+  // son résultat n'est pas lu, et l'ordre existe déjà. On la laisse finir
+  // derrière la réponse. (Layla, 2026-09-10 : « l'envoi est lent ».)
+  apresLaReponse(odooCall(uid, 'mrp.production', 'action_assign', [[id]]))
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
   await rattacherEnfants(uid, id, cree.name)
   return { id, name: cree.name, produit: prod.display_name, qty: cree.product_qty, etat: cree.state }
@@ -1294,6 +1298,15 @@ async function reapproCD() {
 // Ce qui manque pour fabriquer ces ordres (lecture seule).
 // La génoise est ignorée : son stock restera négatif un moment (Layla).
 // ============================================================
+/**
+ * Garde la fonction Vercel en vie le temps d'un travail qui ne doit pas faire
+ * attendre la réponse. Hors Vercel (dev local), on laisse simplement tourner.
+ */
+function apresLaReponse(promesse) {
+  const p = Promise.resolve(promesse).catch(e => console.warn('[apres]', e?.message || e))
+  try { waitUntil(p) } catch { /* pas de contexte Vercel */ }
+}
+
 /**
  * La commande servie par chaque ordre, quand il y en a une → { ordre: 'S52506' }.
  *
