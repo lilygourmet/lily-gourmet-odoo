@@ -758,6 +758,26 @@ export async function declarer({ produit, qty, unite, fois = null, ajustements =
 }
 
 /**
+ * LA CUVE, C'EST CE QU'ON A VRAIMENT FAIT.
+ *
+ * Un ingrédient figé qui se fabrique — la crème légère, la mousse quand elle a
+ * son article — a été DÉCLARÉ juste avant, avec sa vraie quantité. C'est
+ * celle-là qui doit partir dans l'ordre, pas la règle de trois de la recette :
+ * si on a fait 9 000 g de crème là où la recette en annonce 9 775, ce sont
+ * 9 000 g qui sont passés dans les gâteaux.
+ *
+ * Les figés ACHETÉS (la mousse du royal : lait, gélatine, crème…) n'ont pas de
+ * déclaration à eux : ils gardent le calcul de la recette.
+ */
+export function cuveDeclaree(article) {
+  const out = {}
+  for (const c of enfantsDe(article)) {
+    if (c.fige && c.fabrique && c.dejaFait > 0) out[c.produit] = c.dejaFait
+  }
+  return out
+}
+
+/**
  * L'article de tête, une fois la tournée montée. Il sort avec la quantité
  * RÉELLEMENT sortie (128 et non 140) : Odoo ramène alors tout seul le biscuit,
  * le sirop et l'amaretti à 128 via la recette. Seuls les ingrédients figés
@@ -766,7 +786,8 @@ export async function declarer({ produit, qty, unite, fois = null, ajustements =
 export function envoyerAValider(article, sortie, userId) {
   return declarer({
     produit: article.produit, qty: sortie, unite: article.unite,
-    ajustements: article.ajustements || null,
+    // ⚠️ Ce qui a été déclaré prime sur la règle de trois (voir `cuveDeclaree`).
+    ajustements: { ...(article.ajustements || {}), ...cuveDeclaree(article) },
   }, userId)
 }
 
