@@ -441,3 +441,48 @@ describe('non-régression : espèces, chèques et virements ensemble', () => {
     expect(r.unmatched.map(u => u.credit)).toContain(950)
   })
 })
+
+// Un relevé ne contient pas que des opérations : il fait aussi ses comptes. Ces lignes-là
+// portent un montant et arrivaient dans « Reçus banque non liés » comme des encaissements.
+describe('lignes de solde et de total', () => {
+  const X = { dop: 50, det: 160, dv: 400, deb: 500, cre: 600 }
+  const items = [
+    { page: 1, y: 800, x: X.dop, str: 'Date op' },
+    { page: 1, y: 800, x: X.det, str: 'Détails' },
+    { page: 1, y: 800, x: X.dv, str: 'Date valeur' },
+    { page: 1, y: 800, x: X.deb, str: 'Débit' },
+    { page: 1, y: 800, x: X.cre, str: 'Crédit' },
+    { page: 1, y: 700, x: X.dop, str: '17/07/2026' },
+    { page: 1, y: 700, x: X.det, str: 'VIR INST RECU ASMAE SAIR' },
+    { page: 1, y: 700, x: X.dv,  str: '17/07/2026' },
+    { page: 1, y: 700, x: X.cre, str: '500,00' },
+    { page: 1, y: 600, x: X.dop, str: '31/07/2026' },
+    { page: 1, y: 600, x: X.det, str: 'NOUVEAU SOLDE AU 31/07/2026' },
+    { page: 1, y: 600, x: X.dv,  str: '31/07/2026' },
+    { page: 1, y: 600, x: X.cre, str: '125.430,50' },
+    { page: 1, y: 560, x: X.dop, str: '31/07/2026' },
+    { page: 1, y: 560, x: X.det, str: 'TOTAL DES MOUVEMENTS' },
+    { page: 1, y: 560, x: X.dv,  str: '31/07/2026' },
+    { page: 1, y: 560, x: X.cre, str: '88.000,00' },
+  ]
+  const parsed = parseBmciReleve(items)
+
+  it('les reconnaît pour ce qu\'elles sont', () => {
+    expect(parsed.find(t => t.credit === 125430.5).type).toBe('solde')
+    expect(parsed.find(t => t.credit === 88000).type).toBe('solde')
+  })
+
+  it('ne les met pas dans « non liées »', () => {
+    const { unmatched } = reconcileEnvelopes([], parsed, {})
+    expect(unmatched.map(u => u.credit)).toEqual([500])
+  })
+
+  it('ne les propose à aucune caisse', () => {
+    const caisse = {
+      id: 'S', amount_cash: 125430.5, payment_method: 'virement',
+      releve_status: null, session_date: '2026-07-31', virement_client: 'Nouveau Solde',
+    }
+    const { results } = reconcileEnvelopes([caisse], parsed, {})
+    expect(results[0].status).toBe('absent')
+  })
+})
