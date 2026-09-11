@@ -454,6 +454,19 @@ export function disponiblePour(declare, tete) {
 }
 
 /**
+ * UNE DÉCOUPE : un seul ingrédient dans la recette, et l'article se compte en
+ * pièces. C'est un biscuit qu'on taille dans une plaque.
+ *
+ * ⚠️ Celle-là se fait TOUJOURS par plaques entières, catalogue ou pas : « les
+ * découpes paraissent toujours avec le nombre demandé du gâteau ; on a parlé
+ * de tournée de découpe selon la taille » (Layla, 2026-09-11). On ne coupe pas
+ * 90 individuels dans une plaque qui en donne 102 — on en coupe 102, et les 12
+ * en trop partent au congélo.
+ */
+export const estDecoupeServeur = (unite, nbLignes) =>
+  /^u$/i.test(String(unite || '').trim()) && nbLignes === 1
+
+/**
  * Combien produire d'un composant qui se fait à la QUANTITÉ (pas par fournée).
  *
  * Ce qui manque, d'abord. Mais JAMAIS zéro : on ouvre aussi un composant qu'on
@@ -566,7 +579,9 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
       // « 2 737 tournées » de crème légère. Une tournée de 1 PIÈCE, elle, est
       // bien une tournée (la plaque de biscuit à la cuillère).
       // (Analyse du circuit, Layla, 2026-09-09.)
-      const aLaQuantite = fige || !auCatalogue || parTournee <= 1
+      // Une découpe garde ses plaques entières même sans réglage au catalogue.
+      const estDecoupe = estDecoupeServeur(c.unite, lignesPour(sousBom, p).length)
+      const aLaQuantite = fige || (!estDecoupe && (!auCatalogue || parTournee <= 1))
       if (aLaQuantite) {
         // ⚠️ EXCEPTION à « toujours une tournée entière » : un article à
         // quantité FIGÉE ne se fait pas par tournée — la cuve part en entier
