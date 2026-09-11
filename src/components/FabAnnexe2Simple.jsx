@@ -187,14 +187,14 @@ export function GrosChiffre({ titre, valeur, unite, onChange }) {
       <div className="flex items-center justify-center gap-4">
         <button onClick={() => bouger(-pas)}
           disabled={vu <= 0} aria-label={`Moins ${titre}`}
-          className="w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
+          className="print:hidden w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
                      text-[34px] font-extrabold text-bordeaux leading-none disabled:opacity-30">−</button>
         <button onClick={() => setClavier(true)} aria-label={`Changer ${titre}`}
           className="min-w-[130px] text-center font-extrabold tabular-nums text-[54px] leading-none">
           {nb(vu)}
         </button>
         <button onClick={() => bouger(pas)} aria-label={`Plus ${titre}`}
-          className="w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
+          className="print:hidden w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
                      text-[34px] font-extrabold text-bordeaux leading-none">+</button>
       </div>
       {clavier && (
@@ -278,7 +278,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       {/* Éteint tant qu'il manque quelque chose — et tant que le chiffre est
           à zéro : un bouton vert qui ne fait rien est pire qu'un bouton gris. */}
       <button onClick={onFait} disabled={bloque.length > 0 || !(quantite > 0)}
-        className={`w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold
+        className={`print:hidden w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold
           ${bloque.length || !(quantite > 0) ? 'bg-cream-deep text-ink-mute' : 'bg-success text-cream'}`}>
         C'est fait
       </button>

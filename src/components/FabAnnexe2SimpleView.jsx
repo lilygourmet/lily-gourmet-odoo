@@ -268,7 +268,19 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     <div className="min-h-screen bg-cream">
       <AppHeader {...nav} />
       <div className="max-w-[680px] mx-auto px-4 py-4 pb-28">
-        <Fil chemin={chemin} onRetour={() => { setSortie(null); setChemin(chemin.slice(0, -1)) }} />
+        {/* Le fil d'Ariane et le bouton d'impression sur la même ligne. Les
+            deux disparaissent à l'impression : la feuille ne porte que la
+            recette telle qu'elle est à l'écran (Layla, 2026-09-11). */}
+        <div className="flex items-start justify-between gap-3 print:hidden">
+          <Fil chemin={chemin} onRetour={() => { setSortie(null); setChemin(chemin.slice(0, -1)) }} />
+          {sortie === null && (
+            <button onClick={() => window.print()}
+              className="shrink-0 rounded-xl border border-cream-deep bg-cream-warm px-3 py-2
+                         text-[13px] font-bold text-ink-soft">
+              🖨 Imprimer
+            </button>
+          )}
+        </div>
         {sortie !== null
           ? (
             <Sortie noeud={noeud} valeur={sortie} envoi={envoi}
@@ -281,6 +293,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               onValider={() => envoyer(noeud, tete, sortie)} />
           )
           : (
+            <div className="print-area">
             <Fiche noeud={noeud} quantite={q} onQuantite={v => poser(noeud.produit, v)}
               cuites={decoupe ? (cuites[noeud.produit] ?? defautDe(decoupe.enfant)) : undefined}
               onCuites={decoupe
@@ -296,6 +309,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                 }
                 setSortie(q)
               }} />
+            </div>
           )}
       </div>
     </div>
