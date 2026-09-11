@@ -68,7 +68,10 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
         await Promise.all(toWrite.slice(i, i + 15).map(r => {
           const fileIdx = r.line ? r.line._fileIdx : (r.candidates?.[0]?._fileIdx ?? 0)
           return setEnveloppeReleve(r.env.id, {
-          proofUrl: paths[fileIdx] || paths[0],
+          // Preuve photo déjà déposée (bordereau) : on la garde, le rapprochement s'y
+          // ajoute. Sans ce garde-fou, importer un relevé remplaçait la photo par le PDF.
+          // Le bouton « Relancer le rapprochement » protégeait déjà la photo, pas l'import.
+          proofUrl: r.env.proof_url ? undefined : (paths[fileIdx] || paths[0]),
           proofDate: r.line ? r.line.dateIso : r.env.session_date,
           status: r.status,
           libelle: r.line
