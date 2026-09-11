@@ -511,6 +511,20 @@ const lieuStockProd = uid => memo('lieustockprod', async () =>
 // moment — décision de Layla).
 const toujoursDispo = n => /eau\s*robinet|^\s*MP-\s*Eau|genoise/i.test(String(n || ''))
 
+/**
+ * À L'ANNEXE, une MATIÈRE PREMIÈRE ne bloque pas la validation.
+ *
+ * Son stock n'y est pas tenu — 47 tonnes de sucre, une gélatine à −7 590 g —
+ * et une recette pesée ne doit pas rester en rade à cause d'un compteur faux.
+ * « Ne pas prendre en considération les MP- pour le moment dans la validation
+ * des recettes » (Layla, 2026-09-11).
+ *
+ * ⚠️ Seulement pour les ordres de l'annexe (WHPDX) : au labo cake design, le
+ * stock des matières premières sert encore de garde-fou.
+ */
+export const mpDeLAnnexe = (nom, ordre) => /^WHPDX\/MO\//i.test(String(ordre || ''))
+  && /^\s*(\[\d+\]\s*)?MP[-.]/i.test(String(nom || ''))
+
 const estMontageCD = n => /CD\*/i.test(String(n)) && !/^SM[\s.]/i.test(String(n))
 
 /**
@@ -1429,7 +1443,7 @@ async function manquesDesOrdres(uid, names) {
   return mos.map(m => {
     const lignes = moves.filter(x => x.raw_material_production_id[0] === m.id).map(x => {
       const nomP = Array.isArray(x.product_id) ? x.product_id[1] : ''
-      const ignore = toujoursDispo(nomP)
+      const ignore = toujoursDispo(nomP) || mpDeLAnnexe(nomP, m.name)
       const uniteLigne = (Array.isArray(x.product_uom) ? x.product_uom[1] : 'u').replace(/^units?$/i, 'u')
       const lieu = Array.isArray(m.location_src_id) ? m.location_src_id[0] : null
       const st = stockParLieu[lieu + ':' + x.product_id[0]]
