@@ -556,7 +556,11 @@ export async function loadFreeReleveLines(amount, paymentMethod = 'cash') {
     .not('ignored', 'is', true)            // lignes ignorées manuellement exclues
     .not('label', 'ilike', '%lanacash%')   // lignes TPE Lanacash exclues
     .in('type', types)
-  if (amount != null) q = q.gte('amount', a - 0.005).lte('amount', a + 0.005)
+  // MÊME tolérance que le rapprochement automatique (Odoo compte les centimes, la banque
+  // arrondit au dirham). À 0,005 dh près, une caisse de 306,20 ne retrouvait plus SA ligne
+  // de 306,00 au moment de la confirmer : l'app la validait sans rien rattacher, et le
+  // dépôt restait dans « Reçus banque non liés » pour toujours.
+  if (amount != null) q = q.gte('amount', a - ECART_MINI).lte('amount', a + ECART_MINI)
   const { data, error } = await q.order('ligne_date', { ascending: false }).limit(1000)
   if (error) throw error
   return data || []
@@ -614,13 +618,16 @@ export async function confirmReleveLine(env, choice) {
     const ligne = memeJour.find(l => (l.label || '').startsWith(choice.l)
       || choice.l.startsWith((l.label || '').slice(0, 40))) || memeJour[0]
     if (ligne) return attachReleveLines(env, [ligne])
+    // La ligne proposée n'est plus libre (une autre caisse l'a prise entre-temps) ou n'a
+    // jamais été enregistrée. On NE valide PAS : une caisse verte sans ligne rattachée est
+    // fausse des DEUX côtés — la caisse se croit justifiée, et le dépôt reste éternellement
+    // dans « Reçus banque non liés ». Mieux vaut le dire et laisser choisir à la main.
+    throw new Error("La ligne du relevé n'a pas été retrouvée : une autre caisse l'a peut-être déjà prise. Utilise « Lier » pour choisir la bonne ligne.")
   }
-  // Ligne pas mémorisée (vieil import) ou « confirmer sans choisir » : on ne peut que
-  // passer l'enveloppe verte.
+  // « Confirmer sans choisir » : geste volontaire, il n'y a aucune ligne à rattacher.
   await setEnveloppeReleve(env.id, {
     status: 'trouve',
-    proofDate: choice?.d || undefined,
-    libelle: choice ? `${choice.d} · ${choice.l}` : 'Confirmé manuellement',
+    libelle: 'Confirmé manuellement',
     candidates: null,
   })
 }
