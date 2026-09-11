@@ -10,6 +10,7 @@ import { creerOfPrepa } from './fabrication'
 import { toast } from './toast'
 import { todayISO } from './dates'
 import { correspond } from './recherche'
+import { enGrammes as enGrammesOdoo } from './unites'
 import { supabase } from './supabase'
 
 /**
@@ -746,7 +747,14 @@ export async function declarer({ produit, qty, unite, fois = null, ajustements =
   // coup. « Marquer comme fait rame beaucoup » (Layla, 2026-09-11). La
   // déclaration, elle, est déjà enregistrée : si l'ordre tarde ou échoue,
   // « À valider Annexe » la montre comme « sans ordre » et le dit.
-  creerOfPrepa(produit, qty, userId, [], unite, 'annexe', ajustements)
+  // ⚠️ UNE SEULE CONVENTION VERS ODOO : des GRAMMES, ou des pièces. L'unité de
+  // l'article (kg pour la crème citron gingembre, g pour la ganache) ne voyage
+  // plus — c'est elle qui a produit un ordre de « 14,33 g » là où il fallait
+  // 14 328 g, mille fois trop peu (Layla, 2026-09-11). Le serveur reconvertit
+  // ensuite dans l'unité de la recette, quelle qu'elle soit.
+  const enPieces = /^u$/i.test(String(unite || '').trim())
+  const pourOdoo = enPieces ? qty : enGrammesOdoo(qty, unite)
+  creerOfPrepa(produit, pourOdoo, userId, [], enPieces ? 'u' : 'g', 'annexe', ajustements)
     .then(of => {
       // En mode test (?test=1) Odoo n'écrit rien : pas de numéro à rattacher.
       if (of?.name && !of.error && !of.test) return rattacherOrdre(ligne.id, of.name, !of.deja)
