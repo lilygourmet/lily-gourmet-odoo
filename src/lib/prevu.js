@@ -1,5 +1,5 @@
 // ============================================================
-// CE QU'ON A DÉCIDÉ DE FAIRE — et qui ne doit plus bouger tout seul.
+// CE QU'ON A DÉCIDÉ DE FAIRE — et qui ne bouge plus tout seul.
 //
 // « On peut mettre que ce soit 25, et ça reste toujours 25. Si on décide de
 // changer d'avis, il y a un bouton Réinitialiser » (Layla, 2026-09-11).
@@ -10,8 +10,10 @@
 // remettait 23 au début aussi, la crème se recalculait pour 23, et Odoo
 // croyait qu'il restait de la crème au frigo alors qu'elle avait tout mis.
 //
-// Le prévu vit donc dans la TABLETTE, pour la journée : on part faire son
-// travail, on revient, il est toujours là. Il change de jour tout seul.
+// ⚠️ Il ne CHANGE PAS DE JOUR. « Si c'est le lendemain ou une semaine après,
+// ça restera toujours le 25 » (Layla, 2026-09-11) : une recette commencée le
+// soir se finit le lendemain, et le chiffre doit traverser la nuit. Il ne part
+// que de deux façons : « Réinitialiser », ou l'article déclaré jusqu'au bout.
 // ============================================================
 
 const CLE = 'lg:annexe2-prevu'
@@ -19,38 +21,40 @@ const CLE = 'lg:annexe2-prevu'
 const lire = () => {
   try { return JSON.parse(localStorage.getItem(CLE) || '{}') } catch { return {} }
 }
-const ecrire = d => {
-  try { localStorage.setItem(CLE, JSON.stringify(d)) } catch { /* navigation privée */ }
+const ecrire = par => {
+  try { localStorage.setItem(CLE, JSON.stringify({ par })) } catch { /* navigation privée */ }
 }
 
-/** Les prévus du jour : { produit: { q, fige } }. Vide si on a changé de jour. */
-export function prevusDuJour(jour) {
+/** Tous les chiffres retenus : { produit: { q, fige } }. */
+export function prevusGardes() {
+  // ⚠️ L'ancien format rangeait les prévus sous une date (`{ jour, par }`).
+  // On les relit tels quels : un chiffre décidé hier vaut toujours aujourd'hui.
   const d = lire()
-  return d.jour === jour ? (d.par || {}) : {}
+  return d.par || {}
 }
 
-/** Poser (ou corriger) le prévu d'un article. Il n'est pas figé tant qu'on
- *  est encore sur sa fiche — on le règle, on peut se reprendre. */
-export function poserPrevu(jour, produit, q) {
-  const par = { ...prevusDuJour(jour) }
+/** Poser (ou corriger) le chiffre d'un article. Il n'est pas encore figé :
+ *  on est sur sa fiche, on peut se reprendre. */
+export function poserPrevu(produit, q) {
+  const par = { ...prevusGardes() }
   par[produit] = { q, fige: par[produit]?.fige || false }
-  ecrire({ jour, par })
+  ecrire(par)
   return par
 }
 
-/** Figer le prévu : on quitte la fiche, le travail commence. */
-export function figerPrevu(jour, produit) {
-  const par = { ...prevusDuJour(jour) }
+/** Figer : on quitte la fiche, le travail commence. */
+export function figerPrevu(produit) {
+  const par = { ...prevusGardes() }
   if (!par[produit]) return par      // rien n'a été décidé : rien à figer
   par[produit] = { ...par[produit], fige: true }
-  ecrire({ jour, par })
+  ecrire(par)
   return par
 }
 
-/** « Réinitialiser » : on change d'avis, le chiffre redevient libre. */
-export function oublierPrevu(jour, produit) {
-  const par = { ...prevusDuJour(jour) }
+/** « Réinitialiser », ou l'article déclaré : le chiffre redevient libre. */
+export function oublierPrevu(produit) {
+  const par = { ...prevusGardes() }
   delete par[produit]
-  ecrire({ jour, par })
+  ecrire(par)
   return par
 }

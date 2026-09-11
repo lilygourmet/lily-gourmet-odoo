@@ -27,7 +27,7 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistorique
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
-import { prevusDuJour, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
+import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
 
 /**
  * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
@@ -45,9 +45,10 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [details, setDetails] = useState(() =>
     Object.fromEntries((dernierEcran('fab_annexe2') || []).map(a => [a.produit, a])))
   const [chemin, setChemin] = useState([])
-  // Ce qu'on a décidé de faire, gardé pour la journée : on part travailler, on
-  // revient, le chiffre est toujours là. (Layla, 2026-09-11.)
-  const [prevus, setPrevus] = useState(() => prevusDuJour(todayISO()))
+  // Ce qu'on a décidé de faire. On part travailler, on revient — même le
+  // lendemain — le chiffre est toujours là. Il ne part qu'avec
+  // « réinitialiser », ou quand l'article est déclaré. (Layla, 2026-09-11.)
+  const [prevus, setPrevus] = useState(prevusGardes)
   const [quantites, setQuantites] = useState({})
   const [cuites, setCuites] = useState({})
   const [faits, setFaits] = useState({})
@@ -138,9 +139,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const poser = (produit, q) => {
     const v = Math.max(0, Math.round(q * 1000) / 1000)
     setQuantites(x => ({ ...x, [produit]: v }))
-    // Gardé pour la journée : « il faut le garder tant que réinitialiser n'a
-    // pas été noté » (Layla, 2026-09-11).
-    setPrevus(poserPrevu(todayISO(), produit, v))
+    // « Il faut le garder tant que réinitialiser n'a pas été noté » (Layla).
+    setPrevus(poserPrevu(produit, v))
   }
 
   /**
@@ -155,9 +155,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const figer = (q = 0) => {
     const tete = chemin[0]
     if (!tete) return
-    const jour = todayISO()
-    if (!prevus[tete] && q > 0) poserPrevu(jour, tete, q)
-    setPrevus(figerPrevu(jour, tete))
+    if (!prevus[tete] && q > 0) poserPrevu(tete, q)
+    setPrevus(figerPrevu(tete))
   }
 
   // ---------- déclarer ----------
@@ -237,7 +236,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       // c'était toujours celui du gâteau : déclarer la crème légère faisait
       // retomber le gâteau de 25 à 13, alors qu'« il est censé rester à 25
       // jusqu'à ce que je finisse ma recette » (Layla, 2026-09-11).
-      setPrevus(oublierPrevu(todayISO(), noeud.produit))
+      setPrevus(oublierPrevu(noeud.produit))
       if (noeud.produit === tete.produit) {
         // L'article de tête est parti : la séance est finie, on repart propre.
         setFaits({}); setQuantites({}); setCuites({})
@@ -400,7 +399,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               faits={faits} envoi={envoi}
               verrouille={!!prevus[tete.produit]?.fige && noeud.produit === tete.produit}
               onLiberer={prevus[noeud.produit] ? () => {
-                setPrevus(oublierPrevu(todayISO(), noeud.produit))
+                setPrevus(oublierPrevu(noeud.produit))
                 setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
               } : undefined}
               onOuvrir={p => { figer(q); setChemin([...chemin, p]) }}
