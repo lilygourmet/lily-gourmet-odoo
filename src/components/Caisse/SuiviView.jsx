@@ -881,11 +881,16 @@ function SuggestModal({ env, onClose, onAttach }) {
       let libres = [], miennes = []
       try { libres = await loadFreeReleveLines(null, env.payment_method) } catch { libres = [] }
       try { miennes = env.releve_status ? await loadEnvReleveLines(env.id) : [] } catch { miennes = [] }
-      const exact = l => Math.abs(Number(l.amount) - montant) < 0.005
-      // Auto : parmi les lignes du même montant, une SEULE "VIR INST RECU" à la
-      // même date que l'enveloppe -> on l'attache et on l'accorde directement.
+      // Même tolérance que partout ailleurs : Odoo compte les centimes, la banque arrondit.
+      const exact = l => Math.abs(Number(l.amount) - montant) < ECART_MINI
+      // Auto : parmi les lignes du même montant, une SEULE « VIR INST RECU » à la même date
+      // que l'enveloppe ET AU NOM DE LA CLIENTE -> on l'attache et on l'accorde directement.
+      // Le nom est indispensable : sans lui, un virement de LEBDAR NAWAL devenait la preuve
+      // de la caisse de Maryam el Bairi, simplement parce qu'il tombait le bon jour pour le
+      // bon montant. C'est la même règle que le rapprochement automatique.
       const sameDayInst = libres.filter(l => exact(l) && l.type === 'virement_recu'
-        && /\bINST\b/i.test(l.label || '') && l.ligne_date === env.session_date)
+        && /\bINST\b/i.test(l.label || '') && l.ligne_date === env.session_date
+        && nomDansLibelle(env.virement_client, l.label))
       if (!env.releve_status && sameDayInst.length === 1) {
         onAttach(env, sameDayInst)
         return
