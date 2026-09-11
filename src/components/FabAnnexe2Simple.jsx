@@ -177,10 +177,12 @@ export function Clavier({ titre, valeur, unite, onValider, onFermer }) {
  * `onChange`, eux, parlent l'unité de l'ARTICLE — c'est elle qui part chez
  * Odoo. La conversion ne vit qu'ici, via `enGrammes` / `enUnite`.
  */
-export function GrosChiffre({ titre, valeur, unite, onChange }) {
+export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose }) {
   const [clavier, setClavier] = useState(false)
   const vu = enGrammes(valeur, unite)
-  const pas = /^u$/i.test(String(unite || '').trim()) ? 1 : 50
+  // Le pas par défaut : la pièce, ou 50 g. Une DÉCOUPE impose le sien — on ne
+  // coupe pas un sixième de plaque (Layla, 2026-09-11).
+  const pas = impose || (/^u$/i.test(String(unite || '').trim()) ? 1 : 50)
   const bouger = d => onChange(enUnite(Math.max(0, Math.round((vu + d) * 1000) / 1000), unite))
   return (
     <>
@@ -203,6 +205,32 @@ export function GrosChiffre({ titre, valeur, unite, onChange }) {
           onFermer={() => setClavier(false)} />
       )}
     </>
+  )
+}
+
+/**
+ * DOUBLER OU DIVISER LA RECETTE en un appui.
+ *
+ * « Les recettes des biscuits et plaques : mettre un bouton × calculette si
+ * besoin de doubler ou ×0,5 » (Layla, 2026-09-11). Doubler une recette est le
+ * geste le plus courant de l'atelier ; la moitié vient juste après.
+ */
+export function Multiplier({ valeur, unite, onChange }) {
+  const fois = f => {
+    const n = (Number(valeur) || 0) * f
+    // Une pièce reste entière ; un poids garde le gramme.
+    onChange(/^u$/i.test(String(unite || '').trim())
+      ? Math.max(1, Math.round(n))
+      : Math.max(0, Math.round(n * 1000) / 1000))
+  }
+  return (
+    <div className="print:hidden flex justify-center gap-3 mt-3">
+      {[['×2', 2], ['×0,5', 0.5]].map(([mot, f]) => (
+        <button key={mot} onClick={() => fois(f)}
+          className="rounded-xl border-2 border-gold bg-gold/10 px-5 py-2
+                     text-[16px] font-extrabold text-gold">{mot}</button>
+      ))}
+    </div>
   )
 }
 
@@ -245,6 +273,10 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
         <GrosChiffre titre={decoupe ? 'à cuire' : 'à faire'}
           valeur={quantitePesee} unite={aPeser.unite}
           onChange={decoupe ? onCuites : onQuantite} />
+        {/* C'est CE chiffre-là qui commande la recette : le doubler double
+            tout ce qu'il y a dessous. */}
+        <Multiplier valeur={quantitePesee} unite={aPeser.unite}
+          onChange={decoupe ? onCuites : onQuantite} />
       </div>
       {!decoupe && (
         <div className="text-center text-[15px] text-ink-mute mt-1">
@@ -269,8 +301,12 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
               ? `${motPluriel(noeud.produit, quantite)} à couper` : 'à faire'}
           </div>
           <div className="mt-1">
+            {/* ⚠️ Par PALIER de ce que donne une plaque : « si les plaques se
+                coupent par 6, c'est toujours par palier de 6 » (Layla,
+                2026-09-11). Le clavier, lui, accepte n'importe quel nombre —
+                « je fais 4 plaques et je décide d'en couper 26 ». */}
             <GrosChiffre titre="à couper" valeur={quantite} unite={noeud.unite}
-              onChange={onQuantite} />
+              pas={palierDeCoupe(decoupe)} onChange={onQuantite} />
           </div>
           <Partage noeud={noeud} decoupe={decoupe} cuites={cuites} coupes={quantite} />
         </div>
@@ -291,6 +327,19 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       </button>
     </div>
   )
+}
+
+/**
+ * De combien en combien on coupe : ce qu'UNE plaque donne.
+ *
+ * Seulement quand l'ingrédient se compte en plaques ET que le compte tombe
+ * juste (13 biscuits par plaque, 6 pour les 10 pers). Sur un sablé pesé au
+ * gramme, ou sur un compte bâtard (10,47 par plaque), on reste au pas de 1.
+ */
+const palierDeCoupe = decoupe => {
+  const p = decoupe?.parPiece || 0
+  if (!enPieces(decoupe?.enfant?.unite) || !(p >= 2)) return 1
+  return Math.abs(p - Math.round(p)) < 0.01 ? Math.round(p) : 1
 }
 
 /** Ce qui se compte à la pièce — par opposition à ce qui se pèse. */

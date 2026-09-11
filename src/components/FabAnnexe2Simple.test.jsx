@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { CasesAFaire, Cases, Confirmation, Fiche, Clavier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
+import { CasesAFaire, Cases, Confirmation, Fiche, Clavier, Multiplier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
 import { sansRendement } from '../lib/fabAnnexe'
 import { propre } from '../lib/ecranSimple'
 import { decoupeDe } from '../lib/fabAnnexe'
@@ -204,8 +204,10 @@ describe('la découpe, deux chiffres sur un écran', () => {
     fireEvent.click(screen.getByLabelText('Plus à cuire'))
     expect(onCuites).toHaveBeenCalledWith(5)
     expect(onQuantite).not.toHaveBeenCalled()
+    // ⚠️ Par PALIER de 13 : une plaque donne 13 biscuits, on ne coupe pas
+    // un treizième de plaque (Layla, 2026-09-11).
     fireEvent.click(screen.getByLabelText('Plus à couper'))
-    expect(onQuantite).toHaveBeenCalledWith(14)
+    expect(onQuantite).toHaveBeenCalledWith(26)
   })
 
   it('reste un écran simple quand ce n’est pas une découpe', () => {
@@ -896,5 +898,60 @@ describe('le bouton « C’est fait » répond au doigt', () => {
     expect(screen.getByText("C'est noté")).toBeTruthy()
     expect(screen.getByText('Ganache Gold')).toBeTruthy()
     expect(screen.getByText('2 700 g')).toBeTruthy()
+  })
+})
+
+describe('le palier de coupe et le × calculette', () => {
+  it('les 10 pers se coupent par 6', () => {
+    const dixPers = {
+      produit: 'SM. Biscuit a la cuillere 10 pers', libelle: 'Biscuit cuillère 10 pers',
+      unite: 'u', tourneeTaille: 6, reste: 6,
+      recette: [{ produit: 'SM. Biscuit a la cuillere (plaque)', qty: 1, unite: 'u' }],
+      enfants: [{ ...plaque, besoin: 1, stock: 0, dejaFait: 0, fabrique: true, ok: false,
+        produira: 4, tournees: 1, pourQuantite: 4 }],
+    }
+    const onQuantite = vi.fn()
+    render(<Fiche noeud={dixPers} quantite={6} onQuantite={onQuantite}
+      cuites={4} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    fireEvent.click(screen.getByLabelText('Plus à couper'))
+    expect(onQuantite).toHaveBeenCalledWith(12)
+    fireEvent.click(screen.getByLabelText('Moins à couper'))
+    expect(onQuantite).toHaveBeenCalledWith(0)
+  })
+
+  it('mais le clavier accepte n’importe quel nombre — les 26 de Layla', () => {
+    const onQuantite = vi.fn()
+    render(<Fiche noeud={cinqPers} quantite={13} onQuantite={onQuantite}
+      cuites={4} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    fireEvent.click(screen.getByLabelText('Changer à couper'))
+    fireEvent.click(screen.getByText('2'))
+    fireEvent.click(screen.getByText('6'))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
+    expect(onQuantite).toHaveBeenCalledWith(26)
+  })
+
+  it('« ×2 » double la recette, « ×0,5 » la divise', () => {
+    const onChange = vi.fn()
+    render(<Multiplier valeur={3920} unite="g" onChange={onChange} />)
+    fireEvent.click(screen.getByText('×2'))
+    expect(onChange).toHaveBeenCalledWith(7840)
+    fireEvent.click(screen.getByText('×0,5'))
+    expect(onChange).toHaveBeenCalledWith(1960)
+  })
+
+  it('une demi-recette de pièces reste un compte entier, jamais zéro', () => {
+    const onChange = vi.fn()
+    render(<Multiplier valeur={1} unite="u" onChange={onChange} />)
+    fireEvent.click(screen.getByText('×0,5'))
+    expect(onChange).toHaveBeenCalledWith(1)
+  })
+
+  it('le × est sur le chiffre qui commande la recette', () => {
+    // Sur une découpe, c'est celui du HAUT : doubler les plaques double la pâte.
+    const onCuites = vi.fn()
+    render(<Fiche noeud={cinqPers} quantite={13} onQuantite={() => {}}
+      cuites={4} onCuites={onCuites} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    fireEvent.click(screen.getByText('×2'))
+    expect(onCuites).toHaveBeenCalledWith(8)
   })
 })
