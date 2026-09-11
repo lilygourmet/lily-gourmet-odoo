@@ -411,6 +411,9 @@ export async function loadAllFreeReleveLines(avecMasquees = false) {
     .not('label', 'ilike', '%LNC%')
     .not('label', 'ilike', '%TPE%')
     .order('ligne_date', { ascending: false })
+    // Sans limite explicite, PostgREST s'arrête à 1000 lignes SANS le dire : les plus
+    // anciennes disparaîtraient de « Reçus banque non liés » à mesure que la table grossit.
+    .limit(5000)
   if (error) throw error
   // Une opération DÉJÀ rattachée à une caisse n'a plus rien à faire ici, même écrite
   // autrement : le même versement figure dans deux documents de la banque (relevé et

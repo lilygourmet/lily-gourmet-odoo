@@ -386,3 +386,28 @@ describe('nomAutreCliente — détection d\'un rapprochement faux', () => {
     expect(nomAutreCliente('Maryam el bairi', 'VIR INST RECU 2128322 20260602129237')).toBe(false)
   })
 })
+
+// Deux virements identiques de la même cliente, à un mois d'écart, sans n° d'opération :
+// le dédoublonnage des lignes les confondait et en jetait un. La caisse de juillet ne
+// trouvait alors plus rien.
+describe('reconcileEnvelopes — deux virements identiques à un mois d\'écart', () => {
+  const ligne = (d) => ({ credit: 500, dateIso: d, type: 'virement_recu', label: 'VIRT RECU MME SELMA BENOMAR' })
+  const caisse = (id, d) => ({
+    id, amount_cash: 500, payment_method: 'virement',
+    releve_status: null, session_date: d, virement_client: 'Selma Benomar',
+  })
+
+  it('rapproche les deux caisses', () => {
+    const { results } = reconcileEnvelopes(
+      [caisse('A', '2026-06-10'), caisse('B', '2026-07-10')],
+      [ligne('2026-06-10'), ligne('2026-07-10')], {})
+    expect(results.filter(r => r.status === 'trouve')).toHaveLength(2)
+  })
+
+  it('confond toujours la même opération vue dans deux documents le même jour', () => {
+    const { results } = reconcileEnvelopes(
+      [caisse('A', '2026-06-10')],
+      [ligne('2026-06-10'), ligne('2026-06-10')], {})
+    expect(results[0].status).toBe('trouve')
+  })
+})
