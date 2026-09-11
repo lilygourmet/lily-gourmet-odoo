@@ -701,14 +701,17 @@ export function peseesDe(noeud, fois) {
  * se divise pas : on la monte, et ce qui reste part en plus petit. Chaque
  * taille doit alors porter SA part de crème, pas la cuve entière.
  *
- * Le calcul est fait par le serveur (`?mode=repartir`) : l'écart entre la cuve
- * et la somme des parts retombe sur la taille lancée — c'est elle qui a défini
- * la tournée, c'est elle qui absorbe le rab et les pertes.
+ * Le calcul est fait par le serveur (`?mode=repartir`) : la cuve part EN
+ * ENTIER sur la taille lancée, et les autres n'en prennent rien — elles ne
+ * consomment que leurs propres morceaux (les fonds). « Il est censé ne rien
+ * consommer parce qu'il a déjà consommé dans les 23 » (Layla, 2026-09-11).
  */
-export async function repartirCuve(lance, quantites) {
+export async function repartirCuve(lance, quantites, prevu = 0) {
   const r = await fetch('/api/fab-annexe?mode=repartir', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lance, quantites }),
+    // `prevu` : le nombre pour lequel la cuve a été préparée. C'est lui qui
+    // décide de la crème, pas ce qui est sorti ni la tournée du catalogue.
+    body: JSON.stringify({ lance, quantites, prevu }),
   })
   if (!r.ok) throw new Error(`Répartition impossible (${r.status})`)
   const d = await r.json()

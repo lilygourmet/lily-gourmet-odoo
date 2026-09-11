@@ -210,9 +210,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       const autres = Object.entries(parTaille).filter(([, n]) => Number(n) > 0)
       let r
       if (noeud.produit === tete.produit && autres.length) {
+        // `q` est le PRÉVU : le nombre pour lequel la cuve a été préparée.
+        // C'est lui qui décide de la crème, pas `qty` (ce qui est sorti).
         const ordres = await repartirCuve(tete.produit, {
           [tete.produit]: qty, ...Object.fromEntries(autres.map(([p, n]) => [p, Number(n)])),
-        })
+        }, q)
         for (const o of ordres) {
           const x = await declarer({ produit: o.produit, qty: o.qty, unite: o.unite,
             ajustements: o.ajustements }, user?.id)

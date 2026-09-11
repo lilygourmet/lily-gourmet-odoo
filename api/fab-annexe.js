@@ -628,7 +628,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
  * calcul se fait donc dans l'unité de l'ARTICLE, et n'est reconverti en unité
  * de ligne qu'au dernier moment — c'est elle qu'Odoo attend.
  */
-export async function repartir(cache, catalogue, lance, quantites) {
+export async function repartir(cache, catalogue, lance, quantites, prevu = 0) {
   const parLigne = new Map()      // produit → { [ingrédient]: {qty, unite} } par pièce
   const uniteArticle = {}
 
@@ -655,28 +655,25 @@ export async function repartir(cache, catalogue, lance, quantites) {
     return out
   }
 
-  // Ce que chaque taille montée a vraiment pris, dans l'unité de l'article.
-  const parts = {}
-  const total = {}
-  for (const [produit, qty] of Object.entries(quantites)) {
-    if (!(qty > 0)) continue
+  // On lit quand même chaque taille : c'est ce qui remplit `parLigne`, et donc
+  // ce qui dit QUELS ingrédients sont figés chez elle.
+  for (const produit of Object.keys(quantites)) {
     const a = catalogue.find(x => x.produit === produit)
-    if (!a) continue
-    const pp = await parPiece(a)
-    parts[produit] = {}
-    for (const [nom, e] of Object.entries(pp)) {
-      const v = versUnite(e.ligne, e.unite, uniteArticle[nom]) * qty
-      parts[produit][nom] = v
-      total[nom] = (total[nom] || 0) + v
-    }
+    if (a) await parPiece(a)
   }
 
-  // La cuve : ce que la tournée de la taille lancée aurait consommé.
+  // LA CUVE, EN ENTIER, SUR LA TAILLE LANCÉE.
+  //
+  // ⚠️ Calculée sur ce qui était PRÉVU — c'est pour ce nombre-là que la crème
+  // a été faite — jamais sur la tournée du catalogue ni sur ce qui est
+  // réellement sorti. Vécu le 2026-09-11 : 9 775 g de crème légère préparés
+  // pour 25 pièces, 23 sorties ; l'ordre n'en consommait que 4 719 (la cuve
+  // d'une tournée de 13, moins la part donnée aux individuels).
   const ppLance = await parPiece(lance)
-  const ecart = {}
+  const cuve = {}
+  const combien = prevu > 0 ? prevu : lance.tournee
   for (const [nom, e] of Object.entries(ppLance)) {
-    const cuve = versUnite(e.ligne, e.unite, uniteArticle[nom]) * lance.tournee
-    ecart[nom] = cuve - (total[nom] || 0)
+    cuve[nom] = versUnite(e.ligne, e.unite, uniteArticle[nom]) * combien
   }
 
   // Chaque ordre, avec ses ingrédients figés dans l'unité de SA recette.
@@ -688,8 +685,12 @@ export async function repartir(cache, catalogue, lance, quantites) {
     const pp = parLigne.get(produit) || {}
     const ajustements = {}
     for (const [nom, e] of Object.entries(pp)) {
-      let v = parts[produit][nom] || 0
-      if (produit === lance.produit) v += (ecart[nom] || 0)
+      // ⚠️ RIEN pour les autres tailles : la cuve est déjà passée en entier
+      // dans la taille lancée. « Il est censé ne rien consommer parce qu'il a
+      // déjà consommé dans les 23 ; il ne doit prendre que les bases, ce qui
+      // n'est pas figé » (Layla, 2026-09-11). Zéro est une consigne, pas un
+      // oubli : sans elle, Odoo reprendrait la recette au prorata.
+      const v = produit === lance.produit ? (cuve[nom] || 0) : 0
       // ⚠️ Réparti entre les lignes du même produit : Odoo pose la consigne sur
       // chacune, et le total serait sinon compté autant de fois qu'il y a de
       // lignes (le sucre du tiramisu en occupe deux).
@@ -901,7 +902,9 @@ export default async function handler(req, res) {
       const lance = (cat || []).find(x => x.produit === body.lance)
       if (!lance) return res.status(400).json({ error: 'article inconnu : ' + body.lance })
       return res.status(200).json({
-        ordres: await repartir(creerCache(), cat || [], lance, body.quantites || {}),
+        // `prevu` : le nombre pour lequel la cuve a été préparée.
+        ordres: await repartir(creerCache(), cat || [], lance, body.quantites || {},
+          Number(body.prevu) || 0),
       })
     }
 

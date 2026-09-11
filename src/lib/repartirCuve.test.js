@@ -15,13 +15,16 @@ describe('repartirCuve', () => {
     repond(true, { ordres: [{ produit: 'SM- Tarte citron gin 23 cm', qty: 10, lance: true }] })
     await repartirCuve('SM- Tarte citron gin 23 cm', {
       'SM- Tarte citron gin 23 cm': 10, 'SM- Tarte citron gin 18 cm': 4,
-    })
+    }, 12)
     const [url, opts] = fetch.mock.calls[0]
     expect(url).toContain('mode=repartir')
     expect(opts.method).toBe('POST')
     expect(JSON.parse(opts.body)).toEqual({
       lance: 'SM- Tarte citron gin 23 cm',
       quantites: { 'SM- Tarte citron gin 23 cm': 10, 'SM- Tarte citron gin 18 cm': 4 },
+      // Le PRÉVU : 12 tartes visées, même si 10 sont sorties. C'est pour 12
+      // que la crème a été faite.
+      prevu: 12,
     })
   })
 
