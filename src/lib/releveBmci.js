@@ -43,6 +43,12 @@ function classify(label) {
   if (/VIR(EMENT|T)?\.?\s*(INST\s*)?EMIS/.test(L)) return 'virement_emis'   // sortant / remboursement
   if (/VIR(EMENT|T)?\.?\s*(INST\s*)?RECU/.test(L)) return 'virement_recu'   // virement reçu
   if (/CHEQUE/.test(L)) return 'cheque'
+  // Soldes et totaux : ce n'est pas de l'argent reçu, c'est le relevé qui fait ses comptes.
+  // Sans ce filtre, « NOUVEAU SOLDE AU 31/07/2026 · 125 430,50 » atterrissait dans « Reçus
+  // banque non liés » comme un encaissement, et pouvait être proposé à une caisse.
+  // Testé APRÈS les opérations : « VIRT RECU TOTAL MAROC » est déjà un virement ici, la
+  // société ne risque rien.
+  if (/^(NOUVEAU |ANCIEN |AUTRE )?SOLDE\b|^TOTAL|^TOTAUX\b|^REPORT\b/.test(L.trim())) return 'solde'
   return 'autre'
 }
 
