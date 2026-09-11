@@ -514,30 +514,33 @@ export function ingredientsPour(noeud, quantite) {
 }
 
 /**
- * L'étape de DÉCOUPE : une plaque qu'on coupe en 13 biscuits.
+ * L'étape de DÉCOUPE : une masse qu'on portionne en pièces.
  *
- * Elle se reconnaît à trois signes réunis — un seul ingrédient, qui se
- * fabrique, et qui donne PLUSIEURS pièces. Ce n'est pas une étape creuse : il
- * y a une décision à prendre, « je fais 4 plaques et j'en coupe 26 » (Layla,
- * 2026-09-10). L'écran simple la montre alors sur le MÊME écran que la plaque,
- * avec deux chiffres au lieu d'un.
+ * Elle se reconnaît à deux signes : l'article se compte en PIÈCES, et il n'a
+ * qu'un seul ingrédient, qui se fabrique. Peu importe que cet ingrédient se
+ * compte en plaques ou en grammes — une plaque qu'on coupe en 13 biscuits et
+ * 290 g de sablé qu'on presse en une base, c'est la même décision : combien
+ * j'en fais, combien j'en tire. (Layla, 2026-09-11 : « sablé crispy aussi,
+ * chantilly pipée aussi ».)
  *
- * Rend `{ enfant, parPiece }`, ou null quand ce n'est pas une découpe.
+ * Ce n'est PAS une découpe quand c'est un pour un dans la même unité : là, il
+ * n'y a rien à décider, c'est une étape creuse.
+ *
+ * Rend `{ enfant, parPiece }` — `parPiece` = combien de pièces sort UNE unité
+ * de l'ingrédient (13 par plaque, 0,0034 par gramme de sablé).
  */
 export function decoupeDe(noeud) {
   const enfants = enfantsDe(noeud)
   if (enfants.length !== 1) return null
   const enfant = enfants[0]
   if (!enfant.fabrique) return null
-  // Des pièces des DEUX côtés : « 3 920 g de caramel font 2 800 g de crème »
-  // n'est pas une découpe, et le double chiffre n'y voudrait rien dire.
-  const piece = u => /^u$/i.test(String(u || '').trim())
-  if (!piece(noeud?.unite) || !piece(enfant.unite)) return null
+  // C'est l'ARTICLE qui doit se compter en pièces : c'est lui qu'on portionne.
+  if (!/^u$/i.test(String(noeud?.unite || '').trim())) return null
   const ligne = (noeud?.recette || [])[0]
   const sortie = noeud?.tourneeTaille || 0
   if (!(sortie > 0) || !(Number(ligne?.qty) > 0)) return null
-  const parPiece = sortie / Number(ligne.qty)
-  return parPiece > 1 ? { enfant, parPiece: Math.round(parPiece * 1000) / 1000 } : null
+  if (estEtapeCreuse(noeud)) return null
+  return { enfant, parPiece: sortie / Number(ligne.qty) }
 }
 
 /**

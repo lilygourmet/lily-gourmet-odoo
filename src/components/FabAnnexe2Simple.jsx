@@ -238,7 +238,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
 
       {decoupe && (
         <div className="mt-5 text-center text-[15px] font-bold text-ink-mute">
-          {motPluriel(decoupe.enfant.produit, cuites)} à cuire
+          {titreDuHaut(decoupe.enfant, cuites)}
         </div>
       )}
       <div className={decoupe ? 'mt-1' : 'mt-5'}>
@@ -265,7 +265,8 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       {decoupe && (
         <div className="mt-6 pt-5 border-t-4 border-cream-deep">
           <div className="text-center text-[15px] font-bold text-ink-mute">
-            {motPluriel(noeud.produit, quantite)} à couper
+            {enPieces(decoupe.enfant.unite)
+              ? `${motPluriel(noeud.produit, quantite)} à couper` : 'à faire'}
           </div>
           <div className="mt-1">
             <GrosChiffre titre="à couper" valeur={quantite} unite={noeud.unite}
@@ -285,6 +286,21 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
     </div>
   )
 }
+
+/** Ce qui se compte à la pièce — par opposition à ce qui se pèse. */
+const enPieces = u => /^u$/i.test(String(u || '').trim())
+
+/**
+ * Ce qu'on écrit au-dessus du premier chiffre d'une découpe.
+ *
+ * Quand l'ingrédient se compte en plaques, on dit le geste : « 4 plaques à
+ * cuire ». Quand il se pèse, on dit la CHOSE : « sablé crispy » — parce que
+ * « 2 900 pièces à cuire » ne voudrait rien dire, et que ce qu'il faut savoir
+ * c'est quoi préparer.
+ */
+const titreDuHaut = (enfant, combien) => (enPieces(enfant.unite)
+  ? `${motPluriel(enfant.produit, combien)} à cuire`
+  : propre(nomCourt(enfant.produit)))
 
 /**
  * « 4 plaques », « 26 biscuits » — le mot de la chose, accordé.
@@ -505,18 +521,25 @@ function Partage({ noeud, decoupe, cuites, coupes }) {
   const p = partageDecoupe({
     cuites, coupes, parPiece: decoupe.parPiece, stock: decoupe.enfant.stock,
   })
-  const mot = n => motPluriel(decoupe.enfant.produit, n)
+  // Des plaques se comptent (« 2 plaques »), un sablé se pèse (« 2 900 g »).
+  const dire = v => (enPieces(decoupe.enfant.unite)
+    ? `${nb(v)} ${motPluriel(decoupe.enfant.produit, v)}`
+    : qte(v, decoupe.enfant.unite))
+  // « 2 plaques utilisées », « 2 900 g utilisés » : le mot s'accorde avec la
+  // chose. L'écran est lu par des gens qui butent sur les mots — on ne va pas
+  // leur écrire de travers.
+  const fin = v => (/^(plaques?|tartes?|feuilles?)$/i.test(
+    enPieces(decoupe.enfant.unite) ? motPluriel(decoupe.enfant.produit, v) : 'g') ? 'e' : '')
+    + (v > 1 ? 's' : '')
   const besoin = noeud.reste > 0 ? Math.round(noeud.reste) : 0
   const bouts = []
   if (besoin > 0 && besoin !== coupes) bouts.push(`il en faut ${nb(besoin)}`)
-  bouts.push(`${nb(p.utilisees)} ${mot(p.utilisees)} ${p.utilisees > 1 ? 'utilisées' : 'utilisée'}`)
-  if (p.gardees > 0) bouts.push(`${nb(p.gardees)} ${p.gardees > 1 ? 'gardées' : 'gardée'}`)
+  bouts.push(`${dire(p.utilisees)} utilisé${fin(p.utilisees)}`)
+  if (p.gardees > 0) bouts.push(`${dire(p.gardees)} gardé${fin(p.gardees)}`)
   return (
     <div className={`text-center text-[15px] mt-0.5 font-bold
       ${p.manque > 0 ? 'text-danger' : 'text-ink-mute'}`}>
-      {p.manque > 0
-        ? `il manque ${nb(p.manque)} ${mot(p.manque)}`
-        : bouts.join(' · ')}
+      {p.manque > 0 ? `il manque ${dire(p.manque)}` : bouts.join(' · ')}
     </div>
   )
 }

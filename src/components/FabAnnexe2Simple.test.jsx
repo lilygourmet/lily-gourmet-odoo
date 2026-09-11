@@ -4,6 +4,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { CasesAFaire, Cases, Fiche, Clavier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
 import { sansRendement } from '../lib/fabAnnexe'
 import { propre } from '../lib/ecranSimple'
+import { decoupeDe } from '../lib/fabAnnexe'
 
 // ====== L'écran simplifié, lu par des gens qui lisent peu ======
 // Ce qui compte : le gros chiffre est une QUANTITÉ, le stock reste visible,
@@ -173,7 +174,7 @@ describe('la découpe, deux chiffres sur un écran', () => {
 
   it('le cas de Layla : 4 plaques, 26 biscuits → 2 utilisées, 2 gardées', () => {
     poserDecoupe(26)
-    expect(screen.getByText(/2 plaques utilisées · 2 gardées/)).toBeTruthy()
+    expect(screen.getByText(/2 plaques utilisées · 2 plaques gardées/)).toBeTruthy()
   })
 
   it('dit le poids de pâte à préparer, pas le nombre de plaques tout court', () => {
@@ -804,5 +805,69 @@ describe('un article compté en kilos', () => {
     render(<CasesAFaire articles={[article]} onOuvrir={() => {}} />)
     expect(screen.getByText(/5.550/)).toBeTruthy()          // la pastille
     expect(screen.getByText(/il en faut 11.100 g/)).toBeTruthy()
+  })
+})
+
+// ====== La découpe élargie : le sablé, la chantilly, le biscuit gianduja ======
+// « Sablé crispy aussi. Chantilly pipée aussi » (Layla, 2026-09-11). Leur
+// masse se pèse en grammes, mais c'est la même décision : combien j'en fais,
+// combien j'en tire. Données réelles du 2026-09-11.
+
+describe('la découpe de ce qui se pèse', () => {
+  const flan = {
+    produit: 'SM- base flan vanille 20 cm', libelle: 'Base flan vanille 20 cm',
+    unite: 'u', tourneeTaille: 10, pourQuantite: 10, reste: 10,
+    recette: [{ produit: 'SM. Sable Crispy', qty: 2900, unite: 'g' }],
+    enfants: [{ produit: 'SM. Sable Crispy', unite: 'g', besoin: 2900, stock: 0,
+      dejaFait: 0, fabrique: true, ok: false, tourneeTaille: 5598, produira: 2900,
+      pourQuantite: 2900, recette: [{ produit: 'MP- Farine', qty: 1000, unite: 'g' }], enfants: [] }],
+  }
+
+  it('le sablé crispy devient une découpe : la masse en haut, les bases en bas', () => {
+    render(<Fiche noeud={flan} quantite={10} onQuantite={() => {}}
+      cuites={2900} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText('sable crispy')).toBeTruthy()     // ce qu'on prépare
+    expect(screen.getByText('à faire')).toBeTruthy()
+    // Le gros chiffre du haut (la masse) et celui du bas (les bases).
+    expect(screen.getAllByText(/2.900/).length).toBeGreaterThan(0)
+    expect(screen.getByText('10')).toBeTruthy()
+  })
+
+  it('et le partage se dit en GRAMMES, pas en « pièces »', () => {
+    render(<Fiche noeud={flan} quantite={10} onQuantite={() => {}}
+      cuites={4000} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText(/2.900 g utilisés · 1.100 g gardés/)).toBeTruthy()
+  })
+
+  it('la chantilly pipée aussi : 13 g par pièce', () => {
+    const chantilly = {
+      produit: 'SM- Chantilly rose pipée (1)', libelle: 'Chantilly rose pipée (1)',
+      unite: 'u', tourneeTaille: 30, pourQuantite: 30, reste: 30,
+      recette: [{ produit: 'SM. Chantilly à la Rose', qty: 390, unite: 'g' }],
+      enfants: [{ produit: 'SM. Chantilly à la Rose', unite: 'g', besoin: 390, stock: 0,
+        dejaFait: 0, fabrique: true, ok: false, tourneeTaille: 1050, produira: 1050,
+        pourQuantite: 1050, recette: [], enfants: [] }],
+    }
+    expect(decoupeDe(chantilly)).not.toBeNull()
+    render(<Fiche noeud={chantilly} quantite={30} onQuantite={() => {}}
+      cuites={1050} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText('chantilly à la rose')).toBeTruthy()
+  })
+
+  it('une base de flan à l’unité n’est PAS une étape creuse', () => {
+    // 290 g de sablé pour 1 base : les unités diffèrent, il y a bien une
+    // décision (combien de sablé je fais).
+    const une = { ...flan, tourneeTaille: 1, pourQuantite: 1,
+      recette: [{ produit: 'SM. Sable Crispy', qty: 290, unite: 'g' }] }
+    expect(decoupeDe(une)).not.toBeNull()
+  })
+
+  it('mais une crème qui donne une crème, non', () => {
+    const creme = {
+      produit: 'SM. Creme citron Finition', unite: 'g', tourneeTaille: 1000,
+      recette: [{ produit: 'SM. creme citron Production', qty: 1000, unite: 'g' }],
+      enfants: [{ produit: 'SM. creme citron Production', unite: 'g', besoin: 1000, fabrique: true }],
+    }
+    expect(decoupeDe(creme)).toBeNull()
   })
 })
