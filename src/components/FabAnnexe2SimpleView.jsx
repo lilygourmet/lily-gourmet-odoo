@@ -354,8 +354,6 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             // L'étape FINALE : l'article qu'on est venu faire, pas un de ses
             // morceaux. C'est la seule qui rassemble tous les composants.
             const finale = !surEnfant && cible.produit === tete.produit
-            const fois = cible.tourneeTaille > 0
-              ? (surEnfant ? sortie.valeur : q) / cible.tourneeTaille : 1
             return (
               <Sortie noeud={cible} valeur={sortie.valeur} envoi={envoi}
                 onValeur={v => setSortie(x => ({ ...x, valeur: v }))}
@@ -374,10 +372,6 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                 parTaille={parTaille}
                 onTaille={finale && (brut.tailles || []).length
                   ? (p, n) => setParTaille(x => ({ ...x, [p]: n })) : undefined}
-                // Ce qui sort du stock : la dose RÉELLEMENT pesée, celle qu'on
-                // impose à l'ordre Odoo. Seulement pour une préparation — un
-                // montage, lui, laisse Odoo recalculer au prorata de sa sortie.
-                pesees={cible.produit === tete.produit ? null : peseesDe(cible, fois)}
                 onValider={() => (surEnfant
                   ? envoyer(noeud, tete, q, sortie.valeur)
                   : envoyer(noeud, tete, sortie.valeur))} />

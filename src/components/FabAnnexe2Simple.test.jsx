@@ -653,30 +653,21 @@ describe('la quantité figée', () => {
   })
 })
 
-describe('ce qui sort du stock', () => {
+describe('l’écran de fin ne répète plus la recette', () => {
   const sirop = {
     produit: "SM. Sirop d'imbibage cafe Tiramisu", libelle: 'Sirop café', unite: 'g',
     tourneeTaille: 2790,
-    recette: [
-      { produit: 'MP- Sucre Granule', qty: 500, unite: 'g' },
-      { produit: 'MP- Gelatine en poudre', qty: 20, unite: 'g' },
-    ],
+    recette: [{ produit: 'MP- Sucre Granule', qty: 500, unite: 'g' }],
     enfants: [],
   }
 
-  it('récapitule ce qu’on a pesé, avant d’envoyer', () => {
+  it('« enlève les recettes en bas, ça remplit juste la page » (Layla)', () => {
     render(<Sortie noeud={sirop} valeur={2600} onValeur={() => {}} onValider={() => {}}
-      envoi={false} pesees={{ 'MP- Sucre Granule': 500, 'MP- Gelatine en poudre': 20 }} />)
-    expect(screen.getByText(/Ce qui sort du stock/)).toBeTruthy()
-    expect(screen.getByText('500 g')).toBeTruthy()
-    expect(screen.getByText('Masse gélatine')).toBeTruthy()
-    expect(screen.getByText('140 g')).toBeTruthy()        // 20 × 7
-  })
-
-  it('ne dit rien quand il n’y a rien à récapituler', () => {
-    render(<Sortie noeud={sirop} valeur={2600} onValeur={() => {}} onValider={() => {}}
-      envoi={false} pesees={null} />)
+      envoi={false} />)
     expect(screen.queryByText(/Ce qui sort du stock/)).toBeNull()
+    expect(screen.queryByText('Sucre Granule')).toBeNull()
+    // Mais la question, elle, est bien là.
+    expect(screen.getByText('Il en est sorti combien ?')).toBeTruthy()
   })
 })
 

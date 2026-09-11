@@ -676,7 +676,13 @@ function Partage({ noeud, decoupe, cuites, coupes }) {
  * au beurre aussi. Le dire, c'est faire croire à une faute (Layla,
  * 2026-09-10).
  */
-export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees, tailles, nomCuve, parTaille, onTaille, prevu }) {
+/**
+ * ⚠️ Plus de récapitulatif des ingrédients ici : « enlève les recettes en bas,
+ * ça remplit juste la page » (Layla, 2026-09-11). À ce moment-là le travail est
+ * fait — la recette a servi sur l'écran d'avant. Ce qui sort du stock continue
+ * d'être calculé et imposé à l'ordre Odoo, mais sans encombrer l'écran.
+ */
+export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nomCuve, parTaille, onTaille, prevu }) {
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -706,23 +712,6 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees, tail
       {prevu > 0 && valeur !== prevu && (
         <div className="text-center text-[14px] font-bold text-bordeaux mt-1">
           la recette reste comptée pour {nb(prevu)} — tu l'as faite
-        </div>
-      )}
-
-      {pesees && Object.keys(pesees).length > 0 && (
-        <div className="mt-7 rounded-2xl border-2 border-cream-deep overflow-hidden">
-          <div className="px-4 py-2.5 bg-cream-deep/40 text-[13px] font-extrabold
-                          uppercase tracking-wide text-ink-mute">
-            Ce qui sort du stock — ce que tu as pesé
-          </div>
-          {Object.entries(pesees).map(([nom, q]) => (
-            <div key={nom} className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40">
-              <span className="flex-1 min-w-0 text-[16px]">{nomAtelier(nom)}</span>
-              <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
-                {qte(q * facteurAtelier(nom), (noeud.recette || []).find(l => l.produit === nom)?.unite)}
-              </span>
-            </div>
-          ))}
         </div>
       )}
 
