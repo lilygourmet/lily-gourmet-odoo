@@ -41,7 +41,7 @@ export function poserPrevu(jour, produit, q) {
 /** Figer le prévu : on quitte la fiche, le travail commence. */
 export function figerPrevu(jour, produit) {
   const par = { ...prevusDuJour(jour) }
-  if (!par[produit]) return par
+  if (!par[produit]) return par      // rien n'a été décidé : rien à figer
   par[produit] = { ...par[produit], fige: true }
   ecrire({ jour, par })
   return par

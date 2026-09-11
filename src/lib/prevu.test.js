@@ -60,3 +60,23 @@ describe('le prévu', () => {
     expect(prevusDuJour(JOUR)).toEqual({})
   })
 })
+
+describe('le chiffre proposé compte aussi', () => {
+  // « Je suis sorti de la page, je suis revenu, le 25 a disparu » (Layla).
+  // Il n'était gardé que si on l'avait tapé soi-même.
+  it('poser puis figer : il reste au retour', () => {
+    poserPrevu(JOUR, TRONC, 25)          // ce que fait l'écran en quittant
+    figerPrevu(JOUR, TRONC)
+    expect(prevusDuJour(JOUR)[TRONC]).toEqual({ q: 25, fige: true })
+  })
+
+  it('figer sans rien avoir posé ne crée rien', () => {
+    figerPrevu(JOUR, TRONC)
+    expect(prevusDuJour(JOUR)[TRONC]).toBeUndefined()
+  })
+
+  it('et un composant garde sa quantité, lui aussi', () => {
+    poserPrevu(JOUR, 'SM. Chantilly à la Rose', 1050)
+    expect(prevusDuJour(JOUR)['SM. Chantilly à la Rose'].q).toBe(1050)
+  })
+})

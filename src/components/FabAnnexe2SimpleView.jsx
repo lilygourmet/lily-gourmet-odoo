@@ -138,15 +138,26 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const poser = (produit, q) => {
     const v = Math.max(0, Math.round(q * 1000) / 1000)
     setQuantites(x => ({ ...x, [produit]: v }))
-    // ⚠️ On ne garde QUE le chiffre de l'article de tête : c'est lui qui
-    // commande la recette. Les quantités des composants se recalculent.
-    if (produit === (chemin[0] || null)) setPrevus(poserPrevu(todayISO(), produit, v))
+    // Gardé pour la journée : « il faut le garder tant que réinitialiser n'a
+    // pas été noté » (Layla, 2026-09-11).
+    setPrevus(poserPrevu(todayISO(), produit, v))
   }
 
-  /** On quitte la fiche : le travail commence, le chiffre se fige. */
-  const figer = () => {
+  /**
+   * On quitte la fiche : le travail commence, le chiffre se fige.
+   *
+   * ⚠️ Et s'il n'a jamais été touché, le chiffre PROPOSÉ devient le décidé.
+   * Sans ça, celui qu'on n'avait pas tapé soi-même se recalculait au retour :
+   * on part faire la crème, on la déclare, et le tronc framboise ne proposait
+   * plus 25 mais autre chose. (Layla, 2026-09-11 : « je suis sorti de la page,
+   * je suis revenu, le 25 a disparu ».)
+   */
+  const figer = (q = 0) => {
     const tete = chemin[0]
-    if (tete && prevus[tete] && !prevus[tete].fige) setPrevus(figerPrevu(todayISO(), tete))
+    if (!tete) return
+    const jour = todayISO()
+    if (!prevus[tete] && q > 0) poserPrevu(jour, tete, q)
+    setPrevus(figerPrevu(jour, tete))
   }
 
   // ---------- déclarer ----------
@@ -334,7 +345,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             deux disparaissent à l'impression : la feuille ne porte que la
             recette telle qu'elle est à l'écran (Layla, 2026-09-11). */}
         <div className="flex items-start justify-between gap-3 print:hidden">
-          <Fil chemin={chemin} onRetour={() => { figer(); setSortie(null); setChemin(chemin.slice(0, -1)) }} />
+          <Fil chemin={chemin} onRetour={() => { figer(q); setSortie(null); setChemin(chemin.slice(0, -1)) }} />
           {sortie === null && (
             <button onClick={() => window.print()}
               className="shrink-0 rounded-xl border border-cream-deep bg-cream-warm px-3 py-2
@@ -386,11 +397,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                 : undefined}
               faits={faits} envoi={envoi}
               verrouille={!!prevus[tete.produit]?.fige && noeud.produit === tete.produit}
-              onLiberer={() => {
-                setPrevus(oublierPrevu(todayISO(), tete.produit))
-                setQuantites(x => { const n = { ...x }; delete n[tete.produit]; return n })
-              }}
-              onOuvrir={p => { figer(); setChemin([...chemin, p]) }}
+              onLiberer={prevus[noeud.produit] ? () => {
+                setPrevus(oublierPrevu(todayISO(), noeud.produit))
+                setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
+              } : undefined}
+              onOuvrir={p => { figer(q); setChemin([...chemin, p]) }}
               onFait={() => {
                 // Une DÉCOUPE : si on a cuit quelque chose, on demande combien
                 // il en est vraiment sorti — « il faudrait qu'il demande
