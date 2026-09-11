@@ -699,12 +699,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   /** Déclarer N tournées d'une base : on reprend un ordre libre d'Odoo, sinon on en crée un. */
   const declarerBase = async (b, n) => {
     const t = tailleTournee(recettes, b.produit)
-    // Le compteur −/+ gardait sa valeur d'un affichage à l'autre, et il
-    // disparaît dès qu'il ne reste qu'une tournée à faire. Après avoir déclaré
-    // 2 des 3 tournées, le bouton en redéclarait donc 2 au lieu de la dernière.
-    // On ne déclare jamais plus que ce qui reste, et on rend le compteur à sa
-    // valeur d'origine une fois la tournée partie.
-    const combien = Math.max(1, Math.min(b.n || 1, Number(n) || 1))
+    // Le compteur −/+ gardait sa valeur d'un affichage à l'autre : après avoir
+    // déclaré 2 des 3 tournées, le bouton en redéclarait 2 au lieu de la
+    // dernière. C'est le `setLots` juste en dessous qui règle ça — le compteur
+    // revient à sa valeur d'origine une fois la tournée partie.
+    // Le plafond au besoin, lui, a sauté (Layla, 2026-09-11) : on peut déclarer
+    // PLUS que ce qui est demandé, pour prendre de l'avance.
+    const combien = Math.max(1, Number(n) || 1)
     const qty = combien * ((t && t.q) || 0)
     if (!(qty > 0)) return
     setLots(l => { const s2 = { ...l }; delete s2[b.produit]; return s2 })
@@ -1586,13 +1587,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                             {ouvertes[cleBase(b.produit)] ? '▾' : '▸'}
                           </span>
                         )}
-                        {/* combien j'en fais maintenant : pas forcément tout d'un coup */}
-                        {b.n > 1 && (
+                        {/* Combien j'en fais maintenant : moins que demandé si on
+                            n'a pas le temps de tout faire, PLUS pour prendre de
+                            l'avance (le + n'a plus de plafond — Layla 2026-09-11).
+                            Affiché dès qu'il y a une tournée à faire : sans ça,
+                            impossible d'avancer sur une base qui n'en demande qu'une. */}
+                        {b.n > 0 && (
                           <span className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                             <button onClick={() => setLots(l => ({ ...l, [b.produit]: Math.max(1, (l[b.produit] ?? b.n) - 1) }))}
                               className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">−</button>
                             <b className="min-w-[16px] text-center text-[15px]">{lots[b.produit] ?? b.n}</b>
-                            <button onClick={() => setLots(l => ({ ...l, [b.produit]: Math.min(b.n, (l[b.produit] ?? b.n) + 1) }))}
+                            <button onClick={() => setLots(l => ({ ...l, [b.produit]: (l[b.produit] ?? b.n) + 1 }))}
                               className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">+</button>
                           </span>
                         )}
