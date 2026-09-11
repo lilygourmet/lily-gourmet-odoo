@@ -624,7 +624,14 @@ export async function attachReleveLines(env, lines) {
 export async function confirmReleveLine(env, choice) {
   if (choice) {
     const libres = await loadFreeReleveLines(env.amount_cash, env.payment_method)
-    const memeJour = libres.filter(l => l.ligne_date === choice.d)
+    // Une ligne déjà marquée prise par CETTE caisse lui reste évidemment disponible. Sans
+    // ça, une caisse repassée « à confirmer » sans que sa ligne soit libérée (« tout
+    // recalculer ») ne pouvait plus jamais être confirmée : la ligne était invisible dans
+    // « non liées » ET introuvable à la confirmation. Caisse et ligne bloquées toutes deux.
+    const miennes = (await loadEnvReleveLines(env.id))
+      .filter(m => Math.abs(Number(m.amount) - Number(env.amount_cash)) < ECART_MINI)
+    const pool = [...libres, ...miennes.filter(m => !libres.some(l => l.key === m.key))]
+    const memeJour = pool.filter(l => l.ligne_date === choice.d)
     // Plusieurs remises du même montant le même jour : le libellé (n° de remise) départage.
     const ligne = memeJour.find(l => (l.label || '').startsWith(choice.l)
       || choice.l.startsWith((l.label || '').slice(0, 40))) || memeJour[0]
@@ -641,6 +648,17 @@ export async function confirmReleveLine(env, choice) {
     libelle: 'Confirmé manuellement',
     candidates: null,
   })
+}
+
+// Libère les lignes du relevé retenues par ces caisses. Invariant de l'app : SEULE une
+// caisse verte garde une ligne. Une caisse qui retombe « à confirmer » doit rendre la
+// sienne, sinon la ligne reste invisible dans « Reçus banque non liés » alors que plus
+// rien ne la justifie — et la caisse ne peut même plus être confirmée dessus.
+export async function freeReleveLinesOf(envIds) {
+  if (!envIds?.length) return
+  const { error } = await supabase.from('caisse_releve_lignes')
+    .update({ used_by: null }).in('used_by', envIds)
+  if (error) throw error
 }
 
 // Marque une ligne du relevé comme prise par une caisse (sans toucher au reste).
