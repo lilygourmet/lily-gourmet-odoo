@@ -411,3 +411,33 @@ describe('reconcileEnvelopes — deux virements identiques à un mois d\'écart'
     expect(results[0].status).toBe('trouve')
   })
 })
+
+// Filet de sécurité : après toutes les corrections sur les VIREMENTS, vérifier qu'espèces
+// et chèques se rapprochent toujours comme avant, et que les nouvelles règles de nom
+// donnent bien le résultat attendu sur une journée mélangée.
+describe('non-régression : espèces, chèques et virements ensemble', () => {
+  const lignes = [
+    { credit: 1200, dateIso: '2026-06-12', type: 'versement',     label: 'VERSEMENT ESPECES AGENCE' },
+    { credit: 3400, dateIso: '2026-06-20', type: 'cheque_depot',  label: 'REMISE CHEQUE A ENC 47106224' },
+    { credit: 800,  dateIso: '2026-06-10', type: 'virement_recu', label: 'VIR INST RECU 2378161 BADRY FATIN' },
+    { credit: 950,  dateIso: '2026-06-11', type: 'virement_recu', label: 'VIR INST RECU 2378999 LEBDAR NAWAL' },
+  ]
+  const caisses = [
+    { id: 'ESP', amount_cash: 1200, payment_method: 'cash',      releve_status: null, session_date: '2026-06-11' },
+    { id: 'CHQ', amount_cash: 3400, payment_method: 'cheque',    releve_status: null, session_date: '2026-06-05' },
+    { id: 'VIR', amount_cash: 800,  payment_method: 'virement',  releve_status: null, session_date: '2026-06-10', virement_client: 'Fatin Badry' },
+    { id: 'BAD', amount_cash: 950,  payment_method: 'virement',  releve_status: null, session_date: '2026-06-11', virement_client: 'Maryam el bairi' },
+    { id: 'ANO', amount_cash: 777,  payment_method: 'virement',  releve_status: null, session_date: '2026-06-11', virement_client: null },
+  ]
+  const r = reconcileEnvelopes(caisses, lignes, {})
+  const st = id => r.results.find(x => x.env.id === id).status
+
+  it('espèces : toujours rapprochées', () => expect(st('ESP')).toBe('trouve'))
+  it('chèques : toujours rapprochés', () => expect(st('CHQ')).toBe('trouve'))
+  it('virement au bon nom : rapproché', () => expect(st('VIR')).toBe('trouve'))
+  it('virement au nom d\'une autre cliente : refusé', () => expect(st('BAD')).toBe('absent'))
+  it('caisse sans nom et sans ligne de son montant : absente', () => expect(st('ANO')).toBe('absent'))
+  it('la ligne de Nawal reste libre pour elle', () => {
+    expect(r.unmatched.map(u => u.credit)).toContain(950)
+  })
+})

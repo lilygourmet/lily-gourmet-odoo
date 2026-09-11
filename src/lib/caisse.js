@@ -657,10 +657,10 @@ export async function takeReleveLine(key, envId) {
 // seul le CALCUL a besoin d'être refait : les regles de rapprochement changent, les
 // caisses arrivent apres coup. Ici on ne fait qu'ECRIRE le resultat — aucune ligne n'est
 // creee, et les caisses deja vertes ne sont pas touchees (comme un import normal).
-export async function relancerRapprochement() {
+export async function relancerRapprochement({ annulerFaux = true } = {}) {
   // D'ABORD défaire les rapprochements faux : leurs lignes retournent dans « non liées » et
   // leurs caisses redeviennent cherchables, donc le calcul qui suit peut les refaire bien.
-  const annules = await annulerRapprochementsFaux()
+  const annules = annulerFaux ? await annulerRapprochementsFaux() : []
   // La MÊME liste que l'écran « Reçus banque non liés » : lignes libres, hors ignorées et
   // hors TPE, et surtout DÉDOUBLONNÉES. Sans ça le calcul voyait encore les fausses lignes
   // fabriquées par l'ancien lecteur de PDF : deux candidates au lieu d'une, donc une caisse
@@ -813,7 +813,11 @@ export async function loadConfirmedReleveLines() {
 //     1 ligne ») : le libellé y est composite, le nom ne s'y lit pas.
 // Défaire est sans risque : la caisse repasse en attente et la ligne retourne dans
 // « non liées » — c'est exactement ce que fait le bouton « délier » à la main.
-export async function annulerRapprochementsFaux() {
+// `simulation` : ne rien écrire, seulement RENDRE la liste des suspects. Un rattachement
+// fait à la MAIN peut porter un autre nom en toute légitimité (la cliente a été payée par
+// son mari, par une société…) : c'est à Layla de trancher, pas à l'app de défaire son
+// travail sans demander.
+export async function annulerRapprochementsFaux(simulation = false) {
   const { data, error } = await supabase
     .from('caisse_enveloppes')
     .select('id, virement_client, note_proof, session_date, amount_cash')
@@ -831,7 +835,7 @@ export async function annulerRapprochementsFaux() {
     const label = np.slice(sep + 3)
     if (!nomFiable(nomDeLigne(env.virement_client))) continue  // caisse sans nom : on ne juge pas
     if (!nomAutreCliente(env.virement_client, label)) continue
-    await clearEnveloppeReleve(env.id)
+    if (!simulation) await clearEnveloppeReleve(env.id)
     annules.push({ client: env.virement_client, date: env.session_date, montant: env.amount_cash, label })
   }
   return annules
@@ -876,11 +880,18 @@ export async function clearEnveloppeReleve(envId) {
     }
   }
 
-  // 3) Remettre l'enveloppe à zéro
-  const { error } = await supabase.from('caisse_enveloppes').update({
-    releve_status: null, releve_candidates: null,
-    proof_url: null, proof_date: null, note_proof: null, proof_uploaded_at: null,
-  }).eq('id', envId)
+  // 3) Remettre l'enveloppe à zéro — SANS toucher à une preuve photo.
+  // La photo du bordereau déposée par Layla vit dans « env_<id>/… », alors qu'un
+  // rapprochement pointe le PDF du relevé (« releves/… »). Elle ne fait pas partie du
+  // rapprochement : l'annuler ne doit pas la détruire, elle se retire avec son propre
+  // bouton. Vécu : l'annulation AUTOMATIQUE des faux rapprochements effaçait au passage
+  // la photo — et le montant déclaré avec.
+  const photoManuelle = !!env?.proof_url && !String(env.proof_url).includes('releves/')
+  const raz = photoManuelle
+    ? { releve_status: null, releve_candidates: null, note_proof: null }
+    : { releve_status: null, releve_candidates: null, amount_proof: null,
+        proof_url: null, proof_date: null, note_proof: null, proof_uploaded_at: null }
+  const { error } = await supabase.from('caisse_enveloppes').update(raz).eq('id', envId)
   if (error) throw error
 }
 
