@@ -16,7 +16,7 @@
 // chiffre, ce qu'il veut dire en vrai : « 4 plaques · 2 800 g en tout ».
 // ============================================================
 import { useState } from 'react'
-import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant,
+import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant, estPressageServi,
   decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe,
   quantitePourDose } from '../lib/fabAnnexe'
 import { nb, qte, dose, propre, nomAtelier, facteurAtelier,
@@ -502,7 +502,11 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
     <div className="mt-5">
       {liste.map((c, i) => {
         const fait = c.dejaFait > 0 || dejaFaits.includes(c.produit)
-        const manque = !c.pese && !c.ok && !fait && c.fabrique
+        // Une mise en forme (la base de flan) ne manque pas : elle se confirme
+        // en validant le gâteau. La montrer en rouge à côté d'un bouton vert
+        // n'aurait aucun sens. (Layla, 2026-09-11.)
+        const aPresser = estPressageServi(c)
+        const manque = !c.pese && !c.ok && !fait && c.fabrique && !aPresser
         const nom = nomAtelier(c.produit)
         const combien = qte(c.besoin * facteurAtelier(c.produit), c.unite)
         return (
@@ -524,7 +528,9 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
                 {c.fabrique && (
                   <span className="flex items-baseline gap-2 text-[12.5px] font-normal print:text-[8pt]">
                     <span className={`flex-1 min-w-0 truncate ${manque ? 'text-danger' : 'text-ink-mute'}`}>
-                      {fait ? 'fait à l\'instant' : `en stock ${qte(c.stock, c.unite)}`}
+                      {fait ? 'fait à l\'instant'
+                        : aPresser ? 'à presser en validant'
+                          : `en stock ${qte(c.stock, c.unite)}`}
                     </span>
                     <span className={`shrink-0 font-bold print:hidden ${manque ? 'text-danger' : 'text-ink-mute'}`}>
                       {manque ? 'à faire ›' : 'en faire ›'}
@@ -721,7 +727,7 @@ function Partage({ noeud, decoupe, cuites, coupes }) {
  * fait — la recette a servi sur l'écran d'avant. Ce qui sort du stock continue
  * d'être calculé et imposé à l'ordre Odoo, mais sans encombrer l'écran.
  */
-export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nomCuve, parTaille, onTaille, prevu }) {
+export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nomCuve, parTaille, onTaille, prevu, question }) {
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -741,7 +747,7 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nom
         </div>
       )}
       <div className={`text-center text-[19px] font-extrabold mb-3 ${prevu > 0 ? 'mt-1' : 'mt-8'}`}>
-        Il en est sorti combien ?
+        {question || 'Il en est sorti combien ?'}
       </div>
       <GrosChiffre titre="il en est sorti" valeur={valeur} unite={noeud.unite}
         onChange={onValeur} />

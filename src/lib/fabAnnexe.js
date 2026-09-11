@@ -336,6 +336,42 @@ export function pourFois(article, fois) {
 }
 
 /**
+ * LE PRESSAGE : une étape qui ne fabrique rien, elle met en forme ce qui est
+ * déjà là. 290 g de sablé crispy pressés dans un cercle, c'est une base de
+ * flan — pas de cuisson, pas de recette, rien à décider.
+ *
+ * Elle bloquait quand même le gâteau : il fallait entrer dans l'étape, dire
+ * « c'est fait », ressortir, redire « c'est fait ». « Tu as validé flan ; le
+ * crispy y est, combien de base tu as coupé ? » (Layla, 2026-09-11) — la
+ * question se pose donc À LA VALIDATION DU GÂTEAU, et l'étape ne bloque plus.
+ *
+ * ⚠️ On la déclare quand même chez Odoo : sans elle, l'ordre du flan
+ * consommerait des bases qui n'existent pas, et le sablé crispy resterait
+ * éternellement en stock.
+ *
+ * ⚠️ Et seulement TANT QU'IL Y A DE QUOI : sans sablé crispy, la base bloque
+ * comme avant — il faut aller le faire d'abord.
+ *
+ * Le flan seul pour l'instant. 32 autres étapes ont exactement cette forme
+ * (crémeux pistache, gélées, crunchy, fonds de tarte) ; on les ajoutera à
+ * l'usage plutôt que de tout changer d'un coup.
+ */
+const PRESSAGES = /base flan/i
+
+/** Ce composant est-il un pressage qu'on peut faire tout de suite ? */
+export function estPressageServi(composant) {
+  if (!composant || !PRESSAGES.test(String(composant.produit || ''))) return false
+  if (!composant.fabrique || composant.ok || composant.dejaFait > 0) return false
+  const source = enfantsDe(composant)
+  return source.length > 0 && source.every(x => x.ok)
+}
+
+/** Le pressage à confirmer avant de déclarer ce gâteau, s'il y en a un. */
+export function pressageDe(noeud) {
+  return enfantsDe(noeud).find(estPressageServi) || null
+}
+
+/**
  * Ce qui empêche de dire « c'est fait » : un composant qu'on FABRIQUE et dont
  * il n'y a pas assez. Le pâtissier se débloque en le fabriquant à son tour.
  *
@@ -356,7 +392,9 @@ export function bloquants(noeud, dejaFaits) {
     // (« 2 u fait · en attente de validation ») et le verrou, lui, le comptait
     // encore comme manquant : « ça doit me laisser valider vu que j'ai marqué
     // comme fait la base » (Layla, 2026-09-10).
-    .filter(c => !c.ok && c.fabrique && !(c.dejaFait > 0) && !faits.has(c.produit))
+    // Un PRESSAGE ne bloque pas : on le confirme en validant le gâteau.
+    .filter(c => !c.ok && c.fabrique && !(c.dejaFait > 0) && !faits.has(c.produit)
+      && !estPressageServi(c))
     .map(c => c.produit)
 }
 

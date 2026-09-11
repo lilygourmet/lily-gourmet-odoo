@@ -23,7 +23,7 @@ import { CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from '.
 import HistoriqueAnnexe from './HistoriqueAnnexe'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
   decoupeDe, noeudDuChemin, defautDe, aCuireParDefaut, parGateauMere, peseesDe,
-  declarer, envoyerAValider, repartirCuve, sansRendement } from '../lib/fabAnnexe'
+  declarer, envoyerAValider, repartirCuve, sansRendement, pressageDe } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
@@ -182,7 +182,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   /** Ce qu'on cuit : le chiffre réglé à la main, sinon ce qui manque. */
   const aCuire = (noeud, decoupe) => cuites[noeud.produit] ?? aCuireParDefaut(decoupe.enfant)
 
-  const envoyer = async (noeud, tete, qty, cuitesReelles = null) => {
+  const envoyer = async (noeud, tete, qty, cuitesReelles = null, pressees = 0) => {
     if (!(qty > 0) || envoi) return
     // ⚠️ Le jeton de connexion dure 12 h. Sur une tablette allumée toute la
     // journée il expire en plein travail : l'écran a l'air normal, mais plus
@@ -202,6 +202,14 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       if (decoupe && nbCuites > 0) {
         const r = await envoyerUn(decoupe.enfant, tete, nbCuites)
         if (r?.erreur) toast(`Odoo a refusé les plaques : ${r.erreur}`)
+      }
+      // ⚠️ Le PRESSAGE aussi part AVANT : l'ordre du gâteau consomme les
+      // bases, et une base qui n'existe pas laisserait le sablé crispy
+      // éternellement en stock. (Layla, 2026-09-11.)
+      const presse = pressees > 0 ? pressageDe(noeud) : null
+      if (presse) {
+        const r0 = await envoyerUn(presse, tete, pressees)
+        if (r0?.erreur) toast(`Odoo a refusé ${propre(presse.produit)} : ${r0.erreur}`)
       }
       // ⚠️ D'AUTRES TAILLES montées avec la même cuve : chacune doit porter SA
       // part de crème, pas la cuve entière. Le serveur calcule les parts ; on
@@ -339,6 +347,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
 
   const q = quantites[noeud.produit] ?? prevus[noeud.produit]?.q ?? defautDe(noeud)
   const decoupe = decoupeDe(noeud)
+  // L'étape de mise en forme qu'on confirmera en validant — la base de flan.
+  const pressage = pressageDe(noeud)
 
   return (
     <div className="min-h-screen bg-cream">
@@ -364,12 +374,16 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             // CUIRE pour lui (la plaque, le sablé). Deux quantités, deux vraies
             // réponses (Layla, 2026-09-11).
             const surEnfant = sortie.pour === 'enfant'
-            const cible = surEnfant ? decoupe.enfant : noeud
+            // La MISE EN FORME : « combien de bases tu as pressées ? », posée
+            // en validant le gâteau au lieu d'obliger à entrer dans l'étape.
+            const surPressage = sortie.pour === 'pressage'
+            const cible = surEnfant ? decoupe.enfant : surPressage ? pressage : noeud
             // L'étape FINALE : l'article qu'on est venu faire, pas un de ses
             // morceaux. C'est la seule qui rassemble tous les composants.
-            const finale = !surEnfant && cible.produit === tete.produit
+            const finale = !surEnfant && !surPressage && cible.produit === tete.produit
             return (
               <Sortie noeud={cible} valeur={sortie.valeur} envoi={envoi}
+                question={surPressage ? 'Tu en as pressé combien ?' : undefined}
                 onValeur={v => setSortie(x => ({ ...x, valeur: v }))}
                 // Une CUVE ne se divise pas : ce qu'on n'a pas monté en grand
                 // finit en plus petit.
@@ -388,7 +402,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                   ? (p, n) => setParTaille(x => ({ ...x, [p]: n })) : undefined}
                 onValider={() => (surEnfant
                   ? envoyer(noeud, tete, q, sortie.valeur)
-                  : envoyer(noeud, tete, sortie.valeur))} />
+                  : surPressage
+                    ? envoyer(noeud, tete, q, null, sortie.valeur)
+                    : envoyer(noeud, tete, sortie.valeur))} />
             )
           })()
           : (
@@ -417,6 +433,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                     return setSortie({ pour: 'enfant', valeur: nb })
                   }
                   return envoyer(noeud, tete, q)
+                }
+                // La MISE EN FORME se confirme ici, pas dans une étape à part :
+                // « tu as validé flan ; le crispy y est, combien de base tu as
+                // coupé ? » (Layla, 2026-09-11). Le nombre qu'il faut est déjà
+                // rempli — on peut en presser plus si on veut de l'avance.
+                if (pressage) {
+                  return setSortie({ pour: 'pressage', valeur: Math.ceil(pressage.besoin) })
                 }
                 // On ne demande « combien ça a donné ? » que quand la réponse
                 // peut surprendre : un biscuit sort toujours son compte.
