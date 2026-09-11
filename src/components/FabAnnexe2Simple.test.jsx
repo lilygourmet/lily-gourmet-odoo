@@ -1143,6 +1143,15 @@ describe('le chiffre décidé', () => {
     expect(screen.getByLabelText('Plus à faire')).toBeTruthy()
     expect(screen.queryByText('réinitialiser')).toBeNull()
   })
+
+  it('« réinitialiser » se voit AUSSI avant le verrou, dès qu’un chiffre est retenu', () => {
+    const onLiberer = vi.fn()
+    render(<Fiche noeud={tronc} quantite={25} onQuantite={() => {}} onLiberer={onLiberer}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByLabelText('Plus à faire')).toBeTruthy()   // encore modifiable
+    fireEvent.click(screen.getByText('réinitialiser'))
+    expect(onLiberer).toHaveBeenCalled()
+  })
 })
 
 describe('la fin rappelle le prévu', () => {

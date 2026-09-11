@@ -228,6 +228,19 @@ export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose, verro
                      text-[34px] font-extrabold text-bordeaux leading-none
                      md:w-14 md:h-14 md:text-[28px]">+</button>
       </div>
+      {/* « Réinitialiser » se voit AUSSI quand le chiffre n'est pas encore
+          verrouillé : dès qu'il est retenu pour la journée, on doit pouvoir
+          le rendre à l'app. « Je ne vois plus le bouton Réinitialiser »
+          (Layla, 2026-09-11). */}
+      {onLiberer && (
+        <div className="text-center">
+          <button onClick={onLiberer}
+            className="print:hidden mt-1 text-[13px] font-bold text-ink-mute underline
+                       decoration-dotted underline-offset-4">
+            réinitialiser
+          </button>
+        </div>
+      )}
       {clavier && (
         <Clavier titre={titre} valeur={Math.round(vu * 1000) / 1000} unite={uniteAffichee(unite)}
           onValider={v => { onChange(enUnite(v, unite)); setClavier(false) }}
