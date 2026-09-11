@@ -192,7 +192,8 @@ export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose }) {
           className="print:hidden w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
                      text-[34px] font-extrabold text-bordeaux leading-none disabled:opacity-30">−</button>
         <button onClick={() => setClavier(true)} aria-label={`Changer ${titre}`}
-          className="min-w-[130px] text-center font-extrabold tabular-nums text-[54px] leading-none">
+          className="min-w-[130px] text-center font-extrabold tabular-nums text-[54px] leading-none
+                     print:text-[24pt] print:min-w-0">
           {nb(vu)}
         </button>
         <button onClick={() => bouger(pas)} aria-label={`Plus ${titre}`}
@@ -232,14 +233,15 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
     <div>
       <div className="flex items-center gap-3">
         <img src={photoDe(noeud.photo || noeud.produit)} alt="" loading="lazy"
-          className="w-16 h-16 rounded-2xl object-cover bg-cream-deep shrink-0" />
-        <div className="text-[22px] font-extrabold leading-[1.1]">
+          className="w-16 h-16 rounded-2xl object-cover bg-cream-deep shrink-0
+                     print:w-12 print:h-12" />
+        <div className="text-[22px] font-extrabold leading-[1.1] print:text-[15pt]">
           {propre(noeud.libelle || noeud.produit)}
         </div>
       </div>
 
       {decoupe && (
-        <div className="mt-5 text-center text-[15px] font-bold text-ink-mute">
+        <div className="mt-5 text-center text-[15px] font-bold text-ink-mute print:mt-2 print:text-[10pt]">
           {titreDuHaut(decoupe.enfant, cuites)}
         </div>
       )}
@@ -252,7 +254,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
           onChange={decoupe ? onCuites : onQuantite} />
       </div>
       {!decoupe && (
-        <div className="text-center text-[15px] text-ink-mute mt-1">
+        <div className="text-center text-[15px] text-ink-mute mt-1 print:text-[10pt]">
           {/^u$/i.test(String(noeud.unite || '').trim())
             ? 'à faire' : `${uniteAffichee(noeud.unite)} à faire`}
         </div>
@@ -279,7 +281,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
 
       {decoupe && (
         <div className="mt-6 pt-5 border-t-4 border-cream-deep">
-          <div className="text-center text-[15px] font-bold text-ink-mute">
+          <div className="text-center text-[15px] font-bold text-ink-mute print:text-[10pt]">
             {enPieces(decoupe.enfant.unite)
               ? `${motPluriel(noeud.produit, quantite)} à couper` : 'à faire'}
           </div>
@@ -403,7 +405,7 @@ function EnPlaques({ noeud, decoupe, cuites, onCuites }) {
 function EnClair({ noeud, quantite }) {
   const dit = enClair(noeud, quantite)
   if (!dit) return null
-  return <div className="text-center text-[15px] font-bold text-bordeaux mt-0.5">{dit}</div>
+  return <div className="text-center text-[15px] font-bold text-bordeaux mt-0.5 print:text-[10pt]">{dit}</div>
 }
 
 /**
@@ -438,7 +440,7 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
             <button onClick={() => c.fabrique && onOuvrir(c.produit)}
               className="flex-1 min-w-0 text-left flex items-center gap-3">
               <span className={`w-3 h-3 rounded shrink-0 ${manque ? 'bg-danger' : 'bg-success'}`} />
-              <span className={`flex-1 min-w-0 text-[17px] ${manque ? 'text-danger font-bold' : ''}`}>
+              <span className={`flex-1 min-w-0 text-[17px] print:text-[11pt] ${manque ? 'text-danger font-bold' : ''}`}>
                 {/* ⚠️ « Masse gélatine », pas « Gélatine en poudre » : l'atelier
                     pèse la masse (poudre + 6 fois son eau), Odoo compte la
                     poudre. Sans cette règle, on pèse SEPT FOIS trop peu. */}
@@ -448,11 +450,11 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
                     tenu à l'annexe — 47 tonnes de sucre, une gélatine à
                     −7 590 g : l'afficher ne ferait que semer le doute. */}
                 {c.fabrique && (
-                  <span className="flex items-baseline gap-2 text-[12.5px] font-normal">
+                  <span className="flex items-baseline gap-2 text-[12.5px] font-normal print:text-[8pt]">
                     <span className={`flex-1 min-w-0 truncate ${manque ? 'text-danger' : 'text-ink-mute'}`}>
                       {fait ? 'fait à l\'instant' : `en stock ${qte(c.stock, c.unite)}`}
                     </span>
-                    <span className={`shrink-0 font-bold ${manque ? 'text-danger' : 'text-ink-mute'}`}>
+                    <span className={`shrink-0 font-bold print:hidden ${manque ? 'text-danger' : 'text-ink-mute'}`}>
                       {manque ? 'à faire ›' : 'en faire ›'}
                     </span>
                   </span>
@@ -462,6 +464,7 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
             {/* La dose, qu'on peut retaper — le nombre reste gros et lisible. */}
             <button onClick={() => setDose({ ...c, nom, combien })}
               className={`shrink-0 rounded-xl px-3 py-1.5 text-[19px] font-extrabold tabular-nums
+                print:text-[12pt] print:px-0 print:py-0 print:border-0
                 ${manque ? 'border-2 border-danger text-danger' : ''}`}>
               {combien}
             </button>
@@ -496,8 +499,9 @@ export function QuantiteFigee({ noeud, quantite }) {
   const figes = ingredientsPour(noeud, quantite).filter(c => c.fige && !c.fabrique)
   if (!figes.length) return null
   return (
-    <div className="mt-6 rounded-2xl border-2 border-cream-deep overflow-hidden">
-      <div className="px-4 py-2.5 bg-cream-deep/40">
+    <div className="mt-6 rounded-2xl border-2 border-cream-deep overflow-hidden
+                    print:mt-3 print:break-inside-avoid">
+      <div className="px-4 py-2.5 bg-cream-deep/40 print:py-1">
         <div className="text-[16px] font-extrabold">{noeud.figesNom || 'La cuve'}</div>
         <div className="text-[12.5px] text-ink-mute mt-0.5">
           Pour la fournée entière — ne bouge pas avec ce qui sort vraiment
@@ -505,9 +509,9 @@ export function QuantiteFigee({ noeud, quantite }) {
       </div>
       {figes.map((c, i) => (
         <div key={c.produit + i}
-          className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40">
-          <span className="flex-1 min-w-0 text-[16px]">{nomAtelier(c.produit)}</span>
-          <span className="shrink-0 text-[19px] font-extrabold tabular-nums">
+          className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40 print:py-0.5">
+          <span className="flex-1 min-w-0 text-[16px] print:text-[10pt]">{nomAtelier(c.produit)}</span>
+          <span className="shrink-0 text-[19px] font-extrabold tabular-nums print:text-[11pt]">
             {qte(c.besoin * facteurAtelier(c.produit), c.unite)}
           </span>
         </div>
@@ -581,15 +585,18 @@ export function PourUn({ noeud, quantite }) {
   // Plus petit et en italique que le reste : c'est un RAPPEL, pas le geste du
   // moment — le geste, c'est la liste du haut. (Layla, 2026-09-11.)
   return (
-    <div className="mt-6 rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden italic">
-      <div className="px-3.5 py-2 text-[12.5px] font-bold text-ink-mute border-b border-cream-deep">
+    <div className="mt-6 rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden italic
+                    print:mt-3 print:break-inside-avoid">
+      <div className="px-3.5 py-2 text-[12.5px] font-bold text-ink-mute border-b border-cream-deep
+                      print:py-1 print:text-[9pt]">
         Pour 1 {propre(noeud.libelle || noeud.produit)}
       </div>
       {lignes.map((l, i) => (
         <div key={l.nom + i}
-          className="flex items-baseline gap-3 px-3.5 py-1.5 border-t border-cream-deep/40 first:border-t-0">
-          <span className="flex-1 min-w-0 text-[13px]">{l.nom}</span>
-          <span className="shrink-0 text-[14px] font-bold tabular-nums">{l.valeur}</span>
+          className="flex items-baseline gap-3 px-3.5 py-1.5 border-t border-cream-deep/40
+                     first:border-t-0 print:py-0.5">
+          <span className="flex-1 min-w-0 text-[13px] print:text-[9pt]">{l.nom}</span>
+          <span className="shrink-0 text-[14px] font-bold tabular-nums print:text-[10pt]">{l.valeur}</span>
         </div>
       ))}
     </div>
