@@ -41,7 +41,11 @@ export function CasesAFaire({ articles, onOuvrir }) {
     )
   }
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+    // ⚠️ Sur tablette, tout est plus petit d'un cran : « c'est trop grand »
+    // (Layla, 2026-09-11). Le téléphone, lui, garde ses gros doigts.
+    <div className="grid gap-3 md:gap-2.5
+                    grid-cols-[repeat(auto-fill,minmax(150px,1fr))]
+                    md:grid-cols-[repeat(auto-fill,minmax(124px,1fr))]">
       {liste.map(a => (
         <button key={a.produit} onClick={() => onOuvrir(a.produit)}
           className="text-left rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden
@@ -50,12 +54,13 @@ export function CasesAFaire({ articles, onOuvrir }) {
             <img src={photoDe(a.photo || a.produit)} alt="" loading="lazy"
               className="w-full aspect-square object-cover bg-cream-deep" />
             <span className="absolute left-2 top-2 rounded-full bg-danger text-cream
-                             px-3 py-1 text-[19px] font-extrabold tabular-nums">
+                             px-3 py-1 text-[19px] font-extrabold tabular-nums
+                             md:px-2.5 md:py-0.5 md:text-[16px]">
               {nb(enGrammes(aFaireMaintenant(a), a.unite))}
             </span>
           </div>
-          <div className="px-3 py-2">
-            <div className="text-[16px] font-bold leading-tight">
+          <div className="px-3 py-2 md:px-2.5 md:py-1.5">
+            <div className="text-[16px] font-bold leading-tight md:text-[14px]">
               {propre(a.libelle || a.produit)}
             </div>
             {/* Le besoin total sous le nom, quand une fournée n'y suffit pas :
@@ -102,14 +107,16 @@ export function Cases({ items, onOuvrir, vide }) {
     return <p className="text-center text-[17px] font-bold text-ink-mute py-16">{vide}</p>
   }
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+    <div className="grid gap-3 md:gap-2.5
+                    grid-cols-[repeat(auto-fill,minmax(150px,1fr))]
+                    md:grid-cols-[repeat(auto-fill,minmax(124px,1fr))]">
       {items.map(it => (
         <button key={it.cle} onClick={() => onOuvrir(it.cle)}
           className="text-left rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden
                      shadow-sm active:scale-[0.98] transition-transform">
           <img src={photoDe(it.photo || it.cle)} alt="" loading="lazy"
             className="w-full aspect-square object-cover bg-cream-deep" />
-          <div className="px-3 py-2 text-[16px] font-bold leading-tight">
+          <div className="px-3 py-2 text-[16px] font-bold leading-tight md:px-2.5 md:py-1.5 md:text-[14px]">
             {propre(it.libelle || it.cle)}
           </div>
         </button>
@@ -190,15 +197,17 @@ export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose }) {
         <button onClick={() => bouger(-pas)}
           disabled={vu <= 0} aria-label={`Moins ${titre}`}
           className="print:hidden w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
-                     text-[34px] font-extrabold text-bordeaux leading-none disabled:opacity-30">−</button>
+                     text-[34px] font-extrabold text-bordeaux leading-none disabled:opacity-30
+                     md:w-14 md:h-14 md:text-[28px]">−</button>
         <button onClick={() => setClavier(true)} aria-label={`Changer ${titre}`}
           className="min-w-[130px] text-center font-extrabold tabular-nums text-[54px] leading-none
-                     print:text-[24pt] print:min-w-0">
+                     md:min-w-[110px] md:text-[42px] print:text-[24pt] print:min-w-0">
           {nb(vu)}
         </button>
         <button onClick={() => bouger(pas)} aria-label={`Plus ${titre}`}
           className="print:hidden w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
-                     text-[34px] font-extrabold text-bordeaux leading-none">+</button>
+                     text-[34px] font-extrabold text-bordeaux leading-none
+                     md:w-14 md:h-14 md:text-[28px]">+</button>
       </div>
       {clavier && (
         <Clavier titre={titre} valeur={Math.round(vu * 1000) / 1000} unite={uniteAffichee(unite)}
@@ -234,8 +243,8 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       <div className="flex items-center gap-3">
         <img src={photoDe(noeud.photo || noeud.produit)} alt="" loading="lazy"
           className="w-16 h-16 rounded-2xl object-cover bg-cream-deep shrink-0
-                     print:w-12 print:h-12" />
-        <div className="text-[22px] font-extrabold leading-[1.1] print:text-[15pt]">
+                     md:w-14 md:h-14 print:w-12 print:h-12" />
+        <div className="text-[22px] font-extrabold leading-[1.1] md:text-[19px] print:text-[15pt]">
           {propre(noeud.libelle || noeud.produit)}
         </div>
       </div>
@@ -305,6 +314,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
           réaliser que c'est fait » (Layla, 2026-09-11). */}
       <button onClick={onFait} disabled={bloque.length > 0 || !(quantite > 0) || envoi}
         className={`print:hidden w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold transition-colors
+          md:mt-5 md:py-4 md:text-[18px]
           ${envoi ? 'bg-bordeaux text-cream'
             : bloque.length || !(quantite > 0) ? 'bg-cream-deep text-ink-mute'
             : 'bg-success text-cream'}`}>
@@ -440,7 +450,8 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
             <button onClick={() => c.fabrique && onOuvrir(c.produit)}
               className="flex-1 min-w-0 text-left flex items-center gap-3">
               <span className={`w-3 h-3 rounded shrink-0 ${manque ? 'bg-danger' : 'bg-success'}`} />
-              <span className={`flex-1 min-w-0 text-[17px] print:text-[11pt] ${manque ? 'text-danger font-bold' : ''}`}>
+              <span className={`flex-1 min-w-0 text-[17px] md:text-[15px] print:text-[11pt]
+                ${manque ? 'text-danger font-bold' : ''}`}>
                 {/* ⚠️ « Masse gélatine », pas « Gélatine en poudre » : l'atelier
                     pèse la masse (poudre + 6 fois son eau), Odoo compte la
                     poudre. Sans cette règle, on pèse SEPT FOIS trop peu. */}
@@ -464,7 +475,7 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
             {/* La dose, qu'on peut retaper — le nombre reste gros et lisible. */}
             <button onClick={() => setDose({ ...c, nom, combien })}
               className={`shrink-0 rounded-xl px-3 py-1.5 text-[19px] font-extrabold tabular-nums
-                print:text-[12pt] print:px-0 print:py-0 print:border-0
+                md:text-[17px] print:text-[12pt] print:px-0 print:py-0 print:border-0
                 ${manque ? 'border-2 border-danger text-danger' : ''}`}>
               {combien}
             </button>
