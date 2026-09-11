@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
 import { parseStatement, reconcileEnvelopes } from '../../../lib/releveBmci'
-import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, markMatchedReleveLines, saveReleveImport } from '../../../lib/caisse'
+import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, markMatchedReleveLines, saveReleveImport, freeReleveLinesOf } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 import { confirmDialog } from '../../../lib/confirmDialog'
 
@@ -94,6 +94,13 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
         for (let i = 0; i < toClear.length; i += 15) {
           await Promise.all(toClear.slice(i, i + 15).map(r => clearEnveloppeReleve(r.env.id)))
         }
+        // Seule une caisse VERTE garde une ligne du relevé. Une caisse qui retombe
+        // « à confirmer » doit rendre la sienne, sinon elle reste invisible dans
+        // « non liées » alors que plus rien ne la justifie.
+        const toFree = recon.results
+          .filter(r => r.status === 'a_confirmer' && r.env.releve_status === 'trouve' && inPeriod(r.env.note_proof))
+          .map(r => r.env.id)
+        if (toFree.length) await freeReleveLinesOf(toFree)
       }
       // Fiche d'une ligne du relevé (clé stable) — utilisée pour les lignes trouvées
       // comme pour celles restées libres.
