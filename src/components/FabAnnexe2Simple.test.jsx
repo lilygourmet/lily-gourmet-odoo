@@ -1249,3 +1249,25 @@ describe('un article introuvable dans Odoo', () => {
     expect(screen.queryByText(/introuvable/)).toBeNull()
   })
 })
+
+describe('propre : le préfixe, et rien que le préfixe', () => {
+  it('enlève bien les préfixes, quel que soit leur séparateur', () => {
+    expect(propre('SM- flan vanille 20 cm')).toBe('flan vanille 20 cm')
+    expect(propre('SM. Sable Crispy')).toBe('Sable Crispy')
+    expect(propre('SM/ fond de tarte digestif 18 cm')).toBe('fond de tarte digestif 18 cm')
+    expect(propre('SM CD* Crème au beurre Nature')).toBe('CD* Crème au beurre Nature')
+    expect(propre('SMPr- Boite Biscotti')).toBe('Boite Biscotti')
+    expect(propre('Sm- Le Citron Framboise (10)')).toBe('Le Citron Framboise (10)')
+  })
+
+  it('⚠️ ne mange PAS la première lettre d’un vrai mot', () => {
+    // Sept libellés de Layla étaient amputés : « ramboisier », « itrine
+    // citron », « ond Citron Framboise ». (Layla, 2026-09-11.)
+    expect(propre('Framboisier · confit')).toBe('Framboisier · confit')
+    expect(propre('Framboise congelée')).toBe('Framboise congelée')
+    expect(propre('Fond Citron Framboise · 10 pers')).toBe('Fond Citron Framboise · 10 pers')
+    expect(propre('Vitrine citron · 20 cm')).toBe('Vitrine citron · 20 cm')
+    expect(propre('Exotique indiv')).toBe('Exotique indiv')
+    expect(propre('FS- Pecan')).toBe('FS- Pecan')
+  })
+})

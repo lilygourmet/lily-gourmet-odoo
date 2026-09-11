@@ -61,8 +61,14 @@ export const dose = (v, u) => {
  * Le nom débarrassé de ce qui ne se lit pas : « SM- Tiramisu 15cm » devient
  * « Tiramisu 15cm ». Les préfixes d'Odoo ne veulent rien dire à l'atelier.
  */
+// ⚠️ Le préfixe doit être SUIVI d'un séparateur — tiret, point, slash ou
+// espace. Sans cette exigence, le « F » de « Framboisier » et le « V » de
+// « Vitrine citron » étaient pris pour des préfixes : l'écran affichait
+// « ramboisier » et « itrine citron ». (Layla, 2026-09-11.)
+// Les préfixes longs passent AVANT les courts, sinon « SMPr- » perdrait son
+// « SM » et rien d'autre.
 export const propre = nom => String(nom || '')
-  .replace(/^\s*(\[[^\]]*\]\s*)?(SM|MP|MI|GS|RA|GM|CD|E|F|V)\s*[-./]?\s*/i, '')
+  .replace(/^\s*(\[[^\]]*\]\s*)?(SMPr|SMT|SM|MP|MI|GS|RA|GM|CD|E|F|V)(?:\s*[-./]+\s*|\s+)/i, '')
   .replace(/\s{2,}/g, ' ').trim()
 
 /**
