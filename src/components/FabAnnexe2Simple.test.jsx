@@ -1032,12 +1032,13 @@ describe('ce qui est déjà au frigo ne se refabrique pas', () => {
     expect(screen.getByText(/tu en as déjà — 2.576 g/)).toBeTruthy()
   })
 
-  it('mais on peut quand même taper ce qu’on en a fait', () => {
+  it('mais on peut quand même en faire — par FOURNÉE entière', () => {
+    // Le sablé crispy se fait par 5 598 g : on n'en cuit pas 50 grammes.
     const onCuites = vi.fn()
     render(<Fiche noeud={flan} quantite={10} onQuantite={() => {}}
       cuites={0} onCuites={onCuites} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
     fireEvent.click(screen.getByLabelText('Plus à cuire'))
-    expect(onCuites).toHaveBeenCalledWith(50)
+    expect(onCuites).toHaveBeenCalledWith(2900)
   })
 
   it('et il prévient s’il n’y en a pas assez au frigo', () => {
@@ -1173,5 +1174,57 @@ describe('la fin rappelle le prévu', () => {
     render(<Sortie noeud={tronc} valeur={25} prevu={25} onValeur={() => {}}
       onValider={() => {}} envoi={false} />)
     expect(screen.queryByText(/reste comptée/)).toBeNull()
+  })
+})
+
+// ====== Une plaque entière, ou rien ======
+// « Quand on coupe une plaque, c'est toujours le nombre total possible par
+// plaque : si je coupe des individuels c'est 102 à chaque découpe et pas
+// moins. Le biscuit c'est 3 600 g par tournée, pas moins. » (Layla,
+// 2026-09-11.) Chiffres réels après sa correction chez Odoo.
+
+describe('la plaque de gianduja', () => {
+  const indiv = {
+    produit: 'SM. Biscuit Gianduja indiv', libelle: 'Biscuit Gianduja indiv',
+    unite: 'u', tourneeTaille: 102, pourQuantite: 102, reste: 102,
+    recette: [{ produit: 'SM. Biscuit Gianduja (plaque)', qty: 3600, unite: 'g' }],
+    enfants: [{ produit: 'SM. Biscuit Gianduja (plaque)', unite: 'g', besoin: 3600,
+      stock: 0, dejaFait: 0, fabrique: true, ok: false, tourneeTaille: 3600,
+      produira: 3600, pourQuantite: 3600, recette: [], enfants: [] }],
+  }
+  const poser = () => {
+    const onQuantite = vi.fn(); const onCuites = vi.fn()
+    render(<Fiche noeud={indiv} quantite={102} onQuantite={onQuantite}
+      cuites={3600} onCuites={onCuites} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    return { onQuantite, onCuites }
+  }
+
+  it('on coupe par 102, jamais moins', () => {
+    const { onQuantite } = poser()
+    fireEvent.click(screen.getByLabelText('Plus à couper'))
+    expect(onQuantite).toHaveBeenCalledWith(204)
+    fireEvent.click(screen.getByLabelText('Moins à couper'))
+    expect(onQuantite).toHaveBeenCalledWith(0)      // zéro reste possible
+  })
+
+  it('et on cuit par plaque entière — 3 600 g', () => {
+    const { onCuites } = poser()
+    fireEvent.click(screen.getByLabelText('Plus à cuire'))
+    expect(onCuites).toHaveBeenCalledWith(7200)
+  })
+
+  it('« (plaque) » dans le nom fait dire le compte en plaques', () => {
+    poser()
+    expect(screen.getByText('= 1 plaque')).toBeTruthy()
+  })
+
+  it('les 10 pers se coupent par 6, même plaque', () => {
+    const dixPers = { ...indiv, produit: 'SM. Biscuit Gianduja 10 pers',
+      tourneeTaille: 6, pourQuantite: 6, reste: 6 }
+    const onQuantite = vi.fn()
+    render(<Fiche noeud={dixPers} quantite={6} onQuantite={onQuantite}
+      cuites={3600} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    fireEvent.click(screen.getByLabelText('Plus à couper'))
+    expect(onQuantite).toHaveBeenCalledWith(12)
   })
 })

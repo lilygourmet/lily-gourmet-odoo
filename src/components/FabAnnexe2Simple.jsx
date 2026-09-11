@@ -292,7 +292,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
             sauter de 50 g dans une plaque de 3 040 n'a aucun sens. */}
         <GrosChiffre titre={decoupe ? 'à cuire' : 'à faire'}
           valeur={quantitePesee} unite={aPeser.unite}
-          pas={decoupe ? grammesParPlaque(noeud, decoupe) || undefined : undefined}
+          pas={decoupe ? dosePourUnePlaque(noeud) || undefined : undefined}
           verrouille={decoupe ? false : verrouille} onLiberer={onLiberer}
           onChange={decoupe ? onCuites : onQuantite} />
       </div>
@@ -334,7 +334,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
                 2026-09-11). Le clavier, lui, accepte n'importe quel nombre —
                 « je fais 4 plaques et je décide d'en couper 26 ». */}
             <GrosChiffre titre="à couper" valeur={quantite} unite={noeud.unite}
-              pas={palierDeCoupe(decoupe)} verrouille={verrouille} onLiberer={onLiberer}
+              pas={palierDeCoupe(decoupe, noeud)} verrouille={verrouille} onLiberer={onLiberer}
               onChange={onQuantite} />
           </div>
           <Partage noeud={noeud} decoupe={decoupe} cuites={cuites} coupes={quantite} />
@@ -360,17 +360,33 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
 }
 
 /**
- * De combien en combien on coupe : ce qu'UNE plaque donne.
+ * De combien en combien on coupe : ce qu'UNE plaque donne, toujours.
  *
- * Seulement quand l'ingrédient se compte en plaques ET que le compte tombe
- * juste (13 biscuits par plaque, 6 pour les 10 pers). Sur un sablé pesé au
- * gramme, ou sur un compte bâtard (10,47 par plaque), on reste au pas de 1.
+ * « Quand on coupe une plaque, c'est toujours le nombre total possible par
+ * plaque : si je coupe des individuels c'est 102 à chaque découpe et pas
+ * moins » (Layla, 2026-09-11). On coupe une plaque entière, ou rien.
+ *
+ * C'est donc la SORTIE de la recette qui donne le pas — 102 individuels,
+ * 6 dix-personnes, 13 cinq-personnes — que la plaque se compte en pièces ou
+ * en grammes. Zéro reste possible : la plaque part alors entière au congélo.
  */
-const palierDeCoupe = decoupe => {
-  const p = decoupe?.parPiece || 0
-  if (!enPieces(decoupe?.enfant?.unite) || !(p >= 2)) return 1
-  return Math.abs(p - Math.round(p)) < 0.01 ? Math.round(p) : 1
+const palierDeCoupe = (decoupe, noeud) => {
+  const n = Math.round(Number(noeud?.tourneeTaille) || 0)
+  return n >= 2 ? n : 1
 }
+
+/**
+ * CE QUE PÈSE UNE PLAQUE : la dose qu'une découpe consomme d'un coup.
+ *
+ * « Le biscuit c'est 3 600 g par tournée, pas moins » (Layla, 2026-09-11) : on
+ * ne cuit pas un demi-biscuit. Le « + » du poids à cuire avance donc d'une
+ * plaque entière — 3 600 g de plaque gianduja, 3 040 g de plaque brownie,
+ * une plaque de biscuit cuillère.
+ *
+ * ⚠️ Pas la fournée de la plaque : celle du brownie en sort DEUX d'un coup
+ * (6 080 g), et avancer par deux interdirait d'en cuire trois.
+ */
+const dosePourUnePlaque = noeud => Number((noeud?.recette || [])[0]?.qty) || 0
 
 /** Ce qui se compte à la pièce — par opposition à ce qui se pèse. */
 const enPieces = u => /^u$/i.test(String(u || '').trim())
