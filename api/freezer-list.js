@@ -842,6 +842,43 @@ const ORIGINE_APP = 'LG-APP'
  * faire alors qu'Odoo n'en demandait pas (une crème au beurre nature, par
  * exemple : ni ordre, ni règle mini/maxi). `qtyKg` est la quantité fabriquée.
  */
+/**
+ * GARDE-FOU : un facteur mille entre ce que disent les INGRÉDIENTS et ce que
+ * dit la SORTIE, c'est une unité perdue en route.
+ *
+ * Vécu le 2026-09-11 : l'ordre WHPDX/MO/21427 annonçait 14,33 g de crème
+ * citron gingembre — un article compté en kilos dont la recette sort des
+ * grammes — tout en consommant deux recettes entières d'ingrédients. Mille
+ * fois trop peu, et personne pour s'en apercevoir avant la validation.
+ *
+ * On compare donc les deux façons de compter combien de fois la recette a été
+ * faite. Si elles ne diffèrent QUE d'un facteur mille (entre 500 et 2000 : la
+ * signature d'une confusion g/kg), on corrige la sortie et on le dit. Tout
+ * autre écart est laissé tel quel — peser autrement que la recette est le
+ * quotidien de l'atelier, ce n'est pas une erreur.
+ */
+export function corrigerFacteurMille(qty, sortieRecette, lignes, ajustements) {
+  const cle = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const imposes = Object.entries(ajustements || {}).filter(([, v]) => Number(v) > 0)
+  if (!imposes.length || !(qty > 0) || !(sortieRecette > 0)) return { qty, corrige: 0 }
+  const fois = []
+  for (const [nom, v] of imposes) {
+    const parLigne = (lignes || [])
+      .filter(l => cle(Array.isArray(l.product_id) ? l.product_id[1] : '') === cle(nom))
+      .reduce((t, l) => t + (Number(l.product_qty) || 0), 0)
+    if (parLigne > 0) fois.push(Number(v) / parLigne)
+  }
+  if (!fois.length) return { qty, corrige: 0 }
+  fois.sort((a, b) => a - b)
+  const foisIngredients = fois[Math.floor(fois.length / 2)]      // la médiane
+  const foisSortie = qty / sortieRecette
+  if (!(foisIngredients > 0) || !(foisSortie > 0)) return { qty, corrige: 0 }
+  const ecart = foisIngredients / foisSortie
+  if (ecart >= 500 && ecart <= 2000) return { qty: qty * 1000, corrige: 1000 }
+  if (ecart <= 1 / 500 && ecart >= 1 / 2000) return { qty: qty / 1000, corrige: -1000 }
+  return { qty, corrige: 0 }
+}
+
 async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null, prefixe = 'WHLVP/MO/', ajustements = null) {
   const champs = ['id', 'display_name', 'uom_id', 'product_tmpl_id', 'product_template_attribute_value_ids']
   let prod = (await odooSearchRead(uid, 'product.product',
@@ -870,8 +907,21 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   // parle toujours en kilos — sinon 191 pièces devenaient 191 000.
   const brut = unite ? versUnite(qtyKg, unite, uniteBom)
     : (/^kg$/i.test(uniteBom) ? qtyKg : qtyKg * 1000)
-  const qty = Math.round(brut * 1000) / 1000
+  let qty = Math.round(brut * 1000) / 1000
   if (!(qty > 0)) throw new Error('quantité invalide')
+
+  // ⚠️ Les lignes de la recette servent DEUX fois : au garde-fou ci-dessous et
+  // aux mouvements plus bas. Une seule lecture, gardée en mémoire.
+  const lignesBom = await memo('bomlignes:' + bom.id,
+    () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
+      ['product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
+      { limit: 50 }))
+  const garde = corrigerFacteurMille(qty, bom.product_qty, lignesBom, ajustements)
+  if (garde.corrige) {
+    console.warn(`[creer-of] ${nomProduit} : sortie ${qty} ${uniteBom} pour des ingrédients`
+      + ` valant ${garde.qty} — facteur mille corrigé`)
+    qty = Math.round(garde.qty * 1000) / 1000
+  }
 
   const origine = [...parents, ORIGINE_APP].join(',')
 
@@ -913,11 +963,7 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
     company_id: modele.company_id[0],
   }])
   // Odoo ne déroule pas la nomenclature quand l'ordre est créé par programme
-  const [toutesLignes, lieuProd] = await Promise.all([
-    memo('bomlignes:' + bom.id, () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
-      ['product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'], { limit: 50 })),
-    lieuProduction(uid),
-  ])
+  const [toutesLignes, lieuProd] = [lignesBom, await lieuProduction(uid)]
   // ⚠️ UNE SEULE RECETTE : celle du parfum demandé. La recette est posée sur le
   // MODÈLE et porte les lignes de TOUS les parfums, chacune marquée « pour
   // Fruits Rouges », « pour Ananas »… Sans filtrer, l'ordre embarquait la purée
