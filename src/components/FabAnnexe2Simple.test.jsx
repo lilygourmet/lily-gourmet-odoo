@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { CasesAFaire, Cases, Confirmation, Fiche, Clavier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
+import { AutresTailles, CasesAFaire, Cases, Confirmation, Fiche, Clavier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
 import { sansRendement } from '../lib/fabAnnexe'
 import { propre } from '../lib/ecranSimple'
 import { decoupeDe } from '../lib/fabAnnexe'
@@ -1065,5 +1065,58 @@ describe('ce qui est déjà au frigo ne se refabrique pas', () => {
       cuites={0} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
     expect(screen.queryByText(/il manque/)).toBeNull()
     expect(screen.getByText(/tu en as déjà/)).toBeTruthy()
+  })
+})
+
+// ====== Les autres tailles faites avec la même cuve ======
+// « Quand j'ai marqué comme fait les citron gingembre, ça m'a pas demandé si
+// j'ai fait avec la mousse d'autres tailles » (Layla, 2026-09-11). Données
+// réelles : la tarte 23 cm propose le 18 cm et l'individuelle.
+
+describe('les autres tailles', () => {
+  const tailles = [
+    { produit: 'SM- Tarte citron gin 18 cm', libelle: 'Tarte citron gingembre · 18 cm', tournee: 18 },
+    { produit: 'SM- Tarte citron gin Indiv', libelle: 'Tarte citron gingembre · individuelle', tournee: 191 },
+  ]
+  const tarte = { produit: 'SM- Tarte citron gin 23 cm', libelle: 'Tarte citron gingembre · 23 cm', unite: 'u' }
+
+  it('la question se pose, avec le nom de la cuve', () => {
+    render(<Sortie noeud={tarte} valeur={18} onValeur={() => {}} onValider={() => {}} envoi={false}
+      tailles={tailles} nomCuve="La crème citron" parTaille={{}} onTaille={() => {}} />)
+    expect(screen.getByText(/d'autres tailles avec « La crème citron »/)).toBeTruthy()
+    expect(screen.getByText('Tarte citron gingembre · 18 cm')).toBeTruthy()
+    expect(screen.getByText('Tarte citron gingembre · individuelle')).toBeTruthy()
+  })
+
+  it('on compte chaque taille à part', () => {
+    const onTaille = vi.fn()
+    render(<Sortie noeud={tarte} valeur={18} onValeur={() => {}} onValider={() => {}} envoi={false}
+      tailles={tailles} nomCuve="La crème citron" parTaille={{ 'SM- Tarte citron gin 18 cm': 4 }}
+      onTaille={onTaille} />)
+    fireEvent.click(screen.getByLabelText('Plus Tarte citron gingembre · 18 cm'))
+    expect(onTaille).toHaveBeenCalledWith('SM- Tarte citron gin 18 cm', 5)
+    fireEvent.click(screen.getByLabelText('Moins Tarte citron gingembre · 18 cm'))
+    expect(onTaille).toHaveBeenCalledWith('SM- Tarte citron gin 18 cm', 3)
+  })
+
+  it('et on peut taper un nombre d’un coup', () => {
+    const onTaille = vi.fn()
+    render(<AutresTailles tailles={tailles} nomCuve="La crème citron" valeurs={{}} onChange={onTaille} />)
+    fireEvent.click(screen.getByLabelText('Changer Tarte citron gingembre · individuelle'))
+    const touche = t => fireEvent.click(screen.getAllByText(t).find(e => e.tagName === 'BUTTON'))
+    touche('2'); touche('4')
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
+    expect(onTaille).toHaveBeenCalledWith('SM- Tarte citron gin Indiv', 24)
+  })
+
+  it('rien ne s’affiche quand l’article n’a pas de cuve à finir', () => {
+    const { container } = render(<AutresTailles tailles={[]} valeurs={{}} onChange={() => {}} />)
+    expect(container.textContent).toBe('')
+  })
+
+  it('et la question ne se pose pas sur la masse qu’on vient de cuire', () => {
+    render(<Sortie noeud={tarte} valeur={18} onValeur={() => {}} onValider={() => {}} envoi={false}
+      tailles={null} parTaille={{}} />)
+    expect(screen.queryByText(/d'autres tailles/)).toBeNull()
   })
 })

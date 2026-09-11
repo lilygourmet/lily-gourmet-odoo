@@ -654,7 +654,7 @@ function Partage({ noeud, decoupe, cuites, coupes }) {
  * au beurre aussi. Le dire, c'est faire croire à une faute (Layla,
  * 2026-09-10).
  */
-export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees }) {
+export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees, tailles, nomCuve, parTaille, onTaille }) {
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -691,11 +691,65 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees }) {
         </div>
       )}
 
+      {onTaille && (
+        <AutresTailles tailles={tailles} nomCuve={nomCuve}
+          valeurs={parTaille} onChange={onTaille} />
+      )}
+
       <button onClick={onValider} disabled={!(valeur > 0) || envoi}
         className={`w-full mt-8 rounded-2xl py-5 text-[20px] font-extrabold
           ${valeur > 0 && !envoi ? 'bg-success text-cream' : 'bg-cream-deep text-ink-mute'}`}>
         {envoi ? 'en cours…' : "C'est bon"}
       </button>
+    </div>
+  )
+}
+
+/**
+ * LES AUTRES TAILLES faites avec la même cuve.
+ *
+ * Une cuve ne se divise pas : on monte des 23 cm, et ce qui reste finit en
+ * 18 cm et en individuels. Sans cette question, tout le poids de la crème
+ * partait sur la seule taille déclarée. (Layla, 2026-09-11.)
+ *
+ * Seules les tailles PLUS PETITES sont proposées — c'est là qu'on finit une
+ * cuve, jamais l'inverse.
+ */
+export function AutresTailles({ tailles, nomCuve, valeurs, onChange }) {
+  const [clavier, setClavier] = useState(null)
+  if (!tailles?.length) return null
+  return (
+    <div className="mt-7 rounded-2xl border-2 border-cream-deep overflow-hidden text-left">
+      <div className="px-4 py-2.5 bg-cream-deep/40 text-[15px] font-bold">
+        Tu en as fait d'autres tailles avec {nomCuve ? `« ${nomCuve} »` : 'la même cuve'} ?
+      </div>
+      {tailles.map(t => {
+        const v = Number(valeurs?.[t.produit]) || 0
+        return (
+          <div key={t.produit}
+            className="flex items-center gap-2 px-4 py-2.5 border-t border-cream-deep/40 md:py-2">
+            <span className="flex-1 min-w-0 text-[16px] md:text-[15px]">
+              {propre(t.libelle || t.produit)}
+            </span>
+            <button onClick={() => onChange(t.produit, Math.max(0, v - 1))} disabled={v <= 0}
+              aria-label={`Moins ${propre(t.libelle || t.produit)}`}
+              className="w-11 h-11 rounded-xl border-2 border-cream-deep bg-cream-warm
+                         text-[24px] font-extrabold text-bordeaux leading-none disabled:opacity-30">−</button>
+            <button onClick={() => setClavier(t)} aria-label={`Changer ${propre(t.libelle || t.produit)}`}
+              className="min-w-[56px] text-center text-[24px] font-extrabold tabular-nums">{nb(v)}</button>
+            <button onClick={() => onChange(t.produit, v + 1)}
+              aria-label={`Plus ${propre(t.libelle || t.produit)}`}
+              className="w-11 h-11 rounded-xl border-2 border-cream-deep bg-cream-warm
+                         text-[24px] font-extrabold text-bordeaux leading-none">+</button>
+          </div>
+        )
+      })}
+      {clavier && (
+        <Clavier titre={propre(clavier.libelle || clavier.produit)} unite="u"
+          valeur={Number(valeurs?.[clavier.produit]) || 0}
+          onValider={v => { onChange(clavier.produit, Math.max(0, Math.round(v))); setClavier(null) }}
+          onFermer={() => setClavier(null)} />
+      )}
     </div>
   )
 }

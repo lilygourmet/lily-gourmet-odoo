@@ -23,7 +23,7 @@ import { CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from '.
 import HistoriqueAnnexe from './HistoriqueAnnexe'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
   decoupeDe, noeudDuChemin, defautDe, aCuireParDefaut, parGateauMere, peseesDe,
-  declarer, envoyerAValider, sansRendement } from '../lib/fabAnnexe'
+  declarer, envoyerAValider, repartirCuve, sansRendement } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
@@ -51,6 +51,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [envoi, setEnvoi] = useState(false)
   // Ce qu'on vient d'enregistrer, le temps de le montrer en grand.
   const [confirme, setConfirme] = useState(null)
+  // Les autres tailles montées avec la même cuve : { produit: combien }.
+  const [parTaille, setParTaille] = useState({})
   const [erreur, setErreur] = useState(null)
   const [tour, setTour] = useState(0)
   // « Déclarer » : tout ce que l'annexe sait faire, pour venir dire ce qu'on a
@@ -176,7 +178,26 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         const r = await envoyerUn(decoupe.enfant, tete, nbCuites)
         if (r?.erreur) toast(`Odoo a refusé les plaques : ${r.erreur}`)
       }
-      const r = await envoyerUn(noeud, tete, qty)
+      // ⚠️ D'AUTRES TAILLES montées avec la même cuve : chacune doit porter SA
+      // part de crème, pas la cuve entière. Le serveur calcule les parts ; on
+      // déclare les ordres un par un, jamais de front (un ordre orphelin chez
+      // Odoo ne se rattrape pas). (Layla, 2026-09-11.)
+      const autres = Object.entries(parTaille).filter(([, n]) => Number(n) > 0)
+      let r
+      if (noeud.produit === tete.produit && autres.length) {
+        const ordres = await repartirCuve(tete.produit, {
+          [tete.produit]: qty, ...Object.fromEntries(autres.map(([p, n]) => [p, Number(n)])),
+        })
+        for (const o of ordres) {
+          const x = await declarer({ produit: o.produit, qty: o.qty, unite: o.unite,
+            ajustements: o.ajustements }, user?.id)
+          if (x.erreur) toast(`Odoo a refusé ${propre(o.produit)} : ${x.erreur}`)
+          if (o.lance) r = x
+        }
+        r = r || { erreur: null }
+      } else {
+        r = await envoyerUn(noeud, tete, qty)
+      }
       if (r.erreur) toast(`Enregistré, mais Odoo a refusé : ${r.erreur}`)
       else {
         // Plein écran, vert, une seconde et demie : ça ne se rate pas.
@@ -184,6 +205,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         setTimeout(() => setConfirme(null), 1500)
       }
       setSortie(null)
+      setParTaille({})
       setChemin(chemin.slice(0, -1))
       if (noeud.produit === tete.produit) {
         // L'article de tête est parti : la séance est finie, on repart propre.
@@ -315,6 +337,14 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             return (
               <Sortie noeud={cible} valeur={sortie.valeur} envoi={envoi}
                 onValeur={v => setSortie(x => ({ ...x, valeur: v }))}
+                // Une CUVE ne se divise pas : ce qu'on n'a pas monté en grand
+                // finit en plus petit. On demande donc les autres tailles —
+                // mais seulement sur l'article de tête, et seulement s'il en a.
+                tailles={surEnfant ? null : (brut.tailles || [])}
+                nomCuve={brut.figesNom}
+                parTaille={parTaille}
+                onTaille={!surEnfant && (brut.tailles || []).length
+                  ? (p, n) => setParTaille(x => ({ ...x, [p]: n })) : undefined}
                 // Ce qui sort du stock : la dose RÉELLEMENT pesée, celle qu'on
                 // impose à l'ordre Odoo. Seulement pour une préparation — un
                 // montage, lui, laisse Odoo recalculer au prorata de sa sortie.

@@ -693,6 +693,29 @@ export function peseesDe(noeud, fois) {
 }
 
 /**
+ * RÉPARTIR LA CUVE entre les tailles réellement montées.
+ *
+ * « Quand j'ai marqué comme fait les citron gingembre, ça m'a pas demandé si
+ * j'ai fait avec la mousse d'autres tailles » (Layla, 2026-09-11). Une cuve ne
+ * se divise pas : on la monte, et ce qui reste part en plus petit. Chaque
+ * taille doit alors porter SA part de crème, pas la cuve entière.
+ *
+ * Le calcul est fait par le serveur (`?mode=repartir`) : l'écart entre la cuve
+ * et la somme des parts retombe sur la taille lancée — c'est elle qui a défini
+ * la tournée, c'est elle qui absorbe le rab et les pertes.
+ */
+export async function repartirCuve(lance, quantites) {
+  const r = await fetch('/api/fab-annexe?mode=repartir', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lance, quantites }),
+  })
+  if (!r.ok) throw new Error(`Répartition impossible (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+  return d.ordres || []
+}
+
+/**
  * Une chose fabriquée part TOUT DE SUITE dans « À valider Annexe ».
  *
  * Le pâtissier fait son sirop ce soir et montera peut-être le tiramisu demain :
