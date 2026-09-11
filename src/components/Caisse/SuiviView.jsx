@@ -638,7 +638,13 @@ function NonLieSection() {
     if (s) l = l.filter(x => String(x.amount).includes(s) || (x.label || '').toLowerCase().includes(s) || (x.ligne_date || '').includes(s))
     return l
   }, [lines, q, typeFilter])
-  const total = useMemo(() => list.reduce((s, l) => s + Number(l.amount || 0), 0), [list])
+  // Une ligne MASQUÉE est le jumeau d'une ligne déjà comptée ailleurs (même opération vue
+  // dans deux documents, dépôt déjà rattaché…). L'afficher est utile — la compter dans
+  // l'argent ne l'est pas : le total gonflait dès qu'on cochait « voir les masquées », et
+  // un contrôle de caisse fait sur ce total-là serait faux.
+  const reelle = l => !l.masquee
+  const total = useMemo(() => list.filter(reelle).reduce((s, l) => s + Number(l.amount || 0), 0), [list])
+  const nbMasquees = useMemo(() => list.filter(l => l.masquee).length, [list])
   // Regroupement par mois (au choix) : avec plusieurs centaines de lignes, la liste
   // à plat est illisible. Chaque mois se replie d'un clic.
   const groupes = useMemo(() => {
@@ -654,7 +660,7 @@ function NonLieSection() {
         mois,
         titre: /^\d{4}-\d{2}$/.test(mois) ? `${fmtMois(Number(mois.slice(5, 7)) - 1)} ${mois.slice(0, 4)}` : 'Sans date',
         lignes,
-        total: lignes.reduce((s, l) => s + Number(l.amount || 0), 0),
+        total: lignes.filter(reelle).reduce((s, l) => s + Number(l.amount || 0), 0),
       }))
   }, [list])
   const toggleMois = (m) => setReplies(r => (r.includes(m) ? r.filter(x => x !== m) : [...r, m]))
@@ -766,7 +772,9 @@ function NonLieSection() {
         placeholder="🔍 montant, nom, date…"
         style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', marginBottom: 12, fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 10 }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, marginBottom: 12, background: '#EDE4F6', color: '#5b2a86', fontSize: 13 }}>
-        <span>{lines === null ? 'Chargement…' : `${list.length} ligne(s) ${view === 'linked' ? 'liée(s)' : 'non liée(s)'}`}</span>
+        <span>{lines === null ? 'Chargement…'
+          : `${list.length - nbMasquees} ligne(s) ${view === 'linked' ? 'liée(s)' : 'non liée(s)'}`
+            + (nbMasquees ? ` + ${nbMasquees} masquée(s), hors total` : '')}</span>
         <span>{fmtMoney(total)}</span>
       </div>
       {lines !== null && list.length === 0 && (

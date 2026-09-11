@@ -785,6 +785,7 @@ export async function loadBanqueEnvelopesWithEcart() {
     .not('amount_proof', 'is', null)
     .is('ecart_valide_at', null)
     .order('session_date', { ascending: false })
+    .limit(5000)
   if (error) throw error
   return (data || []).filter(e =>
     e.destinataire?.type === 'banque' &&
@@ -800,6 +801,7 @@ export async function loadBanqueEcartsValides() {
     .not('amount_proof', 'is', null)
     .not('ecart_valide_at', 'is', null)
     .order('ecart_valide_at', { ascending: false })
+    .limit(5000)
   if (error) throw error
   return (data || []).filter(e =>
     e.destinataire?.type === 'banque' &&
