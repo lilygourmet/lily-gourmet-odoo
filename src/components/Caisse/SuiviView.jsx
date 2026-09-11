@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, ECART_MINI } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, ECART_MINI } from '../../lib/caisse'
 import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
@@ -217,13 +217,26 @@ function BanqueSection({ user }) {
     const ok = await confirmDialog(
       'Relancer le rapprochement ?\n\nL\'app rejoue le calcul sur les lignes de relevé déjà importées. '
       + 'Aucune ligne n\'est créée (donc aucun doublon).\n\n'
-      + 'Elle défait aussi les rapprochements faux : une caisse verte dont le libellé de la banque '
-      + 'porte le nom d\'une AUTRE cliente repasse en attente, et sa ligne retourne dans « non liées ».',
+      + 'Les caisses déjà rapprochées ne sont pas touchées.',
       { confirmLabel: 'Relancer' })
     if (!ok) return
     setRelance(true)
     try {
-      const r = await relancerRapprochement()
+      // Les rapprochements au nom d'une AUTRE cliente : on montre la liste et on demande.
+      // Certains sont peut-être justes — une cliente payée par son mari, par une société —
+      // et l'app n'a pas à défaire un rattachement fait à la main sans prévenir.
+      let annulerFaux = false
+      const suspects = await annulerRapprochementsFaux(true)
+      if (suspects.length) {
+        annulerFaux = await confirmDialog(
+          `${suspects.length} caisse(s) verte(s) portent le nom d'une AUTRE cliente que celui écrit par la banque :\n\n`
+          + suspects.slice(0, 8).map(a => `• ${a.client} (${a.date}) ← « ${a.label.slice(0, 45)} »`).join('\n')
+          + (suspects.length > 8 ? `\n… et ${suspects.length - 8} autre(s)` : '')
+          + '\n\nLes remettre en attente ? (leurs lignes retournent dans « non liées »)\n'
+          + 'Réponds Non si tu les as liées toi-même exprès.',
+          { confirmLabel: 'Les remettre en attente' })
+      }
+      const r = await relancerRapprochement({ annulerFaux })
       await reload()
       const faux = (r.annules || []).length
         ? `\n\n↩️ ${r.annules.length} rapprochement(s) faux annulé(s) :\n`
