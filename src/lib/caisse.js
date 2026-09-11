@@ -344,6 +344,9 @@ export async function loadBanqueEnvelopesBetween(dMin, dMax) {
     .gte('session_date', dMin)
     .lte('session_date', dMax)
     .order('session_date', { ascending: false })
+    // Limite explicite : c'est cette liste que le rapprochement parcourt. Tronquée en
+    // silence, des caisses seraient simplement absentes du calcul, sans le moindre message.
+    .limit(5000)
   if (error) throw error
   return (data || []).filter(e => e.destinataire?.type === 'banque')
 }
@@ -517,6 +520,7 @@ export async function loadIgnoredReleveLines() {
     .select('*')
     .eq('ignored', true)
     .order('ligne_date', { ascending: false })
+    .limit(5000)
   if (error) throw error
   return data || []
 }
@@ -529,6 +533,7 @@ export async function loadAllLinkedReleveLines() {
     .select('*')
     .not('used_by', 'is', null)
     .order('ligne_date', { ascending: false })
+    .limit(5000)
   if (error) throw error
   const ids = [...new Set((lines || []).map(l => l.used_by).filter(Boolean))]
   let envById = {}
@@ -537,6 +542,9 @@ export async function loadAllLinkedReleveLines() {
       .from('caisse_enveloppes')
       .select('id, source, session_date, amount_cash, payment_method, destinataire:caisse_destinataires(name)')
       .in('id', ids)
+      // Tronquée, cette recherche ferait passer des lignes parfaitement liées pour des
+      // orphelines à l'écran.
+      .limit(5000)
     envById = Object.fromEntries((envs || []).map(e => [e.id, e]))
   }
   return (lines || []).map(l => ({ ...l, env: envById[l.used_by] || null }))

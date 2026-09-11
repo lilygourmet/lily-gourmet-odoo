@@ -701,6 +701,15 @@ function NonLieSection() {
                 → {l.env.destinataire?.name || l.env.source || 'enveloppe'} · {l.env.session_date}{l.env.amount_cash != null ? ` · ${fmtMoney(l.env.amount_cash)}` : ''}
               </div>
             )}
+            {/* Ligne rattachée à une caisse qui n'existe plus (supprimée depuis). Elle
+                n'apparaît nulle part ailleurs : ni dans « non liées » (elle est prise), ni
+                comme rapprochée (il n'y a plus rien en face). Sans ce message, le montant
+                disparaissait du contrôle sans laisser de trace. */}
+            {view === 'linked' && !l.env && (
+              <div style={{ fontSize: 11, color: '#99201E', marginTop: 2 }}>
+                ⚠️ la caisse liée n'existe plus — clique « Délier » pour remettre ce montant dans « non liés »
+              </div>
+            )}
             {view === 'ignored' && l.ignore_reason && (
               <div style={{ fontSize: 11, color: '#8a7a70', fontStyle: 'italic', marginTop: 2 }}>🚫 {l.ignore_reason}</div>
             )}
