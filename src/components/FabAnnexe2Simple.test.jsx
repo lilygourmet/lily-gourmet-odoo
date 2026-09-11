@@ -742,3 +742,67 @@ describe('la recette du bas est un rappel, pas le geste du moment', () => {
     expect(screen.getByText('Cremeux gianduja').className).toMatch(/text-\[13px\]/)
   })
 })
+
+// ====== Les kilos, à l'écran comme à la balance ======
+// « Tout faire afficher en gr. Attention à la conversion » (Layla,
+// 2026-09-11). L'écran montre et prend des GRAMMES ; ce qui part chez Odoo
+// reste dans l'unité de l'article. Se tromper ici, c'est un facteur mille.
+
+describe('un article compté en kilos', () => {
+  const sirop = {
+    produit: 'SM. sirop Imbibage production KG', libelle: 'Sirop imbibage', unite: 'kg',
+    tourneeTaille: 5.55, pourQuantite: 5.55, recette: [],
+    enfants: [{ produit: 'MP- Sucre Granule', unite: 'kg', besoin: 2.5, stock: 70, fabrique: false, ok: true }],
+  }
+  const poserSirop = () => {
+    const onQuantite = vi.fn()
+    render(<Fiche noeud={sirop} quantite={5.55} onQuantite={onQuantite}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    return onQuantite
+  }
+
+  it('le gros chiffre est en grammes', () => {
+    poserSirop()
+    expect(screen.getByText(/5.550/)).toBeTruthy()
+    expect(screen.getByText('g à faire')).toBeTruthy()
+  })
+
+  it('le « + » avance de 50 g, et rend des kilos à Odoo', () => {
+    const onQuantite = poserSirop()
+    fireEvent.click(screen.getByLabelText('Plus à faire'))
+    expect(onQuantite).toHaveBeenCalledWith(5.6)
+  })
+
+  it('le clavier prend des grammes et rend des kilos', () => {
+    const onQuantite = poserSirop()
+    fireEvent.click(screen.getByLabelText('Changer à faire'))
+    fireEvent.click(screen.getByText('2'))
+    fireEvent.click(screen.getByText('6'))
+    fireEvent.click(screen.getByText('0'))
+    fireEvent.click(screen.getByText('0'))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
+    expect(onQuantite).toHaveBeenCalledWith(2.6)
+  })
+
+  it('ses ingrédients aussi sont en grammes', () => {
+    poserSirop()
+    expect(screen.getByText(/2.500 g/)).toBeTruthy()
+  })
+
+  it('« il en est sorti » compte pareil', () => {
+    const onValeur = vi.fn()
+    render(<Sortie noeud={sirop} valeur={5.55} onValeur={onValeur}
+      onValider={() => {}} envoi={false} />)
+    expect(screen.getByText(/5.550/)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Moins il en est sorti'))
+    expect(onValeur).toHaveBeenCalledWith(5.5)
+  })
+
+  it('la case d’accueil aussi', () => {
+    const article = { produit: 'SM. sirop Imbibage production KG', libelle: 'Sirop imbibage',
+      unite: 'kg', reste: 11.1, tournee: 5.55 }
+    render(<CasesAFaire articles={[article]} onOuvrir={() => {}} />)
+    expect(screen.getByText(/5.550/)).toBeTruthy()          // la pastille
+    expect(screen.getByText(/il en faut 11.100 g/)).toBeTruthy()
+  })
+})

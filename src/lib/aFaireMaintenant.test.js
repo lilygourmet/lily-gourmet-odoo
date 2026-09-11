@@ -37,3 +37,21 @@ describe('aFaireMaintenant', () => {
     expect(aFaireMaintenant(null)).toBe(0)
   })
 })
+
+describe('au poids, on n’arrondit pas au kilo', () => {
+  it('un sirop de 5,55 kg reste 5,55 kg — pas 6', () => {
+    const sirop = { produit: 'SM. sirop Imbibage production KG', unite: 'kg',
+      reste: 11.1, tournee: 5.55 }
+    expect(aFaireMaintenant(sirop)).toBe(5.55)
+  })
+
+  it('les grammes gardent leur précision', () => {
+    const glacage = { produit: 'SM. Glacage Rose Finition', unite: 'g',
+      reste: 1178.4, tournee: 5458 }
+    expect(aFaireMaintenant(glacage)).toBe(1178.4)
+  })
+
+  it('les pièces restent entières, et jamais zéro', () => {
+    expect(aFaireMaintenant({ produit: 'SM- Tiramisu', unite: 'u', reste: 0.4, tournee: 140 })).toBe(1)
+  })
+})

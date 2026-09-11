@@ -9,6 +9,25 @@
 export const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 
 /**
+ * L'atelier lit et tape des GRAMMES, toujours — même quand Odoo compte en
+ * kilos. « Attention à la conversion » (Layla, 2026-09-11) : ces trois-là sont
+ * le seul endroit où l'on passe d'une unité à l'autre, et elles sont testées.
+ *
+ * ⚠️ Ce qui part chez Odoo reste dans l'unité de l'ARTICLE : on affiche
+ * 5 550 g, on déclare 5,55 kg. Se tromper ici, c'est un facteur mille.
+ */
+export const estKg = u => /^kg$/i.test(String(u || '').trim())
+
+/** De l'unité d'Odoo vers l'écran : 5,55 kg → 5 550. */
+export const enGrammes = (v, u) => (Number(v) || 0) * (estKg(u) ? 1000 : 1)
+
+/** De l'écran vers Odoo : 5 550 g → 5,55 (kg). */
+export const enUnite = (v, u) => (Number(v) || 0) / (estKg(u) ? 1000 : 1)
+
+/** Le mot d'unité affiché : un kilo se dit en grammes. */
+export const uniteAffichee = u => (estKg(u) ? 'g' : String(u || ''))
+
+/**
  * Une quantité comme l'atelier la lit : en GRAMMES, toujours.
  *
  * « 2,1 kg » oblige à convertir de tête au-dessus de la balance, et c'est là

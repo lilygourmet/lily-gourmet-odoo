@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { qte, dose } from './ecranSimple'
+import { qte, dose, enGrammes, enUnite, uniteAffichee } from './ecranSimple'
 
 // Comment l'écran de l'atelier écrit ses nombres. Tout en grammes : « 2,1 kg »
 // oblige à convertir de tête au-dessus d'une balance, et c'est là qu'on se
@@ -41,5 +41,32 @@ describe('la dose pour une pièce', () => {
   it('un chiffre après la virgule suffit à la balance', () => {
     expect(lu(90.9655, 'g')).toBe('91 g')
     expect(lu(38.24, 'g')).toBe('38,2 g')
+  })
+})
+
+describe('la conversion, le seul endroit où l’on change d’unité', () => {
+  it('de l’unité d’Odoo vers l’écran', () => {
+    expect(enGrammes(5.55, 'kg')).toBe(5550)
+    expect(enGrammes(0.06, 'kg')).toBe(60)
+    expect(enGrammes(1200, 'g')).toBe(1200)
+    expect(enGrammes(13, 'u')).toBe(13)
+  })
+
+  it('et retour, sans perdre un gramme', () => {
+    expect(enUnite(5550, 'kg')).toBe(5.55)
+    expect(enUnite(60, 'kg')).toBe(0.06)
+    expect(enUnite(1200, 'g')).toBe(1200)
+  })
+
+  it('aller-retour : ce qu’on affiche est ce qu’on déclare', () => {
+    for (const [v, u] of [[5.55, 'kg'], [0.004, 'kg'], [1200, 'g'], [13, 'u']]) {
+      expect(enUnite(enGrammes(v, u), u)).toBeCloseTo(v, 9)
+    }
+  })
+
+  it('le mot d’unité suit', () => {
+    expect(uniteAffichee('kg')).toBe('g')
+    expect(uniteAffichee('g')).toBe('g')
+    expect(uniteAffichee('u')).toBe('u')
   })
 })

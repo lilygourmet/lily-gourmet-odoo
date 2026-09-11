@@ -444,7 +444,7 @@ export function noeudDuChemin(article, chemin, quantites) {
 
 /** Ce qu'on propose de faire, tant que personne n'a touché au chiffre. */
 export function defautDe(noeud) {
-  if (noeud?.produira > 0) return Math.round(noeud.produira * 100) / 100
+  if (noeud?.produira > 0) return Math.round(noeud.produira * 1000) / 1000
   // ⚠️ Jamais zéro : un écran qui propose 0 a un bouton « c'est fait » qui ne
   // fait rien, sans rien dire. À défaut de mieux, une fournée.
   return aFaireMaintenant(noeud) || noeud?.tourneeTaille || 0
@@ -612,15 +612,22 @@ export const nomCourt = nom => {
 export function aFaireMaintenant(article) {
   const besoin = article?.reste > 0 ? article.reste : (article?.tournee || 0)
   const fournee = article?.tournee || 0
-  if (!(fournee > 0)) return Math.max(0, Math.round(besoin))
+  // ⚠️ On n'arrondit à l'entier que ce qui se compte en PIÈCES. Un sirop de
+  // 5,55 kg arrondi au kilo, c'est 450 g d'écart affichés en grammes — et
+  // l'atelier en fait 6 000 au lieu de 5 550. (Trouvé le 2026-09-11.)
+  const enPieces = /^u$/i.test(String(article?.unite || '').trim())
+  const rond = v => (enPieces ? Math.round(v) : Math.round(v * 1000) / 1000)
+  if (!(fournee > 0)) return Math.max(0, rond(besoin))
   // ⚠️ `parTourneeEntiere` attend l'ARTICLE, pas son nom — côté serveur, la
   // fonction du même nom prend une chaîne. Lui passer le nom renvoyait
   // toujours « non », et une plaque se serait faite à moitié.
   //
   // UNE fournée à la fois, jamais quatre : le « + » est là pour en faire plus,
   // et un cadre ne se remplit pas à moitié.
-  if (parTourneeEntiere(article)) return Math.round(fournee)
-  return Math.max(1, Math.round(Math.min(besoin, fournee)))
+  if (parTourneeEntiere(article)) return rond(fournee)
+  const q = rond(Math.min(besoin, fournee))
+  // Jamais zéro pièce ; au poids, on garde ce que dit la recette.
+  return enPieces ? Math.max(1, q) : Math.max(0, q)
 }
 
 /**

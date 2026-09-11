@@ -121,8 +121,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       .catch(() => { /* le clic s'en chargera */ })
   }
 
+  // Au MILLIÈME, pas au centième : en kilos, 0,01 c'est 10 grammes — taper
+  // 2 605 g serait revenu à 2 610. (Layla, 2026-09-11 : « attention à la
+  // conversion ».)
   const poser = (produit, q) =>
-    setQuantites(x => ({ ...x, [produit]: Math.max(0, Math.round(q * 100) / 100) }))
+    setQuantites(x => ({ ...x, [produit]: Math.max(0, Math.round(q * 1000) / 1000) }))
 
   // ---------- déclarer ----------
   /**

@@ -19,7 +19,8 @@ import { useState } from 'react'
 import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant,
   decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe,
   quantitePourDose } from '../lib/fabAnnexe'
-import { nb, qte, dose, propre, nomAtelier, facteurAtelier } from '../lib/ecranSimple'
+import { nb, qte, dose, propre, nomAtelier, facteurAtelier,
+  enGrammes, enUnite, uniteAffichee } from '../lib/ecranSimple'
 
 /** La photo d'un article, servie par Odoo. */
 const photoDe = photoFabAnnexe
@@ -50,7 +51,7 @@ export function CasesAFaire({ articles, onOuvrir }) {
               className="w-full aspect-square object-cover bg-cream-deep" />
             <span className="absolute left-2 top-2 rounded-full bg-danger text-cream
                              px-3 py-1 text-[19px] font-extrabold tabular-nums">
-              {nb(aFaireMaintenant(a))}
+              {nb(enGrammes(aFaireMaintenant(a), a.unite))}
             </span>
           </div>
           <div className="px-3 py-2">
@@ -61,7 +62,7 @@ export function CasesAFaire({ articles, onOuvrir }) {
                 la pastille dit quoi faire maintenant, cette ligne dit pourquoi. */}
             {a.reste > aFaireMaintenant(a) && (
               <div className="text-[12.5px] text-ink-mute mt-0.5">
-                il en faut {nb(Math.round(a.reste))}
+                il en faut {qte(a.reste, a.unite)}
               </div>
             )}
           </div>
@@ -171,28 +172,34 @@ export function Clavier({ titre, valeur, unite, onValider, onFermer }) {
  * Le gros chiffre, avec son « − », son « + » et le clavier sous le doigt.
  * Un seul endroit pour tous les nombres de l'écran : le geste est le même
  * partout, et une correction de comportement les corrige tous.
+ *
+ * ⚠️ TOUT s'affiche et se tape en GRAMMES (Layla, 2026-09-11). `valeur` et
+ * `onChange`, eux, parlent l'unité de l'ARTICLE — c'est elle qui part chez
+ * Odoo. La conversion ne vit qu'ici, via `enGrammes` / `enUnite`.
  */
-export function GrosChiffre({ titre, valeur, unite, pas = 1, onChange }) {
+export function GrosChiffre({ titre, valeur, unite, onChange }) {
   const [clavier, setClavier] = useState(false)
+  const vu = enGrammes(valeur, unite)
+  const pas = /^u$/i.test(String(unite || '').trim()) ? 1 : 50
+  const bouger = d => onChange(enUnite(Math.max(0, Math.round((vu + d) * 1000) / 1000), unite))
   return (
     <>
       <div className="flex items-center justify-center gap-4">
-        <button onClick={() => onChange(Math.max(0, Math.round((valeur - pas) * 100) / 100))}
-          disabled={valeur <= 0} aria-label={`Moins ${titre}`}
+        <button onClick={() => bouger(-pas)}
+          disabled={vu <= 0} aria-label={`Moins ${titre}`}
           className="w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
                      text-[34px] font-extrabold text-bordeaux leading-none disabled:opacity-30">−</button>
         <button onClick={() => setClavier(true)} aria-label={`Changer ${titre}`}
           className="min-w-[130px] text-center font-extrabold tabular-nums text-[54px] leading-none">
-          {nb(valeur)}
+          {nb(vu)}
         </button>
-        <button onClick={() => onChange(Math.round((valeur + pas) * 100) / 100)}
-          aria-label={`Plus ${titre}`}
+        <button onClick={() => bouger(pas)} aria-label={`Plus ${titre}`}
           className="w-16 h-16 rounded-3xl border-2 border-cream-deep bg-cream-warm
                      text-[34px] font-extrabold text-bordeaux leading-none">+</button>
       </div>
       {clavier && (
-        <Clavier titre={titre} valeur={valeur} unite={unite}
-          onValider={v => { onChange(v); setClavier(false) }}
+        <Clavier titre={titre} valeur={Math.round(vu * 1000) / 1000} unite={uniteAffichee(unite)}
+          onValider={v => { onChange(enUnite(v, unite)); setClavier(false) }}
           onFermer={() => setClavier(false)} />
       )}
     </>
@@ -236,12 +243,13 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       )}
       <div className={decoupe ? 'mt-1' : 'mt-5'}>
         <GrosChiffre titre={decoupe ? 'à cuire' : 'à faire'}
-          valeur={quantitePesee} unite={aPeser.unite} pas={pasDe(aPeser.unite)}
+          valeur={quantitePesee} unite={aPeser.unite}
           onChange={decoupe ? onCuites : onQuantite} />
       </div>
       {!decoupe && (
         <div className="text-center text-[15px] text-ink-mute mt-1">
-          {noeud.unite === 'u' ? 'à faire' : `${noeud.unite} à faire`}
+          {/^u$/i.test(String(noeud.unite || '').trim())
+            ? 'à faire' : `${uniteAffichee(noeud.unite)} à faire`}
         </div>
       )}
       <EnClair noeud={aPeser} quantite={quantitePesee} />
@@ -260,7 +268,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
             {motPluriel(noeud.produit, quantite)} à couper
           </div>
           <div className="mt-1">
-            <GrosChiffre titre="à couper" valeur={quantite} unite={noeud.unite} pas={1}
+            <GrosChiffre titre="à couper" valeur={quantite} unite={noeud.unite}
               onChange={onQuantite} />
           </div>
           <Partage noeud={noeud} decoupe={decoupe} cuites={cuites} coupes={quantite} />
@@ -277,10 +285,6 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
     </div>
   )
 }
-
-/** Le pas du « + » : la pièce, 50 g, un demi-kilo. */
-const pasDe = unite => /^kg$/i.test(String(unite || '').trim()) ? 0.5
-  : /^(g|gr)$/i.test(String(unite || '').trim()) ? 50 : 1
 
 /**
  * « 4 plaques », « 26 biscuits » — le mot de la chose, accordé.
@@ -541,9 +545,9 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees }) {
         Il en est sorti combien ?
       </div>
       <GrosChiffre titre="il en est sorti" valeur={valeur} unite={noeud.unite}
-        pas={pasDe(noeud.unite)} onChange={onValeur} />
-      {noeud.unite !== 'u' && (
-        <div className="text-center text-[15px] text-ink-mute mt-1">{noeud.unite}</div>
+        onChange={onValeur} />
+      {!/^u$/i.test(String(noeud.unite || '').trim()) && (
+        <div className="text-center text-[15px] text-ink-mute mt-1">{uniteAffichee(noeud.unite)}</div>
       )}
 
       {pesees && Object.keys(pesees).length > 0 && (
