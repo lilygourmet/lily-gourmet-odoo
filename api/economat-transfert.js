@@ -222,7 +222,86 @@ async function handleTransfertStock(req, res) {
   return res.status(200).json({ ok: true, id, name: pick?.name, state: pick?.state, groupe: false })
 }
 
+// ------------------------------------------------------------
+// RATTRAPAGE — les réceptions restées SANS bon Odoo.
+//
+// Le bon est créé par le NAVIGATEUR au moment où quelqu'un confirme une
+// réception. Si ce navigateur tourne encore sur une vieille version, s'il perd
+// le réseau au mauvais moment ou si l'onglet se ferme pendant l'appel, la
+// réception est enregistrée et le bon ne part jamais — en silence. C'est arrivé
+// deux jours de suite (les 2026-09-09 et 10), 21 transferts au total.
+//
+// Ce passage repêche ces lignes : reçues, avec un article Odoo, une quantité,
+// et toujours aucun bon. Il tourne toutes les dix minutes pendant les heures
+// d'atelier. Plus besoin que la tablette soit à jour pour que le stock suive.
+// ------------------------------------------------------------
+const SENS_LABEL = { annexe_boutique: 'Annexe → Boutique', boutique_annexe: 'Boutique → Annexe' }
+const sbUrl = () => process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+const sbKey = () => process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+const sbFetch = (chemin, init = {}) => fetch(`${sbUrl()}/rest/v1/${chemin}`, {
+  ...init,
+  headers: {
+    apikey: sbKey(), Authorization: `Bearer ${sbKey()}`,
+    'Content-Type': 'application/json', ...(init.headers || {}),
+  },
+})
+
+async function handleRattrapage(req, res) {
+  if (!sbUrl() || !sbKey()) return res.status(500).json({ error: 'Supabase non configuré' })
+  // ⚠️ On laisse DEUX MINUTES au navigateur : il est peut-être en train de
+  // créer le bon à cet instant. Sans ce délai on en ferait un deuxième.
+  const limite = new Date(Date.now() - 2 * 60000).toISOString()
+  const r = await sbFetch('transferts_mp?select=*&statut=eq.recu&odoo_picking_id=is.null'
+    + `&odoo_product_id=not.is.null&qty_recu=gt.0&confirmed_at=lt.${limite}&order=id.asc&limit=50`)
+  const lignes = await r.json()
+  if (!Array.isArray(lignes) || !lignes.length) return res.status(200).json({ ok: true, rattrapes: 0 })
+
+  const uid = await auth()
+  const bons = []
+  // Un bon par SENS : les deux sens n'ont pas les mêmes emplacements.
+  for (const sens of [...new Set(lignes.map(l => l.sens))]) {
+    const lot = lignes.filter(l => l.sens === sens)
+    const [src, dest] = sens === 'boutique_annexe'
+      ? [PROD_BOUTIQUE, PROD_ANNEXE]
+      : [PROD_ANNEXE, PROD_BOUTIQUE]
+    const ids = [...new Set(lot.map(l => Number(l.odoo_product_id)).filter(Boolean))]
+    const prods = await exec(uid, 'product.product', 'read', [ids, ['id', 'uom_id']])
+    const uomOf = new Map(prods.map(p => [p.id, Array.isArray(p.uom_id) ? p.uom_id[0] : null]))
+    const moves = lot.map(l => {
+      const pid = Number(l.odoo_product_id)
+      const texte = `${l.matiere} — envoyé par ${l.envoye_par || '?'}, reçu par ${l.recu_par || '?'}`.slice(0, 200)
+      return [0, 0, {
+        name: texte, description_picking: texte, product_id: pid,
+        product_uom_qty: Number(l.qty_recu) || 0, product_uom: uomOf.get(pid),
+        location_id: src, location_dest_id: dest,
+      }]
+    })
+    const id = await exec(uid, 'stock.picking', 'create', [{
+      picking_type_id: TYPE_INTERNE_PRODS,
+      location_id: src, location_dest_id: dest,
+      origin: `TRANSFERT ${SENS_LABEL[sens] || ''} — rattrapage automatique`.slice(0, 200),
+      move_ids_without_package: moves,
+    }])
+    const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name']])
+    for (const l of lot) {
+      await sbFetch(`transferts_mp?id=eq.${l.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ odoo_picking_id: id, odoo_picking_name: pick?.name || null, odoo_error: null }),
+      })
+    }
+    bons.push({ sens, bon: pick?.name, lignes: lot.length })
+  }
+  return res.status(200).json({ ok: true, rattrapes: lignes.length, bons })
+}
+
 export default async function handler(req, res) {
+  // Le rattrapage est appelé par le cron (GET) : il passe avant le filtre POST.
+  if (req.query?.action === 'rattrapage') {
+    try { return await handleRattrapage(req, res) } catch (e) {
+      console.error('[rattrapage transferts]', e?.message || e)
+      return res.status(500).json({ error: String(e?.message || e) })
+    }
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' })
   try {
     // Transfert entre ateliers (≠ demande d'économat) — même fonction pour rester

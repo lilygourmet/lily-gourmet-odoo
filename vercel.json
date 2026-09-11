@@ -42,6 +42,10 @@
       "destination": "/api/freezer-list?mode=reappro-cd"
     },
     {
+      "source": "/api/transferts-rattrapage",
+      "destination": "/api/economat-transfert?action=rattrapage"
+    },
+    {
       "source": "/annuaire",
       "destination": "/annuaire.html"
     }
@@ -74,6 +78,10 @@
     {
       "path": "/api/reveil-annexe",
       "schedule": "*/10 6-15 * * *"
+    },
+    {
+      "path": "/api/transferts-rattrapage",
+      "schedule": "*/10 6-22 * * *"
     }
   ]
 }
