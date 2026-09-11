@@ -75,9 +75,13 @@ export async function loadFabProd(jour, atelier = 'prod') {
   const base = 'id, article, qty, unite, fois, fait_par, fait_le'
   // `ordre` dit à quel ordre Odoo la déclaration se rattache, `pour` pour quel
   // gâteau elle a été faite. Ces colonnes peuvent ne pas exister (SQL pas
-  // encore lancé) : on retombe sur l'ancienne lecture.
-  const avecPour = await lire(base + ', ordre, ordre_cree, pour')
-  if (!avecPour.error) return avecPour.data || []
+  // encore lancé) : on retombe sur l'ancienne lecture — et on s'en souvient,
+  // pour ne pas payer une requête ratée à chaque ouverture d'écran.
+  if (!manquantes.has('pour')) {
+    const avecPour = await lire(base + ', ordre, ordre_cree, pour')
+    if (!avecPour.error) return avecPour.data || []
+    manquantes.add('pour')
+  }
   const avec = await lire(base + ', ordre, ordre_cree')
   if (!avec.error) return avec.data || []
   const { data, error } = await lire(base)
@@ -107,8 +111,11 @@ export async function loadFabProdDepuis(depuis, atelier = 'prod') {
     .gte('jour', depuis).eq('atelier', atelier)
     .order('fait_le', { ascending: false }).limit(5000)
   const base = 'id, jour, article, qty, unite, fois, fait_par, fait_le'
-  const avecPour = await lire(base + ', ordre, ordre_cree, pour')
-  if (!avecPour.error) return avecPour.data || []
+  if (!manquantes.has('pour')) {
+    const avecPour = await lire(base + ', ordre, ordre_cree, pour')
+    if (!avecPour.error) return avecPour.data || []
+    manquantes.add('pour')
+  }
   const avec = await lire(base + ', ordre, ordre_cree')
   if (!avec.error) return avec.data || []
   const { data, error } = await lire(base)
@@ -121,6 +128,12 @@ export async function loadFabProdDepuis(depuis, atelier = 'prod') {
  * a été faite ; `qty` = ce que ça produit, pour garder une trace chiffrée même
  * si la recette change plus tard dans Odoo.
  */
+// ⚠️ Les colonnes facultatives (`pour`, `ordre`) peuvent ne pas exister : le
+// SQL n'a pas toujours été lancé. On le retient APRÈS le premier refus, sinon
+// chaque déclaration payait un aller-retour Supabase raté — à chaque fois.
+// (Layla, 2026-09-11 : « marquer comme fait rame ».)
+const manquantes = new Set()
+
 export async function addFabProd(jour, article, qty, unite, userId, fois = null, atelier = 'prod',
   ordre = null, ordreCree = false, pour = null) {
   const base = { jour, article, qty, unite, fois, atelier, fait_par: userId || null, fait_le: new Date().toISOString() }
@@ -131,10 +144,11 @@ export async function addFabProd(jour, article, qty, unite, userId, fois = null,
   //
   // `pour` = le gâteau pour lequel cette fournée a été faite : « la ganache
   // déclarée garde le lien pour Base CBS 23 cm » (Layla, 2026-09-10).
+  const dispo = c => !manquantes.has(c)
   const essais = []
-  if (ordre && pour) essais.push({ ordre, ordre_cree: !!ordreCree, pour })
+  if (ordre && pour && dispo('pour')) essais.push({ ordre, ordre_cree: !!ordreCree, pour })
   if (ordre) essais.push({ ordre, ordre_cree: !!ordreCree })
-  if (pour) essais.push({ pour })
+  if (pour && dispo('pour')) essais.push({ pour })
   essais.push({})
   let dernier = null
   for (const sup of essais) {
@@ -145,6 +159,9 @@ export async function addFabProd(jour, article, qty, unite, userId, fois = null,
     dernier = error
     // Une colonne absente se rattrape ; le reste (droits, contrainte) non.
     if (!/ordre|pour|column|schema cache/i.test(error.message || '')) throw error
+    for (const c of Object.keys(sup)) {
+      if (new RegExp(`'${c}'`).test(error.message || '')) manquantes.add(c)
+    }
   }
   throw dernier
 }

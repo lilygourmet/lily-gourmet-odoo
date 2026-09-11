@@ -7,6 +7,7 @@
 
 import { addFabProd, rattacherOrdre, loadFabProdDepuis, loadNoms } from './fabricationProd'
 import { creerOfPrepa } from './fabrication'
+import { toast } from './toast'
 import { todayISO } from './dates'
 import { correspond } from './recherche'
 import { supabase } from './supabase'
@@ -727,18 +728,30 @@ export async function repartirCuve(lance, quantites) {
  * travail de l'atelier. L'ordre se rattache après coup.
  */
 export async function declarer({ produit, qty, unite, fois = null, ajustements = null, pour = null }, userId) {
-  // ⚠️ Dans CET ordre, et pas de front : si le journal n'est pas écrit, il ne
-  // faut pas d'ordre Odoo tout seul dans la nature, que l'app ne saurait plus
-  // rattacher ni retirer. La demi-seconde gagnée ne vaut pas un ordre orphelin.
+  // ⚠️ Le JOURNAL d'abord, et lui seul est attendu : c'est le travail de
+  // l'atelier, il ne doit jamais se perdre. Un ordre Odoo tout seul dans la
+  // nature, en revanche, l'app ne saurait plus le rattacher.
+  //
   // `pour` : le gâteau depuis lequel cette préparation a été ouverte. Elle lui
   // est alors RÉSERVÉE — le 18 cm ne se sert pas de la ganache faite pour le
   // 23 cm (Layla, 2026-09-10).
   const ligne = await addFabProd(todayISO(), produit, qty, unite, userId, fois, 'annexe',
     null, false, pour)
-  const of = await creerOfPrepa(produit, qty, userId, [], unite, 'annexe', ajustements)
-  // En mode test (?test=1) Odoo n'écrit rien : pas de numéro à rattacher.
-  if (of?.name && !of.error && !of.test) await rattacherOrdre(ligne.id, of.name, !of.deja)
-  return { produit, qty, ordre: of?.name || null, erreur: of?.error || null }
+
+  // ⚠️ L'ORDRE ODOO PART DERRIÈRE, sans faire attendre personne : sa création
+  // demande sept allers-retours à Odoo, et un montage en déclare deux d'un
+  // coup. « Marquer comme fait rame beaucoup » (Layla, 2026-09-11). La
+  // déclaration, elle, est déjà enregistrée : si l'ordre tarde ou échoue,
+  // « À valider Annexe » la montre comme « sans ordre » et le dit.
+  creerOfPrepa(produit, qty, userId, [], unite, 'annexe', ajustements)
+    .then(of => {
+      // En mode test (?test=1) Odoo n'écrit rien : pas de numéro à rattacher.
+      if (of?.name && !of.error && !of.test) return rattacherOrdre(ligne.id, of.name, !of.deja)
+      if (of?.error) toast(`Odoo a refusé l'ordre de ${produit} : ${of.error}`)
+    })
+    .catch(e => toast(`L'ordre de ${produit} n'est pas parti : ${e.message || e}`))
+
+  return { produit, qty, ordre: null, erreur: null }
 }
 
 /**
