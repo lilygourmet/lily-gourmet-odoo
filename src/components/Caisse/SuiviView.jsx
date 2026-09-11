@@ -171,7 +171,10 @@ function BanqueSection({ user }) {
 
   // Confirmer une enveloppe orange en choisissant la bonne ligne du relevé
   async function handlePickLine(env, choice) {
-    await confirmReleveLine(env, choice)
+    // La fenêtre reste ouverte si la ligne n'a pas pu être rattachée : Layla peut en
+    // choisir une autre plutôt que de se retrouver avec une caisse verte sans preuve.
+    try { await confirmReleveLine(env, choice) }
+    catch (e) { alert(e?.message || String(e)); return }
     setConfirmEnv(null)
     reload()
   }
