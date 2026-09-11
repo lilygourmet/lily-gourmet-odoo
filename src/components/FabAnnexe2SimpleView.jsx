@@ -17,6 +17,8 @@ import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
+import { enClairErreur } from '../lib/erreurs'
+import { hasValidJwt } from '../lib/auth'
 import { CasesAFaire, Cases, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
 import HistoriqueAnnexe from './HistoriqueAnnexe'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
@@ -149,6 +151,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
 
   const envoyer = async (noeud, tete, qty) => {
     if (!(qty > 0) || envoi) return
+    // ⚠️ Le jeton de connexion dure 12 h. Sur une tablette allumée toute la
+    // journée il expire en plein travail : l'écran a l'air normal, mais plus
+    // rien ne s'enregistre. On le dit AVANT de tenter, pas après avoir échoué.
+    if (!hasValidJwt()) {
+      toast('Ta session a expiré : déconnecte-toi et reconnecte-toi, puis recommence.')
+      return
+    }
     navigator.vibrate?.(15)
     setEnvoi(true)
     try {
@@ -175,7 +184,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       }
       recharger()
     } catch (e) {
-      toast('Échec : ' + (e.message || e))
+      toast(enClairErreur(e))
     } finally { setEnvoi(false) }
   }
 

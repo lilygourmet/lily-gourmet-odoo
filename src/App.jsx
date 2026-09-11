@@ -259,14 +259,28 @@ function App() {
   useEffect(() => {
     if (!user) return
     function onVisibility() {
-      if (document.visibilityState === 'visible') {
-        loadFreshUser(user.id).then(fresh => {
-          if (fresh) setUser(fresh)
-        })
+      if (document.visibilityState !== 'visible') return
+      // ⚠️ Le jeton de connexion dure 12 h. Sur une tablette allumée toute la
+      // journée, il expire EN PLEIN TRAVAIL : l'écran continue d'afficher,
+      // mais plus rien ne s'enregistre — et l'atelier ne voit qu'un message
+      // incompréhensible de Postgres. On le remarque ici, au retour sur
+      // l'écran, et on renvoie proprement à la connexion.
+      // (Vécu le 2026-09-11 sur une base de flan.)
+      if (!hasValidJwt()) {
+        logout()
+        setUser(null)
+        return
       }
+      loadFreshUser(user.id).then(fresh => {
+        if (fresh) setUser(fresh)
+      })
     }
     document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onVisibility)
+    }
   }, [user?.id])
 
   // Précharge en arrière-plan les écrans "à la demande" ~1,2 s après l'ouverture,
