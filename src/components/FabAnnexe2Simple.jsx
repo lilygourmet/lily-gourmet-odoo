@@ -209,32 +209,6 @@ export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose }) {
 }
 
 /**
- * DOUBLER OU DIVISER LA RECETTE en un appui.
- *
- * « Les recettes des biscuits et plaques : mettre un bouton × calculette si
- * besoin de doubler ou ×0,5 » (Layla, 2026-09-11). Doubler une recette est le
- * geste le plus courant de l'atelier ; la moitié vient juste après.
- */
-export function Multiplier({ valeur, unite, onChange }) {
-  const fois = f => {
-    const n = (Number(valeur) || 0) * f
-    // Une pièce reste entière ; un poids garde le gramme.
-    onChange(/^u$/i.test(String(unite || '').trim())
-      ? Math.max(1, Math.round(n))
-      : Math.max(0, Math.round(n * 1000) / 1000))
-  }
-  return (
-    <div className="print:hidden flex justify-center gap-3 mt-3">
-      {[['×2', 2], ['×0,5', 0.5]].map(([mot, f]) => (
-        <button key={mot} onClick={() => fois(f)}
-          className="rounded-xl border-2 border-gold bg-gold/10 px-5 py-2
-                     text-[16px] font-extrabold text-gold">{mot}</button>
-      ))}
-    </div>
-  )
-}
-
-/**
  * La fiche : combien on en fait, et ce qu'il faut pour ça.
  *
  * Le gros chiffre est la QUANTITÉ, jamais un nombre de tournées. Dessous, la
@@ -273,10 +247,6 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
         <GrosChiffre titre={decoupe ? 'à cuire' : 'à faire'}
           valeur={quantitePesee} unite={aPeser.unite}
           onChange={decoupe ? onCuites : onQuantite} />
-        {/* C'est CE chiffre-là qui commande la recette : le doubler double
-            tout ce qu'il y a dessous. */}
-        <Multiplier valeur={quantitePesee} unite={aPeser.unite}
-          onChange={decoupe ? onCuites : onQuantite} />
       </div>
       {!decoupe && (
         <div className="text-center text-[15px] text-ink-mute mt-1">
@@ -284,6 +254,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
             ? 'à faire' : `${uniteAffichee(noeud.unite)} à faire`}
         </div>
       )}
+      {decoupe && <EnPlaques noeud={noeud} decoupe={decoupe} cuites={cuites} />}
       <EnClair noeud={aPeser} quantite={quantitePesee} />
 
       <Ingredients noeud={aPeser} quantite={quantitePesee}
@@ -369,6 +340,29 @@ const motPluriel = (nom, n) => {
   const m = nomCourt(nom).match(/\b(plaques?|cadres?|biscuits?|tartes?|feuilles?)\b/)
   const base = m ? m[1].replace(/s$/, '') : 'pièce'
   return n > 1 ? base + 's' : base
+}
+
+/**
+ * « 3 040 g = 1 plaque » — ce que le poids veut dire sur la table.
+ *
+ * Un pâtissier ne verse pas 3 040 g, il étale UNE plaque. On ne le dit que
+ * quand le mot est sûr — l'ingrédient s'appelle « plaque » ou « cadre » —
+ * parce qu'écrire « 2 400 g = 1 biscuit » n'aiderait personne.
+ * (Layla, 2026-09-11 : « explique que par exemple royal chocolat
+ * 3 040 = 1 plaque ».)
+ */
+function EnPlaques({ noeud, decoupe, cuites }) {
+  const nom = decoupe?.enfant?.produit || ''
+  if (enPieces(decoupe?.enfant?.unite) || !/plaque|cadre/i.test(nom)) return null
+  const parPlaque = Number((noeud?.recette || [])[0]?.qty) || 0
+  if (!(parPlaque > 0) || !(cuites > 0)) return null
+  const n = Math.round((cuites / parPlaque) * 100) / 100
+  const mot = /cadre/i.test(nom) ? 'cadre' : 'plaque'
+  return (
+    <div className="text-center text-[15px] font-bold text-bordeaux mt-0.5">
+      = {nb(n)} {n > 1 ? mot + 's' : mot}
+    </div>
+  )
 }
 
 /** Ce que la quantité veut dire en vrai — rien quand il n'y a rien à dire. */

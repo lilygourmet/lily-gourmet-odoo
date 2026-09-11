@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { CasesAFaire, Cases, Confirmation, Fiche, Clavier, Multiplier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
+import { CasesAFaire, Cases, Confirmation, Fiche, Clavier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
 import { sansRendement } from '../lib/fabAnnexe'
 import { propre } from '../lib/ecranSimple'
 import { decoupeDe } from '../lib/fabAnnexe'
@@ -930,28 +930,55 @@ describe('le palier de coupe et le × calculette', () => {
     expect(onQuantite).toHaveBeenCalledWith(26)
   })
 
-  it('« ×2 » double la recette, « ×0,5 » la divise', () => {
-    const onChange = vi.fn()
-    render(<Multiplier valeur={3920} unite="g" onChange={onChange} />)
-    fireEvent.click(screen.getByText('×2'))
-    expect(onChange).toHaveBeenCalledWith(7840)
-    fireEvent.click(screen.getByText('×0,5'))
-    expect(onChange).toHaveBeenCalledWith(1960)
+})
+
+describe('« 3 040 g = 1 plaque »', () => {
+  // Le biscuit brownie 5 pers, tel que Layla l'a arrangé chez Odoo le
+  // 2026-09-11 : 3 040 g de « SM. Biscuit Brownie Plaque » donnent 13 pièces.
+  const brownie = {
+    produit: 'SM. Biscuit brownie 5 pers', libelle: 'Biscuit brownie 5 pers',
+    unite: 'u', tourneeTaille: 13, pourQuantite: 13, reste: 13,
+    recette: [{ produit: 'SM. Biscuit Brownie Plaque', qty: 3040, unite: 'g' }],
+    enfants: [{ produit: 'SM. Biscuit Brownie Plaque', unite: 'g', besoin: 3040, stock: 0,
+      dejaFait: 0, fabrique: true, ok: false, tourneeTaille: 6080, produira: 6080,
+      pourQuantite: 6080, recette: [{ produit: 'MP- Beurre entremets', qty: 1000, unite: 'g' }],
+      enfants: [] }],
+  }
+  const poser = cuites => render(<Fiche noeud={brownie} quantite={13} onQuantite={() => {}}
+    cuites={cuites} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+
+  it('dit ce que le poids veut dire sur la table', () => {
+    poser(3040)
+    expect(screen.getByText('= 1 plaque')).toBeTruthy()
   })
 
-  it('une demi-recette de pièces reste un compte entier, jamais zéro', () => {
-    const onChange = vi.fn()
-    render(<Multiplier valeur={1} unite="u" onChange={onChange} />)
-    fireEvent.click(screen.getByText('×0,5'))
-    expect(onChange).toHaveBeenCalledWith(1)
+  it('et suit quand on en cuit deux', () => {
+    poser(6080)
+    expect(screen.getByText('= 2 plaques')).toBeTruthy()
   })
 
-  it('le × est sur le chiffre qui commande la recette', () => {
-    // Sur une découpe, c'est celui du HAUT : doubler les plaques double la pâte.
-    const onCuites = vi.fn()
+  it('ne dit rien quand le mot n’est pas sûr', () => {
+    // « SM. Biscuit chocolat Gianduja » n'est pas nommé « plaque » : écrire
+    // « 2 400 g = 1 biscuit » n'aiderait personne.
+    const gianduja = { ...brownie,
+      recette: [{ produit: 'SM. Biscuit chocolat Gianduja', qty: 2400, unite: 'g' }],
+      enfants: [{ ...brownie.enfants[0], produit: 'SM. Biscuit chocolat Gianduja', besoin: 2400 }] }
+    render(<Fiche noeud={gianduja} quantite={13} onQuantite={() => {}}
+      cuites={2400} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.queryByText(/= \d+ plaque/)).toBeNull()
+  })
+
+  it('et rien non plus quand la plaque se compte en plaques', () => {
+    // Le biscuit à la cuillère : le chiffre du haut EST déjà un nombre de
+    // plaques, le répéter serait du bruit.
     render(<Fiche noeud={cinqPers} quantite={13} onQuantite={() => {}}
-      cuites={4} onCuites={onCuites} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
-    fireEvent.click(screen.getByText('×2'))
-    expect(onCuites).toHaveBeenCalledWith(8)
+      cuites={4} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.queryByText(/^= /)).toBeNull()
+  })
+
+  it('plus de bouton ×2 nulle part', () => {
+    poser(3040)
+    expect(screen.queryByText('×2')).toBeNull()
+    expect(screen.queryByText('×0,5')).toBeNull()
   })
 })
