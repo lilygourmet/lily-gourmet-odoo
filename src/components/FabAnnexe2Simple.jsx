@@ -218,7 +218,7 @@ export function GrosChiffre({ titre, valeur, unite, onChange }) {
  * sur le même écran — ce qu'on cuit, ce qu'on coupe — parce que ce sont deux
  * décisions, et qu'aller-retour entre deux écrans pour ça n'a aucun sens.
  */
-export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait }) {
+export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait, envoi }) {
   const decoupe = onCuites ? decoupeDe(noeud) : null
   const dejaFaits = declares(faits)
   // En découpe, la plaque se fait ICI : elle ne bloque pas, elle est l'écran.
@@ -277,11 +277,17 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       )}
 
       {/* Éteint tant qu'il manque quelque chose — et tant que le chiffre est
-          à zéro : un bouton vert qui ne fait rien est pire qu'un bouton gris. */}
-      <button onClick={onFait} disabled={bloque.length > 0 || !(quantite > 0)}
-        className={`print:hidden w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold
-          ${bloque.length || !(quantite > 0) ? 'bg-cream-deep text-ink-mute' : 'bg-success text-cream'}`}>
-        C'est fait
+          à zéro : un bouton vert qui ne fait rien est pire qu'un bouton gris.
+          ⚠️ Et il RÉPOND AU DOIGT : créer l'ordre chez Odoo prend plusieurs
+          secondes, pendant lesquelles il faut VOIR qu'il se passe quelque
+          chose — sinon on appuie deux fois. « Je dois double-cliquer pour
+          réaliser que c'est fait » (Layla, 2026-09-11). */}
+      <button onClick={onFait} disabled={bloque.length > 0 || !(quantite > 0) || envoi}
+        className={`print:hidden w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold transition-colors
+          ${envoi ? 'bg-bordeaux text-cream'
+            : bloque.length || !(quantite > 0) ? 'bg-cream-deep text-ink-mute'
+            : 'bg-success text-cream'}`}>
+        {envoi ? 'en cours…' : "C'est fait"}
       </button>
     </div>
   )
@@ -595,6 +601,26 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees }) {
           ${valeur > 0 && !envoi ? 'bg-success text-cream' : 'bg-cream-deep text-ink-mute'}`}>
         {envoi ? 'en cours…' : "C'est bon"}
       </button>
+    </div>
+  )
+}
+
+/**
+ * LA CONFIRMATION — plein écran, vert, une seconde et demie.
+ *
+ * « Montre clairement quand je clique sur le bouton c'est fait : je dois
+ * double-cliquer pour réaliser que c'est fait » (Layla, 2026-09-11). Un petit
+ * message en bas d'écran se rate, surtout les mains dans la farine. Celle-ci
+ * ne se rate pas, et elle s'efface toute seule — rien à refermer.
+ */
+export function Confirmation({ quoi, combien }) {
+  return (
+    <div className="print:hidden fixed inset-0 z-[80] bg-success/95 text-cream flex flex-col
+                    items-center justify-center gap-4 px-8 text-center">
+      <div className="text-[86px] leading-none">✓</div>
+      <div className="text-[26px] font-extrabold leading-tight">C'est noté</div>
+      <div className="text-[19px] font-bold opacity-90">{quoi}</div>
+      {combien && <div className="text-[22px] font-extrabold tabular-nums">{combien}</div>}
     </div>
   )
 }

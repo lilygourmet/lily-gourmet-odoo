@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { CasesAFaire, Cases, Fiche, Clavier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
+import { CasesAFaire, Cases, Confirmation, Fiche, Clavier, Onglets, PourUn, Sortie } from './FabAnnexe2Simple'
 import { sansRendement } from '../lib/fabAnnexe'
 import { propre } from '../lib/ecranSimple'
 import { decoupeDe } from '../lib/fabAnnexe'
@@ -869,5 +869,32 @@ describe('la découpe de ce qui se pèse', () => {
       enfants: [{ produit: 'SM. creme citron Production', unite: 'g', besoin: 1000, fabrique: true }],
     }
     expect(decoupeDe(creme)).toBeNull()
+  })
+})
+
+describe('le bouton « C’est fait » répond au doigt', () => {
+  const pret = { ...tiramisu, enfants: tiramisu.enfants.map(c => ({ ...c, ok: true })) }
+
+  it('dit « en cours… » pendant que l’ordre part chez Odoo', () => {
+    render(<Fiche noeud={pret} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} envoi />)
+    expect(screen.getByText('en cours…')).toBeTruthy()
+    expect(screen.queryByText("C'est fait")).toBeNull()
+  })
+
+  it('et ne part pas deux fois si on appuie deux fois', () => {
+    const onFait = vi.fn()
+    render(<Fiche noeud={pret} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={onFait} envoi />)
+    fireEvent.click(screen.getByText('en cours…'))
+    expect(onFait).not.toHaveBeenCalled()
+  })
+
+  it('la confirmation se voit en grand, et dit quoi', () => {
+    render(<Confirmation quoi="Ganache Gold" combien="2 700 g" />)
+    expect(screen.getByText('✓')).toBeTruthy()
+    expect(screen.getByText("C'est noté")).toBeTruthy()
+    expect(screen.getByText('Ganache Gold')).toBeTruthy()
+    expect(screen.getByText('2 700 g')).toBeTruthy()
   })
 })

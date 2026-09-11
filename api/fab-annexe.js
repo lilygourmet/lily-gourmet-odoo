@@ -915,15 +915,26 @@ export default async function handler(req, res) {
     stocksAmorces.catch(() => { /* l'erreur ressortira au vrai `await` */ })
     // Tout le catalogue : même un article qu'on n'affiche pas y donne la taille
     // de ses tournées, utile dès qu'il apparaît comme composant d'un autre.
-    // Le journal dit ce que l'atelier a DÉJÀ déclaré aujourd'hui : le stock
-    // Odoo ne remonte qu'à la validation, et sans lui l'écran redemanderait la
-    // tournée entière à quelqu'un qui vient de la faire.
+    //
+    // Le journal dit ce que l'atelier a DÉJÀ déclaré : « quand je clique c'est
+    // fait, c'est considéré comme si c'était validé dans Odoo, comme ça les
+    // pâtissiers peuvent continuer à bosser avant la validation finale »
+    // (Layla, 2026-09-11). Le stock Odoo, lui, ne monte qu'à la validation.
+    //
+    // ⚠️ Sur SEPT JOURS, pas seulement aujourd'hui : une fournée faite hier
+    // soir et pas encore validée existe bel et bien ce matin — la compter pour
+    // zéro, c'était la faire refaire. Même fenêtre que « À valider Annexe ».
+    // Ce qui a été validé (ou annulé) ne compte plus : `clos` s'en charge,
+    // sinon la production compterait DEUX fois.
+    //
     // ⚠️ `pour` peut ne pas exister encore (SQL `fab_prod_pour.sql` pas lancé) :
-    // on retombe sur l'ancienne lecture plutôt que de perdre TOUT le journal —
-    // sans lui, l'écran redemanderait à l'atelier ce qu'il vient de faire.
+    // on retombe sur l'ancienne lecture plutôt que de perdre TOUT le journal.
+    const depuis = new Date(jour + 'T12:00:00')
+    depuis.setDate(depuis.getDate() - 6)
     const lireFaits = async () => {
       const ou = c => sb.from('prod_fabrications').select(c)
-        .eq('jour', jour).eq('atelier', 'annexe')
+        .gte('jour', depuis.toLocaleDateString('sv-SE')).eq('atelier', 'annexe')
+        .limit(5000)
       const avec = await ou('article, qty, ordre, pour')
       if (!avec.error) return avec.data
       const sans = await ou('article, qty, ordre')

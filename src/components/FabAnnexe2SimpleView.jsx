@@ -19,12 +19,13 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { enClairErreur } from '../lib/erreurs'
 import { hasValidJwt } from '../lib/auth'
-import { CasesAFaire, Cases, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
+import { CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
 import HistoriqueAnnexe from './HistoriqueAnnexe'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
   decoupeDe, noeudDuChemin, defautDe, parGateauMere, peseesDe, declarer,
   envoyerAValider, sansRendement } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
+import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
 
 /**
@@ -48,6 +49,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [faits, setFaits] = useState({})
   const [sortie, setSortie] = useState(null)
   const [envoi, setEnvoi] = useState(false)
+  // Ce qu'on vient d'enregistrer, le temps de le montrer en grand.
+  const [confirme, setConfirme] = useState(null)
   const [erreur, setErreur] = useState(null)
   const [tour, setTour] = useState(0)
   // « Déclarer » : tout ce que l'annexe sait faire, pour venir dire ce qu'on a
@@ -171,7 +174,12 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         if (r?.erreur) toast(`Odoo a refusé les plaques : ${r.erreur}`)
       }
       const r = await envoyerUn(noeud, tete, qty)
-      toast(r.erreur ? `Enregistré, mais Odoo a refusé : ${r.erreur}` : 'C\'est noté ✓')
+      if (r.erreur) toast(`Enregistré, mais Odoo a refusé : ${r.erreur}`)
+      else {
+        // Plein écran, vert, une seconde et demie : ça ne se rate pas.
+        setConfirme({ quoi: propre(noeud.libelle || noeud.produit), combien: qte(qty, noeud.unite) })
+        setTimeout(() => setConfirme(null), 1500)
+      }
       setSortie(null)
       setChemin(chemin.slice(0, -1))
       if (noeud.produit === tete.produit) {
@@ -215,6 +223,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             {dujour > 0 && <span className="text-ink"> · {dujour}</span>}
           </button>
           {histoOuvert && <HistoriqueAnnexe histo={histo} onFermer={() => setHistoOuvert(false)} />}
+          {confirme && <Confirmation {...confirme} />}
 
           {onglet === 'faire' && (articles === null
             ? <Skeleton rows={4} />
@@ -282,6 +291,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             recette telle qu'elle est à l'écran (Layla, 2026-09-11). */}
         <div className="flex items-start justify-between gap-3 print:hidden">
           <Fil chemin={chemin} onRetour={() => { setSortie(null); setChemin(chemin.slice(0, -1)) }} />
+        {confirme && <Confirmation {...confirme} />}
           {sortie === null && (
             <button onClick={() => window.print()}
               className="shrink-0 rounded-xl border border-cream-deep bg-cream-warm px-3 py-2
@@ -308,7 +318,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               onCuites={decoupe
                 ? v => setCuites(x => ({ ...x, [noeud.produit]: Math.max(0, Math.round(v)) }))
                 : undefined}
-              faits={faits} onOuvrir={p => setChemin([...chemin, p])}
+              faits={faits} envoi={envoi} onOuvrir={p => setChemin([...chemin, p])}
               onFait={() => {
                 // On ne demande « combien ça a donné ? » que quand la réponse
                 // peut surprendre. Un biscuit sort son compte ; une découpe
