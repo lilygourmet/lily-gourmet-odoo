@@ -7,6 +7,7 @@ import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres } from '../l
 import { loadOrdresAnnexe } from '../lib/fabricationAnnexe'
 import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs, setFait } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
+import { versUnite } from '../lib/unites'
 import { AjoutIngredient } from './ValidationView'
 
 // ====== « À valider Annexe » : la page dédiée ======
@@ -162,10 +163,16 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
             if (!parOrdre.has(encoreLa.name)) {
               // `pour` : le gâteau pour lequel la préparation a été faite. Il
               // est réservé à lui, l'écran le dit (Layla, 2026-09-10).
-              parOrdre.set(encoreLa.name, { name: encoreLa.name, article: d.article, pour: d.pour || null, prevu: encoreLa.qty, declare: 0, demande: encoreLa.qty, etat: encoreLa.state })
+              parOrdre.set(encoreLa.name, { name: encoreLa.name, article: d.article, pour: d.pour || null, prevu: encoreLa.qty, declare: 0, demande: encoreLa.qty, etat: encoreLa.state, unite: encoreLa.unite || '' })
             }
             const e = parOrdre.get(encoreLa.name)
-            e.declare = Math.round((e.declare + (Number(d.qty) || 0)) * 100) / 100
+            // ⚠️ DEUX UNITÉS SE CROISENT ICI. Le journal compte dans l'unité de
+            // l'ARTICLE (la crème citron gingembre est en kilos) ; l'ordre Odoo,
+            // lui, est dans l'unité de sa RECETTE (des grammes). Mélangées, la
+            // ligne affichait « 14 g » pour 14,328 kg — et c'est ce chiffre-là
+            // qui serait parti à la validation. (Layla, 2026-09-11.)
+            e.declare = Math.round((e.declare
+              + versUnite(Number(d.qty) || 0, d.unite, e.unite)) * 100) / 100
             e.demande = e.declare > 0 ? e.declare : e.prevu
             continue
           }

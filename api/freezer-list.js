@@ -2015,7 +2015,14 @@ function rangerOrdresAnnexe(ouverts, net) {
     }
     // l'ordre montré : le plus récent qui reste (liste triée par id décroissant)
     const montre = liste.find(o => !jetes.has(o.name)) || liste[0]
-    ordres[n] = { name: montre.name, qty: montre.product_qty, state: montre.state, origin: montre.origin || '' }
+    // ⚠️ L'UNITÉ DE L'ORDRE voyage avec lui. Sans elle, l'écran « À valider »
+    // affichait la quantité DÉCLARÉE (en kilos pour la crème citron gingembre)
+    // avec l'unité de l'ordre (des grammes) : « 14 g » pour 14,328 kg — et
+    // c'est ce chiffre-là qui serait parti à la validation.
+    // (Layla, 2026-09-11.)
+    ordres[n] = { name: montre.name, qty: montre.product_qty, state: montre.state,
+      unite: (Array.isArray(montre.product_uom_id) ? montre.product_uom_id[1] : '') || '',
+      origin: montre.origin || '' }
   }
   return { ordres, doublons }
 }
@@ -2505,7 +2512,8 @@ export default async function handler(req, res) {
         const ouvertsSeuls = await odooSearchRead(uid, 'mrp.production', [
           ['location_src_id', 'in', lieux.map(l => l.id)],
           ['state', 'not in', ['done', 'cancel']],
-        ], ['name', 'product_id', 'product_qty', 'state', 'origin'], { limit: 500, order: 'id desc' })
+        ], ['name', 'product_id', 'product_qty', 'product_uom_id', 'state', 'origin'],
+        { limit: 500, order: 'id desc' })
         res.setHeader('Cache-Control', 'no-store')
         return res.status(200).json(rangerOrdresAnnexe(ouvertsSeuls, net))
       }
