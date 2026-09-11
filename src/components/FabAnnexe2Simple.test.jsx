@@ -982,3 +982,44 @@ describe('« 3 040 g = 1 plaque »', () => {
     expect(screen.queryByText('×0,5')).toBeNull()
   })
 })
+
+describe('écrire « 3 plaques » plutôt que 9 120 g', () => {
+  const brownie = {
+    produit: 'SM. Biscuit brownie 5 pers', libelle: 'Biscuit brownie 5 pers',
+    unite: 'u', tourneeTaille: 13, pourQuantite: 13, reste: 13,
+    recette: [{ produit: 'SM. Biscuit Brownie Plaque', qty: 3040, unite: 'g' }],
+    enfants: [{ produit: 'SM. Biscuit Brownie Plaque', unite: 'g', besoin: 3040, stock: 0,
+      dejaFait: 0, fabrique: true, ok: false, tourneeTaille: 6080, produira: 6080,
+      pourQuantite: 6080, recette: [], enfants: [] }],
+  }
+  const poser = () => {
+    const onCuites = vi.fn()
+    render(<Fiche noeud={brownie} quantite={13} onQuantite={() => {}}
+      cuites={3040} onCuites={onCuites} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    return onCuites
+  }
+
+  it('on tape 3, l’app met 9 120 g', () => {
+    const onCuites = poser()
+    fireEvent.click(screen.getByLabelText('Changer le nombre de plaques'))
+    fireEvent.click(screen.getByText('3'))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
+    expect(onCuites).toHaveBeenCalledWith(9120)
+  })
+
+  it('et le « + » avance d’UNE plaque, pas de 50 g', () => {
+    const onCuites = poser()
+    fireEvent.click(screen.getByLabelText('Plus à cuire'))
+    expect(onCuites).toHaveBeenCalledWith(6080)
+  })
+
+  it('une demi-plaque reste écrivable', () => {
+    const onCuites = poser()
+    fireEvent.click(screen.getByLabelText('Changer le nombre de plaques'))
+    // « 1 » est à la fois une touche et le nombre affiché : on vise la touche.
+    const touche = t => fireEvent.click(screen.getAllByText(t).find(e => e.tagName === 'BUTTON'))
+    touche('1'); touche(','); touche('5')
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
+    expect(onCuites).toHaveBeenCalledWith(4560)
+  })
+})

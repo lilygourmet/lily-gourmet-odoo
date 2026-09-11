@@ -244,8 +244,11 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
         </div>
       )}
       <div className={decoupe ? 'mt-1' : 'mt-5'}>
+        {/* Le « + » avance d'UNE PLAQUE quand la chose se compte en plaques :
+            sauter de 50 g dans une plaque de 3 040 n'a aucun sens. */}
         <GrosChiffre titre={decoupe ? 'à cuire' : 'à faire'}
           valeur={quantitePesee} unite={aPeser.unite}
+          pas={decoupe ? grammesParPlaque(noeud, decoupe) || undefined : undefined}
           onChange={decoupe ? onCuites : onQuantite} />
       </div>
       {!decoupe && (
@@ -254,7 +257,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
             ? 'à faire' : `${uniteAffichee(noeud.unite)} à faire`}
         </div>
       )}
-      {decoupe && <EnPlaques noeud={noeud} decoupe={decoupe} cuites={cuites} />}
+      {decoupe && <EnPlaques noeud={noeud} decoupe={decoupe} cuites={cuites} onCuites={onCuites} />}
       <EnClair noeud={aPeser} quantite={quantitePesee} />
 
       <Ingredients noeud={aPeser} quantite={quantitePesee}
@@ -343,6 +346,17 @@ const motPluriel = (nom, n) => {
 }
 
 /**
+ * Combien pèse UNE plaque : la dose qu'il faut pour une fournée de l'article.
+ * Rend 0 quand on ne peut pas le dire — l'ingrédient se compte déjà en
+ * plaques, ou son nom ne dit pas « plaque ».
+ */
+const grammesParPlaque = (noeud, decoupe) => {
+  const nom = decoupe?.enfant?.produit || ''
+  if (enPieces(decoupe?.enfant?.unite) || !/plaque|cadre/i.test(nom)) return 0
+  return Number((noeud?.recette || [])[0]?.qty) || 0
+}
+
+/**
  * « 3 040 g = 1 plaque » — ce que le poids veut dire sur la table.
  *
  * Un pâtissier ne verse pas 3 040 g, il étale UNE plaque. On ne le dit que
@@ -351,17 +365,28 @@ const motPluriel = (nom, n) => {
  * (Layla, 2026-09-11 : « explique que par exemple royal chocolat
  * 3 040 = 1 plaque ».)
  */
-function EnPlaques({ noeud, decoupe, cuites }) {
-  const nom = decoupe?.enfant?.produit || ''
-  if (enPieces(decoupe?.enfant?.unite) || !/plaque|cadre/i.test(nom)) return null
-  const parPlaque = Number((noeud?.recette || [])[0]?.qty) || 0
+function EnPlaques({ noeud, decoupe, cuites, onCuites }) {
+  const [clavier, setClavier] = useState(false)
+  const parPlaque = grammesParPlaque(noeud, decoupe)
   if (!(parPlaque > 0) || !(cuites > 0)) return null
   const n = Math.round((cuites / parPlaque) * 100) / 100
-  const mot = /cadre/i.test(nom) ? 'cadre' : 'plaque'
+  const mot = /cadre/i.test(decoupe.enfant.produit) ? 'cadre' : 'plaque'
   return (
-    <div className="text-center text-[15px] font-bold text-bordeaux mt-0.5">
-      = {nb(n)} {n > 1 ? mot + 's' : mot}
-    </div>
+    <>
+      {/* On peut aussi ÉCRIRE le nombre de plaques : « donne-moi la
+          possibilité d'écrire 2 plaques ou 3 plaques si je veux » (Layla,
+          2026-09-11). L'app repasse en grammes toute seule. */}
+      <button onClick={() => setClavier(true)} aria-label={`Changer le nombre de ${mot}s`}
+        className="print:hidden block mx-auto text-center text-[15px] font-bold
+                   text-bordeaux mt-0.5 underline decoration-dotted underline-offset-4">
+        = {nb(n)} {n > 1 ? mot + 's' : mot}
+      </button>
+      {clavier && (
+        <Clavier titre={`${mot}s à cuire`} valeur={n} unite=""
+          onValider={v => { onCuites(v * parPlaque); setClavier(false) }}
+          onFermer={() => setClavier(false)} />
+      )}
+    </>
   )
 }
 
