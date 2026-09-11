@@ -9,7 +9,7 @@ import { addFabProd, rattacherOrdre, loadFabProdDepuis, loadNoms } from './fabri
 import { creerOfPrepa } from './fabrication'
 import { toast } from './toast'
 import { todayISO } from './dates'
-import { correspond } from './recherche'
+import { correspond, aplatir } from './recherche'
 import { enGrammes as enGrammesOdoo } from './unites'
 import { supabase } from './supabase'
 
@@ -103,6 +103,23 @@ const estPr = nom => /^pr\s/i.test(sansPrefixe(nom))
 const cleGateau = nom =>
   sansPrefixe(nom).replace(/^pr\s*-?\s*/i, '').replace(/\W+/g, '').toLowerCase()
 
+/**
+ * Ce qui n'est PAS fabriqué à l'annexe, même si Odoo en garde la trace : le
+ * suprême vanille sort du labo cake design, les micro-viennoiseries et les
+ * brioches feuilletées de la viennoiserie. Odoo les range sous l'annexe parce
+ * qu'un ordre y est passé un jour ; la pâtisserie de l'annexe, elle, n'a rien
+ * à y déclarer. (Layla, 2026-09-11.)
+ *
+ * On coupe au GÂTEAU, pas à l'article : c'est le gâteau que Layla a nommé, et
+ * un article qui sert aussi ailleurs garde sa place sous son autre gâteau.
+ * L'écran de réglage « Mini / maxi Annexe », lui, continue de tout montrer.
+ */
+const PAS_A_LANNEXE = ['supreme vanille', 'micro viennoiseries', 'brioches feuilletees']
+const pasALannexe = nom => {
+  const plat = aplatir(nom)
+  return PAS_A_LANNEXE.some(m => plat.includes(m))
+}
+
 export function parGateauMere(articles, cherche, tout = false) {
   const q = String(cherche || '').trim()
   // Quand un « Pr » existe, lui seul a une case : l'étape d'avant s'ouvre
@@ -130,7 +147,12 @@ export function parGateauMere(articles, cherche, tout = false) {
       if (/^\s*(\[\d+\]\s*)?gs\s*-/i.test(a.produit)) continue
       if (avecPr.has(cleGateau(a.produit)) && !estPr(a.produit)) continue
     }
-    const oues = (a.pour || []).length ? a.pour : ['Le reste']
+    // Les gâteaux qui ne sont pas de l'annexe disparaissent. Un article qui ne
+    // servait QU'À eux s'en va avec : le renvoyer sous « Le reste » ne ferait
+    // que déplacer l'encombrement.
+    const vrais = tout ? (a.pour || []) : (a.pour || []).filter(g => !pasALannexe(g))
+    if ((a.pour || []).length && !vrais.length) continue
+    const oues = vrais.length ? vrais : ['Le reste']
     for (const g of oues) {
       const e = groupes.get(g) || { nom: g, photo: g === 'Le reste' ? null : g, articles: [] }
       e.articles.push(a); groupes.set(g, e)
