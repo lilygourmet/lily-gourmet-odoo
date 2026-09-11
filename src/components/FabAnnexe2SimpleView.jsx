@@ -27,6 +27,7 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistorique
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
+import { prevusDuJour, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
 
 /**
  * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
@@ -44,6 +45,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [details, setDetails] = useState(() =>
     Object.fromEntries((dernierEcran('fab_annexe2') || []).map(a => [a.produit, a])))
   const [chemin, setChemin] = useState([])
+  // Ce qu'on a décidé de faire, gardé pour la journée : on part travailler, on
+  // revient, le chiffre est toujours là. (Layla, 2026-09-11.)
+  const [prevus, setPrevus] = useState(() => prevusDuJour(todayISO()))
   const [quantites, setQuantites] = useState({})
   const [cuites, setCuites] = useState({})
   const [faits, setFaits] = useState({})
@@ -131,8 +135,19 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // Au MILLIÈME, pas au centième : en kilos, 0,01 c'est 10 grammes — taper
   // 2 605 g serait revenu à 2 610. (Layla, 2026-09-11 : « attention à la
   // conversion ».)
-  const poser = (produit, q) =>
-    setQuantites(x => ({ ...x, [produit]: Math.max(0, Math.round(q * 1000) / 1000) }))
+  const poser = (produit, q) => {
+    const v = Math.max(0, Math.round(q * 1000) / 1000)
+    setQuantites(x => ({ ...x, [produit]: v }))
+    // ⚠️ On ne garde QUE le chiffre de l'article de tête : c'est lui qui
+    // commande la recette. Les quantités des composants se recalculent.
+    if (produit === (chemin[0] || null)) setPrevus(poserPrevu(todayISO(), produit, v))
+  }
+
+  /** On quitte la fiche : le travail commence, le chiffre se fige. */
+  const figer = () => {
+    const tete = chemin[0]
+    if (tete && prevus[tete] && !prevus[tete].fige) setPrevus(figerPrevu(todayISO(), tete))
+  }
 
   // ---------- déclarer ----------
   /**
@@ -206,6 +221,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       }
       setSortie(null)
       setParTaille({})
+      // Déclaré : le prévu a fait son travail, il ne doit plus commander demain.
+      setPrevus(oublierPrevu(todayISO(), tete.produit))
       setChemin(chemin.slice(0, -1))
       if (noeud.produit === tete.produit) {
         // L'article de tête est parti : la séance est finie, on repart propre.
@@ -301,10 +318,12 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       </div>
     )
   }
-  const { tete, noeud } = noeudDuChemin(brut, chemin, quantites)
+  // Le prévu du jour sert de quantité de départ : il a décidé de la recette.
+  const choisies = { ...Object.fromEntries(Object.entries(prevus).map(([p, v]) => [p, v.q])), ...quantites }
+  const { tete, noeud } = noeudDuChemin(brut, chemin, choisies)
   if (!noeud) { setChemin([]); return null }
 
-  const q = quantites[noeud.produit] ?? defautDe(noeud)
+  const q = quantites[noeud.produit] ?? prevus[noeud.produit]?.q ?? defautDe(noeud)
   const decoupe = decoupeDe(noeud)
 
   return (
@@ -315,7 +334,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             deux disparaissent à l'impression : la feuille ne porte que la
             recette telle qu'elle est à l'écran (Layla, 2026-09-11). */}
         <div className="flex items-start justify-between gap-3 print:hidden">
-          <Fil chemin={chemin} onRetour={() => { setSortie(null); setChemin(chemin.slice(0, -1)) }} />
+          <Fil chemin={chemin} onRetour={() => { figer(); setSortie(null); setChemin(chemin.slice(0, -1)) }} />
           {sortie === null && (
             <button onClick={() => window.print()}
               className="shrink-0 rounded-xl border border-cream-deep bg-cream-warm px-3 py-2
@@ -332,18 +351,28 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             // réponses (Layla, 2026-09-11).
             const surEnfant = sortie.pour === 'enfant'
             const cible = surEnfant ? decoupe.enfant : noeud
+            // L'étape FINALE : l'article qu'on est venu faire, pas un de ses
+            // morceaux. C'est la seule qui rassemble tous les composants.
+            const finale = !surEnfant && cible.produit === tete.produit
             const fois = cible.tourneeTaille > 0
               ? (surEnfant ? sortie.valeur : q) / cible.tourneeTaille : 1
             return (
               <Sortie noeud={cible} valeur={sortie.valeur} envoi={envoi}
                 onValeur={v => setSortie(x => ({ ...x, valeur: v }))}
                 // Une CUVE ne se divise pas : ce qu'on n'a pas monté en grand
-                // finit en plus petit. On demande donc les autres tailles —
-                // mais seulement sur l'article de tête, et seulement s'il en a.
-                tailles={surEnfant ? null : (brut.tailles || [])}
+                // finit en plus petit.
+                //
+                // ⚠️ La question ne se pose qu'à la TOUTE FIN — sur l'article
+                // qu'on est venu faire, celui qui rassemble tous les autres.
+                // Elle apparaissait aussi en plein milieu, pendant qu'on
+                // déclarait une crème ou un fond : « cette question-là, elle
+                // doit être posée complètement à la fin, pas dans les petites
+                // étapes » (Layla, 2026-09-11).
+                tailles={finale ? (brut.tailles || []) : null}
                 nomCuve={brut.figesNom}
+                prevu={finale ? q : 0}
                 parTaille={parTaille}
-                onTaille={!surEnfant && (brut.tailles || []).length
+                onTaille={finale && (brut.tailles || []).length
                   ? (p, n) => setParTaille(x => ({ ...x, [p]: n })) : undefined}
                 // Ce qui sort du stock : la dose RÉELLEMENT pesée, celle qu'on
                 // impose à l'ordre Odoo. Seulement pour une préparation — un
@@ -361,7 +390,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               onCuites={decoupe
                 ? v => setCuites(x => ({ ...x, [noeud.produit]: Math.max(0, Math.round(v)) }))
                 : undefined}
-              faits={faits} envoi={envoi} onOuvrir={p => setChemin([...chemin, p])}
+              faits={faits} envoi={envoi}
+              verrouille={!!prevus[tete.produit]?.fige && noeud.produit === tete.produit}
+              onLiberer={() => {
+                setPrevus(oublierPrevu(todayISO(), tete.produit))
+                setQuantites(x => { const n = { ...x }; delete n[tete.produit]; return n })
+              }}
+              onOuvrir={p => { figer(); setChemin([...chemin, p]) }}
               onFait={() => {
                 // Une DÉCOUPE : si on a cuit quelque chose, on demande combien
                 // il en est vraiment sorti — « il faudrait qu'il demande

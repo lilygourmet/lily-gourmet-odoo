@@ -1120,3 +1120,58 @@ describe('les autres tailles', () => {
     expect(screen.queryByText(/d'autres tailles/)).toBeNull()
   })
 })
+
+// ====== Le chiffre décidé ne bouge plus ======
+// « On peut mettre que ce soit 25, et ça reste toujours 25. Si on décide de
+// changer d'avis, il y a un bouton Réinitialiser » (Layla, 2026-09-11).
+// Le danger : la pâtissière ne pense qu'au nombre sorti (23) et le remet au
+// début — la crème se recalcule pour 23, et Odoo croit qu'il en reste.
+
+describe('le chiffre décidé', () => {
+  const tronc = { ...tiramisu, libelle: 'Tronc framboise 15 cm', tourneeTaille: 25, reste: 25 }
+
+  it('verrouillé : plus de − ni de +, plus de clavier', () => {
+    render(<Fiche noeud={tronc} quantite={25} onQuantite={() => {}} verrouille
+      onLiberer={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText('25')).toBeTruthy()
+    expect(screen.queryByLabelText('Plus à faire')).toBeNull()
+    expect(screen.queryByLabelText('Changer à faire')).toBeNull()
+  })
+
+  it('« réinitialiser » rend la main', () => {
+    const onLiberer = vi.fn()
+    render(<Fiche noeud={tronc} quantite={25} onQuantite={() => {}} verrouille
+      onLiberer={onLiberer} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    fireEvent.click(screen.getByText('réinitialiser'))
+    expect(onLiberer).toHaveBeenCalled()
+  })
+
+  it('libre tant qu’on est encore dessus', () => {
+    render(<Fiche noeud={tronc} quantite={25} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByLabelText('Plus à faire')).toBeTruthy()
+    expect(screen.queryByText('réinitialiser')).toBeNull()
+  })
+})
+
+describe('la fin rappelle le prévu', () => {
+  const tronc = { produit: 'SM- Tronc framboise 15 cm', libelle: 'Tronc framboise 15 cm', unite: 'u' }
+
+  it('dit ce qu’on avait prévu', () => {
+    render(<Sortie noeud={tronc} valeur={25} prevu={25} onValeur={() => {}}
+      onValider={() => {}} envoi={false} />)
+    expect(screen.getByText(/Tu en avais prévu/)).toBeTruthy()
+  })
+
+  it('et rassure quand il en sort moins : la crème ne revient pas au frigo', () => {
+    render(<Sortie noeud={tronc} valeur={23} prevu={25} onValeur={() => {}}
+      onValider={() => {}} envoi={false} />)
+    expect(screen.getByText(/la recette reste comptée pour 25 — tu l'as faite/)).toBeTruthy()
+  })
+
+  it('rien à rappeler quand le compte tombe pile', () => {
+    render(<Sortie noeud={tronc} valeur={25} prevu={25} onValeur={() => {}}
+      onValider={() => {}} envoi={false} />)
+    expect(screen.queryByText(/reste comptée/)).toBeNull()
+  })
+})

@@ -184,13 +184,32 @@ export function Clavier({ titre, valeur, unite, onValider, onFermer }) {
  * `onChange`, eux, parlent l'unité de l'ARTICLE — c'est elle qui part chez
  * Odoo. La conversion ne vit qu'ici, via `enGrammes` / `enUnite`.
  */
-export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose }) {
+export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose, verrouille, onLiberer }) {
   const [clavier, setClavier] = useState(false)
   const vu = enGrammes(valeur, unite)
   // Le pas par défaut : la pièce, ou 50 g. Une DÉCOUPE impose le sien — on ne
   // coupe pas un sixième de plaque (Layla, 2026-09-11).
   const pas = impose || (/^u$/i.test(String(unite || '').trim()) ? 1 : 50)
   const bouger = d => onChange(enUnite(Math.max(0, Math.round((vu + d) * 1000) / 1000), unite))
+  // VERROUILLÉ : le chiffre a été décidé, le travail est lancé, la recette a
+  // été suivie pour LUI. On ne peut plus le baisser par réflexe à la fin —
+  // sinon la crème se recalculerait pour un compte qu'on n'a pas préparé.
+  // « Ça reste toujours 25 ; si on change d'avis, Réinitialiser » (Layla).
+  if (verrouille) {
+    return (
+      <div className="text-center">
+        <div className="font-extrabold tabular-nums text-[54px] leading-none
+                        md:text-[42px] print:text-[24pt]">{nb(vu)}</div>
+        {onLiberer && (
+          <button onClick={onLiberer}
+            className="print:hidden mt-1 text-[13px] font-bold text-ink-mute underline
+                       decoration-dotted underline-offset-4">
+            réinitialiser
+          </button>
+        )}
+      </div>
+    )
+  }
   return (
     <>
       <div className="flex items-center justify-center gap-4">
@@ -230,7 +249,8 @@ export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose }) {
  * sur le même écran — ce qu'on cuit, ce qu'on coupe — parce que ce sont deux
  * décisions, et qu'aller-retour entre deux écrans pour ça n'a aucun sens.
  */
-export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait, envoi }) {
+export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait, envoi,
+  verrouille, onLiberer }) {
   const decoupe = onCuites ? decoupeDe(noeud) : null
   const dejaFaits = declares(faits)
   // En découpe, la plaque se fait ICI : elle ne bloque pas, elle est l'écran.
@@ -260,6 +280,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
         <GrosChiffre titre={decoupe ? 'à cuire' : 'à faire'}
           valeur={quantitePesee} unite={aPeser.unite}
           pas={decoupe ? grammesParPlaque(noeud, decoupe) || undefined : undefined}
+          verrouille={decoupe ? false : verrouille} onLiberer={onLiberer}
           onChange={decoupe ? onCuites : onQuantite} />
       </div>
       {!decoupe && (
@@ -300,7 +321,8 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
                 2026-09-11). Le clavier, lui, accepte n'importe quel nombre —
                 « je fais 4 plaques et je décide d'en couper 26 ». */}
             <GrosChiffre titre="à couper" valeur={quantite} unite={noeud.unite}
-              pas={palierDeCoupe(decoupe)} onChange={onQuantite} />
+              pas={palierDeCoupe(decoupe)} verrouille={verrouille} onLiberer={onLiberer}
+              onChange={onQuantite} />
           </div>
           <Partage noeud={noeud} decoupe={decoupe} cuites={cuites} coupes={quantite} />
         </div>
@@ -654,7 +676,7 @@ function Partage({ noeud, decoupe, cuites, coupes }) {
  * au beurre aussi. Le dire, c'est faire croire à une faute (Layla,
  * 2026-09-10).
  */
-export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees, tailles, nomCuve, parTaille, onTaille }) {
+export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees, tailles, nomCuve, parTaille, onTaille, prevu }) {
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -665,13 +687,26 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, pesees, tail
         </div>
       </div>
 
-      <div className="text-center text-[19px] font-extrabold mt-8 mb-3">
+      {/* ⚠️ On RAPPELLE le prévu, et on dit que la crème ne bouge pas : baisser
+          le nombre de gâteaux ne rend pas de crème au frigo, elle a été faite.
+          C'est la confusion que Layla a signalée le 2026-09-11. */}
+      {prevu > 0 && (
+        <div className="text-center text-[15px] text-ink-mute mt-8">
+          Tu en avais prévu <b className="text-ink">{nb(prevu)}</b>
+        </div>
+      )}
+      <div className={`text-center text-[19px] font-extrabold mb-3 ${prevu > 0 ? 'mt-1' : 'mt-8'}`}>
         Il en est sorti combien ?
       </div>
       <GrosChiffre titre="il en est sorti" valeur={valeur} unite={noeud.unite}
         onChange={onValeur} />
       {!/^u$/i.test(String(noeud.unite || '').trim()) && (
         <div className="text-center text-[15px] text-ink-mute mt-1">{uniteAffichee(noeud.unite)}</div>
+      )}
+      {prevu > 0 && valeur !== prevu && (
+        <div className="text-center text-[14px] font-bold text-bordeaux mt-1">
+          la recette reste comptée pour {nb(prevu)} — tu l'as faite
+        </div>
       )}
 
       {pesees && Object.keys(pesees).length > 0 && (
