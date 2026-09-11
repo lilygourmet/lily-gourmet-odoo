@@ -53,19 +53,29 @@ export function CasesAFaire({ articles, onOuvrir }) {
           <div className="relative">
             <img src={photoDe(a.photo || a.produit)} alt="" loading="lazy"
               className="w-full aspect-square object-cover bg-cream-deep" />
-            <span className="absolute left-2 top-2 rounded-full bg-danger text-cream
+            {/* ⚠️ INTROUVABLE DANS ODOO : l'article a été renommé là-bas et le
+                catalogue garde l'ancien nom. Sans ce « ? », il s'affichait avec
+                une pastille « 1 » — un travail à faire qui n'existe pas
+                (Layla, 2026-09-11). */}
+            <span className={`absolute left-2 top-2 rounded-full text-cream
                              px-3 py-1 text-[19px] font-extrabold tabular-nums
-                             md:px-2.5 md:py-0.5 md:text-[16px]">
-              {nb(enGrammes(aFaireMaintenant(a), a.unite))}
+                             md:px-2.5 md:py-0.5 md:text-[16px]
+                             ${a.absent ? 'bg-ink-mute' : 'bg-danger'}`}>
+              {a.absent ? '?' : nb(enGrammes(aFaireMaintenant(a), a.unite))}
             </span>
           </div>
           <div className="px-3 py-2 md:px-2.5 md:py-1.5">
             <div className="text-[16px] font-bold leading-tight md:text-[14px]">
               {propre(a.libelle || a.produit)}
             </div>
+            {a.absent && (
+              <div className="text-[12.5px] text-danger font-bold mt-0.5">
+                introuvable dans Odoo — renommé ?
+              </div>
+            )}
             {/* Le besoin total sous le nom, quand une fournée n'y suffit pas :
                 la pastille dit quoi faire maintenant, cette ligne dit pourquoi. */}
-            {a.reste > aFaireMaintenant(a) && (
+            {!a.absent && a.reste > aFaireMaintenant(a) && (
               <div className="text-[12.5px] text-ink-mute mt-0.5">
                 il en faut {qte(a.reste, a.unite)}
               </div>

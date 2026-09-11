@@ -1228,3 +1228,24 @@ describe('la plaque de gianduja', () => {
     expect(onQuantite).toHaveBeenCalledWith(12)
   })
 })
+
+describe('un article introuvable dans Odoo', () => {
+  // Layla a renommé « SM. Biscuit chocolat Gianduja » en « SM. Biscuit
+  // Gianduja (plaque) » chez Odoo ; le catalogue garde l'ancien nom. L'écran
+  // affichait une pastille « 1 » — un travail à faire qui n'existe pas.
+  const fantome = { produit: 'SM. Biscuit chocolat Gianduja', libelle: 'Biscuit chocolat Gianduja',
+    mini: 0, maxi: 0, tournee: 1, absent: true }
+
+  it('le dit, au lieu d’annoncer 1 à faire', () => {
+    render(<CasesAFaire articles={[fantome]} onOuvrir={() => {}} />)
+    expect(screen.getByText('?')).toBeTruthy()
+    expect(screen.getByText(/introuvable dans Odoo/)).toBeTruthy()
+    expect(screen.queryByText('1')).toBeNull()
+  })
+
+  it('les vrais articles gardent leur pastille rouge', () => {
+    render(<CasesAFaire articles={[tiramisu]} onOuvrir={() => {}} />)
+    expect(screen.getByText('13')).toBeTruthy()
+    expect(screen.queryByText(/introuvable/)).toBeNull()
+  })
+})
