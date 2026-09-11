@@ -251,13 +251,33 @@ async function handleRattrapage(req, res) {
   // ⚠️ On laisse DEUX MINUTES au navigateur : il est peut-être en train de
   // créer le bon à cet instant. Sans ce délai on en ferait un deuxième.
   const limite = new Date(Date.now() - 2 * 60000).toISOString()
-  const r = await sbFetch('transferts_mp?select=*&statut=eq.recu&odoo_picking_id=is.null'
+  const r = await sbFetch('transferts_mp?select=id&statut=eq.recu&odoo_picking_id=is.null'
     + `&odoo_product_id=not.is.null&qty_recu=gt.0&confirmed_at=lt.${limite}&order=id.asc&limit=50`)
-  const lignes = await r.json()
+  const vues = await r.json()
+  if (!Array.isArray(vues) || !vues.length) return res.status(200).json({ ok: true, rattrapes: 0 })
+
+  // ⚠️ ON RÉSERVE D'ABORD, on crée ensuite. Deux passages lancés à une minute
+  // d'écart (le cron et un appel à la main) ont créé DEUX bons identiques de
+  // 27 lignes le 2026-09-11. Cette écriture ne touche que les lignes encore
+  // libres et nous rend celles qu'on a vraiment prises : l'autre passage n'en
+  // trouvera aucune. `-1` est la marque « en cours ».
+  const prise = await sbFetch(
+    `transferts_mp?id=in.(${vues.map(v => v.id).join(',')})&odoo_picking_id=is.null`,
+    { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ odoo_picking_id: -1 }) })
+  const lignes = await prise.json()
   if (!Array.isArray(lignes) || !lignes.length) return res.status(200).json({ ok: true, rattrapes: 0 })
 
-  const uid = await auth()
+  // Si Odoo refuse, on relâche ce qu'on avait réservé : le passage suivant
+  // réessaiera, plutôt que de laisser ces lignes bloquées à `-1`.
+  const relacher = async () => {
+    await sbFetch(`transferts_mp?id=in.(${lignes.map(l => l.id).join(',')})&odoo_picking_id=eq.-1`,
+      { method: 'PATCH', body: JSON.stringify({ odoo_picking_id: null }) })
+  }
+
+  let uid
+  try { uid = await auth() } catch (e) { await relacher(); throw e }
   const bons = []
+  try {
   // Un bon par SENS : les deux sens n'ont pas les mêmes emplacements.
   for (const sens of [...new Set(lignes.map(l => l.sens))]) {
     const lot = lignes.filter(l => l.sens === sens)
@@ -291,6 +311,7 @@ async function handleRattrapage(req, res) {
     }
     bons.push({ sens, bon: pick?.name, lignes: lot.length })
   }
+  } catch (e) { await relacher(); throw e }
   return res.status(200).json({ ok: true, rattrapes: lignes.length, bons })
 }
 
