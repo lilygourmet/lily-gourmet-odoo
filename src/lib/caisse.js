@@ -583,6 +583,14 @@ export async function loadEnvReleveLines(envId) {
 // Les lignes déjà rattachées à cette enveloppe et non reprises sont libérées.
 export async function attachReleveLines(env, lines) {
   if (!lines?.length) return
+  // Certains appelants ne passent que l'id (délier une ligne d'une remise splittée) : on
+  // relit la preuve en base plutôt que de la croire absente. Sinon la photo du bordereau
+  // déjà déposée se faisait remplacer par le PDF du relevé, sans rien dire.
+  let preuve = env.proof_url
+  if (preuve === undefined) {
+    const { data } = await supabase.from('caisse_enveloppes').select('proof_url').eq('id', env.id).single()
+    preuve = data?.proof_url || null
+  }
   const ordered = [...lines].sort((a, b) => String(a.ligne_date).localeCompare(String(b.ligne_date)))
   const total = ordered.reduce((s, l) => s + Number(l.amount || 0), 0)
   // Une seule ligne : format historique « date · libellé ». Plusieurs : on les liste
@@ -593,7 +601,7 @@ export async function attachReleveLines(env, lines) {
   await setEnveloppeReleve(env.id, {
     // Preuve déjà déposée (photo du bordereau) : on la garde. Le rapprochement s'ajoute
     // à la preuve, il ne la remplace pas.
-    proofUrl: env.proof_url ? undefined : (ordered[0].releve_url || undefined),
+    proofUrl: preuve ? undefined : (ordered[0].releve_url || undefined),
     proofDate: ordered[0].ligne_date || undefined,
     status: 'trouve',
     libelle,
@@ -850,7 +858,10 @@ export async function clearEnveloppeReleve(envId) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
       const amt = Number(env.amount_cash)
       const { data: deja } = await supabase.from('caisse_releve_lignes')
-        .select('key').eq('ligne_date', d).gte('amount', amt - 0.005).lte('amount', amt + 0.005).limit(1)
+        // Au DIRHAM près, comme partout ailleurs : à 0,005 dh, une caisse de 306,20 ne
+        // reconnaissait pas la ligne bancaire de 306,00 déjà présente et en fabriquait une
+        // seconde, à un montant qui ne figure sur aucun relevé.
+        .select('key').eq('ligne_date', d).gte('amount', amt - ECART_MINI).lte('amount', amt + ECART_MINI).limit(1)
       if (!deja?.length) {
         const type = env.payment_method === 'cash' ? 'versement' : env.payment_method === 'cheque' ? 'cheque_depot' : 'virement_recu'
         await supabase.from('caisse_releve_lignes').upsert([{
