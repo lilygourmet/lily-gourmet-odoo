@@ -2,7 +2,7 @@
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
 import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI } from './releveDoublons'
-import { reconcileEnvelopes, nomAutreCliente } from './releveBmci'
+import { reconcileEnvelopes, nomAutreCliente, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
 export { ECART_MINI }
 
 // ============================================================
@@ -701,7 +701,11 @@ export async function relancerRapprochement({ annulerFaux = true } = {}) {
   // même montant — une protection anti-doublon prévue pour un RÉ-IMPORT, où sa propre ligne
   // est relue. Ici les lignes relues n'existent pas : elle volait donc la ligne d'une autre
   // caisse, et plus aucune ne se retrouvait avec une seule ligne possible (« 0 rapprochée »).
-  const toutes = await loadBanqueEnvelopesBetween(debut.toISOString().slice(0, 10), dates[dates.length - 1])
+  // La borne haute dépasse la dernière ligne : une commande peut être postérieure au
+  // virement qui l'a payée (acompte). Sans ça, la caisse n'était même pas chargée.
+  const fin = new Date(dates[dates.length - 1])
+  fin.setDate(fin.getDate() + CAISSE_APRES_DERNIERE_LIGNE)
+  const toutes = await loadBanqueEnvelopesBetween(debut.toISOString().slice(0, 10), fin.toISOString().slice(0, 10))
   const envs = toutes.filter(e => e.releve_status !== 'trouve' && !(e.proof_url && !e.releve_status))
   const { results } = reconcileEnvelopes(envs, txns, { recompute: false })
 
