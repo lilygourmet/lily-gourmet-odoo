@@ -8,7 +8,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 // Odoo compte les centimes, la banque arrondit : même seuil que partout ailleurs pour
 // décider que deux montants sont LE MÊME montant.
-import { ECART_MINI, nomDeLigne, nomFiable, similarite } from './releveDoublons'
+import { ECART_MINI, nomDeLigne, nomFiable, signatureDepot, similarite } from './releveDoublons'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -422,9 +422,17 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
   const seenC = new Set()
   const credits = []
   for (const c of rawCredits) {
-    // Référence = 1er long numéro du libellé, sinon des codes lus sous l'opération (BMCI extrait), sinon le libellé.
-    const ref = ((c.label || '') + ' ' + (c.ref || '')).match(/\d{5,}/)
-    const key = `${Math.round(c.credit * 100)}|${ref ? ref[0] : (c.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 24)}`
+    // Référence : la MÊME que partout ailleurs (signatureDepot) — montant au dirham + le
+    // PLUS LONG numéro du libellé. On lisait ici le PREMIER numéro et le montant au
+    // centime : deux façons de désigner une opération dans la même app, qui ne tombaient
+    // pas d'accord d'un document à l'autre.
+    const texte = (c.label || '') + ' ' + (c.ref || '')
+    // Sans aucun numéro, le libellé ne suffit pas à identifier une opération : il faut
+    // AUSSI le jour. Sans lui, deux virements identiques de la même cliente à un mois
+    // d'écart (« VIRT RECU MME SELMA BENOMAR », 500 dh, juin puis juillet) avaient la même
+    // référence — l'app en jetait un, et la caisse de juillet n'était jamais rapprochée.
+    const key = signatureDepot(c.credit, texte)
+      || `${c.dateIso}|${Math.round(c.credit * 100)}|${(c.label || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 24)}`
     if (seenC.has(key)) continue
     seenC.add(key); credits.push(c)
   }
