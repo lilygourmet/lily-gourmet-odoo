@@ -210,6 +210,31 @@ function bomDe(cache, produit) {
  * chercher — elles n'ont donc plus rien à demander.
  * (Layla, 2026-09-10 : « c'est trop lent à travailler ».)
  */
+/**
+ * Les noms à demander à Odoo pour retrouver un article de recette : le nom
+ * EXACT, et sa base sans les parenthèses finales.
+ *
+ * ⚠️ BUG DU 2026-09-11, grave et silencieux : on ne demandait QUE la base. Or
+ * « SM. Biscuit a la cuillere (plaque) » est un vrai nom d'article, pas une
+ * variante de « SM. Biscuit a la cuillere » (lequel est archivé). Odoo ne
+ * renvoyait donc rien, le pré-chargement déposait `null` dans le cache, et la
+ * PLAQUE DISPARAISSAIT de la recette du biscuit 5 pers : plus de ligne, plus
+ * de blocage, « c'est fait » possible sans jamais l'avoir faite.
+ *
+ * Les parenthèses servent bien aux variantes ailleurs (« SM- 20 cm Vitrine
+ * (Citron) ») : on demande donc les deux, et le nom exact gagne.
+ */
+export function nomsAChercher(noms) {
+  const out = new Set()
+  for (const n of noms || []) {
+    if (!n) continue
+    out.add(n)
+    const base = String(n).replace(/\s*\([^()]*\)\s*$/, '').trim()
+    if (base && base !== n) out.add(base)
+  }
+  return [...out]
+}
+
 async function amorcerRecettes(cache, noms, niveaux = 5) {
   let aVoir = [...new Set(noms.map(n => sansRef(n)).filter(Boolean))]
   const vus = new Set()
@@ -218,10 +243,10 @@ async function amorcerRecettes(cache, noms, niveaux = 5) {
     for (const n of aVoir) vus.add(n)
     if (!neufs.length) break
     // 1) les articles, par paquets — le nom peut désigner une variante
-    const bases = [...new Set(neufs.map(n => n.replace(/\s*\([^()]*\)\s*$/, '').trim()))]
+    const cherches = nomsAChercher(neufs)
     const prods = []
-    for (let d = 0; d < bases.length; d += 300) {
-      prods.push(...await sr('product.product', [['name', 'in', bases.slice(d, d + 300)]],
+    for (let d = 0; d < cherches.length; d += 300) {
+      prods.push(...await sr('product.product', [['name', 'in', cherches.slice(d, d + 300)]],
         CHAMPS_PRODUIT, { limit: 3000 }))
     }
     const parNet = new Map()
@@ -237,7 +262,10 @@ async function amorcerRecettes(cache, noms, niveaux = 5) {
       const p = memes.length === 1 ? memes[0]
         : (parNet.get(net(n)) || memes[0] || null)
       choisi[n] = p || null
-      poserMemo('p:' + n, p || null)
+      // ⚠️ Ne JAMAIS déposer un « je n'ai pas trouvé » : `produitParNom`
+      // s'arrêterait là, alors qu'il sait chercher plus loin (les variantes).
+      // C'est ce qui faisait disparaître la plaque de biscuit (2026-09-11).
+      if (p) poserMemo('p:' + n, p)
     }
     // 2) leurs recettes et leurs lignes, en deux requêtes
     const tmpls = [...new Set(Object.values(choisi).filter(Boolean)
