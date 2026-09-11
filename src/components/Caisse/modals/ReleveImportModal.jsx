@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
-import { parseStatement, reconcileEnvelopes } from '../../../lib/releveBmci'
+import { parseStatement, reconcileEnvelopes, CAISSE_APRES_DERNIERE_LIGNE } from '../../../lib/releveBmci'
 import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, markMatchedReleveLines, saveReleveImport, freeReleveLinesOf } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 import { confirmDialog } from '../../../lib/confirmDialog'
@@ -35,7 +35,10 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
       const isos = allTx.filter(t => t.dateIso).map(t => t.dateIso).sort()
       // Les espèces/chèques sont déposés APRÈS la vente (parfois > 1 mois) → on remonte 120 j avant.
       const start = new Date(isos[0]); start.setDate(start.getDate() - 120)
-      const envs = await loadBanqueEnvelopesBetween(start.toISOString().slice(0, 10), isos[isos.length - 1])
+      // Et on dépasse la dernière ligne : une commande peut être postérieure au virement
+      // qui l'a payée (acompte reçu jusqu'à 14 jours avant).
+      const end = new Date(isos[isos.length - 1]); end.setDate(end.getDate() + CAISSE_APRES_DERNIERE_LIGNE)
+      const envs = await loadBanqueEnvelopesBetween(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10))
       setParsed({ envs, allTx })
       setRecon(reconcileEnvelopes(envs, allTx, { recompute: false }))
       setStep('preview')

@@ -406,6 +406,13 @@ export function windowFor(method, nomDansLeLibelle = false) {
   return { min: -2, max: 100 }
 }
 
+// Un virement nommé peut être reçu jusqu'à 14 jours AVANT la commande (acompte). Les
+// caisses à charger vont donc jusqu'à 14 jours APRÈS la dernière ligne du relevé : sans
+// cette marge, la caisse du 21/07 payée par le virement du 14/07 n'était même pas chargée,
+// et la fenêtre élargie ne servait à rien. Dérivé de la règle elle-même pour qu'ils ne
+// puissent plus se désaccorder.
+export const CAISSE_APRES_DERNIERE_LIGNE = -windowFor('virement', true).min
+
 // Au-delà de ce délai, un chèque n'est plus validé TOUT SEUL (il passe « à confirmer »).
 // Les relevés s'importent mois par mois : « une seule ligne possible » veut alors dire
 // « une seule ligne DANS CE FICHIER-LÀ », et le vrai dépôt peut se trouver dans un mois

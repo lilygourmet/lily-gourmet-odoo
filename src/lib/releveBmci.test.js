@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reconcileEnvelopes, parseBmciReleve, nomAutreCliente } from './releveBmci'
+import { reconcileEnvelopes, parseBmciReleve, nomAutreCliente, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
 
 // Une enveloppe déjà justifiée par une PREUVE PHOTO manuelle (proof_url sans
 // releve_status) ne doit pas être re-rapprochée à l'import du relevé, et son
@@ -484,5 +484,15 @@ describe('lignes de solde et de total', () => {
     }
     const { results } = reconcileEnvelopes([caisse], parsed, {})
     expect(results[0].status).toBe('absent')
+  })
+})
+
+// La marge de chargement des caisses doit suivre la règle des acomptes : si un virement
+// peut arriver 14 jours avant la commande, il faut chercher les caisses jusqu'à 14 jours
+// après la dernière ligne du relevé. Sinon la caisse n'est même pas chargée.
+describe('marge de chargement des caisses', () => {
+  it('vaut exactement le recul autorisé d\'un virement nommé', () => {
+    expect(CAISSE_APRES_DERNIERE_LIGNE).toBe(-windowFor('virement', true).min)
+    expect(CAISSE_APRES_DERNIERE_LIGNE).toBe(14)
   })
 })
