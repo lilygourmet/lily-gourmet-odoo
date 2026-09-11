@@ -1023,3 +1023,47 @@ describe('écrire « 3 plaques » plutôt que 9 120 g', () => {
     expect(onCuites).toHaveBeenCalledWith(4560)
   })
 })
+
+describe('ce qui est déjà au frigo ne se refabrique pas', () => {
+  // Le sablé crispy : 2 576 g en stock, 290 g demandés pour une base de flan.
+  const flan = {
+    produit: 'SM- base flan vanille 20 cm', libelle: 'Base flan vanille 20 cm',
+    unite: 'u', tourneeTaille: 10, pourQuantite: 10, reste: 10,
+    recette: [{ produit: 'SM. Sable Crispy', qty: 2900, unite: 'g' }],
+    enfants: [{ produit: 'SM. Sable Crispy', unite: 'g', besoin: 2900, stock: 2576,
+      dejaFait: 0, fabrique: true, ok: true, tourneeTaille: 5598, produira: 2900,
+      pourQuantite: 2900, recette: [], enfants: [] }],
+  }
+
+  it('le dit clairement au lieu d’un zéro tout seul', () => {
+    render(<Fiche noeud={flan} quantite={10} onQuantite={() => {}}
+      cuites={0} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText(/tu en as déjà — 2.576 g/)).toBeTruthy()
+  })
+
+  it('mais on peut quand même taper ce qu’on en a fait', () => {
+    const onCuites = vi.fn()
+    render(<Fiche noeud={flan} quantite={10} onQuantite={() => {}}
+      cuites={0} onCuites={onCuites} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    fireEvent.click(screen.getByLabelText('Plus à cuire'))
+    expect(onCuites).toHaveBeenCalledWith(50)
+  })
+
+  it('et il prévient s’il n’y en a pas assez au frigo', () => {
+    // 2 576 g au frigo, 2 900 g pour dix bases : il en manque 324.
+    render(<Fiche noeud={flan} quantite={10} onQuantite={() => {}}
+      cuites={0} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByText(/il manque 324 g/)).toBeTruthy()
+  })
+
+  it('et ne dit rien quand il y en a assez', () => {
+    // Le vrai cas du jour : une seule base, 290 g demandés.
+    const une = { ...flan, tourneeTaille: 1, pourQuantite: 1, reste: 1,
+      recette: [{ produit: 'SM. Sable Crispy', qty: 290, unite: 'g' }],
+      enfants: [{ ...flan.enfants[0], besoin: 290, produira: 290, pourQuantite: 290 }] }
+    render(<Fiche noeud={une} quantite={1} onQuantite={() => {}}
+      cuites={0} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.queryByText(/il manque/)).toBeNull()
+    expect(screen.getByText(/tu en as déjà/)).toBeTruthy()
+  })
+})

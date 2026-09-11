@@ -454,6 +454,23 @@ const quantiteDe = (article, quantites) =>
   quantites[article.produit] ?? aFaireMaintenant(article)
 
 /**
+ * Ce qu'on propose de CUIRE dans une découpe : RIEN quand on en a déjà.
+ *
+ * ⚠️ Bug du 2026-09-11 : le chiffre du haut se remplissait avec ce que la
+ * recette demande, même avec 2 576 g de sablé crispy au frigo. L'app déclarait
+ * donc une fabrication de 290 g que personne n'avait faite, et le stock Odoo
+ * montait pour rien — à chaque base de flan.
+ *
+ * On ne propose de cuire que ce qui MANQUE. Le bloc reste à l'écran : si le
+ * pâtissier en a quand même fait, il tape le nombre.
+ */
+export function aCuireParDefaut(enfant) {
+  const dispo = (enfant?.stock || 0) + (enfant?.dejaFait || 0)
+  const manque = (enfant?.besoin || 0) - dispo
+  return manque > 0 ? defautDe(enfant) : 0
+}
+
+/**
  * Ce qui sort TOUJOURS le compte annoncé : flans, cheesecakes, biscuits,
  * génoises. Pour ceux-là, « combien ça a donné ? » était une perte de temps
  * (Layla, 2026-09-09) — on envoie la quantité prévue sans rien demander.

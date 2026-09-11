@@ -258,6 +258,15 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
         </div>
       )}
       {decoupe && <EnPlaques noeud={noeud} decoupe={decoupe} cuites={cuites} onCuites={onCuites} />}
+      {/* Rien à cuire : c'est déjà au frigo. On le DIT, au lieu de laisser un
+          zéro tout seul — et rien ne sera déclaré comme fabriqué.
+          (Layla, 2026-09-11 : « si le produit est déjà en stock, il ne
+          considère pas qu'il l'a préparé ».) */}
+      {decoupe && !(cuites > 0) && (
+        <div className="text-center text-[15px] font-bold text-success mt-0.5">
+          tu en as déjà — {qte(decoupe.enfant.stock, decoupe.enfant.unite)}
+        </div>
+      )}
       <EnClair noeud={aPeser} quantite={quantitePesee} />
 
       <Ingredients noeud={aPeser} quantite={quantitePesee}

@@ -22,8 +22,8 @@ import { hasValidJwt } from '../lib/auth'
 import { CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
 import HistoriqueAnnexe from './HistoriqueAnnexe'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
-  decoupeDe, noeudDuChemin, defautDe, parGateauMere, peseesDe, declarer,
-  envoyerAValider, sansRendement } from '../lib/fabAnnexe'
+  decoupeDe, noeudDuChemin, defautDe, aCuireParDefaut, parGateauMere, peseesDe,
+  declarer, envoyerAValider, sansRendement } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
@@ -152,7 +152,10 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     }, user?.id)
   }
 
-  const envoyer = async (noeud, tete, qty) => {
+  /** Ce qu'on cuit : le chiffre réglé à la main, sinon ce qui manque. */
+  const aCuire = (noeud, decoupe) => cuites[noeud.produit] ?? aCuireParDefaut(decoupe.enfant)
+
+  const envoyer = async (noeud, tete, qty, cuitesReelles = null) => {
     if (!(qty > 0) || envoi) return
     // ⚠️ Le jeton de connexion dure 12 h. Sur une tablette allumée toute la
     // journée il expire en plein travail : l'écran a l'air normal, mais plus
@@ -168,7 +171,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       // l'ordre des biscuits consomme les plaques, et un ordre orphelin dans
       // Odoo ne se rattrape pas tout seul.
       const decoupe = decoupeDe(noeud)
-      const nbCuites = decoupe ? (cuites[noeud.produit] ?? defautDe(decoupe.enfant)) : 0
+      const nbCuites = cuitesReelles ?? (decoupe ? aCuire(noeud, decoupe) : 0)
       if (decoupe && nbCuites > 0) {
         const r = await envoyerUn(decoupe.enfant, tete, nbCuites)
         if (r?.erreur) toast(`Odoo a refusé les plaques : ${r.erreur}`)
@@ -291,7 +294,6 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             recette telle qu'elle est à l'écran (Layla, 2026-09-11). */}
         <div className="flex items-start justify-between gap-3 print:hidden">
           <Fil chemin={chemin} onRetour={() => { setSortie(null); setChemin(chemin.slice(0, -1)) }} />
-        {confirme && <Confirmation {...confirme} />}
           {sortie === null && (
             <button onClick={() => window.print()}
               className="shrink-0 rounded-xl border border-cream-deep bg-cream-warm px-3 py-2
@@ -300,33 +302,53 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             </button>
           )}
         </div>
+        {confirme && <Confirmation {...confirme} />}
         {sortie !== null
-          ? (
-            <Sortie noeud={noeud} valeur={sortie} envoi={envoi}
-              onValeur={v => setSortie(v)}
-              // Ce qui sort du stock : la dose RÉELLEMENT pesée, celle qu'on
-              // impose à l'ordre Odoo. Seulement pour une préparation — un
-              // montage, lui, laisse Odoo recalculer au prorata de sa sortie.
-              pesees={noeud.produit === tete.produit ? null
-                : peseesDe(noeud, noeud.tourneeTaille > 0 ? q / noeud.tourneeTaille : 1)}
-              onValider={() => envoyer(noeud, tete, sortie)} />
-          )
+          ? (() => {
+            // La question porte soit sur l'article, soit sur ce qu'on vient de
+            // CUIRE pour lui (la plaque, le sablé). Deux quantités, deux vraies
+            // réponses (Layla, 2026-09-11).
+            const surEnfant = sortie.pour === 'enfant'
+            const cible = surEnfant ? decoupe.enfant : noeud
+            const fois = cible.tourneeTaille > 0
+              ? (surEnfant ? sortie.valeur : q) / cible.tourneeTaille : 1
+            return (
+              <Sortie noeud={cible} valeur={sortie.valeur} envoi={envoi}
+                onValeur={v => setSortie(x => ({ ...x, valeur: v }))}
+                // Ce qui sort du stock : la dose RÉELLEMENT pesée, celle qu'on
+                // impose à l'ordre Odoo. Seulement pour une préparation — un
+                // montage, lui, laisse Odoo recalculer au prorata de sa sortie.
+                pesees={cible.produit === tete.produit ? null : peseesDe(cible, fois)}
+                onValider={() => (surEnfant
+                  ? envoyer(noeud, tete, q, sortie.valeur)
+                  : envoyer(noeud, tete, sortie.valeur))} />
+            )
+          })()
           : (
             <div className="print-area">
             <Fiche noeud={noeud} quantite={q} onQuantite={v => poser(noeud.produit, v)}
-              cuites={decoupe ? (cuites[noeud.produit] ?? defautDe(decoupe.enfant)) : undefined}
+              cuites={decoupe ? aCuire(noeud, decoupe) : undefined}
               onCuites={decoupe
                 ? v => setCuites(x => ({ ...x, [noeud.produit]: Math.max(0, Math.round(v)) }))
                 : undefined}
               faits={faits} envoi={envoi} onOuvrir={p => setChemin([...chemin, p])}
               onFait={() => {
-                // On ne demande « combien ça a donné ? » que quand la réponse
-                // peut surprendre. Un biscuit sort son compte ; une découpe
-                // vient d'être comptée deux fois à la main.
-                if (decoupe || sansRendement(noeud.libelle || noeud.produit)) {
+                // Une DÉCOUPE : si on a cuit quelque chose, on demande combien
+                // il en est vraiment sorti — « il faudrait qu'il demande
+                // combien il en a fait de ce sablé crispy » (Layla,
+                // 2026-09-11). Si on n'a rien cuit (c'était au frigo), rien à
+                // demander : seules les pièces partent.
+                if (decoupe) {
+                  const nb = aCuire(noeud, decoupe)
+                  if (nb > 0 && !sansRendement(decoupe.enfant.produit)) {
+                    return setSortie({ pour: 'enfant', valeur: nb })
+                  }
                   return envoyer(noeud, tete, q)
                 }
-                setSortie(q)
+                // On ne demande « combien ça a donné ? » que quand la réponse
+                // peut surprendre : un biscuit sort toujours son compte.
+                if (sansRendement(noeud.libelle || noeud.produit)) return envoyer(noeud, tete, q)
+                setSortie({ pour: 'article', valeur: q })
               }} />
             </div>
           )}
