@@ -232,15 +232,17 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       }
       setSortie(null)
       setParTaille({})
-      // Déclaré : le prévu a fait son travail, il ne doit plus commander demain.
-      setPrevus(oublierPrevu(todayISO(), tete.produit))
       setChemin(chemin.slice(0, -1))
+      // ⚠️ On n'oublie QUE le prévu de ce qu'on vient de déclarer. Avant,
+      // c'était toujours celui du gâteau : déclarer la crème légère faisait
+      // retomber le gâteau de 25 à 13, alors qu'« il est censé rester à 25
+      // jusqu'à ce que je finisse ma recette » (Layla, 2026-09-11).
+      setPrevus(oublierPrevu(todayISO(), noeud.produit))
       if (noeud.produit === tete.produit) {
         // L'article de tête est parti : la séance est finie, on repart propre.
         setFaits({}); setQuantites({}); setCuites({})
       } else {
-        // Une préparation : elle compte comme faite pour débloquer le dessus,
-        // et sa quantité reste réglée si on y revient.
+        // Une préparation : elle compte comme faite pour débloquer le dessus.
         setFaits(f => ({ ...f, [noeud.produit]: { fois: 1 } }))
       }
       recharger()
