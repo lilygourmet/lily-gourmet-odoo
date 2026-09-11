@@ -882,6 +882,17 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     if (cle) marquer(cle, faits[cle].produit, faits[cle].qty)
   }
 
+  // Le stock CD, c'est l'APP qui le tient (règles `cd_minmax`) : un gâteau tapé à
+  // la main dans Odoo — ou relancé par une vieille règle « OP/… » — n'a plus à
+  // remonter dans la liste à faire. Ne restent que les commandes client (« S… »)
+  // et ce que l'app a lancé elle-même (« LG-APP »). Règle de Layla, 2026-09-11.
+  // Une origine qu'on n'a pas su remonter jusqu'à la commande (c'est encore un
+  // n° d'ordre) est GARDÉE : mieux vaut un gâteau de trop qu'une commande ratée.
+  const nousRegarde = o => {
+    const orig = String(o.origine || '').trim()
+    return /\bS\d{3,}\b/i.test(orig) || /LG-APP/i.test(orig) || /^WH.*\/MO\//i.test(orig)
+  }
+
   // Deux ordres pour le même produit : ça dépend d'OÙ ILS VIENNENT.
   //
   // • Règle mini/maxi d'Odoo (origine « OP/… ») : Odoo relance la règle chaque
@@ -895,7 +906,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   //   (Règle rappelée par Layla le 2026-09-02.)
   const aFaire = useMemo(
     () => {
-      const brut = ((data && data.ofs) || []).filter(o => !dejaDeclares.has(o.name)).map(o => {
+      const brut = ((data && data.ofs) || []).filter(o => !dejaDeclares.has(o.name) && nousRegarde(o)).map(o => {
         const dispo = stockDeProduit(o.produit)
         return { ...o, stockApp: dispo, stockAssez: dispo >= enKg(o.qty, o.unite).q - 0.001 }
       })
