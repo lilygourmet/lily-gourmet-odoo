@@ -3,8 +3,8 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation, changerQtyOrdre } from '../lib/fabrication'
 import { buildZplInfo, estMontageCD, estPrepaEtiquetee } from '../lib/etiquettes'
-// La MÊME tolérance que l'annexe : au plus 5 % du besoin et au plus 50 g.
-import { manqueTolerable } from '../lib/fabAnnexe'
+// Le verrou, sorti de l'écran pour être testable (src/lib/verrouCD.test.js).
+import { bloqueSur } from '../lib/verrouCD'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
@@ -85,9 +85,18 @@ const estSirop = n => /sirop/i.test(String(n || ''))
 const toujoursLa = n => estGenoise(n) || /eau\s*robinet|^\s*MP-\s*Eau/i.test(String(n || ''))
 const jamaisDeplier = n => estBase(n) || estIngredient(n) || estGenoise(n)
 
-// Ce qui peut être coché « fait » dans une recette : ni un ingrédient, ni une
-// base (elle se coche dans « à préparer »), ni la génoise (on ne la suit pas).
-const peutEtreFait = n => estPrepa(n) && !estIngredient(n) && !estBase(n) && !estGenoise(n)
+/**
+ * LA liste des préparations qu'on suit : ni une base (elle se coche dans « à
+ * préparer »), ni la génoise, ni l'eau du robinet.
+ *
+ * ⚠️ LA MÊME pour le verrou et pour le bouton « c'est fait ». Ce qui bloque
+ * DOIT pouvoir se cocher, sinon c'est un mur : le 2026-09-12 les crèmes du cake
+ * design (`SM. CD* Crème Pâtissière`…) étaient écartées du verrou parce que
+ * leur nom commence par « SM. » — et quatre d'entre elles n'ont même pas
+ * d'ordre à elles. Si on les fait bloquer sans les rendre cochables, le
+ * pâtissier n'a plus aucune issue.
+ */
+const peutEtreFait = n => estPrepa(n) && !estBase(n) && !estGenoise(n) && !toujoursLa(n)
 // Une préparation qu'on devrait pouvoir dérouler mais dont la nomenclature est
 // absente d'Odoo : on le signale au lieu de laisser la ligne muette.
 const sansRecette = (n, recettes) => estPrepa(n) && !estIngredient(n) && !estGenoise(n) && !recettes[n]
@@ -1097,22 +1106,31 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const bloquants = (produit, qty, usage = '', lot = null) => {
     const r = recettes[produit]
     if (!r) return []
-    // le facteur ne sert plus : on ne bloque que sur ce dont il n'y a rien du tout
+    // ⚠️ À L'ÉCHELLE de ce qu'on fait, comme `manquePour` juste en dessous.
+    // On ne bloquait que sur un stock à ZÉRO : la crème au beurre vanille de
+    // WHLVP/MO/202582 (2 880 g) s'est déclarée faite alors qu'il manquait 850 g
+    // de crème pâtissière — l'écran l'écrivait, le bouton s'allumait quand même
+    // (Layla, 2026-09-12).
+    const base = norm(r.unite) === 'g' ? r.qty / 1000 : r.qty
+    const f = base ? (Number(qty) || 0) / base : 0
     return r.lignes
-      .filter(l => estPrepa(l.produit) && !estIngredient(l.produit) && !toujoursLa(l.produit))
-      .filter(l => recettes[l.produit])                                        // sans recette, rien à faire ici
-      .filter(l => !(lot ? estDeclare(lot, l.produit, usage) : faits[clePrepa(l.produit, usage)]))
-      .filter(l => stockDeProduit(l.produit) + reservePour(lot, l.produit) <= 0.001)
+      // La même liste que le bouton « c'est fait » : ce qui bloque se coche.
+      .filter(l => peutEtreFait(l.produit))
+      .filter(l => {
+        const besoin = enKg((Number(l.qty) || 0) * f, l.unite)
+        return bloqueSur({
+          besoin: f ? besoin.q : 0, unite: besoin.u,
+          dispo: stockDeProduit(l.produit) + reservePour(lot, l.produit),
+          aRecette: !!recettes[l.produit],
+          declare: lot ? estDeclare(lot, l.produit, usage) : !!faits[clePrepa(l.produit, usage)],
+        })
+      })
       .map(l => l.produit)
   }
   // pour un gâteau : ses préparations non faites (celles qui ne sont pas en stock)
   const bloquantsGateau = o => (o.recette || [])
-    .filter(r => estPrepa(r.produit) && !estIngredient(r.produit) && !toujoursLa(r.produit))
-    // Sans recette dans Odoo, l'app ne sait ni la montrer ni créer l'ordre :
-    // bloquer là-dessus condamnerait l'article pour toujours.
-    .filter(r => recettes[r.produit])
-    // déjà déclaré fait POUR CE GÂTEAU : il n'y a plus rien à attendre
-    .filter(r => !declarePour(o, r.produit))
+    // La même liste que le bouton « c'est fait » : ce qui bloque se coche.
+    .filter(r => peutEtreFait(r.produit))
     // ⚠️ Il en faut ASSEZ, pas « un fond de bassine ». Avant, on ne bloquait
     // que sur un stock à ZÉRO : les 0,08 kg de crème au beurre praliné restés
     // au labo ont laissé valider WHLVP/MO/202762, qui en demande 0,9 — 91 %
@@ -1123,12 +1141,15 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // besoin ET au plus 50 g, jamais sur ce qui se compte à la pièce. Quelques
     // grammes de balance ne bloquent pas un gâteau qui est monté.
     .filter(r => {
-      const dispo = stockDeProduit(r.produit) + enKg(r.reserve || 0, r.unite).q
-      if (dispo <= 0.001) return true                       // rien du tout : ça bloque
-      const besoin = enKg(Number(r.qty) || 0, r.unite).q
-      if (!(besoin > 0) || dispo >= besoin - 1e-7) return false   // assez : rien à attendre
-      const poids = /^u$/i.test(String(r.unite || '').trim()) ? 'u' : 'kg'
-      return !manqueTolerable(besoin, dispo, poids)
+      const besoin = enKg(Number(r.qty) || 0, r.unite)
+      return bloqueSur({
+        besoin: besoin.q, unite: besoin.u,
+        dispo: stockDeProduit(r.produit) + enKg(r.reserve || 0, r.unite).q,
+        // Sans recette dans Odoo, l'app ne sait ni la montrer ni créer
+        // l'ordre : bloquer là-dessus condamnerait l'article pour toujours.
+        aRecette: !!recettes[r.produit],
+        declare: declarePour(o, r.produit),      // déjà fait POUR CE GÂTEAU
+      })
     })
     .map(r => r.produit)
 
