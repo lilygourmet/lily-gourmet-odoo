@@ -11,7 +11,7 @@ import {
   loadArticles, searchOdooProducts, addArticle, setArticleActif,
   loadTransferts, addTransfertsGroupes, confirmTransfert, envoyerVersOdoo,
   loadWaSm, saveWaSm, unitesPour, versUniteOdoo,
-  retirerEnvoi, habitude, FACTEUR_ALERTE,
+  retirerEnvoi, habitude, FACTEUR_ALERTE, receptionAberrante,
 } from '../lib/transfertsStock'
 
 // 3,8 plutôt que 3.8 ; masque les décimales inutiles (5 kg, pas 5,0).
@@ -143,6 +143,18 @@ export default function TransfertsStockView({ user, famille = 'mp', activeView, 
   // n'était prévenu — maintenant l'expéditeur reçoit le WhatsApp dans les
   // deux cas.
   async function confirmerRecu(t, n, refuse = false) {
+    // ⚠️ Recevoir bien plus que ce qui a été envoyé, c'est presque toujours une
+    // unité confondue : 0,9 kg d'œufs envoyés, « 900 » tapé, et Odoo portait
+    // 900 kg (bon 03841, le 2026-09-09). Le garde-fou existait à l'envoi, pas
+    // ici.
+    if (!refuse && receptionAberrante(t, n)) {
+      const ok = await confirmDialog(
+        `${fmt(n)} ${t.unite || ''} de ${t.matiere} ?\n\n`
+        + `L'annexe n'en a envoyé que ${fmt(t.qty_envoye)} ${t.unite || ''}. `
+        + `Vérifie l'unité : c'est ce chiffre-là qui partira dans Odoo.`,
+        { confirmLabel: 'Oui, c\'est bien ça', danger: true })
+      if (!ok) return
+    }
     setBusy(true)
     try {
       const ref = await confirmTransfert(t, n, user, { refuse })

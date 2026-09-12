@@ -184,6 +184,25 @@ export function habitude(rows, odooProductId) {
 /** Le facteur au-delà duquel on demande confirmation (20 × l'habitude). */
 export const FACTEUR_ALERTE = 20
 
+/**
+ * RECEVOIR BEAUCOUP PLUS QUE CE QUI A ÉTÉ ENVOYÉ : presque toujours une unité
+ * confondue, jamais un vrai colis.
+ *
+ * Le 2026-09-09, l'annexe envoie 0,9 kg d'œufs entiers ; la boutique tape
+ * « 900 » en pensant en grammes. La ligne Odoo est en kg : le bon
+ * E-ACP/INTPDXPD/03841 portait **900 kg d'œufs**. Il a été annulé à temps.
+ *
+ * Le garde-fou existait à l'ENVOI (20 × l'habitude de l'article) mais pas à la
+ * réception, où l'on tape librement. On ne regarde que le haut : recevoir moins
+ * que prévu est normal (un colis entamé, une ligne partiellement refusée).
+ */
+export function receptionAberrante(ligne, qty) {
+  const envoye = Number(ligne?.qty_envoye) || 0
+  const recu = Number(qty) || 0
+  if (!(envoye > 0) || !(recu > 0)) return false
+  return recu > envoye * FACTEUR_ALERTE
+}
+
 // Enregistre un envoi (en attente de confirmation) puis prévient l'autre atelier.
 export async function addTransfert({ famille, sens, article, qty, date, user }) {
   const { error } = await supabase.from('transferts_mp').insert({

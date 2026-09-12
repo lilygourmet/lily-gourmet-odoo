@@ -16,7 +16,7 @@
 // ⚠️ Jamais pour les administrateurs : ce n'est pas eux qui vont chercher les
 // caisses au frigo. Ils gardent l'onglet Transferts, avec la liste complète.
 import { useEffect, useState } from 'react'
-import { loadEnAttentePour, confirmTransfert, SENS } from '../lib/transfertsStock'
+import { loadEnAttentePour, confirmTransfert, receptionAberrante, SENS } from '../lib/transfertsStock'
 import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
 
@@ -83,9 +83,19 @@ export default function RappelTransferts({ user, onNavigate }) {
         { confirmLabel: 'Refuser', danger: true })
       if (!ok) return
     }
+    const qty = refuse ? 0 : Number(String(recu ?? t.qty_envoye).replace(',', '.'))
+    // Même garde-fou que l'écran Transferts : une unité confondue à la
+    // réception part telle quelle dans Odoo (900 kg d'œufs, le 2026-09-09).
+    if (!refuse && receptionAberrante(t, qty)) {
+      const ok = await confirmDialog(
+        `${fmt(qty)} ${t.unite || ''} de ${t.matiere} ?\n\n`
+        + `L'annexe n'en a envoyé que ${fmt(t.qty_envoye)} ${t.unite || ''}. `
+        + `Vérifie l'unité : c'est ce chiffre-là qui partira dans Odoo.`,
+        { confirmLabel: 'Oui, c\'est bien ça', danger: true })
+      if (!ok) return
+    }
     setBusy(true)
     try {
-      const qty = refuse ? 0 : Number(String(recu ?? t.qty_envoye).replace(',', '.'))
       const ref = await confirmTransfert(t, qty, user, { refuse })
       toast.success(refuse
         ? 'Refusé — rien dans Odoo, l\'expéditeur est prévenu.'
