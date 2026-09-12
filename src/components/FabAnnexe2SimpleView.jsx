@@ -23,7 +23,8 @@ import { CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from '.
 import HistoriqueAnnexe from './HistoriqueAnnexe'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
   decoupeDe, noeudDuChemin, defautDe, aCuireParDefaut, parGateauMere, peseesDe,
-  declarer, envoyerAValider, repartirCuve, sansRendement, pressageDe } from '../lib/fabAnnexe'
+  declarer, envoyerAValider, repartirCuve, sansRendement, pressageDe,
+  toutConsomme } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
@@ -172,7 +173,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     const fois = noeud.tourneeTaille > 0 ? qty / noeud.tourneeTaille : 1
     return declarer({
       produit: noeud.produit, unite: noeud.unite, fois, qty,
-      ajustements: peseesDe(noeud, fois),
+      // ⚠️ Un composant dont il ne manque presque rien part avec ce qu'il en
+      // RESTE : la recette dirait 100 g de pécan quand il n'y en a que 97.
+      ajustements: { ...peseesDe(noeud, fois), ...toutConsomme(noeud) },
       // Faite DEPUIS ce gâteau, donc réservée à lui : une autre taille
       // redemandera la sienne (Layla, 2026-09-10).
       pour: tete.produit,

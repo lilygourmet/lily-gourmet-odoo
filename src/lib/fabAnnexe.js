@@ -372,6 +372,48 @@ export function pressageDe(noeud) {
 }
 
 /**
+ * PRESQUE LÀ : il en manque si peu que ce n'est pas une pénurie, c'est la
+ * balance. « 100 g, pour quelques grammes qui manquent, je pense c'est ok de
+ * laisser l'app prendre l'article et mettre consommé tout » (Layla,
+ * 2026-09-11) — le pécan du flan, 97 g pour 100 demandés.
+ *
+ * Deux garde-fous, choisis par Layla le 2026-09-12 :
+ *   • au plus 5 % du besoin — 3 g sur 100, c'est la balance ; 3 g sur 10,
+ *     c'est un tiers de la recette ;
+ *   • au plus 50 g — sur une cuve de 5 kg, 5 % feraient 250 g, et 250 g de
+ *     crème qui manquent, ce n'est plus une imprécision.
+ *
+ * ⚠️ JAMAIS sur ce qui se compte à la pièce. Il manque un fond de tarte sur
+ * dix : ce n'est pas la balance, c'est une tarte qu'on ne peut pas faire.
+ *
+ * ⚠️ Et jamais quand il n'y a RIEN : zéro n'est pas « presque tout ».
+ */
+const PART_TOLEREE = 0.05
+const GRAMMES_TOLERES = 50
+
+export function presqueLa(composant) {
+  const c = composant
+  if (!c || !c.fabrique || c.ok) return false
+  if (/^u$/i.test(String(c.unite || '').trim())) return false
+  const besoin = Number(c.besoin) || 0
+  const dispo = Math.max(0, Number(c.stock) || 0) + (Number(c.dejaFait) || 0)
+  const manque = besoin - dispo
+  if (!(besoin > 0) || !(manque > 0) || !(dispo > 0)) return false
+  const enG = enGrammesOdoo(manque, c.unite)
+  return manque <= besoin * PART_TOLEREE && enG !== null && enG <= GRAMMES_TOLERES
+}
+
+/**
+ * Ce qu'on consomme VRAIMENT de ces presque-là : tout ce qui reste, pas ce que
+ * dit la recette. Sans ça, l'ordre du flan demanderait 100 g de pécan alors
+ * qu'il n'y en a que 97, et Odoo passerait le stock à −3.
+ */
+export function toutConsomme(noeud) {
+  return Object.fromEntries(enfantsDe(noeud).filter(presqueLa)
+    .map(c => [c.produit, Math.max(0, Number(c.stock) || 0) + (Number(c.dejaFait) || 0)]))
+}
+
+/**
  * Ce qui empêche de dire « c'est fait » : un composant qu'on FABRIQUE et dont
  * il n'y a pas assez. Le pâtissier se débloque en le fabriquant à son tour.
  *
@@ -393,8 +435,9 @@ export function bloquants(noeud, dejaFaits) {
     // encore comme manquant : « ça doit me laisser valider vu que j'ai marqué
     // comme fait la base » (Layla, 2026-09-10).
     // Un PRESSAGE ne bloque pas : on le confirme en validant le gâteau.
+    // Un PRESQUE-LÀ non plus : on prendra tout ce qui reste.
     .filter(c => !c.ok && c.fabrique && !(c.dejaFait > 0) && !faits.has(c.produit)
-      && !estPressageServi(c))
+      && !estPressageServi(c) && !presqueLa(c))
     .map(c => c.produit)
 }
 
@@ -855,7 +898,10 @@ export function envoyerAValider(article, sortie, userId) {
   return declarer({
     produit: article.produit, qty: sortie, unite: article.unite,
     // ⚠️ Ce qui a été déclaré prime sur la règle de trois (voir `cuveDeclaree`).
-    ajustements: { ...(article.ajustements || {}), ...cuveDeclaree(article) },
+    // ⚠️ Un presque-là part avec ce qu'il en RESTE, pas avec ce que dit la
+    // recette : sinon Odoo passerait son stock en négatif.
+    ajustements: { ...(article.ajustements || {}), ...toutConsomme(article),
+      ...cuveDeclaree(article) },
   }, userId)
 }
 

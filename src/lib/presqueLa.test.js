@@ -1,0 +1,95 @@
+// ============================================================
+// QUAND IL EN MANQUE TROIS GRAMMES.
+//
+// « 100 g, pour quelques grammes qui manquent, je pense c'est ok de laisser
+// l'app prendre l'article et mettre consommé tout » (Layla, 2026-09-11) — le
+// pécan caramélisé du flan, 97 g pour 100 demandés.
+//
+// La limite, choisie par Layla le 2026-09-12 : au plus 5 % du besoin ET au
+// plus 50 g. Deux garde-fous, parce qu'aucun des deux ne suffit seul :
+//   • sans le %, 3 g manquants sur 10 g passeraient (un tiers de la recette) ;
+//   • sans les 50 g, une cuve de 5 kg laisserait filer 250 g.
+//
+// ⚠️ Et jamais sur ce qui se compte : un fond de tarte qui manque, c'est une
+// tarte qu'on ne peut pas faire, pas une imprécision de balance.
+// ============================================================
+import { describe, it, expect } from 'vitest'
+import { presqueLa, toutConsomme, bloquants } from './fabAnnexe'
+
+const c = (o = {}) => ({ unite: 'g', fabrique: true, ok: false, dejaFait: 0,
+  produit: 'SM. Pécan caramélise flan Production', ...o })
+
+describe('presque là', () => {
+  it('le pécan du flan : 97 g pour 100, on prend tout', () => {
+    expect(presqueLa(c({ besoin: 100, stock: 97 }))).toBe(true)
+  })
+
+  it('en kilos aussi — c’est la même chose écrite autrement', () => {
+    // 0,097 kg pour 0,1 : 3 g manquants, exactement le même cas.
+    expect(presqueLa(c({ unite: 'kg', besoin: 0.1, stock: 0.097 }))).toBe(true)
+  })
+
+  describe('le garde-fou des 5 %', () => {
+    it('3 g sur 10, c’est un tiers de la recette : ça bloque', () => {
+      expect(presqueLa(c({ besoin: 10, stock: 7 }))).toBe(false)
+    })
+    it('pile 5 % passe, un poil au-dessus ne passe pas', () => {
+      expect(presqueLa(c({ besoin: 200, stock: 190 }))).toBe(true)   // 10 g = 5 %
+      expect(presqueLa(c({ besoin: 200, stock: 189 }))).toBe(false)  // 11 g
+    })
+  })
+
+  describe('le garde-fou des 50 g', () => {
+    it('⚠️ une cuve de 5 kg ne laisse pas filer 250 g, même si c’est 5 %', () => {
+      expect(presqueLa(c({ besoin: 5000, stock: 4750 }))).toBe(false)
+    })
+    it('mais 40 g sur 5 kg, oui : c’est la balance', () => {
+      expect(presqueLa(c({ besoin: 5000, stock: 4960 }))).toBe(true)
+    })
+    it('pile 50 g passe, 51 g ne passe pas', () => {
+      expect(presqueLa(c({ besoin: 2000, stock: 1950 }))).toBe(true)
+      expect(presqueLa(c({ besoin: 2000, stock: 1949 }))).toBe(false)
+    })
+  })
+
+  describe('ce que la règle ne touche jamais', () => {
+    it('ce qui se compte à la pièce : un fond de tarte qui manque bloque', () => {
+      expect(presqueLa(c({ unite: 'u', besoin: 10, stock: 9 }))).toBe(false)
+    })
+    it('zéro n’est pas « presque tout »', () => {
+      expect(presqueLa(c({ besoin: 100, stock: 0 }))).toBe(false)
+    })
+    it('un stock négatif non plus', () => {
+      expect(presqueLa(c({ besoin: 1040, stock: -140 }))).toBe(false)
+    })
+    it('une matière première achetée n’est pas concernée', () => {
+      expect(presqueLa(c({ besoin: 100, stock: 97, fabrique: false }))).toBe(false)
+    })
+    it('ce qui est déjà au complet non plus', () => {
+      expect(presqueLa(c({ besoin: 100, stock: 120, ok: true }))).toBe(false)
+    })
+  })
+})
+
+describe('ce qui part chez Odoo', () => {
+  const flan = { composants: [
+    c({ besoin: 100, stock: 97 }),
+    c({ produit: 'SM. Sable Crispy', besoin: 290, stock: 2576, ok: true }),
+    c({ produit: 'SM. creme citron Production', besoin: 1600, stock: 66 }),
+  ] }
+
+  it('⚠️ le presque-là part avec ce qui RESTE, pas avec la recette', () => {
+    // Sans ça, l'ordre demanderait 100 g et Odoo passerait le stock à −3.
+    expect(toutConsomme(flan)).toEqual({ 'SM. Pécan caramélise flan Production': 97 })
+  })
+
+  it('le vrai manque n’est pas dedans, et il bloque toujours', () => {
+    expect(toutConsomme(flan)['SM. creme citron Production']).toBeUndefined()
+    expect(bloquants(flan, [])).toEqual(['SM. creme citron Production'])
+  })
+
+  it('ce qui a déjà été déclaré compte comme du stock', () => {
+    expect(toutConsomme({ composants: [c({ besoin: 100, stock: 90, dejaFait: 7 })] }))
+      .toEqual({ 'SM. Pécan caramélise flan Production': 97 })
+  })
+})

@@ -17,6 +17,7 @@
 // ============================================================
 import { useState } from 'react'
 import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant, estPressageServi,
+  presqueLa,
   decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe,
   quantitePourDose } from '../lib/fabAnnexe'
 import { nb, qte, dose, propre, nomAtelier, facteurAtelier,
@@ -506,7 +507,10 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
         // en validant le gâteau. La montrer en rouge à côté d'un bouton vert
         // n'aurait aucun sens. (Layla, 2026-09-11.)
         const aPresser = estPressageServi(c)
-        const manque = !c.pese && !c.ok && !fait && c.fabrique && !aPresser
+        // Il en manque trois grammes sur cent : on prendra tout ce qui reste,
+        // ce n'est pas un manque. (Layla, 2026-09-12.)
+        const presque = presqueLa(c)
+        const manque = !c.pese && !c.ok && !fait && c.fabrique && !aPresser && !presque
         const nom = nomAtelier(c.produit)
         const combien = qte(c.besoin * facteurAtelier(c.produit), c.unite)
         return (
@@ -530,7 +534,8 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
                     <span className={`flex-1 min-w-0 truncate ${manque ? 'text-danger' : 'text-ink-mute'}`}>
                       {fait ? 'fait à l\'instant'
                         : aPresser ? 'à presser en validant'
-                          : `en stock ${qte(c.stock, c.unite)}`}
+                          : presque ? `${qte(c.stock, c.unite)} — on prendra tout`
+                            : `en stock ${qte(c.stock, c.unite)}`}
                     </span>
                     <span className={`shrink-0 font-bold print:hidden ${manque ? 'text-danger' : 'text-ink-mute'}`}>
                       {manque ? 'à faire ›' : 'en faire ›'}

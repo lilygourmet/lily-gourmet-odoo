@@ -25,8 +25,11 @@ const base = (stockSable = 2576, extra = {}) => ({
   recette: [{ produit: 'SM. Sable Crispy', qty: 290, unite: 'g' }],
   enfants: [sable(stockSable)], ...extra,
 })
+// ⚠️ 97 g pour 100 : depuis le 2026-09-12 ce n'est plus un manque, on prend
+// tout ce qui reste. C'est `presqueLa` qui s'en occupe — voir presqueLa.test.js.
+// Ici il faut un VRAI manque, sinon on ne teste plus rien.
 const pecan = { produit: 'SM. Pécan caramélise flan Production', unite: 'g',
-  besoin: 100, stock: 97, dejaFait: 0, fabrique: true, ok: false, enfants: [] }
+  besoin: 1000, stock: 97, dejaFait: 0, fabrique: true, ok: false, enfants: [] }
 const flan = (...composants) => ({ produit: 'SM- flan vanille 20 cm', unite: 'u', composants })
 
 describe('la base de flan', () => {
