@@ -391,16 +391,27 @@ export function pressageDe(noeud) {
 const PART_TOLEREE = 0.05
 const GRAMMES_TOLERES = 50
 
+/**
+ * La règle en chiffres, sans rien savoir de la forme des données — pour que
+ * Fabrication CD applique EXACTEMENT la même tolérance que l'annexe. Le
+ * 2026-09-12, le CD ne bloquait que sur un stock à zéro : 0,08 kg de crème au
+ * beurre praliné oubliés au labo ont débloqué un gâteau qui en demande 0,9.
+ */
+export function manqueTolerable(besoin, dispo, unite) {
+  if (/^u$/i.test(String(unite || '').trim())) return false
+  const b = Number(besoin) || 0
+  const d = Number(dispo) || 0
+  const manque = b - d
+  if (!(b > 0) || !(manque > 0) || !(d > 0)) return false
+  const enG = enGrammesOdoo(manque, unite)
+  return manque <= b * PART_TOLEREE && enG !== null && enG <= GRAMMES_TOLERES
+}
+
 export function presqueLa(composant) {
   const c = composant
   if (!c || !c.fabrique || c.ok) return false
-  if (/^u$/i.test(String(c.unite || '').trim())) return false
-  const besoin = Number(c.besoin) || 0
-  const dispo = Math.max(0, Number(c.stock) || 0) + (Number(c.dejaFait) || 0)
-  const manque = besoin - dispo
-  if (!(besoin > 0) || !(manque > 0) || !(dispo > 0)) return false
-  const enG = enGrammesOdoo(manque, c.unite)
-  return manque <= besoin * PART_TOLEREE && enG !== null && enG <= GRAMMES_TOLERES
+  return manqueTolerable(Number(c.besoin) || 0,
+    Math.max(0, Number(c.stock) || 0) + (Number(c.dejaFait) || 0), c.unite)
 }
 
 /**

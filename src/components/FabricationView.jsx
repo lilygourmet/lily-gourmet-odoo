@@ -3,6 +3,8 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation, changerQtyOrdre } from '../lib/fabrication'
 import { buildZplInfo, estMontageCD, estPrepaEtiquetee } from '../lib/etiquettes'
+// La MÊME tolérance que l'annexe : au plus 5 % du besoin et au plus 50 g.
+import { manqueTolerable } from '../lib/fabAnnexe'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
 import { toast } from '../lib/toast'
@@ -1111,9 +1113,23 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     .filter(r => recettes[r.produit])
     // déjà déclaré fait POUR CE GÂTEAU : il n'y a plus rien à attendre
     .filter(r => !declarePour(o, r.produit))
-    // rien du tout : ni en stock, ni réservé pour lui. Un manque partiel
-    // n'empêche pas de déclarer un gâteau qui est monté.
-    .filter(r => stockDeProduit(r.produit) + enKg(r.reserve || 0, r.unite).q <= 0.001)
+    // ⚠️ Il en faut ASSEZ, pas « un fond de bassine ». Avant, on ne bloquait
+    // que sur un stock à ZÉRO : les 0,08 kg de crème au beurre praliné restés
+    // au labo ont laissé valider WHLVP/MO/202762, qui en demande 0,9 — 91 %
+    // manquants (Layla, 2026-09-12). Vingt ordres ouverts profitaient du trou,
+    // dont une ganache à 57 g pour 3 840 demandés.
+    //
+    // La tolérance est celle de l'annexe, au chiffre près : au plus 5 % du
+    // besoin ET au plus 50 g, jamais sur ce qui se compte à la pièce. Quelques
+    // grammes de balance ne bloquent pas un gâteau qui est monté.
+    .filter(r => {
+      const dispo = stockDeProduit(r.produit) + enKg(r.reserve || 0, r.unite).q
+      if (dispo <= 0.001) return true                       // rien du tout : ça bloque
+      const besoin = enKg(Number(r.qty) || 0, r.unite).q
+      if (!(besoin > 0) || dispo >= besoin - 1e-7) return false   // assez : rien à attendre
+      const poids = /^u$/i.test(String(r.unite || '').trim()) ? 'u' : 'kg'
+      return !manqueTolerable(besoin, dispo, poids)
+    })
     .map(r => r.produit)
 
   // Les ordres Odoo correspondant à ce qui est marqué fait : l'ordre lui-même
