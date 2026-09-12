@@ -20,7 +20,7 @@ import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant, estPressageS
   presqueLa,
   decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe,
   quantitePourDose } from '../lib/fabAnnexe'
-import { nb, qte, dose, propre, nomAtelier, facteurAtelier,
+import { nb, qte, dose, propre, nomAtelier, facteurAtelier, melangeDe,
   enGrammes, enUnite, uniteAffichee } from '../lib/ecranSimple'
 
 /** La photo d'un article, servie par Odoo. */
@@ -649,11 +649,29 @@ export function PourUn({ noeud, quantite }) {
   if (!enPieces || !montage || !(quantite > 1)) return null
   const liste = ingredientsPour(noeud, quantite)
   const cuve = liste.filter(c => c.fige && !c.fabrique)
-  const lignes = liste.filter(c => !(c.fige && !c.fabrique))
-    .map(c => ({
+  // ⚠️ Un MÉLANGE ne fait qu'une ligne, sous son nom : « l'appareil à flan,
+  // 1 568 g », pas crème 500 g + lait 500 g + vanille 8 g… (Layla,
+  // 2026-09-12). Contrairement à la cuve, il suit la quantité — Odoo le
+  // consomme au prorata, rien n'est imposé.
+  const lignes = []
+  let melange = null
+  for (const c of liste.filter(x => !(x.fige && !x.fabrique))) {
+    const nomMelange = melangeDe(noeud.produit, c.produit)
+    const g = nomMelange && enGrammes(c.besoin * facteurAtelier(c.produit), c.unite)
+    if (nomMelange && g !== null) {
+      melange = melange || { nom: nomMelange, g: 0, rang: lignes.length }
+      melange.g += g
+      continue
+    }
+    lignes.push({
       nom: motDeLAtelier(nomAtelier(c.produit)),
       valeur: parPiece(c.besoin * facteurAtelier(c.produit) / quantite, c.unite),
-    }))
+    })
+  }
+  if (melange) {
+    lignes.splice(melange.rang, 0,
+      { nom: melange.nom, valeur: dose(melange.g / quantite, 'g') })
+  }
   if (cuve.length) {
     // Une cuve ne se pèse qu'en grammes : c'est la seule unité commune à ses
     // ingrédients, et c'est celle de la balance.

@@ -5,6 +5,8 @@
 // (Layla, 2026-09-10.)
 // ============================================================
 
+import { aplatir } from './recherche'
+
 /** Un nombre comme on l'écrit en français : 2 800, 1,5. */
 export const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 
@@ -92,3 +94,38 @@ export const nomAtelier = nom => regleAtelier(nom)?.nom || propre(nom)
 
 /** Par combien multiplier ce qu'Odoo compte pour obtenir ce qu'on pèse. */
 export const facteurAtelier = nom => regleAtelier(nom)?.facteur || 1
+
+/**
+ * LES MÉLANGES : ce que le pâtissier fait en UN seul geste avant de monter.
+ *
+ * « Enlever les ingrédients et noter le total de l'appareil à flan » (Layla,
+ * 2026-09-12). Dans le rappel « Pour 1 … », lire sept lignes de matières
+ * premières n'apprend rien : ce qu'on veut savoir, c'est combien d'appareil
+ * va dans un flan. C'est la même idée que « La mousse, 800 g » du royal.
+ *
+ * ⚠️ Ce n'est PAS une cuve (le réglage « figés » de Mini / maxi Annexe). Une
+ * cuve se fait EN ENTIER quoi qu'il arrive ; un mélange SUIT le nombre de
+ * gâteaux. Le flan est lancé tantôt par 1, tantôt par 2, parfois par 3 (60
+ * ordres relevés le 2026-09-12) : une cuve fixe se tromperait une fois sur
+ * deux. Ce regroupement ne touche donc QUE l'affichage — Odoo continue de
+ * consommer au prorata.
+ *
+ * La liste du haut, elle, garde le détail : c'est là qu'on pèse.
+ */
+const MELANGES = [{
+  gateau: /flan vanille/i,
+  nom: "L'appareil à flan",
+  dedans: ['MP- Crème whipping', 'MP- Lait UHT', 'MP- Vanille Gousse Bourbon',
+    'MP- Sucre Granule', 'MP- Oeufs entier', 'MP- Maizena', 'MP- Beurre entremets'],
+}]
+
+// ⚠️ Comparaison APLATIE, jamais brute : Odoo écrit « MP- Lait UHT » avec une
+// espace insécable, et deux noms qui se lisent pareil ne sont pas égaux.
+const memeNom = (a, b) => aplatir(a) === aplatir(b)
+
+/** Le mélange auquel appartient cet ingrédient, pour ce gâteau — sinon rien. */
+export function melangeDe(gateau, ingredient) {
+  const m = MELANGES.find(x => x.gateau.test(String(gateau || ''))
+    && x.dedans.some(n => memeNom(n, ingredient)))
+  return m ? m.nom : null
+}
