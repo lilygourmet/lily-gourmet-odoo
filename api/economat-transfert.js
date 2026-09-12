@@ -387,6 +387,50 @@ export default async function handler(req, res) {
       } catch { return null }
     }
 
+    /**
+     * Le bon de CE demandeur encore en brouillon, s'il y en a un.
+     *
+     * Tant que l'économe ne l'a pas validé, tout ce que l'employé redemande
+     * s'y AJOUTE au lieu d'ouvrir un deuxième bon — une seule référence à
+     * servir. C'est exactement ce que font déjà les transferts annexe ↔
+     * boutique (Layla, 2026-09-12). Le 10 septembre, Hayat avait deux bons
+     * pour la même journée.
+     *
+     * On groupe sur l'origine EXACTE : elle porte le nom et le badge du
+     * demandeur. La demande de Hayat ne se mélange donc jamais à celle de
+     * Hassania, et l'économe voit toujours qui a demandé quoi.
+     * Dès que le bon est « prêt » ou validé, la demande suivante ouvre un
+     * nouveau numéro.
+     */
+    const brouillonDuDemandeur = async () => {
+      try {
+        const [p] = await exec(uid, 'stock.picking', 'search_read', [[
+          ['origin', '=', origine],
+          ['state', '=', 'draft'],
+          ['picking_type_id', '=', dest.type],
+          ['location_id', '=', dest.src],
+          ['location_dest_id', '=', dest.dest],
+        ], ['id', 'name', 'state']], { order: 'id desc', limit: 1 })
+        return p || null
+      } catch { return null }
+    }
+
+    /**
+     * Ce lot vient-il d'être ajouté à ce bon ? Le garde-fou du double appui,
+     * version « bon qui s'accumule » : on ne compare plus tout le bon (il
+     * grossit à chaque demande) mais SEULEMENT ses lignes des deux dernières
+     * minutes.
+     */
+    const dejaAjoute = async (pickingId, lot) => {
+      try {
+        const mv = await exec(uid, 'stock.move', 'search_read', [[
+          ['picking_id', '=', pickingId], ['create_date', '>=', ilYaDeuxMin],
+        ], ['name', 'product_uom_qty']])
+        if (!mv || !mv.length) return false
+        return empreinte(mv.map(m => ({ nom: m.name, qty: m.product_uom_qty }))) === empreinte(lot)
+      } catch { return false }
+    }
+
     const uid = (lignesLg.length || lignesAchat.length) ? await auth() : null
 
     // Unité de chaque produit. Par défaut l'unité d'ACHAT (uom_po_id), celle
@@ -428,24 +472,32 @@ export default async function handler(req, res) {
       }]
     }
 
-    // 1) Odoo Lily Gourmet : le transfert interne habituel, vers le lieu du badge
+    // 1) Odoo Lily Gourmet : le transfert interne habituel, vers le lieu du
+    //    badge — AJOUTÉ au bon en brouillon du demandeur s'il en a un.
     if (lignesLg.length) {
-      const vu = await dejaEnvoye('stock.picking', exec, uid, lignesLg)
-      if (vu) {
-        transferts.push({ source: 'principal', id: vu.id, name: vu.name, deja: true, fournisseur: null })
-        console.log('[economat] doublon evite :', vu.name)
-      }
-      const choisirUom = vu ? null : await uomChooser(exec, uid, lignesLg, true)
-      const id = vu ? vu.id : await exec(uid, 'stock.picking', 'create', [{
-        picking_type_id: dest.type,
-        location_id: dest.src,
-        location_dest_id: dest.dest,
-        origin: origine,
-        move_ids_without_package: lignesLg.map(l => enMove(l, choisirUom, dest.src, dest.dest, AUTRE_ACHAT)),
-      }])
-      if (!vu) {
-        const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name', 'state']])
-        transferts.push({ source: 'principal', id, name: pick?.name, state: pick?.state, fournisseur: null })
+      const ouvert = await brouillonDuDemandeur()
+      if (ouvert && await dejaAjoute(ouvert.id, lignesLg)) {
+        transferts.push({ source: 'principal', id: ouvert.id, name: ouvert.name, deja: true, fournisseur: null })
+        console.log('[economat] doublon evite :', ouvert.name)
+      } else {
+        const choisirUom = await uomChooser(exec, uid, lignesLg, true)
+        const moves = lignesLg.map(l => enMove(l, choisirUom, dest.src, dest.dest, AUTRE_ACHAT))
+        if (ouvert) {
+          await exec(uid, 'stock.move', 'create', [moves.map(m => ({ ...m[2], picking_id: ouvert.id }))])
+          transferts.push({ source: 'principal', id: ouvert.id, name: ouvert.name,
+            state: 'draft', groupe: true, fournisseur: null })
+          console.log('[economat] ajoute au bon ouvert :', ouvert.name)
+        } else {
+          const id = await exec(uid, 'stock.picking', 'create', [{
+            picking_type_id: dest.type,
+            location_id: dest.src,
+            location_dest_id: dest.dest,
+            origin: origine,
+            move_ids_without_package: moves,
+          }])
+          const [pick] = await exec(uid, 'stock.picking', 'read', [[id], ['name', 'state']])
+          transferts.push({ source: 'principal', id, name: pick?.name, state: pick?.state, fournisseur: null })
+        }
       }
     }
 
