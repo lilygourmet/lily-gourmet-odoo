@@ -37,16 +37,52 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
     return () => { vivant = false }
   }, [])
 
+  /**
+   * TOUS les CD* d'Odoo, pas seulement ceux déjà réglés : « les mini/maxi CD
+   * doivent maintenant comporter tous les CD* pour que je décide de leur
+   * quantité » (Layla, 2026-09-13). Les articles jamais réglés apparaissent à
+   * 0 / 0 — donc jamais relancés tout seuls — et ne sont écrits en base qu'au
+   * moment où on leur donne un chiffre.
+   *
+   * La liste du stock vient d'Odoo et porte déjà tous les CD* : c'est elle qui
+   * complète. Tant qu'elle n'est pas arrivée, on montre ce qu'on a.
+   */
+  const toutes = useMemo(() => {
+    if (!lignes) return null
+    const dejaLa = new Set(lignes.map(l => l.produit))
+    const enPlus = Object.keys(stocks)
+      .filter(nom => !dejaLa.has(nom))
+      .map(nom => ({ produit: nom, mini: 0, maxi: 0, unite: 'u', actif: true, jamaisRegle: true }))
+    return [...lignes, ...enPlus]
+  }, [lignes, stocks])
+
   const visibles = useMemo(() => {
     const q = filtre.trim().toLowerCase()
-    if (!q) return lignes || []
-    return (lignes || []).filter(l => propre(l.produit).toLowerCase().includes(q))
-  }, [lignes, filtre])
+    const l = toutes || []
+    const filtres = q ? l.filter(x => propre(x.produit).toLowerCase().includes(q)) : l
+    // Ce qui est réglé d'abord : ce sont les décisions de Layla, elles ne
+    // doivent pas se noyer au milieu de trois cents articles à zéro.
+    return filtres.slice().sort((a, b) => {
+      const ra = (Number(a.mini) > 0 || Number(a.maxi) > 0) ? 0 : 1
+      const rb = (Number(b.mini) > 0 || Number(b.maxi) > 0) ? 0 : 1
+      return ra - rb || propre(a.produit).localeCompare(propre(b.produit), 'fr')
+    })
+  }, [toutes, filtre])
+
+  const nbRegles = (toutes || []).filter(l => Number(l.mini) > 0 || Number(l.maxi) > 0).length
 
   // On tape dans les cases sans rien envoyer : l'enregistrement se fait en
   // quittant la case, pour ne pas écrire à chaque touche.
   const changer = (produit, champ, valeur) => {
-    setLignes(v => (v || []).map(l => (l.produit === produit ? { ...l, [champ]: valeur } : l)))
+    setLignes(v => {
+      const l = v || []
+      // Un article jamais réglé n'existe pas encore dans la liste : on l'y met
+      // au premier chiffre tapé.
+      if (!l.some(x => x.produit === produit)) {
+        return [...l, { produit, mini: 0, maxi: 0, unite: 'u', actif: true, [champ]: valeur }]
+      }
+      return l.map(x => (x.produit === produit ? { ...x, [champ]: valeur } : x))
+    })
   }
 
   const enregistrer = async ligne => {
@@ -94,7 +130,8 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
 
             <div className="text-[12px] text-ink-mute mb-1.5">
               {visibles.length} article{visibles.length > 1 ? 's' : ''}
-              {filtre ? ` sur ${lignes.length}` : ''}
+              {filtre ? ` sur ${(toutes || []).length}` : ''}
+              {!filtre && nbRegles > 0 && <> — dont <b>{nbRegles} réglé{nbRegles > 1 ? 's' : ''}</b>, en tête de liste</>}
             </div>
 
             {visibles.map(l => {
@@ -110,6 +147,7 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
                       <div className="text-[11.5px] text-ink-mute">
                         {st ? <>il en reste <b>{nb(st.dispo)} {l.unite}</b>{sousLeMini ? ' — sous le mini' : ''}</>
                           : 'stock en cours de lecture…'}
+                        {l.jamaisRegle && <span className="text-ink-mute"> · jamais réglé</span>}
                       </div>
                     </div>
                     <label className="text-[11.5px] text-ink-mute">
