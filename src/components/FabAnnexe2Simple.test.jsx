@@ -199,6 +199,27 @@ describe('la découpe, deux chiffres sur un écran', () => {
     expect(screen.getByText(/il manque 2 plaques/)).toBeTruthy()
   })
 
+  it('ÉTEINT « C’est fait » quand on coupe plus que la plaque ne donne', () => {
+    // Le 2026-09-13 : 3 040 g de brownie cuits — de quoi faire 13 biscuits
+    // 5 pers — et 15 déclarés. 468 g de plaque consommés en trop, en silence.
+    // « Une plaque se coupe, rappelle-toi » (Layla). L'écran le disait déjà en
+    // rouge ; maintenant il refuse.
+    const { onFait } = poserDecoupe(39, 1)
+    fireEvent.click(screen.getByText("C'est fait"))
+    expect(onFait).not.toHaveBeenCalled()
+  })
+
+  it('laisse passer dès qu’il y a de quoi : la plaque du congélo compte', () => {
+    // 1 plaque cuite ne suffit pas pour 26, mais avec celles du congélateur si.
+    const avecStock = { ...cinqPers,
+      enfants: [{ ...cinqPers.enfants[0], stock: 3 }] }
+    const onFait = vi.fn()
+    render(<Fiche noeud={avecStock} quantite={26} onQuantite={() => {}}
+      cuites={1} onCuites={() => {}} faits={[]} onOuvrir={() => {}} onFait={onFait} />)
+    fireEvent.click(screen.getAllByText("C'est fait")[0])
+    expect(onFait).toHaveBeenCalled()
+  })
+
   it('les deux « + » ne se mélangent pas', () => {
     const { onQuantite, onCuites } = poserDecoupe()
     fireEvent.click(screen.getByLabelText('Plus à cuire'))

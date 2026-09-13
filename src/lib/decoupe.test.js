@@ -85,6 +85,22 @@ describe('partageDecoupe', () => {
     expect(p.manque).toBe(0)
   })
 
+  it('le brownie du 13 septembre : 3 040 g cuits, 15 biscuits déclarés', () => {
+    // La recette Odoo : 3 040 g de plaque = 13 biscuits 5 pers. Quinze en
+    // demandent 3 507,69 — il manque 467,69 g, et c'est ce trou qui a fait
+    // partir le stock de travers.
+    const p = partageDecoupe({ cuites: 3040, coupes: 15, parPiece: 13 / 3040, stock: 0 })
+    expect(Math.round(p.utilisees)).toBe(3508)
+    expect(Math.round(p.manque)).toBe(468)
+    expect(p.gardees).toBe(0)
+  })
+
+  it('les 13 d’une plaque passent, eux, sans rien manquer', () => {
+    const p = partageDecoupe({ cuites: 3040, coupes: 13, parPiece: 13 / 3040, stock: 0 })
+    expect(p.manque).toBe(0)
+    expect(p.gardees).toBe(0)
+  })
+
   it('dit ce qui manque plutôt que d’afficher un négatif', () => {
     const p = partageDecoupe({ cuites: 1, coupes: 39, parPiece: 13 })
     expect(p.utilisees).toBe(3)

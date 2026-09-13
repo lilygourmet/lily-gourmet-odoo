@@ -277,8 +277,23 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
   verrouille, onLiberer }) {
   const decoupe = onCuites ? decoupeDe(noeud) : null
   const dejaFaits = declares(faits)
-  // En découpe, la plaque se fait ICI : elle ne bloque pas, elle est l'écran.
-  const bloque = decoupe ? [] : bloquants(noeud, dejaFaits)
+  // ⚠️ ON NE COUPE PAS PLUS QUE CE QU'ON A. Une plaque cuite donne un nombre
+  // FIXE de pièces : 3 040 g de brownie se coupent en 13 biscuits 5 pers, pas
+  // 15. Le 2026-09-13, 15 ont été déclarés sur une plaque de 3 040 g — 468 g de
+  // plaque consommés en trop, en silence, et le stock est parti de travers
+  // (Layla : « une plaque se coupe, rappelle-toi »).
+  //
+  // L'écran disait déjà « il manque 2 plaques » en rouge ; il laissait valider.
+  // Maintenant le bouton s'éteint, comme il s'éteint quand un ingrédient
+  // manque. Ce qu'on peut couper = (plaque cuite + plaque au congélateur).
+  //
+  // En découpe, la plaque elle-même ne bloque pas : elle SE FAIT sur cet écran.
+  const partage = decoupe ? partageDecoupe({
+    cuites, coupes: quantite, parPiece: decoupe.parPiece, stock: decoupe.enfant.stock,
+  }) : null
+  const bloque = decoupe
+    ? (partage && partage.manque > 0.001 ? [decoupe.enfant.produit] : [])
+    : bloquants(noeud, dejaFaits)
   const aPeser = decoupe ? decoupe.enfant : noeud
   const quantitePesee = decoupe ? cuites : quantite
 
