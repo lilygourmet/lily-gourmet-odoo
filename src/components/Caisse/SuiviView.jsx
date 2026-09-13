@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, ECART_MINI } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, ECART_MINI } from '../../lib/caisse'
 import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
@@ -86,6 +86,8 @@ function BanqueSection({ user }) {
   const [ignoreEnv, setIgnoreEnv] = useState(null) // enveloppe en cours d'« ignorer » (saisie de la raison)
   const [ignoreReason, setIgnoreReason] = useState('')
   const [relance, setRelance] = useState(false)   // rapprochement en cours de relance
+  // Mois à refaire à zéro (AAAA-MM). Par défaut le mois en cours.
+  const [moisRefaire, setMoisRefaire] = useState(`${currentYear()}-${String(currentMonth()).padStart(2, '0')}`)
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -211,6 +213,33 @@ function BanqueSection({ user }) {
     reload()
   }
 
+  // Refait un mois à zéro. « Relancer » ne touche jamais une caisse verte : un mois mal
+  // rapproché ne se répare donc jamais tout seul. Ici on délie tout le mois d'abord — y
+  // compris ce qui a été lié à la main, sinon un doublon lié resterait en place.
+  // On MONTRE le résultat avant d'écrire quoi que ce soit.
+  async function handleRefaireMois() {
+    const [y, m] = moisRefaire.split('-').map(Number)
+    setRelance(true)
+    try {
+      const sim = await refaireMois(y, m, { simulation: true })
+      if (!sim.avant.total) { alert(`Aucune caisse banque en ${sim.mois}.`); return }
+      const etat = a => `  \u2713 ${a.rapprochees} rapprochée(s)   \u23F3 ${a.a_confirmer} à confirmer   \u2B1C ${a.en_attente} en attente`
+      const ok = await confirmDialog(
+        `Refaire ${sim.mois} à zéro — ${sim.avant.total} caisse(s) banque.\n\n`
+        + `AUJOURD'HUI :\n${etat(sim.avant)}\n\n`
+        + `APRÈS :\n${etat(sim.apres)}\n\n`
+        + `${sim.liberees} ligne(s) de relevé seraient libérées et réattribuées.\n\n`
+        + `⚠️ Les rapprochements de ce mois faits À LA MAIN seront refaits eux aussi.\n`
+        + `Les photos de bordereau, elles, sont conservées.`,
+        { danger: true, confirmLabel: 'Refaire ce mois' })
+      if (!ok) return
+      const r = await refaireMois(y, m, { simulation: false })
+      await reload()
+      alert(`${r.mois} refait :\n✓ ${r.apres.rapprochees} rapprochée(s)\n⏳ ${r.apres.a_confirmer} à confirmer\n⬜ ${r.apres.en_attente} en attente`)
+    } catch (e) { alert('Erreur : ' + (e?.message || e)) }
+    finally { setRelance(false) }
+  }
+
   // Rejoue le rapprochement sur les lignes déjà importées (sans redemander les PDF :
   // un ré-import recrée des lignes, donc des doublons à revérifier).
   async function handleRelancer() {
@@ -324,6 +353,12 @@ function BanqueSection({ user }) {
         )}
         <button onClick={handleRelancer} disabled={relance} style={{ ...btnNormal, opacity: relance ? 0.6 : 1 }}>
           {relance ? '⏳ Rapprochement…' : '🔄 Relancer le rapprochement'}
+        </button>
+        <input type="month" value={moisRefaire} onChange={e => setMoisRefaire(e.target.value)}
+          style={{ padding: '6px 8px', fontSize: 13, border: '1px solid #e5d8c3', borderRadius: 8 }} />
+        <button onClick={handleRefaireMois} disabled={relance} style={{ ...btnNormal, opacity: relance ? 0.6 : 1 }}
+          title="Délie tout le mois puis refait le calcul — montre le résultat avant d'écrire">
+          🧹 Refaire ce mois à zéro
         </button>
         <button onClick={() => setShowImport(true)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>
           <FileText size={14} /> Importer relevé bancaire
