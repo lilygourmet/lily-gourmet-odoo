@@ -904,6 +904,15 @@ export function corrigerFacteurMille(qty, sortieRecette, lignes, ajustements) {
   return { qty, corrige: 0 }
 }
 
+/**
+ * La quantité à écrire dans l'ordre, dans l'unité de SORTIE de la recette.
+ * Sortie de `creerOfPreparation` pour être testable : c'est elle qui a écrit
+ * 54 tonnes de génoise le 2026-09-13.
+ */
+export function quantiteOrdre(qty, unite, uniteBom) {
+  return versUnite(qty, unite || 'kg', uniteBom)
+}
+
 async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null, prefixe = 'WHLVP/MO/', ajustements = null) {
   const champs = ['id', 'display_name', 'uom_id', 'product_tmpl_id', 'product_template_attribute_value_ids']
   let prod = (await odooSearchRead(uid, 'product.product',
@@ -928,10 +937,16 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
 
   const uniteBom = Array.isArray(bom.product_uom_id) ? bom.product_uom_id[1] : 'kg'
   // `unite` dit dans quelle unité la quantité est exprimée (annexe : pièces,
-  // grammes, kilos…). Sans elle on garde l'ancienne convention du CD, qui
-  // parle toujours en kilos — sinon 191 pièces devenaient 191 000.
-  const brut = unite ? versUnite(qtyKg, unite, uniteBom)
-    : (/^kg$/i.test(uniteBom) ? qtyKg : qtyKg * 1000)
+  // grammes, kilos…). Sans elle, c'est l'ancienne convention du CD : des kilos.
+  //
+  // ⚠️ TOUT passe par `versUnite`, y compris ce cas-là. L'ancien repli écrivait
+  // « si la recette ne sort pas des kg, c'est des g, donc ×1000 » — or une
+  // recette peut sortir des TOURNÉES. La génoise sort en « Tournée (3 kg) » :
+  // 18 kg demandés devenaient 18 000 tournées, soit 54 tonnes, et l'ordre
+  // WHLVP/MO/202912 a été validé tel quel le 2026-09-13 (puis 203046, 18 t de
+  // génoise vanille le soir même). `versUnite` sait lire le poids dans le nom
+  // de l'unité : 18 kg → 18 000 g ÷ 3 000 = 6 tournées.
+  const brut = quantiteOrdre(qtyKg, unite, uniteBom)
   let qty = Math.round(brut * 1000) / 1000
   if (!(qty > 0)) throw new Error('quantité invalide')
 
