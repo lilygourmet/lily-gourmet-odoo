@@ -2206,8 +2206,11 @@ export default async function handler(req, res) {
       const modele = await modeleWhlvp(uid)
       const lieu = modele && Array.isArray(modele.location_src_id) ? modele.location_src_id[0] : null
       if (!lieu) return res.status(200).json({ stocks: {} })
+      // ⚠️ L'UNITÉ vient d'Odoo elle aussi : le craquant se compte en kg, les
+      // gâteaux en pièces. L'écran l'affichait « u » pour tout le monde, parce
+      // qu'elle ne voyageait pas (Layla, 2026-09-13).
       const arts = await odooSearchRead(uid, 'product.product', [['name', 'ilike', 'CD*']],
-        ['id', 'display_name'], { limit: 2000 })
+        ['id', 'display_name', 'uom_id'], { limit: 2000 })
       if (!arts.length) return res.status(200).json({ stocks: {} })
       const lus = await odooCall(uid, 'product.product', 'read',
         [arts.map(a => a.id), ['free_qty', 'qty_available']], { context: { location: lieu } })
@@ -2218,6 +2221,7 @@ export default async function handler(req, res) {
         stocks[a.display_name] = {
           dispo: Math.round((p.free_qty || 0) * 100) / 100,
           physique: Math.round((p.qty_available || 0) * 100) / 100,
+          unite: String(Array.isArray(a.uom_id) ? a.uom_id[1] : 'u').replace(/^Units?$/i, 'u'),
         }
       }
       return res.status(200).json({ stocks })

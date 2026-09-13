@@ -52,7 +52,8 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
     const dejaLa = new Set(lignes.map(l => l.produit))
     const enPlus = Object.keys(stocks)
       .filter(nom => !dejaLa.has(nom))
-      .map(nom => ({ produit: nom, mini: 0, maxi: 0, unite: 'u', actif: true, jamaisRegle: true }))
+      .map(nom => ({ produit: nom, mini: 0, maxi: 0,
+        unite: stocks[nom]?.unite || 'u', actif: true, jamaisRegle: true }))
     return [...lignes, ...enPlus]
   }, [lignes, stocks])
 
@@ -77,11 +78,13 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
     setLignes(v => {
       const l = v || []
       // Un article jamais réglé n'existe pas encore dans la liste : on l'y met
-      // au premier chiffre tapé.
+      // au premier chiffre tapé, avec l'unité qu'Odoo lui donne.
       if (!l.some(x => x.produit === produit)) {
-        return [...l, { produit, mini: 0, maxi: 0, unite: 'u', actif: true, [champ]: valeur }]
+        return [...l, { produit, mini: 0, maxi: 0, unite: stocks[produit]?.unite || 'u',
+          actif: true, [champ]: valeur }]
       }
-      return l.map(x => (x.produit === produit ? { ...x, [champ]: valeur } : x))
+      return l.map(x => (x.produit === produit
+        ? { ...x, unite: stocks[produit]?.unite || x.unite, [champ]: valeur } : x))
     })
   }
 
@@ -134,8 +137,13 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
               {!filtre && nbRegles > 0 && <> — dont <b>{nbRegles} réglé{nbRegles > 1 ? 's' : ''}</b>, en tête de liste</>}
             </div>
 
-            {visibles.map(l => {
-              const st = stocks[l.produit]
+            {visibles.map(brut => {
+              const st = stocks[brut.produit]
+              // ⚠️ L'unité d'Odoo fait foi : c'est elle qui donne son sens au
+              // stock affiché juste à côté, et donc aux chiffres qu'on tape.
+              // Un « u » enregistré autrefois sur du kg se corrige tout seul
+              // au prochain enregistrement (Layla, 2026-09-13).
+              const l = st?.unite ? { ...brut, unite: st.unite } : brut
               const sousLeMini = st && Number(st.dispo) < Number(l.mini)
               return (
                 <div key={l.produit}
