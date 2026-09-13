@@ -68,7 +68,18 @@ function parseCakedesign(productName) {
   // Exclusions : ingrédients / sous-recettes (pas des fonds à sortir du congélateur)
   if (/ganache\s+cakedesign/i.test(n)) return null   // ganache = ingrédient
   if (/^\s*MP-/i.test(n)) return null                // MP- = matière première
-  if (/^\s*SM\b/i.test(n)) return null               // SM CD* = crèmes/craquant/bases montées à part
+  // ⚠️ NE PLUS écarter sur le seul préfixe « SM ». Les gâteaux ont été renommés
+  // dans Odoo — « 13x13 Cakedesign CD* (Chocolat) » est devenu « SM CD*- 13x13
+  // Cakedesign (Chocolat) » — et cette exclusion les a TOUS fait disparaître :
+  // plus aucune taille reconnue, donc plus aucun regroupement par parfum dans
+  // Fabrication CD, donc les crèmes d'un même parfum ne s'additionnaient plus
+  // (Layla, 2026-09-13). Elle cassait aussi la liste du congélateur.
+  //
+  // Ce qu'on voulait écarter — crèmes, craquant, bases, sirops — n'a jamais de
+  // FORMAT : ni 13x13, ni « 20 cm », ni « Cœur 5p », ni « Plaque … ». La
+  // reconnaissance de format ci-dessous suffit donc à les laisser de côté.
+  // Vérifié sur les 293 articles « CD* » d'Odoo : 188 gâteaux retrouvés, et
+  // pas une seule préparation prise par erreur.
   // Doit être un composant cakedesign
   if (!/(cakedesign|CD\*)/i.test(n)) return null
   const cleanP = (s) => (s || '').replace(/\bCD\*?\b/ig, '').replace(/cakedesign/ig, '').replace(/\s+/g, ' ').trim()
