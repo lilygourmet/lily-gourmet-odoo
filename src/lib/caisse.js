@@ -742,6 +742,86 @@ export async function relancerRapprochement({ annulerFaux = true } = {}) {
   return { trouve, a_confirmer: aConfirmer, lignes: txns.length, annules }
 }
 
+// Refait le rapprochement d'un MOIS complet, à zéro.
+//
+// Le bouton « Relancer » ne touche jamais une caisse déjà verte : si un mois s'est mal
+// rapproché, ses caisses gardent leurs mauvaises lignes et les bonnes restent « non liées »
+// pour toujours. Relancer n'y changera jamais rien — il faut délier d'abord.
+//
+// Ici on délie TOUT le mois, rapprochements faits à la main compris : un doublon lié à la
+// main resterait sinon en place, et c'est justement ce qu'on cherche à éliminer.
+// La photo d'un bordereau, elle, n'est pas un rapprochement : clearEnveloppeReleve la
+// conserve (voir le commentaire là-bas).
+//
+// `simulation` : ne rien écrire, seulement RENDRE le avant / après. C'est le seul moyen de
+// répondre à « est-ce que ça va faire mieux ? » sans avoir à l'essayer pour de vrai.
+export async function refaireMois(year, month, { simulation = true } = {}) {
+  const { start, end } = monthBounds(year, month)
+  const finInclus = new Date(new Date(end) - 86400000).toISOString().slice(0, 10)
+  const caisses = await loadBanqueEnvelopesBetween(start, finInclus)
+  const compter = (liste, etat) => liste.filter(etat).length
+  const avant = {
+    total: caisses.length,
+    rapprochees: compter(caisses, e => e.releve_status === 'trouve'),
+    a_confirmer: compter(caisses, e => e.releve_status === 'a_confirmer'),
+    en_attente: compter(caisses, e => !e.releve_status),
+  }
+  if (!caisses.length) return { avant, apres: avant, liberees: 0, mois: start.slice(0, 7) }
+
+  // Les lignes que ces caisses retiennent : elles redeviendront libres.
+  const ids = caisses.map(e => e.id)
+  const { data: retenues } = await supabase
+    .from('caisse_releve_lignes').select('*').in('used_by', ids).limit(5000)
+
+  if (!simulation) {
+    for (const e of caisses) if (e.releve_status || e.proof_url) await clearEnveloppeReleve(e.id)
+    await freeReleveLinesOf(ids)
+  }
+
+  // Les lignes disponibles pour ce nouveau calcul : celles déjà libres PLUS celles qu'on
+  // vient de libérer (en simulation, celles qu'on libérerait).
+  const libres = await loadAllFreeReleveLines()
+  const vues = new Set((libres || []).map(l => l.key))
+  const toutesLignes = [...(libres || []), ...(retenues || []).filter(l => !vues.has(l.key))]
+  const txns = toutesLignes
+    .filter(l => l.ligne_date && l.amount != null)
+    .map(l => ({
+      dateIso: l.ligne_date, credit: Number(l.amount), label: l.label || '', type: l.type,
+      _key: l.key, _url: l.releve_url,
+    }))
+
+  // Toutes les caisses du mois repartent à zéro pour le calcul, quel que soit leur état réel.
+  const remises = caisses.map(e => ({ ...e, releve_status: null, proof_url: null, note_proof: null }))
+  const { results } = reconcileEnvelopes(remises, txns, { recompute: false })
+  const apres = {
+    total: caisses.length,
+    rapprochees: compter(results, r => r.status === 'trouve'),
+    a_confirmer: compter(results, r => r.status === 'a_confirmer'),
+    en_attente: compter(results, r => r.status === 'absent'),
+  }
+  if (simulation) return { avant, apres, liberees: (retenues || []).length, mois: start.slice(0, 7) }
+
+  for (const r of results) {
+    if (r.status === 'trouve' && r.line) {
+      await setEnveloppeReleve(r.env.id, {
+        proofUrl: r.env.proof_url ? undefined : (r.line._url || undefined),
+        proofDate: r.line.dateIso,
+        status: 'trouve',
+        libelle: `${r.line.dateIso} · ${r.line.label}`.slice(0, 220),
+        candidates: null,
+      })
+      await supabase.from('caisse_releve_lignes').update({ used_by: r.env.id }).eq('key', r.line._key)
+    } else if (r.status === 'a_confirmer' && r.candidates?.length) {
+      await setEnveloppeReleve(r.env.id, {
+        status: 'a_confirmer',
+        libelle: r.candidates.map(c => `${c.dateIso} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300),
+        candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
+      })
+    }
+  }
+  return { avant, apres, liberees: (retenues || []).length, mois: start.slice(0, 7) }
+}
+
 // Retire la preuve manuelle d'une enveloppe (photo/PDF uploadée) -> repasse en attente.
 export async function clearEnveloppeProof(envId) {
   const { error } = await supabase.from('caisse_enveloppes')
