@@ -124,9 +124,17 @@ export const familleDuNom = nom => String(nom || '')
   .replace(/\W+/g, ' ').trim().toLowerCase()
 
 /**
- * Les AUTRES tailles de la même cuve, plus petites que celle qu'on lance.
- * « D'un 10 pers on peut finir en 5 pers et en individuels, d'un 5 pers
- * seulement en individuels » (Layla, 2026-09-07).
+ * TOUTES les autres tailles de la même cuve.
+ *
+ * ⚠️ On ne proposait que les tailles PLUS PETITES : « d'un 10 pers on finit en
+ * 5 pers et en individuels » (Layla, 2026-09-07). Mais l'inverse arrive aussi —
+ * on monte des individuels et on finit la cuve en 10 pers. Depuis le
+ * 2026-09-13, toutes les tailles de la famille sont proposées, des plus grandes
+ * aux plus petites : « donne la possibilité de mettre les plus grandes aussi ».
+ * Sans ça, celui qui lance un individuel n'avait AUCUNE case où déclarer le
+ * reste, et tout le poids de la cuve retombait sur la seule taille lancée.
+ *
+ * On ne sort jamais de la famille, et ce qui est en pause reste de côté.
  *
  * La famille du catalogue fait foi quand elle est renseignée ; sinon elle se
  * lit dans le nom — sans quoi il faudrait la saisir à la main pour chacun des
@@ -139,7 +147,7 @@ export function autresTailles(catalogue, a) {
   const f = fam(a)
   if (!f) return []
   return (catalogue || [])
-    .filter(x => x.produit !== a.produit && x.actif !== false && fam(x) === f && rang(x) < rang(a))
+    .filter(x => x.produit !== a.produit && x.actif !== false && fam(x) === f)
     .sort((x, y) => rang(y) - rang(x))
 }
 

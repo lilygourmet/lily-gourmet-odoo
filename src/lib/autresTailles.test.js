@@ -43,12 +43,21 @@ describe('familleDuNom', () => {
 })
 
 describe('autresTailles', () => {
-  it('ne propose QUE les tailles plus petites, de la plus grande à la plus petite', () => {
+  it('propose TOUTES les autres tailles, de la plus grande à la plus petite', () => {
+    // ⚠️ Avant, seules les plus petites étaient proposées. Celui qui lançait un
+    // individuel n'avait alors AUCUNE case où déclarer le reste de sa cuve
+    // (Layla, 2026-09-13).
     expect(noms(autresTailles(cat, cat[0])))    // le 10 pers
       .toEqual(['Sm- Le Citron Framboise (5)', 'Sm- Le Citron Framboise (1)'])
-    expect(noms(autresTailles(cat, cat[1])))    // le 5 pers
-      .toEqual(['Sm- Le Citron Framboise (1)'])
-    expect(noms(autresTailles(cat, cat[2]))).toEqual([])   // l'individuel : rien en dessous
+    expect(noms(autresTailles(cat, cat[1])))    // le 5 pers : le 10 aussi
+      .toEqual(['Sm- Le Citron Framboise (10)', 'Sm- Le Citron Framboise (1)'])
+    expect(noms(autresTailles(cat, cat[2])))    // l'individuel : les deux au-dessus
+      .toEqual(['Sm- Le Citron Framboise (10)', 'Sm- Le Citron Framboise (5)'])
+  })
+
+  it('garde l’ordre : la plus grande d’abord', () => {
+    expect(noms(autresTailles(cat, cat[5])))    // tiramisu indiv, rang 1
+      .toEqual(['SM- Tiramisu 20cm', 'SM- Tiramisu 15cm'])
   })
 
   it('suit la famille du catalogue quand elle est renseignée', () => {
@@ -59,6 +68,8 @@ describe('autresTailles', () => {
   it('marche sans famille renseignée, par le nom', () => {
     expect(noms(autresTailles(cat, cat[6])))    // royal 20 cm
       .toEqual(['SM- Royal Chocolat 15 cm'])
+    expect(noms(autresTailles(cat, cat[7])))    // royal 15 cm : le 20 remonte
+      .toEqual(['SM- Royal Chocolat 20 cm'])
   })
 
   it('ne sort jamais de sa famille', () => {

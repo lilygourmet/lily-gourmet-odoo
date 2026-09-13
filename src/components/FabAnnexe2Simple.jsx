@@ -804,8 +804,10 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nom
  * 18 cm et en individuels. Sans cette question, tout le poids de la crème
  * partait sur la seule taille déclarée. (Layla, 2026-09-11.)
  *
- * Seules les tailles PLUS PETITES sont proposées — c'est là qu'on finit une
- * cuve, jamais l'inverse.
+ * TOUTES les tailles de la famille sont proposées, des plus grandes aux plus
+ * petites (Layla, 2026-09-13) : on finit une cuve aussi bien en plus grand
+ * qu'en plus petit. Avant, celui qui lançait un individuel n'avait aucune case
+ * où déclarer le reste.
  */
 export function AutresTailles({ tailles, nomCuve, valeurs, onChange }) {
   const [clavier, setClavier] = useState(null)
