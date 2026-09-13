@@ -7,7 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { waitUntil } from '@vercel/functions'
-import { versUnite } from '../src/lib/unites.js'
+import { versUnite, enGrammes } from '../src/lib/unites.js'
 
 // Ce que Check CD- a déjà contrôlé. Sans la base (SQL pas lancé, variables
 // absentes), on renvoie null : la chaîne stricte se met alors en veille plutôt
@@ -913,6 +913,37 @@ export function quantiteOrdre(qty, unite, uniteBom) {
   return versUnite(qty, unite || 'kg', uniteBom)
 }
 
+// LE DERNIER REMPART : UN ORDRE NE PÈSE PAS CENT KILOS.
+//
+// « ça ne refera plus ça nulle part ? » (Layla, 2026-09-13). Corriger le calcul
+// qui a écrit 54 tonnes de génoise ne suffit pas : il faut qu'une quantité
+// absurde ne PUISSE plus partir dans Odoo, quelle que soit la faute de calcul
+// qui l'a produite.
+//
+// Le plafond n'est pas choisi au hasard. Sur les 3 899 ordres pesables créés
+// entre le 1er juin et le 13 septembre 2026, le plus lourd VRAI fait 52 kg
+// (un fourrage nougat), le 99e centile 27,7 kg. Trois seulement dépassent
+// 100 kg, et les trois sont des accidents : les 54 t et 18 t de génoise, plus
+// 380 kg de crème citron lancés par Odoo lui-même.
+//
+// Cent kilos laissent donc deux fois la marge de la plus grosse fournée jamais
+// faite. Ce qui se compte à la PIÈCE n'est pas concerné : 4 000 craquants, ça
+// existe.
+const PLAFOND_G = 100000
+
+/** Cette quantité de produit fini est-elle impossible ? */
+export function poidsAberrant(qty, unite) {
+  const g = enGrammes(qty, unite)
+  return g !== null && g > PLAFOND_G
+}
+
+function refuseSiAberrant(nom, qty, unite) {
+  if (!poidsAberrant(qty, unite)) return
+  const kg = Math.round(enGrammes(qty, unite) / 1000)
+  throw new Error(`${qty} ${unite} de ${nom}, c'est ${kg} kg : personne ne fait ça.`
+    + ' Rien n\'a été créé dans Odoo. Vérifie la quantité.')
+}
+
 async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null, prefixe = 'WHLVP/MO/', ajustements = null) {
   const champs = ['id', 'display_name', 'uom_id', 'product_tmpl_id', 'product_template_attribute_value_ids']
   let prod = (await odooSearchRead(uid, 'product.product',
@@ -949,6 +980,7 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   const brut = quantiteOrdre(qtyKg, unite, uniteBom)
   let qty = Math.round(brut * 1000) / 1000
   if (!(qty > 0)) throw new Error('quantité invalide')
+  refuseSiAberrant(prod.display_name, qty, uniteBom)
 
   // ⚠️ Les lignes de la recette servent DEUX fois : au garde-fou ci-dessous et
   // aux mouvements plus bas. Une seule lecture, gardée en mémoire.
@@ -1243,6 +1275,7 @@ async function creerOrdrePrepa(uid, cle, tournees, colorants) {
   const modele = await modeleWhlvp(uid)
   if (!modele) throw new Error('aucun ordre WHLVP pour servir de modèle')
   const qty = Math.round(bom.product_qty * tournees * 1000) / 1000
+  refuseSiAberrant(prod.display_name, qty, bom.product_uom_id?.[1])
 
   // Anti-doublon, comme pour les crèmes : deux appuis rapprochés sur « C'est
   // fait » ne doivent pas lancer deux tournées identiques. ⚠️ Fenêtre COURTE :
@@ -1936,6 +1969,7 @@ async function produireGsAnnexe(uid, { tmplId, nom, qty }) {
     return { name: dejaV.name, deja: true }
   }
 
+  refuseSiAberrant(prod.display_name, qty, bom.product_uom_id?.[1])
   const id = await odooCall(uid, 'mrp.production', 'create', [{
     product_id: prod.id,
     product_qty: qty,
@@ -2314,8 +2348,13 @@ export default async function handler(req, res) {
       if (body.test) return res.status(200).json({ test: true })
       const uid = await odooAuth()
       const [mo] = await odooSearchRead(uid, 'mrp.production', [['name', '=', nom]],
-        ['id', 'name', 'state', 'product_qty', 'qty_producing'], { limit: 1 })
+        ['id', 'name', 'state', 'product_qty', 'qty_producing', 'product_uom_id'], { limit: 1 })
       if (!mo) return res.status(200).json({ error: 'ordre introuvable : ' + nom })
+      // Le même plafond que pour une création : on corrige une quantité, on
+      // n'en invente pas une impossible.
+      if (poidsAberrant(qty, mo.product_uom_id?.[1])) {
+        return res.status(200).json({ error: `${qty} ${mo.product_uom_id?.[1]}, c'est plus de 100 kg : quantité refusée` })
+      }
       if (!['draft', 'confirmed'].includes(mo.state)) {
         return res.status(200).json({ error: `ordre ${mo.state} : on n'y touche plus` })
       }

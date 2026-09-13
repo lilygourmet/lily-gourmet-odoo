@@ -39,3 +39,37 @@ describe('la quantité écrite dans l’ordre de fabrication', () => {
     expect(quantiteOrdre(135, 'u', 'u')).toBe(135)
   })
 })
+
+// ============================================================
+// LE DERNIER REMPART. « ça ne refera plus ça nulle part ? » (Layla).
+//
+// Le plafond vient des chiffres : sur les 3 899 ordres pesables créés entre le
+// 1er juin et le 13 septembre 2026, le plus lourd VRAI fait 52 kg, et seuls
+// trois dépassent 100 kg — les trois sont des accidents.
+// ============================================================
+import { poidsAberrant } from '../../api/freezer-list.js'
+
+describe('le plafond de 100 kg sur un ordre de fabrication', () => {
+  it('refuse les 54 tonnes de génoise', () => {
+    expect(poidsAberrant(18000, 'Tournée (3 kg)')).toBe(true)
+    expect(poidsAberrant(6000, 'Tournée (3 kg)')).toBe(true)
+  })
+
+  it('refuse les 380 kg de crème citron lancés par Odoo', () => {
+    expect(poidsAberrant(380, 'kg')).toBe(true)
+  })
+
+  it('laisse passer les plus grosses vraies fournées', () => {
+    expect(poidsAberrant(52000, 'g')).toBe(false)        // fourrage nougat, 52 kg
+    expect(poidsAberrant(41550, 'g')).toBe(false)        // pâte à sucre
+    expect(poidsAberrant(12, 'Tournée (3 kg)')).toBe(false) // 36 kg de génoise
+    expect(poidsAberrant(11.1, 'kg')).toBe(false)        // le maxi du sirop
+    expect(poidsAberrant(6.12, 'kg')).toBe(false)        // une cuve de gianduja
+  })
+
+  it('ne touche jamais à ce qui se compte à la pièce', () => {
+    expect(poidsAberrant(4000, 'u')).toBe(false)         // le maxi du craquant
+    expect(poidsAberrant(135, 'Units')).toBe(false)
+    expect(poidsAberrant(1000000, 'u')).toBe(false)
+  })
+})
