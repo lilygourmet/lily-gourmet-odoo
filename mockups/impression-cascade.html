@@ -1,0 +1,463 @@
+<title>Imprimer la fournée</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400;1,9..144,600&family=Karla:wght@400;500;700&display=swap">
+
+<style>
+  /* Les couleurs viennent de tailwind.config.js — c'est la palette de l'app,
+     on ne s'en invente pas une autre pour une maquette de l'app. */
+  :root {
+    --ground:   #f7f3ec;
+    --surface:  #ffffff;
+    --edge:     #f1eadd;
+    --line:     #e5d8c3;
+    --ink:      #1a0f0a;
+    --ink-soft: #4a3a30;
+    --ink-mute: #8a7a70;
+    --bordeaux: #993556;
+    --gold:     #b8893c;
+    --danger:   #a32d2d;
+    --ok:       #4a7a3a;
+    --paper:    #ffffff;
+    --paper-ink:#141414;
+    --paper-line:#c9c2b6;
+    --shadow:   0 18px 40px rgba(75,35,28,.12);
+    --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+    --sans:  'Karla', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#16100d; --surface:#221a15; --edge:#33261f; --line:#3d2e25;
+      --ink:#f6efe6; --ink-soft:#d6c6b8; --ink-mute:#9c8a7c;
+      --bordeaux:#d97d97; --gold:#d4a95c; --danger:#e08a8a; --ok:#8fc07a;
+      --shadow:0 18px 40px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#16100d; --surface:#221a15; --edge:#33261f; --line:#3d2e25;
+    --ink:#f6efe6; --ink-soft:#d6c6b8; --ink-mute:#9c8a7c;
+    --bordeaux:#d97d97; --gold:#d4a95c; --danger:#e08a8a; --ok:#8fc07a;
+    --shadow:0 18px 40px rgba(0,0,0,.45);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 40px 24px 80px; }
+  :focus-visible { outline: 2px solid var(--bordeaux); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+  header { border-bottom: 2px solid var(--line); padding-bottom: 22px; margin-bottom: 34px; }
+  .kicker { font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+            color: var(--bordeaux); font-weight: 700; margin: 0 0 8px; }
+  h1 { font-family: var(--serif); font-style: italic; font-weight: 600;
+       font-size: clamp(30px, 5vw, 46px); line-height: 1.05; margin: 0 0 12px;
+       text-wrap: balance; letter-spacing: -.01em; }
+  .chapo { max-width: 62ch; color: var(--ink-soft); margin: 0; font-size: 17px; }
+  .chapo b { color: var(--ink); font-weight: 700; }
+
+  .etapes { display: flex; flex-direction: column; gap: 34px; }
+  .etape { display: grid; grid-template-columns: 340px 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .etape { grid-template-columns: 1fr; } }
+
+  .num { font-family: var(--serif); font-size: 13px; font-weight: 600;
+         letter-spacing: .14em; text-transform: uppercase; color: var(--gold);
+         display: block; margin-bottom: 6px; }
+  .etape h2 { font-family: var(--serif); font-size: 24px; font-weight: 600;
+              margin: 0 0 10px; line-height: 1.15; text-wrap: balance; }
+  .etape p { margin: 0 0 10px; color: var(--ink-soft); max-width: 58ch; }
+  .etape p:last-child { margin-bottom: 0; }
+  .note { border-left: 3px solid var(--gold); padding: 2px 0 2px 14px;
+          color: var(--ink-soft); font-size: 15px; margin-top: 14px !important; }
+  .note b { color: var(--ink); }
+
+  /* ---------- l'écran ---------- */
+  .tel { background: var(--surface); border: 1px solid var(--line);
+         border-radius: 22px; padding: 14px; box-shadow: var(--shadow); }
+  .tel-barre { font-size: 12px; color: var(--ink-mute); display: flex;
+               justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .fil { font-size: 12.5px; color: var(--ink-mute); font-weight: 700; }
+  .btn-impr { border: 1px solid var(--bordeaux); background: var(--edge); color: var(--bordeaux);
+              border-radius: 11px; padding: 5px 9px; font: 700 12.5px var(--sans);
+              box-shadow: 0 0 0 3px color-mix(in srgb, var(--bordeaux) 16%, transparent); }
+  .titre-fiche { font-size: 19px; font-weight: 700; line-height: 1.1; margin: 4px 0 2px; }
+  .gros { font-family: var(--serif); font-size: 44px; font-weight: 600;
+          text-align: center; line-height: 1; margin: 12px 0 2px; font-variant-numeric: tabular-nums; }
+  .gros-sous { text-align: center; font-size: 13px; color: var(--ink-mute); margin-bottom: 12px; }
+  .ing { border-top: 1px solid var(--edge); padding: 7px 2px; display: flex;
+         justify-content: space-between; gap: 10px; font-size: 14px; }
+  .ing b { font-variant-numeric: tabular-nums; }
+  .manque { color: var(--danger); font-weight: 700; }
+  .ya { color: var(--ok); font-weight: 700; }
+
+  /* ---------- le panneau ---------- */
+  .panneau { background: var(--surface); border: 1px solid var(--line);
+             border-radius: 22px; padding: 16px; box-shadow: var(--shadow); }
+  .panneau h3 { font-family: var(--serif); font-size: 19px; font-weight: 600; margin: 0 0 3px; }
+  .panneau .sous { font-size: 13px; color: var(--ink-mute); margin: 0 0 13px; }
+
+  /* le choix ancienne / nouvelle */
+  .bascule { display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+             background: var(--edge); border-radius: 13px; padding: 4px; margin-bottom: 14px; }
+  .bascule button { border: 0; background: transparent; border-radius: 10px;
+                    padding: 9px 6px; font: 700 13.5px var(--sans); color: var(--ink-mute);
+                    cursor: pointer; line-height: 1.2; }
+  .bascule button small { display: block; font-weight: 400; font-size: 11.5px; opacity: .85; }
+  .bascule button[aria-pressed="true"] { background: var(--surface); color: var(--bordeaux);
+                                         box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+  .lig { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px;
+         align-items: center; padding: 9px 4px; border-top: 1px solid var(--edge); }
+  .lig:first-child { border-top: 0; }
+  .lig.p1 { padding-left: 20px; } .lig.p2 { padding-left: 40px; }
+  .case { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--bordeaux);
+          background: var(--bordeaux); color: #fff; font-size: 13px; font-weight: 700;
+          display: grid; place-items: center; line-height: 1; cursor: pointer; padding: 0; }
+  .case[aria-checked="false"] { background: transparent; border-color: var(--line); color: transparent; }
+  .nom { font-size: 14.5px; font-weight: 700; line-height: 1.2; }
+  .quoi { font-size: 12.5px; color: var(--ink-mute); display: block; font-weight: 400; margin-top: 1px; }
+  .lig[data-on="false"] .nom { color: var(--ink-mute); font-weight: 400; }
+
+  .qte { display: flex; align-items: center; gap: 5px; }
+  .qte input { width: 74px; text-align: right; font: 700 15px var(--sans);
+               font-variant-numeric: tabular-nums; color: var(--ink);
+               background: var(--edge); border: 1.5px solid transparent;
+               border-radius: 9px; padding: 5px 7px; }
+  .qte input:hover { border-color: var(--line); }
+  .qte input.touche { border-color: var(--bordeaux); background: var(--surface); }
+  .qte .u { font-size: 12.5px; color: var(--ink-mute); font-weight: 700; width: 12px; }
+  .qte .rendre { border: 0; background: transparent; color: var(--bordeaux);
+                 font-size: 15px; cursor: pointer; padding: 0 2px; visibility: hidden; }
+  .qte .rendre.vu { visibility: visible; }
+  .lig[data-on="false"] input { opacity: .45; }
+
+  .valider { margin-top: 14px; width: 100%; border: 0; border-radius: 14px;
+             background: var(--bordeaux); color: #fff; padding: 13px;
+             font: 700 16px var(--sans); cursor: pointer; }
+
+  /* ---------- les feuilles ---------- */
+  .feuilles { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; }
+  .feuille { background: var(--paper); color: var(--paper-ink);
+             border: 1px solid var(--paper-line); border-radius: 3px;
+             padding: 20px 20px 18px; box-shadow: var(--shadow);
+             font-size: 13px; display: flex; flex-direction: column; }
+  .f-tete { font-size: 10.5px; color: #6b6259; line-height: 1.35; margin-bottom: 9px; }
+  .f-tete .chemin { font-weight: 700; }
+  .f-titre { font-size: 19px; font-weight: 700; line-height: 1.1; margin-bottom: 1px; }
+  .f-qty { font-size: 15px; font-weight: 700; margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+  .f-lab { font-size: 9.5px; letter-spacing: .13em; text-transform: uppercase;
+           color: #6b6259; font-weight: 700; margin-bottom: 4px; }
+  .f-ing { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0;
+           border-top: 1px solid #ece7de; }
+  .f-ing b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .f-note { font-size: 10.5px; color: #6b6259; font-style: italic; margin-top: 9px; }
+
+  .cartouche { border: 2px solid var(--paper-ink); border-radius: 4px;
+               padding: 11px 12px 12px; margin-top: 16px; }
+  .cartouche .f-lab { margin-bottom: 8px; }
+  .champ { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; }
+  .champ + .champ, .duo { border-top: 1px dotted #c9c2b6; }
+  .champ .q { flex: 1; font-size: 12.5px; }
+  .champ .imprime { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .champ .vide { flex: 0 0 96px; border-bottom: 1.5px solid var(--paper-ink); height: 19px; }
+  .champ .unite { font-weight: 700; width: 14px; }
+  .duo { display: flex; gap: 10px; }
+  .duo .champ { flex: 1; border-top: 0; }
+
+  .fin { margin-top: 44px; border-top: 2px solid var(--line); padding-top: 22px;
+         display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px; }
+  .fin h3 { font-family: var(--serif); font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+  .fin p { margin: 0; color: var(--ink-soft); font-size: 14.5px; }
+  .fin .q { color: var(--bordeaux); font-weight: 700; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="kicker">Fabrication Annexe 2 · maquette</p>
+    <h1>Imprimer la fournée</h1>
+    <p class="chapo">
+      Le 🖨 garderait ses deux métiers : <b>la feuille qu'on regarde</b>, comme
+      aujourd'hui, ou <b>tout ce qu'il reste à fabriquer</b>. Et dans le second
+      cas, on peut <b>changer les quantités avant d'imprimer</b>.
+      Les chiffres ci-dessous sont les vrais, pris dans Odoo ce soir — et le
+      panneau du deuxième temps marche pour de bon : change le 80.
+    </p>
+  </header>
+
+  <div class="etapes">
+
+    <!-- ÉTAPE 1 -->
+    <section class="etape">
+      <div class="tel">
+        <div class="tel-barre">
+          <span class="fil">← Cheesecake Exotique indiv</span>
+          <button class="btn-impr" type="button">🖨 Imprimer</button>
+        </div>
+        <div class="titre-fiche">Cheesecake Exotique indiv</div>
+        <div class="gros">80</div>
+        <div class="gros-sous">à faire · il en reste 36</div>
+        <div class="ing"><span>Marmelade Passion Mangue</span><b>2 000 g <span class="ya">✓</span></b></div>
+        <div class="ing"><span>Mousse Cheese Passion</span><b>2 880 g <span class="manque">0 en stock</span></b></div>
+        <div class="ing"><span>Crunchy Citron Passion</span><b>2 400 g <span class="manque">0 en stock</span></b></div>
+      </div>
+      <div>
+        <span class="num">Premier temps</span>
+        <h2>Le bouton pose une question au lieu d'imprimer</h2>
+        <p>
+          L'écran ne change pas. Le 🖨 ouvre un petit panneau — et la première
+          chose qu'on y voit, c'est le choix entre l'ancienne façon et la
+          nouvelle.
+        </p>
+        <p>
+          Si tu veux juste la feuille sous les yeux, deux appuis : le bouton,
+          puis « Imprimer ». C'est un appui de plus qu'aujourd'hui, pas dix.
+        </p>
+      </div>
+    </section>
+
+    <!-- ÉTAPE 2 -->
+    <section class="etape">
+      <div class="panneau">
+        <h3>Tu imprimes quoi ?</h3>
+        <p class="sous">Depuis Cheesecake Exotique indiv</p>
+
+        <div class="bascule" role="group" aria-label="Que faut-il imprimer ?">
+          <button type="button" id="b-seule" aria-pressed="false">
+            Juste cette fiche<small>comme aujourd'hui</small>
+          </button>
+          <button type="button" id="b-tout" aria-pressed="true">
+            Tout ce qui manque<small>la cascade entière</small>
+          </button>
+        </div>
+
+        <div id="liste"></div>
+        <button class="valider" type="button" id="valider">Imprimer</button>
+      </div>
+      <div>
+        <span class="num">Deuxième temps</span>
+        <h2>Les quantités se changent ici, avant d'imprimer</h2>
+        <p>
+          Chaque ligne porte son chiffre, dans son unité — des <b>g</b> pour une
+          crème, des <b>u</b> pour un gâteau. Tu tapes dedans, c'est tout.
+        </p>
+        <p class="note">
+          <b>Change le 80 du haut</b> : tout le dessous suit, comme sur la fiche.
+          <b>Change ensuite un chiffre du bas</b> : il se fige, il ne suivra plus —
+          et un <b>↺</b> apparaît pour le rendre à l'app.
+        </p>
+        <p class="note">
+          Coché d'avance : <b>ce dont il n'y a pas assez</b>. La marmelade est
+          décochée parce qu'il en reste 3 400 g. Baisse le 80 assez bas et tu
+          verras des lignes se décocher toutes seules.
+        </p>
+      </div>
+    </section>
+
+    <!-- ÉTAPE 3 -->
+    <section class="etape">
+      <div>
+        <span class="num">Troisième temps</span>
+        <h2>Les feuilles, dans l'ordre du travail</h2>
+        <p>
+          Le plus profond d'abord — on ne monte pas le <i>Crunchy</i> avant
+          d'avoir le <i>Crumble</i>. Chaque feuille dit d'où elle vient et finit
+          par le cadre à remplir au crayon.
+        </p>
+        <p class="note">
+          Le stock d'avant est <b>imprimé</b> ; ce qui est sorti se remplit à la
+          main, dans l'unité de l'article.
+        </p>
+      </div>
+      <div></div>
+    </section>
+
+    <div class="feuilles">
+      <article class="feuille">
+        <div class="f-tete">
+          <div class="chemin">Cheesecake Exotique indiv › Crunchy Citron Passion › Crumble Pistache</div>
+          <div>pour : Cheesecake Exotique</div>
+        </div>
+        <div class="f-titre">Crumble Pistache</div>
+        <div class="f-qty">2 350 g à faire</div>
+        <div class="f-lab">Ce qu'il faut</div>
+        <div class="f-ing"><span>Beurre entremets</span><b>588 g</b></div>
+        <div class="f-ing"><span>Sucre Glace</span><b>588 g</b></div>
+        <div class="f-ing"><span>Poudre d'amande</span><b>588 g</b></div>
+        <div class="f-ing"><span>Farine</span><b>588 g</b></div>
+        <div class="cartouche">
+          <div class="f-lab">À remplir après la fournée</div>
+          <div class="champ"><span class="q">En stock avant de commencer</span><span class="imprime">50 g</span></div>
+          <div class="champ"><span class="q">Il en est sorti</span><span class="vide"></span><span class="unite">g</span></div>
+          <div class="duo">
+            <div class="champ"><span class="q">Par</span><span class="vide"></span></div>
+            <div class="champ"><span class="q">à</span><span class="vide"></span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="feuille">
+        <div class="f-tete">
+          <div class="chemin">Cheesecake Exotique indiv › Mousse Cheese Passion</div>
+          <div>pour : Cheesecake Exotique</div>
+        </div>
+        <div class="f-titre">Mousse Cheese Passion</div>
+        <div class="f-qty">2 880 g à faire</div>
+        <div class="f-lab">Ce qu'il faut</div>
+        <div class="f-ing"><span>Crème whipping</span><b>1 658 g</b></div>
+        <div class="f-ing"><span>Fromage Milky food</span><b>1 178 g</b></div>
+        <div class="f-ing"><span>Sucre Granule</span><b>480 g</b></div>
+        <div class="f-ing"><span>Oeufs jaune</span><b>305 g</b></div>
+        <div class="f-ing"><span>Purée de Passion</span><b>262 g</b></div>
+        <div class="f-ing"><span>Eau robinet</span><b>175 g</b></div>
+        <div class="f-ing"><span>Masse Gélatine</span><b>131 g</b></div>
+        <div class="cartouche">
+          <div class="f-lab">À remplir après la fournée</div>
+          <div class="champ"><span class="q">En stock avant de commencer</span><span class="imprime">0 g</span></div>
+          <div class="champ"><span class="q">Il en est sorti</span><span class="vide"></span><span class="unite">g</span></div>
+          <div class="duo">
+            <div class="champ"><span class="q">Par</span><span class="vide"></span></div>
+            <div class="champ"><span class="q">à</span><span class="vide"></span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="feuille">
+        <div class="f-tete">
+          <div class="chemin">Cheesecake Exotique indiv</div>
+          <div>pour : Cheesecake Exotique</div>
+        </div>
+        <div class="f-titre">Cheesecake Exotique indiv</div>
+        <div class="f-qty">80 u à monter</div>
+        <div class="f-lab">Ce qu'il faut</div>
+        <div class="f-ing"><span>Mousse Cheese Passion</span><b>2 880 g</b></div>
+        <div class="f-ing"><span>Crunchy Citron Passion</span><b>2 400 g</b></div>
+        <div class="f-ing"><span>Marmelade Passion Mangue</span><b>2 000 g</b></div>
+        <p class="f-note">Pour 1 individuel : 36 g de mousse, 30 g de crunchy, 25 g de marmelade.</p>
+        <div class="cartouche">
+          <div class="f-lab">À remplir après la fournée</div>
+          <div class="champ"><span class="q">En stock avant de commencer</span><span class="imprime">36 u</span></div>
+          <div class="champ"><span class="q">Il en est sorti</span><span class="vide"></span><span class="unite">u</span></div>
+          <div class="duo">
+            <div class="champ"><span class="q">Par</span><span class="vide"></span></div>
+            <div class="champ"><span class="q">à</span><span class="vide"></span></div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+
+  <div class="fin">
+    <div>
+      <h3>Rien de neuf à calculer</h3>
+      <p>La cascade, les stocks, la règle « un chiffre tapé à la main ne bouge
+        plus » : l'app fait déjà tout ça sur la fiche. Le panneau ne fait que
+        les montrer sur une page.</p>
+    </div>
+    <div>
+      <h3>Ce qui reste à décider</h3>
+      <p><span class="q">Une feuille par article, ou tout sur une seule ?</span>
+        Cinq feuilles, ça fait cinq papiers à ne pas perdre.</p>
+    </div>
+    <div>
+      <h3>Et après ?</h3>
+      <p><span class="q">Ce qui est écrit au crayon, tu le ressaisis le soir ?</span>
+        Si oui, le cadre pourrait porter le nom de l'article en gros, pour
+        retrouver l'écran vite fait.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // La cascade réelle du Cheesecake Exotique indiv, relevée dans Odoo le 14/09.
+  // `par` = ce qu'il faut par gâteau ; `stock` = ce qu'il y a au congélateur.
+  const ARBRE = [
+    { id: 'gateau',   nom: 'Cheesecake Exotique indiv', u: 'u', prof: 0, par: 1,        stock: 36,   tete: true },
+    { id: 'marmelade',nom: 'Marmelade Passion Mangue',  u: 'g', prof: 1, par: 25,       stock: 3400 },
+    { id: 'mousse',   nom: 'Mousse Cheese Passion',     u: 'g', prof: 1, par: 36,       stock: 0 },
+    { id: 'crunchy',  nom: 'Crunchy Citron Passion',    u: 'g', prof: 1, par: 30,       stock: 0 },
+    { id: 'crumble',  nom: 'Crumble Pistache',          u: 'g', prof: 2, par: 30,       stock: 50 },
+    { id: 'beurre',   nom: 'Beurre Clarifié',           u: 'g', prof: 2, par: 9,        stock: 246 },
+    { id: 'zest',     nom: 'Citron Zest',               u: 'g', prof: 2, par: 1.25,     stock: 1350 },
+  ];
+
+  const nb = v => Math.round(v).toLocaleString('fr-FR');
+  const etat = { gateau: 80, mode: 'tout', tapes: {}, coches: {} };
+
+  // Ce que l'app PROPOSE : ce qui manque pour la quantité de gâteaux demandée.
+  // La tête, elle, c'est le nombre de gâteaux lui-même.
+  const propose = a => a.tete ? etat.gateau
+    : Math.max(0, Math.round(a.par * etat.gateau - a.stock));
+  const valeur  = a => (a.id in etat.tapes ? etat.tapes[a.id] : propose(a));
+  const coche   = a => (a.id in etat.coches ? etat.coches[a.id] : (a.tete || propose(a) > 0));
+
+  const liste = document.getElementById('liste');
+  const valider = document.getElementById('valider');
+
+  function dessine() {
+    const seule = etat.mode === 'seule';
+    liste.innerHTML = '';
+    for (const a of ARBRE) {
+      if (seule && !a.tete) continue;
+      const on = seule ? true : coche(a);
+      const lig = document.createElement('div');
+      lig.className = 'lig p' + a.prof;
+      lig.dataset.on = on;
+
+      const c = document.createElement('button');
+      c.type = 'button'; c.className = 'case'; c.setAttribute('role', 'checkbox');
+      c.setAttribute('aria-checked', on); c.setAttribute('aria-label', a.nom);
+      c.textContent = '✓';
+      c.disabled = seule;
+      c.onclick = () => { etat.coches[a.id] = !on; dessine(); };
+
+      const txt = document.createElement('span');
+      const manque = a.tete ? 0 : Math.max(0, a.par * etat.gateau - a.stock);
+      const dit = a.tete ? 'le montage'
+        : a.stock <= 0 ? 'rien en stock'
+        : manque > 0 ? `il en reste ${nb(a.stock)} ${a.u}, il en faut ${nb(a.par * etat.gateau)}`
+        : `il en reste ${nb(a.stock)} ${a.u} — tu en as assez`;
+      txt.innerHTML = `<span class="nom"></span><span class="quoi"></span>`;
+      txt.querySelector('.nom').textContent = a.nom;
+      txt.querySelector('.quoi').textContent = dit;
+
+      const q = document.createElement('span');
+      q.className = 'qte';
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.inputMode = 'decimal';
+      inp.value = nb(valeur(a));
+      inp.setAttribute('aria-label', 'Quantité de ' + a.nom);
+      if (a.id in etat.tapes) inp.classList.add('touche');
+      inp.onchange = () => {
+        const v = Math.max(0, Number(String(inp.value).replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+        if (a.tete) { etat.gateau = v; etat.tapes = {}; } else { etat.tapes[a.id] = v; }
+        dessine();
+      };
+      const u = document.createElement('span'); u.className = 'u'; u.textContent = a.u;
+      const r = document.createElement('button');
+      r.type = 'button'; r.className = 'rendre' + (a.id in etat.tapes ? ' vu' : '');
+      r.textContent = '↺'; r.title = 'Rendre le chiffre à l’app';
+      r.setAttribute('aria-label', 'Rendre le chiffre proposé pour ' + a.nom);
+      r.onclick = () => { delete etat.tapes[a.id]; dessine(); };
+      q.append(inp, u, r);
+
+      lig.append(c, txt, q);
+      liste.append(lig);
+    }
+    const n = seule ? 1 : ARBRE.filter(coche).length;
+    valider.textContent = n === 1 ? 'Imprimer 1 feuille' : `Imprimer ${n} feuilles`;
+  }
+
+  for (const [id, mode] of [['b-seule', 'seule'], ['b-tout', 'tout']]) {
+    document.getElementById(id).onclick = () => {
+      etat.mode = mode;
+      document.getElementById('b-seule').setAttribute('aria-pressed', mode === 'seule');
+      document.getElementById('b-tout').setAttribute('aria-pressed', mode === 'tout');
+      dessine();
+    };
+  }
+  dessine();
+</script>

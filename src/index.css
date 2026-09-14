@@ -227,6 +227,91 @@ html, body {
     page-break-inside: avoid;
     break-inside: avoid;
   }
+
+  /* ------------------------------------------------------------
+     LES FEUILLES DE FOURNÉE (Fabrication Annexe 2).
+     « Une feuille par article et que ça fit en une page » (Layla,
+     2026-09-14). Une page par article, le cadre à remplir en bas, et un
+     corps de texte serré pour qu'une recette de quinze lignes tienne.
+     ------------------------------------------------------------ */
+  .feuille-impr {
+    page-break-after: always;
+    break-after: page;
+    font-size: 11pt;
+    line-height: 1.35;
+    color: #000;
+  }
+  .feuille-impr:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .feuille-impr .fi-chemin {
+    font-size: 8.5pt;
+    color: #555;
+    font-weight: 700;
+    margin-bottom: 2mm;
+  }
+  .feuille-impr .fi-titre {
+    font-size: 17pt;
+    font-weight: 800;
+    line-height: 1.1;
+    margin: 0 0 1mm;
+  }
+  .feuille-impr .fi-qty {
+    font-size: 13pt;
+    font-weight: 700;
+    margin-bottom: 4mm;
+  }
+  .feuille-impr .fi-lab {
+    font-size: 7.5pt;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #555;
+    font-weight: 700;
+    margin-bottom: 1mm;
+  }
+  .feuille-impr .fi-ing {
+    display: flex;
+    justify-content: space-between;
+    gap: 8mm;
+    padding: 1.1mm 0;
+    border-top: 0.2mm solid #ddd;
+  }
+  .feuille-impr .fi-ing b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* Le cadre reste d'un bloc : coupé en deux, il ne se remplit plus. */
+  .feuille-impr .fi-cadre {
+    margin-top: 6mm;
+    border: 0.5mm solid #000;
+    border-radius: 1mm;
+    padding: 3mm 4mm 4mm;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .feuille-impr .fi-cadre-nom {
+    font-size: 13pt;
+    font-weight: 800;
+    line-height: 1.1;
+    margin: 0 0 2mm;
+  }
+  .feuille-impr .fi-champ {
+    display: flex;
+    align-items: baseline;
+    gap: 3mm;
+    padding: 2mm 0;
+    border-top: 0.2mm dotted #999;
+    font-size: 10pt;
+  }
+  .feuille-impr .fi-champ > span:first-child { flex: 1; }
+  .feuille-impr .fi-champ b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .feuille-impr .fi-trait {
+    flex: 0 0 32mm;
+    border-bottom: 0.35mm solid #000;
+    height: 5mm;
+  }
+  .feuille-impr .fi-u { width: 5mm; }
+  .feuille-impr .fi-duo > span { flex: 0 0 auto; }
+  .feuille-impr .fi-duo .fi-trait:last-child { flex: 0 0 24mm; }
 }
 
 /* Le rappel des transferts : la ligne suivante monte à la place de la précédente.

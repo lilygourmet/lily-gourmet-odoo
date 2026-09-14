@@ -21,6 +21,7 @@ import { enClairErreur } from '../lib/erreurs'
 import { hasValidJwt, isAdmin } from '../lib/auth'
 import { CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
 import HistoriqueAnnexe from './HistoriqueAnnexe'
+import { ChoixImpression, FeuillesImpression } from './ImpressionFournee'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
   decoupeDe, noeudDuChemin, defautDe, aCuireParDefaut, parGateauMere, peseesDe,
   declarer, envoyerAValider, repartirCuve, sansRendement, pressageDe,
@@ -29,6 +30,7 @@ import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
+import { feuillesAImprimer, cocheesParDefaut } from '../lib/feuillesAImprimer'
 
 /**
  * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
@@ -71,6 +73,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // L'historique : un bouton, par date (Layla, 2026-09-09).
   const [histo, setHisto] = useState(null)
   const [histoOuvert, setHistoOuvert] = useState(false)
+  // Le panneau d'impression : `null` = fermé. Sinon on y garde ce qui est
+  // coché et la façon choisie, le temps d'appuyer sur Imprimer.
+  const [impr, setImpr] = useState(null)
+  // Ce qui part vraiment à l'imprimante, le temps de l'appel à `window.print`.
+  const [feuillesPretes, setFeuillesPretes] = useState(null)
 
   const ouvert = chemin[0] || null
   const nav = { user, onLogout, onNavigate, activeView }
@@ -385,6 +392,29 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // Les gâteaux que l'article de tête sert. Seul le catalogue « Déclarer » les
   // connaît (`pour`) ; la fiche, ouverte article par article, ne les a pas.
   const gateauxMere = (tout || []).find(x => x.produit === tete.produit)?.pour || []
+
+  // ---------- imprimer la fournée ----------
+  // Les feuilles se recalculent à chaque frappe dans le panneau : elles lisent
+  // `choisies`, la même table que la fiche. Un chiffre tapé à la main s'y
+  // range, donc il se fige ; le ↺ l'en retire et l'app reprend la main.
+  const feuilles = impr ? feuillesAImprimer(noeud, q, choisies) : []
+  const coches = impr?.coches ?? cocheesParDefaut(feuilles)
+  // ⚠️ La feuille du dessus est toujours celle qu'on regarde : « Juste cette
+  // fiche » n'imprime qu'elle, et c'est la dernière de la liste.
+  const aImprimer = impr?.mode === 'seule'
+    ? feuilles.slice(-1)
+    : feuilles.filter(f => coches[f.produit])
+
+  /**
+   * On ferme le panneau AVANT d'imprimer : il est en position fixe, il
+   * couvrirait la feuille. Le navigateur a besoin d'un tour de boucle pour
+   * repeindre, d'où le `setTimeout` — sans lui, Safari imprime le panneau.
+   */
+  const lancerImpression = () => {
+    setImpr(null)
+    setFeuillesPretes(aImprimer)
+    setTimeout(() => { window.print(); setFeuillesPretes(null) }, 60)
+  }
   const decoupe = decoupeDe(noeud)
   // L'étape de mise en forme qu'on confirmera en validant — la base de flan.
   const pressage = pressageDe(noeud)
@@ -399,7 +429,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         <div className="flex items-start justify-between gap-3 print:hidden">
           <Fil chemin={chemin} onRetour={() => { figer(q); setSortie(null); setChemin(chemin.slice(0, -1)) }} />
           {sortie === null && (
-            <button onClick={() => window.print()}
+            <button onClick={() => setImpr({ mode: 'seule', coches: null })}
               className="shrink-0 rounded-xl border border-cream-deep bg-cream-warm px-3 py-2
                          text-[13px] font-bold text-ink-soft">
               🖨 Imprimer
@@ -407,6 +437,20 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
           )}
         </div>
         {confirme && <Confirmation {...confirme} />}
+        {impr && (
+          <ChoixImpression
+            feuilles={feuilles} mode={impr.mode} coches={coches} tapes={quantites}
+            onMode={m => setImpr(x => ({ ...x, mode: m, coches }))}
+            onCoche={(p, v) => setImpr(x => ({ ...x, coches: { ...coches, [p]: v } }))}
+            onQuantite={(p, v) => { poser(p, v); setImpr(x => ({ ...x, coches })) }}
+            onRendre={p => {
+              setQuantites(x => { const n = { ...x }; delete n[p]; return n })
+              setImpr(x => ({ ...x, coches }))
+            }}
+            onImprimer={lancerImpression}
+            onFermer={() => setImpr(null)} />
+        )}
+        {feuillesPretes && <FeuillesImpression feuilles={feuillesPretes} />}
         {sortie !== null
           ? (() => {
             // La question porte soit sur l'article, soit sur ce qu'on vient de
@@ -449,7 +493,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             )
           })()
           : (
-            <div className="print-area">
+            <div className={feuillesPretes ? undefined : 'print-area'}>
             {/* ⚠️ À L'IMPRESSION SEULEMENT : D'OÙ VIENT CETTE FICHE.
                 Sur une feuille posée au plan de travail, « Crème au beurre »
                 ne dit ni laquelle ni pour quel gâteau — et l'écran, lui, a le

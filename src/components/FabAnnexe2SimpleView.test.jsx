@@ -158,3 +158,43 @@ describe('l’impression de la fiche', () => {
     expect(screen.getByText(/pour :/).textContent).toBe('pour : Tiramisu')
   })
 })
+
+// ============================================================
+// IMPRIMER LA FOURNÉE.
+//
+// « je veux avoir le choix de l'ancienne version et de la nouvelle. sauf que
+// pour la nouvelle des fois j'aime bien modifier les quantités avant »
+// (Layla, 2026-09-14).
+// ============================================================
+describe('le bouton imprimer', () => {
+  it('ouvre le choix au lieu d’imprimer tout de suite', async () => {
+    const print = vi.fn()
+    window.print = print
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    await waitFor(() => expect(screen.getByText('🖨 Tu imprimes quoi ?')).toBeTruthy())
+    expect(screen.getByText('Juste cette fiche')).toBeTruthy()
+    expect(screen.getByText('Tout ce qui manque')).toBeTruthy()
+    expect(print).not.toHaveBeenCalled()
+  })
+
+  it('« juste cette fiche » n’envoie qu’une feuille', async () => {
+    window.print = vi.fn()
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    await waitFor(() => expect(screen.getByText('Imprimer 1 feuille')).toBeTruthy())
+  })
+
+  it('la quantité se corrige AVANT d’imprimer, en grammes', async () => {
+    window.print = vi.fn()
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    const champ = await screen.findByLabelText(/Quantité de Sirop imbibage/)
+    // 5,55 kg chez Odoo → 5 550 g dans le champ
+    expect(champ.value.replace(/ | /g, ' ')).toBe('5 550')
+    fireEvent.change(champ, { target: { value: '3000' } })
+    await waitFor(() =>
+      expect(screen.getByLabelText(/Quantité de Sirop imbibage/).value
+        .replace(/ | /g, ' ')).toBe('3 000'))
+  })
+})
