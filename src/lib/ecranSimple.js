@@ -40,7 +40,14 @@ export const uniteAffichee = u => (estKg(u) ? 'g' : String(u || ''))
 export const qte = (v, u) => {
   const kg = /^kg$/i.test(String(u || '').trim())
   const n = (Number(v) || 0) * (kg ? 1000 : 1)
-  return `${nb(Math.round(n))} ${kg ? 'g' : (u || '')}`.trim()
+  const mot = kg ? 'g' : (u || '')
+  // ⚠️ JAMAIS « 0 g » pour quelque chose qui existe. 0,4 g de colorant n'est
+  // pas rien, mais arrondi à l'entier l'écran écrit « 0 » — et on croit qu'il
+  // a oublié la ligne. Layla, le 2026-09-14, en regardant des lignes en kilos
+  // affichées à zéro : « quand le sucre est au kg, tu ne le prends pas ».
+  // Sous le demi-gramme, on garde donc la précision, comme `dose`.
+  if (n !== 0 && Math.abs(n) < 0.5) return `${nb(Number(n.toPrecision(2)))} ${mot}`.trim()
+  return `${nb(Math.round(n))} ${mot}`.trim()
 }
 
 /**

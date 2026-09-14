@@ -499,6 +499,31 @@ export function disponiblePour(declare, tete) {
  * 90 individuels dans une plaque qui en donne 102 — on en coupe 102, et les 12
  * en trop partent au congélo.
  */
+/**
+ * LA QUANTITÉ QU'UNE FICHE PROPOSE.
+ *
+ * ⚠️ UNE FOURNÉE DE 1 g N'EN EST PAS UNE. Sur un article qui se PÈSE, une
+ * « tournée » à 1 (ou 0) dans « Mini / maxi Annexe » ne veut pas dire qu'une
+ * fournée fait un gramme : c'est la façon de dire « pas de fournée décidée »,
+ * pour que ce composant se fasse à la quantité juste (voir `aLaQuantite`).
+ *
+ * Mais une FICHE, elle, doit proposer quelque chose de faisable. Avec 1, elle
+ * calculait tout pour UN GRAMME : « 0,00037 kg de sucre, 0,09 g d'eau,
+ * 0,00075 kg d'amandes » pour les amandes caramélisées. Layla, le 2026-09-14 :
+ * « les amandes caramélisées sortent la recette pas ok ».
+ *
+ * On retombe alors sur la fournée de la RECETTE ODOO — exactement ce que fait
+ * déjà l'onglet « Déclarer ». Ce qui se compte à la PIÈCE n'est pas concerné :
+ * une tournée d'un seul gâteau existe.
+ */
+export function fourneeFiche(tourneeCatalogue, unite, fourneeRecette) {
+  const t = Number(tourneeCatalogue) || 0
+  if (!/^(g|gr|kg)$/i.test(String(unite || '').trim())) return t || 1
+  if (t > 1) return t
+  const r = Number(fourneeRecette) || 0
+  return r > 0 ? r : (t || 1)
+}
+
 export const estDecoupeServeur = (unite, nbLignes) =>
   /^u$/i.test(String(unite || '').trim()) && nbLignes === 1
 
@@ -1118,9 +1143,15 @@ export default async function handler(req, res) {
         continue
       }
 
+      // Ce que la recette Odoo sort d'un coup, dans l'unité de l'article : le
+      // repli quand le catalogue ne décide pas de fournée (voir `fourneeFiche`).
+      const bomFiche = await bomDe(cache, p)
+      const fournee = fourneeFiche(a.tournee, uniteDe(p),
+        bomFiche && versUnite(bomFiche.product_qty || 1, bomFiche.product_uom_id?.[1], p.uom_id?.[1]))
+
       // Ses composants, eux, ne voient QUE ce qui est libre et ce qui lui est
       // réservé : la ganache faite pour le 23 cm ne dispense pas le 18 cm.
-      const composants = await composantsDe(cache, p, a.tournee, a.figes || [], 0, [], lots, achetes,
+      const composants = await composantsDe(cache, p, fournee, a.figes || [], 0, [], lots, achetes,
         disponiblePour(declare, a.produit))
       // Une CUVE, c'est ce qui ne se divise pas : les figés réglés pour
       // l'article, ou n'importe quelle mousse — même quand elle a son propre
@@ -1134,12 +1165,12 @@ export default async function handler(req, res) {
         // gâteau. On ne retombe sur son propre nom qu'en dernier recours.
         photo: a.photo || gateauDe(a.produit) || a.produit,
         unite: uniteDe(p),
-        stock, mini: a.mini, maxi: a.maxi, tournee: a.tournee,
+        stock, mini: a.mini, maxi: a.maxi, tournee: fournee,
         dejaFait, reste,
         etat: stock <= 0 ? 'rupture' : 'refaire',
         figes: a.figes || [],
         figesNom: a.figes_nom || 'Monté sur place',
-        ajustements: ajustementsFiges(await bomDe(cache, p), p, a.figes || [], a.tournee),
+        ajustements: ajustementsFiges(bomFiche, p, a.figes || [], fournee),
         // ⚠️ Les tailles d'une même cuve (« d'un 10 pers on finit en 5 pers et
         // en individuels ») ne sont PAS calculées ici : chacune coûte une
         // dizaine d'allers-retours vers Odoo, et l'écran de fin multi-tailles

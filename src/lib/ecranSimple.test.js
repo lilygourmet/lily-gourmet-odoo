@@ -70,3 +70,33 @@ describe('la conversion, le seul endroit où l’on change d’unité', () => {
     expect(uniteAffichee('u')).toBe('u')
   })
 })
+
+// ============================================================
+// « QUAND LE SUCRE EST AU KG, TU NE LE PRENDS PAS » (Layla, 2026-09-14).
+//
+// L'unité était bien lue et convertie — mais la fiche des amandes
+// caramélisées était calculée pour UN GRAMME (voir `fourneeFiche`), et
+// 0,00037 kg de sucre s'écrivait « 0 g ». L'écran avait l'air d'oublier les
+// lignes en kilos. Une quantité qui existe ne doit jamais s'écrire zéro.
+// ============================================================
+describe('une petite quantité ne s’écrit jamais « 0 »', () => {
+  const lu2 = (v, u) => qte(v, u).replace(/ | /g, ' ')
+
+  it('garde la précision sous le demi-gramme, en g comme en kg', () => {
+    expect(lu2(0.00037, 'kg')).toBe('0,37 g')
+    expect(lu2(0.4, 'g')).toBe('0,4 g')
+    expect(lu2(0.09, 'g')).toBe('0,09 g')
+  })
+
+  it('mais zéro reste zéro', () => {
+    expect(lu2(0, 'kg')).toBe('0 g')
+    expect(lu2(0, 'g')).toBe('0 g')
+  })
+
+  it('et rien ne change au-dessus du demi-gramme', () => {
+    expect(lu2(0.12, 'kg')).toBe('120 g')
+    expect(lu2(5.55, 'kg')).toBe('5 550 g')
+    expect(lu2(880, 'g')).toBe('880 g')
+    expect(lu2(105, 'u')).toBe('105 u')
+  })
+})
