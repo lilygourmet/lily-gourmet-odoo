@@ -768,31 +768,43 @@ export async function analyserVirements(year, month) {
     return j >= w.min && j <= w.max
   }
 
+  // L'ordre compte. Chercher d'abord la fenêtre de dates, puis le nom, donnait des
+  // diagnostics absurdes : pour une caisse « Boutaina el Ouadrhiri », l'app désignait la
+  // ligne du bon montant la plus proche en date — « VIR INST RECU OUMZIL RANIA », une
+  // autre cliente — et annonçait « hors fenêtre de −134 j ». Le vrai blocage n'est pas la
+  // date : c'est qu'AUCUNE ligne n'est à son nom.
+  // On cherche donc d'abord les lignes à SON nom, et la date ne départage qu'ensuite.
   const details = caisses.map(e => {
     const base = { id: e.id, client: e.virement_client || '(sans nom)', date: e.session_date, montant: Number(e.amount_cash) }
-    const memeMontantLibres = libres.filter(l => memeMontant(l, e))
-    if (!memeMontantLibres.length) {
+    const dit = (raison, detail, indice) => ({ ...base, raison, detail: detail || '', indice: indice || '' })
+    const ecrire = l => `${l.ligne_date} · ${(l.label || '').slice(0, 45)}`
+
+    const duMontant = libres.filter(l => memeMontant(l, e))
+    if (!duMontant.length) {
       const prise = prises.find(l => memeMontant(l, e))
-      if (prise) return { ...base, raison: 'ligne déjà prise par une autre caisse', indice: `${prise.ligne_date} · ${(prise.label || '').slice(0, 40)}` }
-      return { ...base, raison: 'aucune ligne de ce montant dans les relevés importés', indice: '' }
+      return prise
+        ? dit('ligne déjà prise par une autre caisse', '', ecrire(prise))
+        : dit('aucune ligne de ce montant dans les relevés importés')
     }
-    const dedans = memeMontantLibres.filter(l => dansFenetre(l, e))
+    if (!nomFiable(nomDeLigne(e.virement_client))) {
+      return dit('pas de nom de cliente dans Odoo — jamais validé tout seul',
+        `${duMontant.length} ligne(s) de ce montant`, ecrire(duMontant[0]))
+    }
+    const aSonNom = duMontant.filter(l => nomDansLibelle(e.virement_client, l.label))
+    if (!aSonNom.length) {
+      return dit('aucune ligne à son nom',
+        `${duMontant.length} ligne(s) de ce montant, toutes à d'autres noms`, ecrire(duMontant[0]))
+    }
+    const dedans = aSonNom.filter(l => dansFenetre(l, e))
     if (!dedans.length) {
-      const proche = memeMontantLibres.sort((a, b) => Math.abs(jours(a, e)) - Math.abs(jours(b, e)))[0]
+      const proche = [...aSonNom].sort((a, b) => Math.abs(jours(a, e)) - Math.abs(jours(b, e)))[0]
       const j = Math.round(jours(proche, e))
-      return { ...base, raison: `ligne du bon montant mais hors fenêtre de dates (${j > 0 ? '+' : ''}${j} j)`, indice: `${proche.ligne_date} · ${(proche.label || '').slice(0, 40)}` }
+      return dit('ligne à son nom, mais hors fenêtre de dates', `${j > 0 ? '+' : ''}${j} jours`, ecrire(proche))
     }
-    const auNom = dedans.filter(l => nomDansLibelle(e.virement_client, l.label))
-    if (!auNom.length) {
-      if (!nomFiable(nomDeLigne(e.virement_client))) {
-        return { ...base, raison: 'pas de nom de cliente dans Odoo — jamais validé tout seul', indice: `${dedans.length} ligne(s) possible(s)` }
-      }
-      const autre = dedans.find(l => nomAutreCliente(e.virement_client, l.label))
-      return { ...base, raison: autre ? 'la ligne du bon montant est au nom de quelqu\'un d\'autre' : 'aucune ligne à ce nom',
-        indice: `${dedans[0].ligne_date} · ${(dedans[0].label || '').slice(0, 40)}` }
+    if (dedans.length > 1) {
+      return dit('plusieurs lignes possibles à son nom — à confirmer', `${dedans.length} lignes`, ecrire(dedans[0]))
     }
-    if (auNom.length > 1) return { ...base, raison: `${auNom.length} lignes possibles à ce nom — à confirmer`, indice: '' }
-    return { ...base, raison: 'devrait se rapprocher — relance le calcul', indice: `${auNom[0].ligne_date} · ${(auNom[0].label || '').slice(0, 40)}` }
+    return dit('devrait se rapprocher — relance le calcul', '', ecrire(dedans[0]))
   })
 
   const parRaison = new Map()
