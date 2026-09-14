@@ -72,6 +72,20 @@ export async function loadToutFabAnnexe() {
 }
 
 /**
+ * « J'ai corrigé une recette dans Odoo et je ne veux pas attendre. »
+ *
+ * Le serveur garde les recettes une demi-heure pour ne pas harceler Odoo. Ceci
+ * lui dit de les oublier TOUT DE SUITE — pour toutes ses copies à la fois, pas
+ * seulement celle qui répond à ce clic.
+ */
+export async function relireRecettes() {
+  const r = await fetch('/api/fab-annexe?mode=relire-recettes', { method: 'POST' })
+  if (!r.ok) throw new Error(`Serveur indisponible (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+}
+
+/**
  * Dans Odoo, tout ce qui se fabrique à l'annexe commence par « SM ». Ce qui
  * suit dit quoi : un TIRET (« SM- », « SMPr- ») = un gâteau monté ; un point,
  * un slash ou rien du tout (« SM. », « SMT. », « SM CD* », « SM/ ») = une

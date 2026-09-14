@@ -38,7 +38,7 @@ const flan = {
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
-vi.mock('../lib/auth', () => ({ hasValidJwt: () => true }))
+vi.mock('../lib/auth', () => ({ hasValidJwt: () => true, isAdmin: () => true }))
 vi.mock('../lib/fabrication', () => ({ dernierEcran: () => null, garderEcran: () => {} }))
 vi.mock('../lib/fabAnnexe', async importOriginal => {
   const vrai = await importOriginal()

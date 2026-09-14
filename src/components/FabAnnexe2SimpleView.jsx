@@ -18,13 +18,13 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { enClairErreur } from '../lib/erreurs'
-import { hasValidJwt } from '../lib/auth'
+import { hasValidJwt, isAdmin } from '../lib/auth'
 import { CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
 import HistoriqueAnnexe from './HistoriqueAnnexe'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
   decoupeDe, noeudDuChemin, defautDe, aCuireParDefaut, parGateauMere, peseesDe,
   declarer, envoyerAValider, repartirCuve, sansRendement, pressageDe,
-  toutConsomme } from '../lib/fabAnnexe'
+  toutConsomme, relireRecettes } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
@@ -75,6 +75,30 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const ouvert = chemin[0] || null
   const nav = { user, onLogout, onNavigate, activeView }
   const recharger = () => setTour(t => t + 1)
+
+  /**
+   * « Je ne veux pas attendre 30 min » (Layla, 2026-09-14). Le serveur garde
+   * les recettes une demi-heure ; ce bouton les lui fait oublier tout de suite.
+   *
+   * ⚠️ Vider le serveur ne suffit pas : les fiches déjà ouvertes sont gardées
+   * ICI, dans `details`. Sans les jeter aussi, le bouton ne changerait rien à
+   * l'écran.
+   */
+  const [relit, setRelit] = useState(false)
+  const majRecettes = async () => {
+    if (relit) return
+    setRelit(true)
+    try {
+      await relireRecettes()
+      setDetails({})
+      recharger()
+      toast.success('Recettes relues chez Odoo')
+    } catch (e) {
+      toast.error(enClairErreur(e))
+    } finally {
+      setRelit(false)
+    }
+  }
 
   useEffect(() => {
     let vivant = true
@@ -289,6 +313,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             🕓 Ce qui a été fait
             {dujour > 0 && <span className="text-ink"> · {dujour}</span>}
           </button>
+          {isAdmin(user) && (
+            <button onClick={majRecettes} disabled={relit}
+              className="w-full mb-4 rounded-2xl border-2 border-cream-deep bg-cream-warm
+                         py-3 text-[15px] font-bold text-ink-mute disabled:opacity-50">
+              {relit ? 'Lecture chez Odoo…' : '🔄 Mettre à jour les recettes'}
+            </button>
+          )}
           {histoOuvert && <HistoriqueAnnexe histo={histo} onFermer={() => setHistoOuvert(false)} />}
           {confirme && <Confirmation {...confirme} />}
 

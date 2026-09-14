@@ -72,6 +72,34 @@ function dejaEnCache(cle) {
   return !!e && Date.now() - e.t < DUREE_RECETTES
 }
 
+// ------------------------------------------------------------
+// « J'AI CORRIGÉ UNE RECETTE DANS ODOO, JE NE VEUX PAS ATTENDRE. »
+//
+// Les recettes sont gardées une demi-heure — et pas au même endroit pour tout
+// le monde : Vercel fait tourner PLUSIEURS copies de cette fonction, chacune
+// avec sa propre mémoire. Une copie qui vide la sienne ne règle rien : la
+// copie d'à côté continuerait de servir l'ancienne recette.
+//
+// D'où un TOP DÉPART commun, rangé dans `app_config`. Le bouton l'avance ;
+// chaque copie qui voit un top plus récent que le sien jette ses recettes et
+// va les relire chez Odoo. Ça coûte une lecture Supabase par appel — quelques
+// dizaines de millisecondes devant des secondes d'Odoo.
+// ------------------------------------------------------------
+const CLE_VERSION = 'fab_annexe_recettes_v'
+let _versionVue = null
+
+async function alignerRecettes(sb) {
+  const { data, error } = await sb.from('app_config')
+    .select('value').eq('key', CLE_VERSION).maybeSingle()
+  // Base injoignable : on garde ce qu'on a. Mieux vaut une recette d'il y a
+  // vingt minutes qu'un écran vide devant un pâtissier.
+  if (error) return
+  const v = data?.value || ''
+  // Premier appel de cette copie : son cache est vide, rien à jeter.
+  if (_versionVue === null) { _versionVue = v; return }
+  if (v !== _versionVue) { _recettes.clear(); _versionVue = v }
+}
+
 function memo(cle, faire) {
   const e = _recettes.get(cle)
   if (e && Date.now() - e.t < DUREE_RECETTES) return e.v
@@ -882,6 +910,25 @@ export default async function handler(req, res) {
       return res.status(200).send(Buffer.from(b64, 'base64'))
     }
 
+    const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+    // ⚠️ AVANT tout ce qui lit une recette : si quelqu'un a appuyé sur
+    // « mettre à jour les recettes », cette copie doit oublier les siennes.
+    await alignerRecettes(sb)
+
+    // Le bouton « mettre à jour les recettes » : on avance le top départ, et
+    // toutes les copies du serveur relisent Odoo au prochain appel.
+    if (req.method === 'POST' && req.query.mode === 'relire-recettes') {
+      const v = String(Date.now())
+      const { error: e } = await sb.from('app_config')
+        .upsert({ key: CLE_VERSION, value: v, updated_at: new Date().toISOString() },
+          { onConflict: 'key' })
+      if (e) return res.status(200).json({ error: 'Impossible d\'enregistrer : ' + e.message })
+      _recettes.clear()
+      _versionVue = v
+      return res.status(200).json({ ok: true })
+    }
+
     // Le cron d'atelier appelle `?details=1` toutes les 10 minutes. Qu'il
     // réchauffe AUSSI le squelette de « Déclarer » : sans ça, la première
     // personne à ouvrir l'onglet payait ses quatre secondes toutes les demi-
@@ -890,8 +937,6 @@ export default async function handler(req, res) {
       const p = Promise.resolve(squeletteTout()).catch(e => console.warn('[tout]', e?.message || e))
       try { waitUntil(p) } catch { /* pas de contexte Vercel */ }
     }
-
-    const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
     // ------------------------------------------------------------
     // L'onglet « Déclarer » : TOUT ce qui se fabrique à l'annexe, mini ou pas.

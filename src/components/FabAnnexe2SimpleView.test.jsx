@@ -17,6 +17,8 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 const declarer = vi.fn(async () => ({ produit: 'x', qty: 1, ordre: null, erreur: null }))
 const envoyerAValider = vi.fn(async () => ({ produit: 'x', qty: 1, ordre: null, erreur: null }))
 const repartirCuve = vi.fn(async () => [])
+const relireRecettes = vi.fn(async () => {})
+let listesLues = 0
 
 // Le sirop : compté en KILOS chez Odoo, fournée de 5,55 kg.
 const sirop = {
@@ -31,25 +33,29 @@ const sirop = {
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
-vi.mock('../lib/auth', () => ({ hasValidJwt: () => true }))
+vi.mock('../lib/auth', () => ({ hasValidJwt: () => true, isAdmin: () => true }))
 vi.mock('../lib/fabrication', () => ({ dernierEcran: () => null, garderEcran: () => {} }))
 vi.mock('../lib/fabAnnexe', async importOriginal => {
   const vrai = await importOriginal()
   return {
     ...vrai,                                   // les VRAIES règles de calcul
-    loadFabAnnexe: async () => [sirop],
+    loadFabAnnexe: async () => { listesLues++; return [sirop] },
     loadToutFabAnnexe: async () => [],
     loadArticlesFabAnnexe: async () => [sirop],
     loadHistoriqueAnnexe: async () => [],
     declarer: (...a) => declarer(...a),
     envoyerAValider: (...a) => envoyerAValider(...a),
     repartirCuve: (...a) => repartirCuve(...a),
+    relireRecettes: (...a) => relireRecettes(...a),
   }
 })
 
 const { default: FabAnnexe2SimpleView } = await import('./FabAnnexe2SimpleView')
 
-beforeEach(() => { localStorage.clear(); declarer.mockClear(); envoyerAValider.mockClear() })
+beforeEach(() => {
+  localStorage.clear(); declarer.mockClear(); envoyerAValider.mockClear()
+  relireRecettes.mockClear(); listesLues = 0
+})
 afterEach(cleanup)
 
 const ouvrirLaFiche = async () => {
@@ -105,5 +111,26 @@ describe('le chemin complet', () => {
     await ouvrirLaFiche()
     expect(declarer).not.toHaveBeenCalled()
     expect(envoyerAValider).not.toHaveBeenCalled()
+  })
+})
+
+// ============================================================
+// LE BOUTON « METTRE À JOUR LES RECETTES ».
+//
+// « je ne veux pas attendre 30 min » (Layla, 2026-09-14). Le serveur garde les
+// recettes une demi-heure ; le bouton les lui fait oublier. Mais vider le
+// serveur ne suffit PAS : l'écran garde ses fiches déjà ouvertes de son côté.
+// S'il ne les jette pas aussi, le bouton ne change rien à ce qu'on voit.
+// ============================================================
+describe('mettre à jour les recettes', () => {
+  it('prévient le serveur ET rouvre la fiche chez Odoo', async () => {
+    await ouvrirLaFiche()
+    const avant = listesLues
+    fireEvent.click(screen.getByText(/^← /))
+    await waitFor(() => expect(screen.getByText('🔄 Mettre à jour les recettes')).toBeTruthy())
+    fireEvent.click(screen.getByText('🔄 Mettre à jour les recettes'))
+    await waitFor(() => expect(relireRecettes).toHaveBeenCalled())
+    // et l'écran repart chercher les fiches au lieu de resservir les siennes
+    await waitFor(() => expect(listesLues).toBeGreaterThan(avant))
   })
 })
