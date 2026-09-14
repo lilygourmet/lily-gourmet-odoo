@@ -1109,7 +1109,7 @@ function AnalyseVirementsModal({ a, onClose }) {
           {a.details.map(d => (
             <div key={d.id} style={{ padding: '7px 10px', borderBottom: '1px solid #f0e8db', fontSize: 12.5 }}>
               <div><b>{d.client}</b> · {fmtDateCourte(d.date)} · {fmtMoney(d.montant)}</div>
-              <div style={{ color: '#99201E' }}>{d.raison}</div>
+              <div style={{ color: '#99201E' }}>{d.raison}{d.detail ? ` — ${d.detail}` : ''}</div>
               {d.indice && <div style={{ color: '#8a7a70', fontSize: 11 }}>{d.indice}</div>}
             </div>
           ))}
