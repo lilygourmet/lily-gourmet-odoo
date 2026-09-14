@@ -67,10 +67,27 @@ describe('l’accueil', () => {
     expect(screen.getByText(/il en faut 352/)).toBeTruthy()
   })
 
-  it('ne répète pas le besoin quand une fournée suffit', () => {
+  // ⚠️ RÈGLE CHANGÉE LE 2026-09-14. Avant, le besoin total disparaissait quand
+  // une seule fournée y suffisait — pour ne pas répéter la pastille. Résultat :
+  // une case sur deux avait une ligne de moins que sa voisine. « des fois tu
+  // commences par il en faut, des fois par en stock » (Layla). Toutes les cases
+  // disent maintenant les deux mêmes choses, dans le même ordre.
+  it('dit le besoin total MÊME quand une fournée suffit', () => {
     const royal = { produit: 'SM- Royal Chocolat 15 cm', libelle: 'Royal 15 cm', reste: 13, tournee: 13 }
     render(<CasesAFaire articles={[royal]} onOuvrir={() => {}} />)
-    expect(screen.queryByText(/il en faut/)).toBeNull()
+    expect(screen.getByText(/il en faut 13/)).toBeTruthy()
+  })
+
+  it('les deux lignes sont TOUJOURS là, et dans le même ordre', () => {
+    const deux = [
+      { produit: 'A', libelle: 'Un', reste: 13, tournee: 13, stock: 8, unite: 'u' },
+      { produit: 'B', libelle: 'Deux', reste: 352, tournee: 88, stock: 0, unite: 'u' },
+    ]
+    render(<CasesAFaire articles={deux} onOuvrir={() => {}} />)
+    const lignes = [...document.querySelectorAll('div')]
+      .map(e => e.textContent || '')
+      .filter(t => /^(en stock|il en faut)/.test(t))
+    expect(lignes).toEqual(['en stock 8 u', 'il en faut 13 u', 'en stock 0 u', 'il en faut 352 u'])
   })
 
   it('le dit quand il n’y a rien, sans jargon', () => {

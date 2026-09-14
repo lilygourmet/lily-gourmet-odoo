@@ -90,9 +90,14 @@ export function CasesAFaire({ articles, onOuvrir }) {
                 )}
               </div>
             )}
-            {/* Le besoin total sous le nom, quand une fournée n'y suffit pas :
-                la pastille dit quoi faire maintenant, cette ligne dit pourquoi. */}
-            {!a.absent && a.reste > aFaireMaintenant(a) && (
+            {/* LE BESOIN TOTAL, toujours. La pastille dit quoi faire MAINTENANT
+                (au plus une fournée), cette ligne dit combien il en faut EN TOUT.
+                ⚠️ Elle ne s'affichait qu'en cas d'écart entre les deux — donc une
+                case sur deux avait une ligne de moins, et les autres deux. « des
+                fois tu commences par il en faut, des fois par en stock » (Layla,
+                2026-09-14). Toutes les cases disent maintenant les deux mêmes
+                choses, dans le même ordre. */}
+            {!a.absent && a.reste > 0 && (
               <div className="text-[12.5px] text-ink-mute mt-0.5">
                 il en faut {qte(a.reste, a.unite)}
               </div>
