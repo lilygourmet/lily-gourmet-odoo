@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, ECART_MINI } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, analyserVirements, ECART_MINI } from '../../lib/caisse'
 import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
@@ -88,6 +88,7 @@ function BanqueSection({ user }) {
   const [relance, setRelance] = useState(false)   // rapprochement en cours de relance
   // Mois à refaire à zéro (AAAA-MM). Par défaut le mois en cours.
   const [moisRefaire, setMoisRefaire] = useState(`${currentYear()}-${String(currentMonth()).padStart(2, '0')}`)
+  const [analyse, setAnalyse] = useState(null)   // résultat de l'analyse des virements
 
   useEffect(() => { reload() }, [year, month, statusFilter])
 
@@ -211,6 +212,15 @@ function BanqueSection({ user }) {
     if (!await confirmDialog('Retirer la preuve de ce versement ? Il repassera « en attente ».', { danger: true, confirmLabel: 'Retirer' })) return
     await clearEnveloppeProof(envId)
     reload()
+  }
+
+  // Dit POURQUOI les virements du mois ne se rapprochent pas, un par un. Ne modifie rien.
+  async function handleAnalyser() {
+    const [y, m] = moisRefaire.split('-').map(Number)
+    setRelance(true)
+    try { setAnalyse(await analyserVirements(y, m)) }
+    catch (e) { alert('Erreur : ' + (e?.message || e)) }
+    finally { setRelance(false) }
   }
 
   // Refait un mois à zéro. « Relancer » ne touche jamais une caisse verte : un mois mal
@@ -359,6 +369,10 @@ function BanqueSection({ user }) {
         <button onClick={handleRefaireMois} disabled={relance} style={{ ...btnNormal, opacity: relance ? 0.6 : 1 }}
           title="Délie tout le mois puis refait le calcul — montre le résultat avant d'écrire">
           🧹 Refaire ce mois à zéro
+        </button>
+        <button onClick={handleAnalyser} disabled={relance} style={{ ...btnNormal, opacity: relance ? 0.6 : 1 }}
+          title="Dit pourquoi chaque virement du mois ne se rapproche pas — ne modifie rien">
+          🔍 Pourquoi ces virements ne se rapprochent pas
         </button>
         <button onClick={() => setShowImport(true)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>
           <FileText size={14} /> Importer relevé bancaire
@@ -540,6 +554,8 @@ function BanqueSection({ user }) {
       {showImport && (
         <ReleveImportModal onClose={() => setShowImport(false)} onDone={reload} user={user} />
       )}
+
+      {analyse && <AnalyseVirementsModal a={analyse} onClose={() => setAnalyse(null)} />}
 
       {linkFrom && (
         <LinkTwoModal from={linkFrom} list={list} onClose={() => setLinkFrom(null)} onLink={handleLink} />
@@ -1068,6 +1084,50 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => onPick(env, null)} style={{ ...btnNormal, flex: 1 }}>Confirmer sans choisir</button>
           <button onClick={onClose} style={{ ...btnNormal, flex: 1 }}>Annuler</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Dit, virement par virement, ce qui empêche le rapprochement. Rien n'est modifié ici :
+// c'est un constat, pas une action. Le texte est sélectionnable pour pouvoir être recopié.
+function AnalyseVirementsModal({ a, onClose }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: 16, padding: 24, maxWidth: 760, width: '100%', border: '0.5px solid #e5d8c3' }}>
+        <h3 style={{ margin: '0 0 4px' }}>🔍 Virements de {a.mois} qui ne se rapprochent pas</h3>
+        <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 12 }}>
+          {a.total} caisse(s) virement non rapprochée(s). Rien n'a été modifié.
+        </div>
+        {a.resume.map(r => (
+          <div key={r.raison} style={{ display: 'flex', gap: 8, fontSize: 13, padding: '5px 10px', marginBottom: 4, background: '#EDE4F6', color: '#5b2a86', borderRadius: 8 }}>
+            <b>{r.n}</b><span>{r.raison}</span>
+          </div>
+        ))}
+        <div style={{ maxHeight: 330, overflowY: 'auto', marginTop: 12 }}>
+          {a.details.map(d => (
+            <div key={d.id} style={{ padding: '7px 10px', borderBottom: '1px solid #f0e8db', fontSize: 12.5 }}>
+              <div><b>{d.client}</b> · {fmtDateCourte(d.date)} · {fmtMoney(d.montant)}</div>
+              <div style={{ color: '#99201E' }}>{d.raison}{d.detail ? ` — ${d.detail}` : ''}</div>
+              {d.indice && <div style={{ color: '#8a7a70', fontSize: 11, wordBreak: 'break-word' }}>{d.indice}</div>}
+            </div>
+          ))}
+          {!a.details.length && <div style={{ fontSize: 13, color: '#0a7d3d', padding: 8 }}>Aucun virement en attente ce mois-ci.</div>}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          {/* Le cadre n'en montre qu'une partie à la fois : sans ce bouton, impossible de
+              transmettre le rapport ENTIER à quelqu'un qui doit l'analyser. */}
+          <button style={btnNormal} onClick={() => {
+            const txt = `Virements de ${a.mois} non rapprochés — ${a.total} caisse(s)\n\n`
+              + a.resume.map(r => `${r.n}  ${r.raison}`).join('\n')
+              + '\n\n'
+              + a.details.map(d => `${d.client} · ${d.date} · ${d.montant} dh\n  ${d.raison}${d.detail ? ' — ' + d.detail : ''}\n  ${d.indice || '-'}`).join('\n')
+            navigator.clipboard.writeText(txt)
+              .then(() => alert('Rapport complet copié. Tu peux le coller dans la conversation.'))
+              .catch(() => alert('Copie impossible depuis ce navigateur.'))
+          }}>📋 Copier tout le rapport</button>
+          <button onClick={onClose} style={btnNormal}>Fermer</button>
         </div>
       </div>
     </div>

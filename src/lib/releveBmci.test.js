@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reconcileEnvelopes, parseBmciReleve, nomAutreCliente, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
+import { reconcileEnvelopes, parseBmciReleve, nomAutreCliente, nomDansLibelle, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
 
 // Une enveloppe déjà justifiée par une PREUVE PHOTO manuelle (proof_url sans
 // releve_status) ne doit pas être re-rapprochée à l'import du relevé, et son
@@ -327,7 +327,8 @@ describe('reconcileEnvelopes — orthographe proche du nom de la cliente', () =>
   it('ne rapproche pas une cliente vraiment différente', () => {
     const autre = { ...caisse, virement_client: 'Iraqi Yacout' }
     const { results } = reconcileEnvelopes([autre], [ligne], {})
-    expect(results[0].status).toBe('absent')
+    // Depuis « payé par un tiers », la ligne peut être PROPOSÉE — jamais validée seule.
+    expect(results[0].status).not.toBe('trouve')
   })
 })
 
@@ -342,7 +343,9 @@ describe('reconcileEnvelopes — repli instantané et nom d\'une autre cliente',
 
   it('ne prend pas le virement d\'une autre cliente', () => {
     const { results } = reconcileEnvelopes([caisse], [ligne], {})
-    expect(results[0].status).toBe('absent')
+    // Proposée à confirmer (un proche a pu payer), mais jamais verte toute seule : c'est
+    // exactement ce qui avait donné un virement de LEBDAR NAWAL à deux caisses.
+    expect(results[0].status).not.toBe('trouve')
   })
 
   it('propose sans valider quand le libellé ne porte aucun nom', () => {
@@ -435,7 +438,7 @@ describe('non-régression : espèces, chèques et virements ensemble', () => {
   it('espèces : toujours rapprochées', () => expect(st('ESP')).toBe('trouve'))
   it('chèques : toujours rapprochés', () => expect(st('CHQ')).toBe('trouve'))
   it('virement au bon nom : rapproché', () => expect(st('VIR')).toBe('trouve'))
-  it('virement au nom d\'une autre cliente : refusé', () => expect(st('BAD')).toBe('absent'))
+  it('virement au nom d\'une autre cliente : jamais validé seul', () => expect(st('BAD')).not.toBe('trouve'))
   it('caisse sans nom et sans ligne de son montant : absente', () => expect(st('ANO')).toBe('absent'))
   it('la ligne de Nawal reste libre pour elle', () => {
     expect(r.unmatched.map(u => u.credit)).toContain(950)
@@ -494,5 +497,83 @@ describe('marge de chargement des caisses', () => {
   it('vaut exactement le recul autorisé d\'un virement nommé', () => {
     expect(CAISSE_APRES_DERNIERE_LIGNE).toBe(-windowFor('virement', true).min)
     expect(CAISSE_APRES_DERNIERE_LIGNE).toBe(14)
+  })
+})
+
+// Un même nom arabe s'écrit de plusieurs façons en lettres latines. Vécu, juin 2026 :
+// Odoo dit « Iraqui yaqot », la banque écrit « VIRT RECU MLLE YACOUT IRAQI » — la ligne
+// était bien la sienne, et l'app ne la reconnaissait pas.
+describe('nomDansLibelle — écritures différentes d\'un même nom', () => {
+  const oui = [
+    ['Iraqui yaqot', 'VIRT RECU MLLE YACOUT IRAQI'],
+    ['Bennomar Salma', 'VIRT RECU MME SELMA BENOMAR'],
+    ['Lina Cherkaoui', 'VIR INST RECU CHARKAOUI LINA'],
+    ['Nawal Lebdar', 'VIR INST RECU LEBDAR NAWAL'],
+  ]
+  const non = [
+    ['Maryam el bairi', 'VIRT RECU MLLE YACOUT IRAQI'],
+    ['Maryam el bairi', 'VIR INST RECU LEBDAR NAWAL'],
+    ['Iraqui yaqot', 'VIR INST RECU LEBDAR NAWAL'],
+    ['Lina Cherkaoui', 'VIR INST RECU MLE SALMA KHYARI'],
+    ['Charkaoui Lina', 'VIR INST RECU KENZA BELAAZIZ'],
+    ['touria hakam', 'VIR INST RECU SAMIA 2160458 260610287017 2606'],
+  ]
+  it.each(oui)('reconnaît %s dans « %s »', (client, label) => {
+    expect(nomDansLibelle(client, label)).toBe(true)
+  })
+  it.each(non)('ne confond pas %s avec « %s »', (client, label) => {
+    expect(nomDansLibelle(client, label)).toBe(false)
+  })
+
+  it('rapproche enfin le virement d\'Iraqui yaqot', () => {
+    const ligne = { credit: 600, dateIso: '2026-06-03', type: 'virement_recu', label: 'VIRT RECU MLLE YACOUT IRAQI' }
+    const caisse = {
+      id: 'IY', amount_cash: 600, payment_method: 'virement',
+      releve_status: null, session_date: '2026-06-02', virement_client: 'Iraqui yaqot',
+    }
+    expect(reconcileEnvelopes([caisse], [ligne], {}).results[0].status).toBe('trouve')
+  })
+
+  it('ne le donne pas à la caisse de Maryam el bairi', () => {
+    const ligne = { credit: 600, dateIso: '2026-06-03', type: 'virement_recu', label: 'VIRT RECU MLLE YACOUT IRAQI' }
+    const caisse = {
+      id: 'MB', amount_cash: 600, payment_method: 'virement',
+      releve_status: null, session_date: '2026-06-03', virement_client: 'Maryam el bairi',
+    }
+    expect(reconcileEnvelopes([caisse], [ligne], {}).results[0].status).not.toBe('trouve')
+  })
+})
+
+// Vécu, juin 2026 : une cliente est payée par un PROCHE. La ligne est là, même jour, même
+// montant — mais au nom du mari, d'un parent, d'une société. Sept cas sur sept.
+describe('reconcileEnvelopes — payé par un tiers', () => {
+  const ligne = { credit: 469, dateIso: '2026-06-10', type: 'virement_recu', label: 'VIR INST RECU DAIMY MAROUANE' }
+  const caisse = {
+    id: 'HP', amount_cash: 469, payment_method: 'virement',
+    releve_status: null, session_date: '2026-06-10', virement_client: 'hortense perret',
+  }
+
+  it('propose la ligne au lieu de la cacher', () => {
+    const { results } = reconcileEnvelopes([caisse], [ligne], {})
+    expect(results[0].status).toBe('a_confirmer')
+    expect(results[0].candidates.map(c => c.label)).toContain('VIR INST RECU DAIMY MAROUANE')
+  })
+
+  it('ne la valide JAMAIS toute seule', () => {
+    const { results } = reconcileEnvelopes([caisse], [ligne], {})
+    expect(results[0].status).not.toBe('trouve')
+  })
+
+  it('ne propose rien si le tiers a payé bien trop tôt', () => {
+    const loin = { ...ligne, dateIso: '2026-05-20' }
+    const { results } = reconcileEnvelopes([caisse], [loin], {})
+    expect(results[0].status).toBe('absent')
+  })
+
+  it('préfère toujours la ligne à SON nom quand elle existe', () => {
+    const sienne = { ...ligne, dateIso: '2026-06-09', label: 'VIR INST RECU PERRET HORTENSE' }
+    const { results } = reconcileEnvelopes([caisse], [sienne, ligne], {})
+    expect(results[0].status).toBe('trouve')
+    expect(results[0].line.label).toBe('VIR INST RECU PERRET HORTENSE')
   })
 })

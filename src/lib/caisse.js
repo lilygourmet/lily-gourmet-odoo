@@ -2,7 +2,7 @@
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
 import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI } from './releveDoublons'
-import { reconcileEnvelopes, nomAutreCliente, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
+import { reconcileEnvelopes, nomAutreCliente, nomDansLibelle, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
 export { ECART_MINI }
 
 // ============================================================
@@ -740,6 +740,100 @@ export async function relancerRapprochement({ annulerFaux = true } = {}) {
     }
   }
   return { trouve, a_confirmer: aConfirmer, lignes: txns.length, annules }
+}
+
+// Pourquoi les virements d'un mois ne se rapprochent-ils PAS ? Dit, caisse par caisse, ce
+// qui bloque — au lieu de laisser deviner. Ne modifie rien.
+//
+// Les raisons sont exclusives et données dans l'ordre où elles bloquent : on s'arrête à la
+// première qui explique. C'est le même cheminement que le rapprochement lui-même
+// (montant, puis fenêtre de dates, puis nom), donc le diagnostic ne peut pas diverger du
+// comportement réel.
+export async function analyserVirements(year, month) {
+  const { start, end } = monthBounds(year, month)
+  const finInclus = new Date(new Date(end) - 86400000).toISOString().slice(0, 10)
+  const caisses = (await loadBanqueEnvelopesBetween(start, finInclus))
+    .filter(e => (e.payment_method || 'cash') === 'virement' && e.releve_status !== 'trouve')
+  const libres = (await loadAllFreeReleveLines())
+    .filter(l => (l.type === 'virement_recu' || l.type === 'autre') && l.ligne_date)
+  const { data: prisesRaw } = await supabase.from('caisse_releve_lignes')
+    .select('amount, label, ligne_date, type, used_by').not('used_by', 'is', null).limit(5000)
+  const prises = (prisesRaw || []).filter(l => l.type === 'virement_recu' || l.type === 'autre')
+
+  const memeMontant = (l, e) => Math.abs(Number(l.amount) - Number(e.amount_cash)) < ECART_MINI
+  const jours = (l, e) => (new Date(l.ligne_date) - new Date(e.session_date)) / 86400000
+  const dansFenetre = (l, e) => {
+    const w = windowFor('virement', nomDansLibelle(e.virement_client, l.label))
+    const j = jours(l, e)
+    return j >= w.min && j <= w.max
+  }
+
+  // L'ordre compte. Chercher d'abord la fenêtre de dates, puis le nom, donnait des
+  // diagnostics absurdes : pour une caisse « Boutaina el Ouadrhiri », l'app désignait la
+  // ligne du bon montant la plus proche en date — « VIR INST RECU OUMZIL RANIA », une
+  // autre cliente — et annonçait « hors fenêtre de −134 j ». Le vrai blocage n'est pas la
+  // date : c'est qu'AUCUNE ligne n'est à son nom.
+  // On cherche donc d'abord les lignes à SON nom, et la date ne départage qu'ensuite.
+  const details = caisses.map(e => {
+    const base = { id: e.id, client: e.virement_client || '(sans nom)', date: e.session_date, montant: Number(e.amount_cash) }
+    const dit = (raison, detail, indice) => ({ ...base, raison, detail: detail || '', indice: indice || '' })
+    // Le libellé ENTIER. Coupé à 45 caractères, il donnait l'illusion que la banque
+    // n'écrivait aucun nom : « VIR INST RECU EL 2203607 758236382266 0072026 » — alors que
+    // « EL ATTARI » continuait après la coupe. Le diagnostic accusait le relevé d'un défaut
+    // qui n'était que celui de son propre affichage.
+    const ecrire = l => `${l.ligne_date} · ${l.label || ''}`
+
+    // Un montant négatif est un remboursement ou une correction : il n'y a aucun
+    // encaissement à trouver en face. Le ranger avec les virements introuvables faisait
+    // chercher pour rien.
+    if (Number(e.amount_cash) <= 0) return dit('montant négatif — remboursement, rien à rapprocher')
+    const duMontant = libres.filter(l => memeMontant(l, e))
+    if (!duMontant.length) {
+      const prise = prises.find(l => memeMontant(l, e))
+      return prise
+        ? dit('ligne déjà prise par une autre caisse', '', ecrire(prise))
+        : dit('aucune ligne de ce montant dans les relevés importés')
+    }
+    if (!nomFiable(nomDeLigne(e.virement_client))) {
+      return dit('pas de nom de cliente dans Odoo — jamais validé tout seul',
+        `${duMontant.length} ligne(s) de ce montant`, ecrire(duMontant[0]))
+    }
+    const aSonNom = duMontant.filter(l => nomDansLibelle(e.virement_client, l.label))
+    if (!aSonNom.length) {
+      // Le bon montant, le bon jour, mais un autre nom : c'est presque toujours un proche
+      // qui a payé pour elle. Le dire, plutôt que de la ranger avec les introuvables — la
+      // ligne est là, il suffit de la confirmer.
+      const leJour = duMontant
+        .filter(l => Math.abs(jours(l, e)) <= 1)
+        .sort((a, b) => Math.abs(jours(a, e)) - Math.abs(jours(b, e)))[0]
+      if (leJour) {
+        return dit('payé par quelqu\'un d\'autre ? — ligne du bon montant, le bon jour, à un autre nom',
+          'à confirmer dans la liste des caisses', ecrire(leJour))
+      }
+      return dit('aucune ligne à son nom',
+        `${duMontant.length} ligne(s) de ce montant, toutes à d'autres noms et à d'autres dates`,
+        ecrire(duMontant[0]))
+    }
+    const dedans = aSonNom.filter(l => dansFenetre(l, e))
+    if (!dedans.length) {
+      const proche = [...aSonNom].sort((a, b) => Math.abs(jours(a, e)) - Math.abs(jours(b, e)))[0]
+      const j = Math.round(jours(proche, e))
+      return dit('ligne à son nom, mais hors fenêtre de dates', `${j > 0 ? '+' : ''}${j} jours`, ecrire(proche))
+    }
+    if (dedans.length > 1) {
+      return dit('plusieurs lignes possibles à son nom — à confirmer', `${dedans.length} lignes`, ecrire(dedans[0]))
+    }
+    return dit('devrait se rapprocher — relance le calcul', '', ecrire(dedans[0]))
+  })
+
+  const parRaison = new Map()
+  for (const d of details) parRaison.set(d.raison, (parRaison.get(d.raison) || 0) + 1)
+  return {
+    mois: start.slice(0, 7),
+    total: caisses.length,
+    resume: [...parRaison.entries()].sort((a, b) => b[1] - a[1]).map(([raison, n]) => ({ raison, n })),
+    details: details.sort((a, b) => String(a.date).localeCompare(String(b.date))),
+  }
 }
 
 // Refait le rapprochement d'un MOIS complet, à zéro.
