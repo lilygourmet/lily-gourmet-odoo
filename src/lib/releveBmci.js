@@ -536,9 +536,20 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
       if (named.length) return named
       // Caisse sans nom de cliente : on ne sait rien, tout candidat reste possible.
       if (!nameTokens(env.virement_client).length) return c
-      // Caisse nommée, aucune ligne à son nom : on écarte celles qui nomment quelqu'un
-      // d'autre, et on propose le reste (libellés sans nom lisible) à confirmer.
-      return c.filter(x => !nomAutreCliente(env.virement_client, x.label))
+      // Caisse nommée : on préfère les lignes qui ne nomment personne d'autre.
+      const neutres = c.filter(x => !nomAutreCliente(env.virement_client, x.label))
+      if (neutres.length) return neutres
+      // Rien à son nom, et toutes les lignes nomment quelqu'un d'autre. C'est souvent un
+      // PROCHE qui a payé pour elle : le mari, un parent, une société. Vécu en juin 2026 —
+      // hortense perret, 469 dh le 10/06, et l'unique ligne de 469 dh du 10/06 est au nom
+      // de DAIMY MAROUANE. Sept cas sur sept tombaient le même jour.
+      // On les PROPOSE (l'étape 1 exige le nom pour valider : elles ne deviendront jamais
+      // vertes toutes seules), dans la fenêtre étroite seulement — un tiers paie pour CETTE
+      // commande-là, pas quinze jours plus tôt — et les trois plus proches au maximum,
+      // sinon un montant courant en proposerait treize.
+      const w2 = windowFor('virement')
+      return c.filter(x => signedDays(x.dateIso, env.session_date) >= w2.min
+                        && signedDays(x.dateIso, env.session_date) <= w2.max).slice(0, 3)
     }
     return c
   }

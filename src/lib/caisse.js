@@ -800,8 +800,19 @@ export async function analyserVirements(year, month) {
     }
     const aSonNom = duMontant.filter(l => nomDansLibelle(e.virement_client, l.label))
     if (!aSonNom.length) {
+      // Le bon montant, le bon jour, mais un autre nom : c'est presque toujours un proche
+      // qui a payé pour elle. Le dire, plutôt que de la ranger avec les introuvables — la
+      // ligne est là, il suffit de la confirmer.
+      const leJour = duMontant
+        .filter(l => Math.abs(jours(l, e)) <= 1)
+        .sort((a, b) => Math.abs(jours(a, e)) - Math.abs(jours(b, e)))[0]
+      if (leJour) {
+        return dit('payé par quelqu\'un d\'autre ? — ligne du bon montant, le bon jour, à un autre nom',
+          'à confirmer dans la liste des caisses', ecrire(leJour))
+      }
       return dit('aucune ligne à son nom',
-        `${duMontant.length} ligne(s) de ce montant, toutes à d'autres noms`, ecrire(duMontant[0]))
+        `${duMontant.length} ligne(s) de ce montant, toutes à d'autres noms et à d'autres dates`,
+        ecrire(duMontant[0]))
     }
     const dedans = aSonNom.filter(l => dansFenetre(l, e))
     if (!dedans.length) {
