@@ -382,6 +382,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   if (!noeud) { setChemin([]); return null }
 
   const q = quantites[noeud.produit] ?? prevus[noeud.produit]?.q ?? defautDe(noeud)
+  // Les gâteaux que l'article de tête sert. Seul le catalogue « Déclarer » les
+  // connaît (`pour`) ; la fiche, ouverte article par article, ne les a pas.
+  const gateauxMere = (tout || []).find(x => x.produit === tete.produit)?.pour || []
   const decoupe = decoupeDe(noeud)
   // L'étape de mise en forme qu'on confirmera en validant — la base de flan.
   const pressage = pressageDe(noeud)
@@ -447,6 +450,18 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
           })()
           : (
             <div className="print-area">
+            {/* ⚠️ À L'IMPRESSION SEULEMENT : D'OÙ VIENT CETTE FICHE.
+                Sur une feuille posée au plan de travail, « Crème au beurre »
+                ne dit ni laquelle ni pour quel gâteau — et l'écran, lui, a le
+                fil d'Ariane juste au-dessus. « montrer l'article mère dans
+                l'impression pour qu'on sache de quelle crème au beurre il
+                s'agit » (Layla, 2026-09-14).
+                Deux lignes : le chemin parcouru, puis les gâteaux que cet
+                article sert (le catalogue « Déclarer » les connaît). */}
+            <div className="hidden print:block text-[9pt] text-ink-mute mb-1 leading-snug">
+              {chemin.length > 1 && <div>{chemin.map(propre).join(' › ')}</div>}
+              {gateauxMere.length > 0 && <div>pour : {gateauxMere.map(propre).join(' · ')}</div>}
+            </div>
             <Fiche noeud={noeud} quantite={q} onQuantite={v => poser(noeud.produit, v)}
               cuites={decoupe ? aCuire(noeud, decoupe) : undefined}
               onCuites={decoupe

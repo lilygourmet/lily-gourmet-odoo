@@ -40,7 +40,7 @@ vi.mock('../lib/fabAnnexe', async importOriginal => {
   return {
     ...vrai,                                   // les VRAIES règles de calcul
     loadFabAnnexe: async () => { listesLues++; return [sirop] },
-    loadToutFabAnnexe: async () => [],
+    loadToutFabAnnexe: async () => [{ ...sirop, pour: ['E- Tiramisu'] }],
     loadArticlesFabAnnexe: async () => [sirop],
     loadHistoriqueAnnexe: async () => [],
     declarer: (...a) => declarer(...a),
@@ -144,5 +144,17 @@ describe('la case « À faire »', () => {
     const vu = [...document.querySelectorAll('div')].map(e => e.textContent)
       .find(t => /^en stock/.test(t || ''))
     expect(vu.replace(/\u202f|\u00a0/g, ' ')).toBe('en stock 1 200 g')
+  })
+})
+
+// « montrer l'article mère dans l'impression pour qu'on sache de quelle crème
+// au beurre il s'agit » (Layla, 2026-09-14). Sur une feuille posée au plan de
+// travail, le titre seul ne dit pas pour quel gâteau on travaille — l'écran,
+// lui, a son fil d'Ariane juste au-dessus.
+describe('l’impression de la fiche', () => {
+  it('porte les gâteaux que l’article sert', async () => {
+    await ouvrirLaFiche()
+    await waitFor(() => expect(screen.getByText(/pour :/)).toBeTruthy())
+    expect(screen.getByText(/pour :/).textContent).toBe('pour : Tiramisu')
   })
 })
