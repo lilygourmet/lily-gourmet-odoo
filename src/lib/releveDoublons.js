@@ -60,6 +60,43 @@ export function memeDepotSansNumero(ligne, caisse, joursMax = 7) {
   return jours <= joursMax
 }
 
+// Un même nom arabe s'écrit de plusieurs façons en lettres latines : Odoo dit « Iraqui
+// yaqot », la banque écrit « YACOUT IRAQI ». Le K, le Q et le C notent le même son, OU et
+// U aussi, Y et I aussi, et les lettres doublées ne s'entendent pas. On ramène tout ça à
+// une écriture unique avant de comparer.
+const translitterer = w => w
+  .replace(/OU/g, 'U').replace(/PH/g, 'F')
+  .replace(/[QC]/g, 'K').replace(/Y/g, 'I')
+  .replace(/(.)\1+/g, '$1')
+
+// Est-ce la MÊME personne ? On compare MOT À MOT, chaque mot cherchant son meilleur
+// partenaire dans l'autre nom, plutôt que les deux noms bout à bout.
+//
+// Le nom entier était trop sévère : « IRAQI YACOUT » et « IRAQUI YAQOT » tombaient à 0,75
+// — deux écritures du même nom, refusées. Mot à mot, IRAKI/IRAKUI et IAKUT/IAKOT se
+// reconnaissent chacun, et une cliente de juin cessait d'être introuvable.
+//
+// Chaque mot doit trouver son partenaire : il ne suffit pas qu'UN mot corresponde. Sans
+// cette exigence, deux sœurs au même nom de famille deviendraient la même personne.
+export function memePersonne(a, b, seuilMot = 0.8) {
+  const mots = s => (s || '').split(' ').filter(w => w.length >= 4).map(translitterer)
+  const ma = mots(a), mb = mots(b)
+  if (!ma.length || !mb.length) return false
+  const [court, long] = ma.length <= mb.length ? [ma, mb] : [mb, ma]
+  const pris = new Set()
+  for (const m of court) {
+    let meilleur = -1, ou = -1
+    long.forEach((n, i) => {
+      if (pris.has(i)) return
+      const sim = similarite(m, n)
+      if (sim > meilleur) { meilleur = sim; ou = i }
+    })
+    if (meilleur < seuilMot) return false
+    pris.add(ou)
+  }
+  return true
+}
+
 // Ressemblance entre deux textes, de 0 (rien à voir) à 1 (identiques) — distance de Levenshtein.
 export function similarite(a, b) {
   if (!a || !b) return 0

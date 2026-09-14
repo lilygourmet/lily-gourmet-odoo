@@ -1115,7 +1115,20 @@ function AnalyseVirementsModal({ a, onClose }) {
           ))}
           {!a.details.length && <div style={{ fontSize: 13, color: '#0a7d3d', padding: 8 }}>Aucun virement en attente ce mois-ci.</div>}
         </div>
-        <button onClick={onClose} style={{ ...btnNormal, marginTop: 12 }}>Fermer</button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          {/* Le cadre n'en montre qu'une partie à la fois : sans ce bouton, impossible de
+              transmettre le rapport ENTIER à quelqu'un qui doit l'analyser. */}
+          <button style={btnNormal} onClick={() => {
+            const txt = `Virements de ${a.mois} non rapprochés — ${a.total} caisse(s)\n\n`
+              + a.resume.map(r => `${r.n}  ${r.raison}`).join('\n')
+              + '\n\n'
+              + a.details.map(d => `${d.client} · ${d.date} · ${d.montant} dh\n  ${d.raison}${d.detail ? ' — ' + d.detail : ''}\n  ${d.indice || '-'}`).join('\n')
+            navigator.clipboard.writeText(txt)
+              .then(() => alert('Rapport complet copié. Tu peux le coller dans la conversation.'))
+              .catch(() => alert('Copie impossible depuis ce navigateur.'))
+          }}>📋 Copier tout le rapport</button>
+          <button onClick={onClose} style={btnNormal}>Fermer</button>
+        </div>
       </div>
     </div>
   )
