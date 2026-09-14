@@ -197,6 +197,22 @@ const sansRef = t => String(t || '').replace(/^\[[^\]]*\]\s*/, '').trim()
  * (Citron) / (Praliné Amandes caramélisées) / … Le catalogue peut donc nommer
  * soit l'article simple, soit une variante précise — on essaie les deux.
  */
+/**
+ * DERNIER RECOURS : LA CASSE. Odoo compare les noms lettre par lettre.
+ * Le catalogue disait « SM. Sirop Imbibage Mini Cake Chocolat **Kg** » quand
+ * Odoo écrit « …**KG** » : l'article disparaissait de l'écran avec
+ * « introuvable dans Odoo — renommé ? ». Une seule lettre. (Layla, 2026-09-14.)
+ *
+ * On ne s'en sert QUE quand la recherche exacte n'a rien donné — donc presque
+ * jamais. Le résultat d'`ilike` est refiltré au nom près : un « contient » ne
+ * doit pas ramener un article voisin.
+ */
+async function chercheALaCasse(nom) {
+  const proches = await sr('product.product', [['name', 'ilike', nom]], CHAMPS_PRODUIT, { limit: 40 })
+  return proches.find(x => net(x.name) === net(nom))
+    || proches.find(x => net(x.display_name) === net(nom)) || null
+}
+
 export function produitParNom(cache, nomBrut) {
   // « [178] E- Tiramisu » : la référence interne d'Odoo n'est pas dans `name`.
   const nom = String(nomBrut || '').replace(/^\[[^\]]*\]\s*/, '').trim()
@@ -208,9 +224,12 @@ export function produitParNom(cache, nomBrut) {
       // « SM- 20 cm Vitrine (Praliné Amandes caramélisées) » : on cherche la
       // variante par son nom complet.
       const base = String(nom).replace(/\s*\([^()]*\)\s*$/, '').trim()
-      if (!base || base === nom) return null
-      const freres = await sr('product.product', [['name', '=', base]], CHAMPS_PRODUIT, { limit: 40 })
-      return freres.find(x => net(x.display_name) === net(nom)) || null
+      if (base && base !== nom) {
+        const freres = await sr('product.product', [['name', '=', base]], CHAMPS_PRODUIT, { limit: 40 })
+        const v = freres.find(x => net(x.display_name) === net(nom))
+        if (v) return v
+      }
+      return chercheALaCasse(nom)
     }))
   }
   return cache.produits.get(nom)

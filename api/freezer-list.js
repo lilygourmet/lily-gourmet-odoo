@@ -971,7 +971,8 @@ function refuseSiAberrant(nom, qty, unite) {
 }
 
 async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = null, prefixe = 'WHLVP/MO/', ajustements = null) {
-  const champs = ['id', 'display_name', 'uom_id', 'product_tmpl_id', 'product_template_attribute_value_ids']
+  // `name` sert au repli sur la casse, plus bas.
+  const champs = ['id', 'name', 'display_name', 'uom_id', 'product_tmpl_id', 'product_template_attribute_value_ids']
   let prod = (await odooSearchRead(uid, 'product.product',
     [['name', '=', nomProduit]], champs, { limit: 1 }))[0]
   // ⚠️ Un article À PARFUMS porte le MÊME `name` pour tous ses parfums : les
@@ -979,13 +980,23 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   // display_name dit (Ananas) / (Fruits Rouges) / (Mangue/Passion). Chercher le
   // nom complet dans `name` ne trouvait donc RIEN, et l'ordre n'était pas créé
   // (vécu le 2026-09-04 sur les 135 mini cheese cake Fruits Rouges).
+  const netNom = t => String(t || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
   if (!prod) {
     const base = String(nomProduit).replace(/\s*\([^()]*\)\s*$/, '').trim()
     if (base && base !== nomProduit) {
-      const net = t => String(t || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
       const freres = await odooSearchRead(uid, 'product.product', [['name', '=', base]], champs, { limit: 40 })
-      prod = freres.find(x => net(x.display_name) === net(nomProduit)) || null
+      prod = freres.find(x => netNom(x.display_name) === netNom(nomProduit)) || null
     }
+  }
+  // ⚠️ ET LA CASSE, en dernier. Odoo compare lettre par lettre : « … Chocolat
+  // Kg » ne trouve pas « … Chocolat KG », et la fournée ne partait pas — une
+  // seule lettre d'écart (Layla, 2026-09-14). On refiltre au nom près : un
+  // « contient » ne doit pas lancer l'ordre d'un article voisin.
+  if (!prod) {
+    const proches = await odooSearchRead(uid, 'product.product',
+      [['name', 'ilike', nomProduit]], champs, { limit: 40 })
+    prod = proches.find(x => netNom(x.name) === netNom(nomProduit))
+      || proches.find(x => netNom(x.display_name) === netNom(nomProduit)) || null
   }
   if (!prod) throw new Error('article introuvable dans Odoo : ' + nomProduit)
   const bom = (await odooSearchRead(uid, 'mrp.bom',
