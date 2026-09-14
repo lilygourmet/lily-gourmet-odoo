@@ -777,8 +777,16 @@ export async function analyserVirements(year, month) {
   const details = caisses.map(e => {
     const base = { id: e.id, client: e.virement_client || '(sans nom)', date: e.session_date, montant: Number(e.amount_cash) }
     const dit = (raison, detail, indice) => ({ ...base, raison, detail: detail || '', indice: indice || '' })
-    const ecrire = l => `${l.ligne_date} · ${(l.label || '').slice(0, 45)}`
+    // Le libellé ENTIER. Coupé à 45 caractères, il donnait l'illusion que la banque
+    // n'écrivait aucun nom : « VIR INST RECU EL 2203607 758236382266 0072026 » — alors que
+    // « EL ATTARI » continuait après la coupe. Le diagnostic accusait le relevé d'un défaut
+    // qui n'était que celui de son propre affichage.
+    const ecrire = l => `${l.ligne_date} · ${l.label || ''}`
 
+    // Un montant négatif est un remboursement ou une correction : il n'y a aucun
+    // encaissement à trouver en face. Le ranger avec les virements introuvables faisait
+    // chercher pour rien.
+    if (Number(e.amount_cash) <= 0) return dit('montant négatif — remboursement, rien à rapprocher')
     const duMontant = libres.filter(l => memeMontant(l, e))
     if (!duMontant.length) {
       const prise = prises.find(l => memeMontant(l, e))
