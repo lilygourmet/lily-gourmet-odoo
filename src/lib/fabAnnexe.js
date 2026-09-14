@@ -741,11 +741,23 @@ export function enClair(noeud, quantite) {
   return bouts.join(' · ')
 }
 
-/** « SM. Biscuit a la cuillere (plaque) » → « plaque ». */
+/**
+ * « SM. Biscuit a la cuillere (plaque) » → « plaque ».
+ *
+ * ⚠️ SAUF si la parenthèse ne contient qu'une UNITÉ. « SM. Mousse Meringue
+ * Citron (kg) » n'est pas une chose qui s'appelle « kg » : c'est une mousse.
+ * L'écran de découpe écrivait donc « kg » tout seul au-dessus du gros chiffre,
+ * là où il devait dire ce qu'on est en train de faire. Layla, le 2026-09-14 :
+ * « j'ai pas compris comment cette fiche fonctionne ».
+ */
+const UNITE_SEULE = /^(kg|g|gr|grammes?|u|u\.|units?|unit[ée]s?|pcs?|pi[eè]ces?|l|cl|ml)$/i
+
 export const nomCourt = nom => {
   const n = String(nom || '').replace(/^\s*(\[[^\]]*\]\s*)?(SM|MP|MI|GS|RA|GM|CD|E|F|V)[-./\s]\s*/i, '')
   const par = n.match(/\(([^)]+)\)\s*$/)
-  return (par ? par[1] : n).trim().toLowerCase()
+  if (par && !UNITE_SEULE.test(par[1].trim())) return par[1].trim().toLowerCase()
+  // Sans parenthèse utile, c'est le nom lui-même — débarrassé de l'unité.
+  return n.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase() || n.trim().toLowerCase()
 }
 
 /**
