@@ -191,9 +191,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * au prorata du poids obtenu, et un sirop qui rend moins aurait consommé
    * moins de café que ce qu'on a mis dedans.
    */
-  const envoyerUn = (noeud, tete, qty) => {
+  const envoyerUn = (noeud, tete, qty, prevu = 0) => {
     const racine = noeud.produit === tete.produit
-    if (racine) return envoyerAValider(tete, qty, user?.id)
+    // `prevu` : ce qu'on a VOULU faire. Les ingrédients le suivent, lui, et pas
+    // le poids obtenu — voir `peseesPrevues`.
+    if (racine) return envoyerAValider(tete, qty, user?.id, prevu)
     const fois = noeud.tourneeTaille > 0 ? qty / noeud.tourneeTaille : 1
     return declarer({
       produit: noeud.produit, unite: noeud.unite, fois, qty,
@@ -209,7 +211,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   /** Ce qu'on cuit : le chiffre réglé à la main, sinon ce qui manque. */
   const aCuire = (noeud, decoupe) => cuites[noeud.produit] ?? aCuireParDefaut(decoupe.enfant)
 
-  const envoyer = async (noeud, tete, qty, cuitesReelles = null, pressees = 0) => {
+  const envoyer = async (noeud, tete, qty, cuitesReelles = null, pressees = 0, prevu = 0) => {
     if (!(qty > 0) || envoi) return
     // ⚠️ Le jeton de connexion dure 12 h. Sur une tablette allumée toute la
     // journée il expire en plein travail : l'écran a l'air normal, mais plus
@@ -258,7 +260,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         }
         r = r || { erreur: null }
       } else {
-        r = await envoyerUn(noeud, tete, qty)
+        r = await envoyerUn(noeud, tete, qty, prevu)
       }
       if (r.erreur) toast(`Enregistré, mais Odoo a refusé : ${r.erreur}`)
       else {
@@ -438,7 +440,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                   ? envoyer(noeud, tete, q, sortie.valeur)
                   : surPressage
                     ? envoyer(noeud, tete, q, null, sortie.valeur)
-                    : envoyer(noeud, tete, sortie.valeur))} />
+                    // ⚠️ `q` voyage à côté de ce qui est sorti : c'est lui
+                    // qui décide des ingrédients (Layla, 2026-09-14).
+                    : envoyer(noeud, tete, sortie.valeur, null, 0, q))} />
             )
           })()
           : (

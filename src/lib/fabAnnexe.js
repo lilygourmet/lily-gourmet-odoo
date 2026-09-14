@@ -931,15 +931,39 @@ export function cuveDeclaree(article) {
  * le sirop et l'amaretti à 128 via la recette. Seuls les ingrédients figés
  * sont imposés, à la tournée entière — c'est le rôle de `article.ajustements`.
  */
-export function envoyerAValider(article, sortie, userId) {
+export function envoyerAValider(article, sortie, userId, prevu = 0) {
   return declarer({
     produit: article.produit, qty: sortie, unite: article.unite,
-    // ⚠️ Ce qui a été déclaré prime sur la règle de trois (voir `cuveDeclaree`).
-    // ⚠️ Un presque-là part avec ce qu'il en RESTE, pas avec ce que dit la
-    // recette : sinon Odoo passerait son stock en négatif.
-    ajustements: { ...(article.ajustements || {}), ...toutConsomme(article),
+    // ⚠️ CE QU'ON A PESÉ D'ABORD — voir `peseesPrevues`. Ce qui suit l'écrase :
+    // un figé, un presque-là, une cuve déclarée en savent plus.
+    ajustements: { ...peseesPrevues(article, prevu),
+      ...(article.ajustements || {}), ...toutConsomme(article),
       ...cuveDeclaree(article) },
   }, userId)
+}
+
+/**
+ * LES INGRÉDIENTS SUIVENT CE QU'ON A VOULU FAIRE, PAS CE QUI EST SORTI.
+ *
+ * « c'est la recette de 5 537,7 mais ça m'a sorti 5 664 — les ingrédients
+ * doivent suivre 5 537,7 » (Layla, 2026-09-14, sur le confit de framboise).
+ *
+ * Une préparation qui se PÈSE part d'ingrédients fixes : on met 1 758 g de
+ * framboise, et il en sort ce qu'il en sort. Laissé à lui-même, Odoo remet
+ * tout au prorata du poids obtenu — donc 1 798 g de framboise qui ne sont
+ * jamais passés dans la bassine. C'est le même calcul que `peseesDe` fait
+ * depuis toujours pour les COMPOSANTS ; il manquait à l'article de tête.
+ *
+ * ⚠️ NE VAUT PAS POUR CE QUI SE COMPTE À LA PIÈCE. Un montage de 128 tiramisus
+ * au lieu de 140 consomme vraiment 128 biscuits : là, le prorata d'Odoo a
+ * raison, et on le laisse faire.
+ */
+export function peseesPrevues(article, prevu) {
+  if (!(prevu > 0)) return {}
+  if (/^u$/i.test(String(article?.unite || '').trim())) return {}
+  const fournee = Number(article?.tournee) || 0
+  if (!(fournee > 0)) return {}
+  return peseesDe(enNoeud(article), prevu / fournee)
 }
 
 // ============================================================
