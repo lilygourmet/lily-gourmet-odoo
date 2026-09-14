@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reconcileEnvelopes, parseBmciReleve, nomAutreCliente, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
+import { reconcileEnvelopes, parseBmciReleve, nomAutreCliente, nomDansLibelle, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
 
 // Une enveloppe déjà justifiée par une PREUVE PHOTO manuelle (proof_url sans
 // releve_status) ne doit pas être re-rapprochée à l'import du relevé, et son
@@ -494,5 +494,49 @@ describe('marge de chargement des caisses', () => {
   it('vaut exactement le recul autorisé d\'un virement nommé', () => {
     expect(CAISSE_APRES_DERNIERE_LIGNE).toBe(-windowFor('virement', true).min)
     expect(CAISSE_APRES_DERNIERE_LIGNE).toBe(14)
+  })
+})
+
+// Un même nom arabe s'écrit de plusieurs façons en lettres latines. Vécu, juin 2026 :
+// Odoo dit « Iraqui yaqot », la banque écrit « VIRT RECU MLLE YACOUT IRAQI » — la ligne
+// était bien la sienne, et l'app ne la reconnaissait pas.
+describe('nomDansLibelle — écritures différentes d\'un même nom', () => {
+  const oui = [
+    ['Iraqui yaqot', 'VIRT RECU MLLE YACOUT IRAQI'],
+    ['Bennomar Salma', 'VIRT RECU MME SELMA BENOMAR'],
+    ['Lina Cherkaoui', 'VIR INST RECU CHARKAOUI LINA'],
+    ['Nawal Lebdar', 'VIR INST RECU LEBDAR NAWAL'],
+  ]
+  const non = [
+    ['Maryam el bairi', 'VIRT RECU MLLE YACOUT IRAQI'],
+    ['Maryam el bairi', 'VIR INST RECU LEBDAR NAWAL'],
+    ['Iraqui yaqot', 'VIR INST RECU LEBDAR NAWAL'],
+    ['Lina Cherkaoui', 'VIR INST RECU MLE SALMA KHYARI'],
+    ['Charkaoui Lina', 'VIR INST RECU KENZA BELAAZIZ'],
+    ['touria hakam', 'VIR INST RECU SAMIA 2160458 260610287017 2606'],
+  ]
+  it.each(oui)('reconnaît %s dans « %s »', (client, label) => {
+    expect(nomDansLibelle(client, label)).toBe(true)
+  })
+  it.each(non)('ne confond pas %s avec « %s »', (client, label) => {
+    expect(nomDansLibelle(client, label)).toBe(false)
+  })
+
+  it('rapproche enfin le virement d\'Iraqui yaqot', () => {
+    const ligne = { credit: 600, dateIso: '2026-06-03', type: 'virement_recu', label: 'VIRT RECU MLLE YACOUT IRAQI' }
+    const caisse = {
+      id: 'IY', amount_cash: 600, payment_method: 'virement',
+      releve_status: null, session_date: '2026-06-02', virement_client: 'Iraqui yaqot',
+    }
+    expect(reconcileEnvelopes([caisse], [ligne], {}).results[0].status).toBe('trouve')
+  })
+
+  it('ne le donne pas à la caisse de Maryam el bairi', () => {
+    const ligne = { credit: 600, dateIso: '2026-06-03', type: 'virement_recu', label: 'VIRT RECU MLLE YACOUT IRAQI' }
+    const caisse = {
+      id: 'MB', amount_cash: 600, payment_method: 'virement',
+      releve_status: null, session_date: '2026-06-03', virement_client: 'Maryam el bairi',
+    }
+    expect(reconcileEnvelopes([caisse], [ligne], {}).results[0].status).toBe('absent')
   })
 })

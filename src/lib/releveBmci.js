@@ -8,7 +8,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 // Odoo compte les centimes, la banque arrondit : même seuil que partout ailleurs pour
 // décider que deux montants sont LE MÊME montant.
-import { ECART_MINI, nomDeLigne, nomFiable, signatureDepot, similarite } from './releveDoublons'
+import { ECART_MINI, memePersonne, nomDeLigne, nomFiable, signatureDepot, similarite } from './releveDoublons'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -380,6 +380,10 @@ export function nomDansLibelle(client, label) {
   if (!toks.length) return false
   const L = norm(label)
   if (toks.some(t => L.includes(t))) return true
+  // Mot à mot (voir memePersonne) : c'est ce qui reconnaît « Iraqui yaqot » dans
+  // « VIRT RECU MLLE YACOUT IRAQI ». La comparaison du nom entier reste en second filet,
+  // elle rattrape les cas où un mot manque d'un côté.
+  if (memePersonne(nomDeLigne(label), nomDeLigne(client))) return true
   return similarite(nomDeLigne(label), nomDeLigne(client)) >= 0.85
 }
 
