@@ -937,6 +937,32 @@ export function poidsAberrant(qty, unite) {
   return g !== null && g > PLAFOND_G
 }
 
+/**
+ * LE COMPTE DOIT TOMBER JUSTE : ce qu'on écrit dans l'ordre doit peser ce
+ * qu'on a demandé.
+ *
+ * Vécu le 2026-09-14 : deux ordres de mousse meringue citron créés à **0,8 g**
+ * au lieu de 800 (`WHPDX/MO/21481` et `21494`), alors que l'écran avait bien
+ * envoyé 800 g. Le stock de la mousse est tombé à −800 g. La cause exacte
+ * n'est pas retrouvée — la recette Odoo avait changé d'unité dans la journée —
+ * mais un facteur mille ne doit JAMAIS passer en silence.
+ *
+ * On recompte donc en grammes des deux côtés. S'ils ne disent pas la même
+ * chose à 1 % près, rien ne part.
+ */
+function refuseSiPasLeCompte(nom, demande, uniteDemande, qty, uniteBom) {
+  const voulu = enGrammes(demande, uniteDemande || 'kg')
+  const ecrit = enGrammes(qty, uniteBom)
+  // L'un des deux se compte en pièces : il n'y a pas de poids à comparer.
+  if (voulu === null || ecrit === null) return
+  if (!(voulu > 0) || !(ecrit > 0)) return
+  const ecart = Math.abs(ecrit - voulu) / voulu
+  if (ecart <= 0.01) return
+  throw new Error(`${nom} : l'ordre pèserait ${Math.round(ecrit)} g pour `
+    + `${Math.round(voulu)} g demandés. Rien n'a été créé dans Odoo —`
+    + ' préviens Layla, c\'est une unité qui ne tombe pas juste.')
+}
+
 function refuseSiAberrant(nom, qty, unite) {
   if (!poidsAberrant(qty, unite)) return
   const kg = Math.round(enGrammes(qty, unite) / 1000)
@@ -981,6 +1007,7 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   let qty = Math.round(brut * 1000) / 1000
   if (!(qty > 0)) throw new Error('quantité invalide')
   refuseSiAberrant(prod.display_name, qty, uniteBom)
+  refuseSiPasLeCompte(prod.display_name, qtyKg, unite, qty, uniteBom)
 
   // ⚠️ Les lignes de la recette servent DEUX fois : au garde-fou ci-dessous et
   // aux mouvements plus bas. Une seule lecture, gardée en mémoire.
