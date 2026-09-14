@@ -74,6 +74,22 @@ export function CasesAFaire({ articles, onOuvrir }) {
                 introuvable dans Odoo — renommé ?
               </div>
             )}
+            {/* CE QU'IL EN RESTE, sous le nom. « Dans à faire montre le stock
+                actuel des articles » (Layla, 2026-09-14) : la pastille dit quoi
+                faire, ce chiffre dit ce qu'on a déjà sous la main.
+                ⚠️ Un stock négatif s'affiche à zéro — c'est un compteur faux,
+                pas une dette, et l'app le compte déjà comme tel.
+                ⚠️ Et ce qui a été déclaré AUJOURD'HUI se dit à côté : le stock
+                d'Odoo ne monte qu'à la validation, sans ça l'écran annoncerait
+                « en stock 0 » juste après une fournée. */}
+            {!a.absent && (
+              <div className="text-[12.5px] text-ink-mute mt-0.5">
+                en stock {qte(Math.max(0, a.stock || 0), a.unite)}
+                {a.dejaFait > 0 && (
+                  <span className="text-ok font-bold"> · {qte(a.dejaFait, a.unite)} aujourd'hui</span>
+                )}
+              </div>
+            )}
             {/* Le besoin total sous le nom, quand une fournée n'y suffit pas :
                 la pastille dit quoi faire maintenant, cette ligne dit pourquoi. */}
             {!a.absent && a.reste > aFaireMaintenant(a) && (

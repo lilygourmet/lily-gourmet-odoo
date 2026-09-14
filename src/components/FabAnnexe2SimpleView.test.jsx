@@ -23,7 +23,7 @@ let listesLues = 0
 // Le sirop : compté en KILOS chez Odoo, fournée de 5,55 kg.
 const sirop = {
   produit: 'SM. sirop Imbibage production KG', libelle: 'Sirop imbibage', unite: 'kg',
-  tournee: 5.55, stock: 0, dejaFait: 0, reste: 5.55, mini: 0, maxi: 0,
+  tournee: 5.55, stock: 1.2, dejaFait: 0, reste: 5.55, mini: 0, maxi: 0,
   figes: [], figesNom: 'Monté sur place', ajustements: {}, tailles: [],
   photo: 'E- Tiramisu', etat: 'rupture',
   composants: [{ produit: 'MP- Sucre Granule', unite: 'g', besoin: 2000, stock: 0,
@@ -132,5 +132,17 @@ describe('mettre à jour les recettes', () => {
     await waitFor(() => expect(relireRecettes).toHaveBeenCalled())
     // et l'écran repart chercher les fiches au lieu de resservir les siennes
     await waitFor(() => expect(listesLues).toBeGreaterThan(avant))
+  })
+})
+
+// « dans à faire montre le stock actuel des articles » (Layla, 2026-09-14).
+describe('la case « À faire »', () => {
+  it('dit ce qu’il en reste, en grammes', async () => {
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    await waitFor(() => expect(screen.getByText('Sirop imbibage')).toBeTruthy())
+    // 1,2 kg chez Odoo → « en stock 1 200 g » (les espaces fines varient)
+    const vu = [...document.querySelectorAll('div')].map(e => e.textContent)
+      .find(t => /^en stock/.test(t || ''))
+    expect(vu.replace(/\u202f|\u00a0/g, ' ')).toBe('en stock 1 200 g')
   })
 })
