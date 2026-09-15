@@ -135,15 +135,18 @@ describe('mettre à jour les recettes', () => {
   })
 })
 
-// « dans à faire montre le stock actuel des articles » (Layla, 2026-09-14).
+// « dans à faire montre le stock actuel des articles » (Layla, 2026-09-14),
+// puis « si l'article existe, ne pas me dire "il existe" — avec une autre
+// couleur » (2026-09-15) : le chiffre seul, et la couleur qui parle.
 describe('la case « À faire »', () => {
-  it('dit ce qu’il en reste, en grammes', async () => {
+  it('dit ce qu’il en reste, en grammes et en vert', async () => {
     render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
     await waitFor(() => expect(screen.getByText('Sirop imbibage')).toBeTruthy())
-    // 1,2 kg chez Odoo → « en stock 1 200 g » (les espaces fines varient)
-    const vu = [...document.querySelectorAll('div')].map(e => e.textContent)
-      .find(t => /^en stock/.test(t || ''))
-    expect(vu.replace(/\u202f|\u00a0/g, ' ')).toBe('en stock 1 200 g')
+    // 1,2 kg chez Odoo → « 1 200 g » (les espaces fines varient)
+    const vu = [...document.querySelectorAll('div')]
+      .find(e => /^1.200 g$/.test((e.textContent || '').replace(/\u202f|\u00a0/g, ' ')))
+    expect(vu).toBeTruthy()
+    expect(vu.className).toMatch(/text-ok/)
   })
 })
 

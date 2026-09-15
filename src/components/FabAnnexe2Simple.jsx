@@ -74,32 +74,25 @@ export function CasesAFaire({ articles, onOuvrir }) {
                 introuvable dans Odoo — renommé ?
               </div>
             )}
-            {/* CE QU'IL EN RESTE, sous le nom. « Dans à faire montre le stock
-                actuel des articles » (Layla, 2026-09-14) : la pastille dit quoi
-                faire, ce chiffre dit ce qu'on a déjà sous la main.
-                ⚠️ Un stock négatif s'affiche à zéro — c'est un compteur faux,
-                pas une dette, et l'app le compte déjà comme tel.
-                ⚠️ Et ce qui a été déclaré AUJOURD'HUI se dit à côté : le stock
-                d'Odoo ne monte qu'à la validation, sans ça l'écran annoncerait
-                « en stock 0 » juste après une fournée. */}
+            {/* CE QU'IL EN RESTE, EN COULEUR. « Si l'article existe, ne pas me
+                dire "il existe" — avec une autre couleur » (Layla, 2026-09-15) :
+                le VERT dit qu'il y en a, le ROUGE qu'il n'y en a plus. Une seule
+                ligne, un seul chiffre — la pastille du haut dit déjà quoi faire.
+                ⚠️ Le besoin TOTAL (« il en faut 124 ») a disparu d'ici avec la
+                phrase : si l'atelier le redemande, il revient à côté du chiffre,
+                pas sur une deuxième ligne.
+                ⚠️ Un stock négatif s'affiche à zéro : c'est un compteur faux, pas
+                une dette, et l'app le compte déjà comme tel.
+                ⚠️ Ce qui a été déclaré AUJOURD'HUI se dit à côté — le stock
+                d'Odoo ne monte qu'à la validation, sans ça la case annoncerait
+                zéro juste après une fournée. */}
             {!a.absent && (
-              <div className="text-[12.5px] text-ink-mute mt-0.5">
-                en stock {qte(Math.max(0, a.stock || 0), a.unite)}
+              <div className={`text-[13.5px] font-extrabold mt-0.5 tabular-nums
+                ${Math.max(0, a.stock || 0) > 0 ? 'text-ok' : 'text-danger'}`}>
+                {qte(Math.max(0, a.stock || 0), a.unite)}
                 {a.dejaFait > 0 && (
-                  <span className="text-ok font-bold"> · {qte(a.dejaFait, a.unite)} aujourd'hui</span>
+                  <span className="text-ok"> · {qte(a.dejaFait, a.unite)} aujourd'hui</span>
                 )}
-              </div>
-            )}
-            {/* LE BESOIN TOTAL, toujours. La pastille dit quoi faire MAINTENANT
-                (au plus une fournée), cette ligne dit combien il en faut EN TOUT.
-                ⚠️ Elle ne s'affichait qu'en cas d'écart entre les deux — donc une
-                case sur deux avait une ligne de moins, et les autres deux. « des
-                fois tu commences par il en faut, des fois par en stock » (Layla,
-                2026-09-14). Toutes les cases disent maintenant les deux mêmes
-                choses, dans le même ordre. */}
-            {!a.absent && a.reste > 0 && (
-              <div className="text-[12.5px] text-ink-mute mt-0.5">
-                il en faut {qte(a.reste, a.unite)}
               </div>
             )}
           </div>

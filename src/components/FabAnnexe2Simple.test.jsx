@@ -58,36 +58,45 @@ describe('l’accueil', () => {
     expect(onOuvrir).toHaveBeenCalledWith('SM- Tiramisu 15cm')
   })
 
-  it('la pastille dit ce qu’on fait MAINTENANT, le besoin total va dessous', () => {
+  it('la pastille dit ce qu’on fait MAINTENANT', () => {
     // Cadre forêt noir : il en faut 352, la recette en fait 88 à la fois.
     const cadre = { produit: 'SM- cadre foret noir grand Production',
-      libelle: 'Cadre forêt noir', reste: 352, tournee: 88 }
+      libelle: 'Cadre forêt noir', reste: 352, tournee: 88, stock: 0, unite: 'u' }
     render(<CasesAFaire articles={[cadre]} onOuvrir={() => {}} />)
     expect(screen.getByText('88')).toBeTruthy()
-    expect(screen.getByText(/il en faut 352/)).toBeTruthy()
   })
 
-  // ⚠️ RÈGLE CHANGÉE LE 2026-09-14. Avant, le besoin total disparaissait quand
-  // une seule fournée y suffisait — pour ne pas répéter la pastille. Résultat :
-  // une case sur deux avait une ligne de moins que sa voisine. « des fois tu
-  // commences par il en faut, des fois par en stock » (Layla). Toutes les cases
-  // disent maintenant les deux mêmes choses, dans le même ordre.
-  it('dit le besoin total MÊME quand une fournée suffit', () => {
-    const royal = { produit: 'SM- Royal Chocolat 15 cm', libelle: 'Royal 15 cm', reste: 13, tournee: 13 }
+  // ⚠️ RÈGLE CHANGÉE LE 2026-09-15 : « si l'article existe, ne pas me dire
+  // "il existe" — avec une autre couleur » (Layla). Plus de phrase sous le nom,
+  // et plus de besoin total : un seul chiffre, le stock, dont la COULEUR dit
+  // tout. Vert = il y en a, rouge = il n'y en a plus.
+  it('le stock est VERT quand il en reste', () => {
+    const royal = { produit: 'SM- Royal Chocolat 15 cm', libelle: 'Royal 15 cm',
+      reste: 13, tournee: 13, stock: 6, unite: 'u' }
     render(<CasesAFaire articles={[royal]} onOuvrir={() => {}} />)
-    expect(screen.getByText(/il en faut 13/)).toBeTruthy()
+    const chiffre = [...document.querySelectorAll('div')].find(e => e.textContent === '6 u')
+    expect(chiffre.className).toMatch(/text-ok/)
   })
 
-  it('les deux lignes sont TOUJOURS là, et dans le même ordre', () => {
+  it('et ROUGE quand il n’y en a plus', () => {
+    const vide = { produit: 'SM. Base CBS 23 cm', libelle: 'Base CBS 23 cm',
+      reste: 15, tournee: 10, stock: 0, unite: 'u' }
+    render(<CasesAFaire articles={[vide]} onOuvrir={() => {}} />)
+    const chiffre = [...document.querySelectorAll('div')].find(e => e.textContent === '0 u')
+    expect(chiffre.className).toMatch(/text-danger/)
+  })
+
+  it('plus aucune phrase sous le nom', () => {
     const deux = [
       { produit: 'A', libelle: 'Un', reste: 13, tournee: 13, stock: 8, unite: 'u' },
       { produit: 'B', libelle: 'Deux', reste: 352, tournee: 88, stock: 0, unite: 'u' },
     ]
     render(<CasesAFaire articles={deux} onOuvrir={() => {}} />)
+    expect(screen.queryByText(/en stock|il en faut/)).toBeNull()
     const lignes = [...document.querySelectorAll('div')]
-      .map(e => e.textContent || '')
-      .filter(t => /^(en stock|il en faut)/.test(t))
-    expect(lignes).toEqual(['en stock 8 u', 'il en faut 13 u', 'en stock 0 u', 'il en faut 352 u'])
+      .map(e => (e.textContent || '').replace(/\u202f|\u00a0/g, ' '))
+      .filter(t => /^\d[\d ]* u$/.test(t))
+    expect(lignes).toEqual(['8 u', '0 u'])
   })
 
   it('le dit quand il n’y a rien, sans jargon', () => {
@@ -832,10 +841,10 @@ describe('un article compté en kilos', () => {
 
   it('la case d’accueil aussi', () => {
     const article = { produit: 'SM. sirop Imbibage production KG', libelle: 'Sirop imbibage',
-      unite: 'kg', reste: 11.1, tournee: 5.55 }
+      unite: 'kg', reste: 11.1, tournee: 5.55, stock: 1.2 }
     render(<CasesAFaire articles={[article]} onOuvrir={() => {}} />)
     expect(screen.getByText(/5.550/)).toBeTruthy()          // la pastille
-    expect(screen.getByText(/il en faut 11.100 g/)).toBeTruthy()
+    expect(screen.getByText(/1.200 g/)).toBeTruthy()        // le stock, en grammes
   })
 })
 
