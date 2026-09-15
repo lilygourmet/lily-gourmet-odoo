@@ -60,6 +60,10 @@ export function ChoixImpression({
             const on = seule || !!coches[f.produit]
             const p = seule ? 0 : profondeurDe(f)
             const tape = f.produit in tapes
+            // ⚠️ IL Y EN A DÉJÀ ASSEZ : rien à faire, donc rien à imprimer.
+            // « ce qui est déjà en stock s'écrit en vert et non cliqué »
+            // (Layla, 2026-09-15) — même langage que les cases de « À faire ».
+            const assez = !(f.qty > 0)
             return (
               <div key={f.produit}
                 className="flex items-center gap-2.5 py-2 border-t border-cream-deep first:border-0"
@@ -73,9 +77,11 @@ export function ChoixImpression({
                   ✓
                 </button>
                 <span className="flex-1 min-w-0">
-                  <span className={`block text-[14.5px] leading-tight
-                    ${on ? 'font-bold' : 'text-ink-mute'}`}>{propre(f.libelle)}</span>
-                  <span className="block text-[12px] text-ink-mute">
+                  <span className={`block text-[14.5px] leading-tight font-bold
+                    ${assez ? 'text-ok' : on ? '' : 'text-ink-mute font-normal'}`}>
+                    {propre(f.libelle)}
+                  </span>
+                  <span className={`block text-[12px] ${assez ? 'text-ok' : 'text-ink-mute'}`}>
                     {f.stock > 0.001 ? `il en reste ${qte(f.stock, f.unite)}` : 'rien en stock'}
                     {/* Sert à deux endroits : on additionne, et on le dit. */}
                     {f.pour.length > 1 && (

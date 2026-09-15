@@ -398,7 +398,14 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // `choisies`, la même table que la fiche. Un chiffre tapé à la main s'y
   // range, donc il se fige ; le ↺ l'en retire et l'app reprend la main.
   const feuilles = impr ? feuillesAImprimer(noeud, q, choisies) : []
-  const coches = impr?.coches ?? cocheesParDefaut(feuilles)
+  // ⚠️ On ne garde QUE les cases touchées à la main. Le reste se redéduit du
+  // stock à chaque frappe : baisser la quantité du gâteau doit pouvoir faire
+  // repasser un composant en « tu en as assez », et le décocher tout seul.
+  const coches = (() => {
+    const d = cocheesParDefaut(feuilles)
+    return Object.fromEntries(feuilles.map(f =>
+      [f.produit, impr?.choix?.[f.produit] ?? d[f.produit]]))
+  })()
   const aImprimer = feuilles.filter(f => coches[f.produit])
 
   /**
@@ -443,7 +450,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         <div className="flex items-start justify-between gap-3 print:hidden">
           <Fil chemin={chemin} onRetour={() => { figer(q); setSortie(null); setChemin(chemin.slice(0, -1)) }} />
           {sortie === null && (
-            <button onClick={() => setImpr({ mode: 'seule', coches: null })}
+            <button onClick={() => setImpr({ mode: 'seule', choix: {} })}
               className="shrink-0 rounded-xl border border-cream-deep bg-cream-warm px-3 py-2
                          text-[13px] font-bold text-ink-soft">
               🖨 Imprimer
@@ -454,13 +461,10 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         {impr && (
           <ChoixImpression
             feuilles={feuilles} mode={impr.mode} coches={coches} tapes={quantites}
-            onMode={m => setImpr(x => ({ ...x, mode: m, coches }))}
-            onCoche={(p, v) => setImpr(x => ({ ...x, coches: { ...coches, [p]: v } }))}
-            onQuantite={(p, v) => { poser(p, v); setImpr(x => ({ ...x, coches })) }}
-            onRendre={p => {
-              setQuantites(x => { const n = { ...x }; delete n[p]; return n })
-              setImpr(x => ({ ...x, coches }))
-            }}
+            onMode={m => setImpr(x => ({ ...x, mode: m }))}
+            onCoche={(p, v) => setImpr(x => ({ ...x, choix: { ...(x.choix || {}), [p]: v } }))}
+            onQuantite={(p, v) => poser(p, v)}
+            onRendre={p => setQuantites(x => { const n = { ...x }; delete n[p]; return n })}
             onImprimer={lancerImpression}
             onFermer={() => setImpr(null)} />
         )}

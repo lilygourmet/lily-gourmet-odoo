@@ -201,3 +201,21 @@ describe('le bouton imprimer', () => {
         .replace(/\u202f|\u00a0/g, ' ')).toBe('3 000'))
   })
 })
+
+// « tout ce qui manque la cascade entière ; ce qui est déjà en stock s'écrit
+// en vert et non cliqué » (Layla, 2026-09-15).
+describe('le panneau « tout ce qui manque »', () => {
+  it('ce qu’on a déjà s’écrit en vert et reste décoché', async () => {
+    window.print = vi.fn()
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Tout ce qui manque'))
+    // Le sirop a 1,2 kg en stock pour une fournée de 5,55 : il en manque,
+    // donc il reste coché et n'est PAS vert.
+    const ligne = screen.getByLabelText('Sirop imbibage')
+    expect(ligne.getAttribute('aria-checked')).toBe('true')
+    const nom = [...document.querySelectorAll('span')]
+      .find(e => e.textContent === 'Sirop imbibage')
+    expect(nom.className).not.toMatch(/text-ok/)
+  })
+})
