@@ -1,0 +1,179 @@
+// @vitest-environment jsdom
+// ============================================================
+// AJOUTER UNE LIVRAISON À UNE COMMANDE : LE PARCOURS EN ENTIER.
+//
+// « Si je rajoute une livraison à un client déjà confirmé, qu'est-ce qui
+// changera ? » (Layla, 2026-09-15) — rien, avant. Maintenant deux questions,
+// dans cet ordre, et jamais rien d'automatique :
+//
+//   1. « Cette commande devient une livraison » → décaler l'heure ?
+//   2. « Prévenir le client maintenant ? »      → envoyer le message ?
+//
+// ⚠️ Ce que ce test garde surtout : RIEN ne part au client sans un oui
+// explicite. « L'envoi au client reste un choix » (Layla).
+// ============================================================
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+
+const updateOrderDate = vi.fn(async () => ({}))
+const addOrderLine = vi.fn(async () => ({}))
+const sendTemplate = vi.fn(async () => ({}))
+const reponses = []                       // ce que Layla répond aux questions
+const confirmDialog = vi.fn(async () => (reponses.length ? reponses.shift() : false))
+
+const lignes = []                         // ce que la commande contient
+vi.mock('../lib/commande', () => ({
+  loadOrderLines: async () => lignes.map(l => ({ ...l })),
+  addOrderLine: (...a) => addOrderLine(...a),
+  updateOrderLine: async () => ({}),
+  deleteOrderLine: async () => ({}),
+  addOrderWarning: async () => ({}),
+  removeOrderWarning: async () => ({}),
+  updateOrderDate: (...a) => updateOrderDate(...a),
+  loadOrderCatalog: async () => [],
+  loadOrderProduct: async () => null,
+  loadWarehouses: async () => [],
+  setOrderWarehouse: async () => ({}),
+  removeOrderPhoto: async () => ({}),
+  syncManufacturingOrders: async () => ({}),
+}))
+vi.mock('../lib/deliveries', () => ({
+  loadLivreurs: async () => [], loadDeliveryStates: async () => ({}),
+  assignDelivery: async () => ({}), setLivraisonLocalisation: async () => ({}),
+}))
+vi.mock('../lib/conversations', () => ({
+  recordDevisTraitement: async () => ({}), loadDevisPhotos: async () => [],
+  sendTemplate: (...a) => sendTemplate(...a),
+}))
+vi.mock('../lib/modifications', () => ({ createModification: async () => ({}) }))
+vi.mock('./ProductConfigurator', () => ({ ConfiguratorModal: () => null, PRICE_EDITABLE: new Set() }))
+vi.mock('./CakeDayPlanning', () => ({ default: () => null }))
+vi.mock('./CopyableRef', () => ({ default: () => null }))
+vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
+vi.mock('../lib/confirmDialog', () => ({ confirmDialog: (...a) => confirmDialog(...a) }))
+vi.mock('../lib/photoCompress', () => ({ filePhoto: async () => null }))
+vi.mock('../lib/auth', () => ({ canSeeWatiInfo: () => true }))
+
+const { default: OrderEditModal } = await import('./OrderEditModal')
+
+// Une commande CONFIRMÉE, retrait à 15h, chez un client qui a WhatsApp.
+const commande = {
+  id: 42, name: 'S52797', state: 'sale', clientName: 'Mme Alaoui',
+  clientPhone: '212661234567', deliveryAt: '2026-09-16 14:00:00',
+  slotText: '', amountText: '450 MAD', productLines: [],
+}
+const user = { id: 'u1', role: 'admin' }
+
+beforeEach(() => {
+  lignes.length = 0
+  reponses.length = 0
+  updateOrderDate.mockClear(); sendTemplate.mockClear(); confirmDialog.mockClear()
+})
+afterEach(cleanup)
+
+const ouvrir = async () => {
+  render(<OrderEditModal order={commande} onClose={() => {}} onChanged={() => {}} user={user} embedded />)
+  await waitFor(() => expect(screen.getByText('Mme Alaoui')).toBeTruthy())
+}
+
+const boutonEnregistrer = () =>
+  screen.getAllByText(/Enregistrer/i).find(b => b.tagName === 'BUTTON')
+
+/** Touche une quantité : c'est ce qui déclenche l'enregistrement. */
+const toucherUneQuantite = () => {
+  const q = document.querySelector('input[type="number"]')
+  fireEvent.change(q, { target: { value: '2' } })
+}
+
+const ajouterLivraisonPuisEnregistrer = async () => {
+  await ouvrir()
+  const b = boutonEnregistrer()
+  expect(b).toBeTruthy()
+  return b
+}
+
+describe('les deux questions', () => {
+  it('l’écran s’ouvre sur la commande confirmée', async () => {
+    await ouvrir()
+    expect(screen.getByText('Mme Alaoui')).toBeTruthy()
+  })
+
+  it('⚠️ sans ligne « Livraison », aucune question n’est posée', async () => {
+    const b = await ajouterLivraisonPuisEnregistrer()
+    fireEvent.click(b)
+    await waitFor(() => expect(confirmDialog).not.toHaveBeenCalled())
+    expect(updateOrderDate).not.toHaveBeenCalled()
+    expect(sendTemplate).not.toHaveBeenCalled()
+  })
+})
+
+describe('⚠️ rien ne part au client tout seul', () => {
+  it('le message n’est JAMAIS envoyé sans un oui explicite', async () => {
+    reponses.push(false)                       // « Non, laisser l'heure »
+    const b = await ajouterLivraisonPuisEnregistrer()
+    fireEvent.click(b)
+    await waitFor(() => expect(sendTemplate).not.toHaveBeenCalled())
+  })
+})
+
+
+describe('la commande contient une livraison', () => {
+  // ⚠️ Le nom TEL QU'ODOO L'ÉCRIT : un retour à la ligne devant.
+  const ligneLivraison = { id: 7, name: '\n  Livraison (Souissi)',
+    rawName: '\n  Livraison (Souissi)', qty: 1, price: 50, discount: 0 }
+
+  it('la première question est posée, avec le bon créneau', async () => {
+    lignes.push(ligneLivraison)
+    reponses.push(false)                          // on répond « non » pour l'instant
+    await ouvrir()
+    toucherUneQuantite()
+    fireEvent.click(boutonEnregistrer())
+    await waitFor(() => expect(confirmDialog).toHaveBeenCalled())
+    const texte = confirmDialog.mock.calls[0][0]
+    expect(texte).toContain('devient une livraison')
+    expect(texte).toContain('entre 15h et 17h')   // retrait 15h → créneau 15h-17h
+    expect(texte).toContain('14h30')              // la cuisine prépare 30 min avant
+    expect(texte).toContain('ne sera pas prévenu')
+  })
+
+  it('« non » : rien ne bouge, ni l’heure ni le client', async () => {
+    lignes.push(ligneLivraison)
+    reponses.push(false)
+    await ouvrir()
+    toucherUneQuantite()
+    fireEvent.click(boutonEnregistrer())
+    await waitFor(() => expect(confirmDialog).toHaveBeenCalled())
+    expect(updateOrderDate).not.toHaveBeenCalled()
+    expect(sendTemplate).not.toHaveBeenCalled()
+  })
+
+  it('« oui » : l’heure est décalée, PUIS on demande pour le client', async () => {
+    lignes.push(ligneLivraison)
+    reponses.push(true, false)                    // oui décaler · pas de message
+    await ouvrir()
+    toucherUneQuantite()
+    fireEvent.click(boutonEnregistrer())
+    await waitFor(() => expect(updateOrderDate).toHaveBeenCalled())
+    expect(updateOrderDate).toHaveBeenCalledWith(42, '2026-09-16', '15:00')
+    expect(confirmDialog.mock.calls[1][0]).toContain('Prévenir le client')
+    expect(sendTemplate).not.toHaveBeenCalled()   // ⚠️ elle a dit non
+  })
+
+  it('« oui » puis « envoyer » : le message part, en UNE seule ligne', async () => {
+    lignes.push(ligneLivraison)
+    reponses.push(true, true)
+    await ouvrir()
+    toucherUneQuantite()
+    fireEvent.click(boutonEnregistrer())
+    await waitFor(() => expect(sendTemplate).toHaveBeenCalled())
+    const envoi = sendTemplate.mock.calls[0][0]
+    expect(envoi.templateName).toBe('wati_info')  // le seul qui passe hors des 24 h
+    expect(envoi.clientPhone).toBe('212661234567')
+    const texte = envoi.parameters[0].value
+    expect(texte).toContain('S52797')
+    expect(texte).toContain('16/09/2026')
+    expect(texte).toContain('entre 15h et 17h')
+    // ⚠️ WATI refuse tout retour à la ligne dans une variable de modèle.
+    expect(texte).not.toContain('\n')
+  })
+})
