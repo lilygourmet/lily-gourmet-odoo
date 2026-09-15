@@ -23,7 +23,7 @@ export async function loadFabrication(jours = 60) {
   const r = await fetch(`/api/freezer-list?mode=fabrication&jours=${jours}`)
   if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
   const data = await r.json()
-  return { ofs: data.ofs || [], ordres: data.ordres || [], recettes: data.recettes || {}, stocks: data.stocks || {}, catalogue: data.catalogue || [] }
+  return { ofs: data.ofs || [], ordres: data.ordres || [], recettes: data.recettes || {}, stocks: data.stocks || {}, catalogue: data.catalogue || [], ganaches: data.ganaches || [] }
 }
 
 /**

@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation, changerQtyOrdre } from '../lib/fabrication'
+import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation, changerQtyOrdre, validerDansOdoo } from '../lib/fabrication'
 import { buildZplInfo, estMontageCD, estPrepaEtiquetee } from '../lib/etiquettes'
 // Le verrou, sorti de l'écran pour être testable (src/lib/verrouCD.test.js).
 import { bloqueSur } from '../lib/verrouCD'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
+import { ganachesParJour, ditLeGateau, ditLePoids } from '../lib/ganaches'
 import { toast } from '../lib/toast'
 import { supabase } from '../lib/supabase'
 
@@ -397,6 +398,66 @@ function Groupe({ titre, list, sel, onToggle, faits, onFait, bloqueGateau, onVal
   )
 }
 
+/**
+ * LES GÂTEAUX À GANACHER, entre le stock et les commandes.
+ *
+ * Une pastille de la couleur du chocolat, le gâteau, le client. La couleur
+ * porte l'information : on voit noir ou blanc sans lire le mot.
+ *
+ * « Fait » valide l'ordre chez Odoo — c'est ce que Layla a demandé
+ * (2026-09-15) : la ganache a son propre ordre, il faut qu'il se ferme.
+ */
+function AGanacher({ ganaches, gateaux, faits, onFait, enCours }) {
+  const jours = ganachesParJour(ganaches, gateaux, faits)
+  if (!jours.length) return null
+  const jourLong = j => (j
+    ? new Date(j + 'T12:00:00').toLocaleDateString('fr-FR',
+      { weekday: 'long', day: 'numeric', month: 'long' })
+    : 'sans date')
+  const noir = g => /noir/i.test(String(g.chocolat || ''))
+  return (
+    <>
+      <div className="text-[12.5px] font-bold text-ink-mute mt-4 mb-1.5">🍫 À GANACHER</div>
+      {jours.map(([jour, lignes]) => (
+        <div key={jour} className="mb-2">
+          <div className="text-[11.5px] font-bold text-bordeaux uppercase tracking-wider mb-1">
+            {jourLong(jour)}
+          </div>
+          {lignes.map(g => (
+            <div key={g.ordre}
+              className="flex items-center gap-3 bg-white border border-line rounded-xl px-3 py-2.5 mb-1.5">
+              {/* La pastille EST le chocolat : on la lit sans lire le mot. */}
+              <span aria-hidden="true"
+                className={`w-8 h-8 rounded-full shrink-0 border-2
+                  ${noir(g) ? 'bg-chocolate border-chocolate' : 'bg-gold-pale border-gold-soft'}`} />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[14px] font-extrabold leading-tight">
+                  {g.chocolat}
+                  {ditLePoids(g) && <span className="font-normal text-ink-mute"> · {ditLePoids(g)}</span>}
+                </span>
+                {/* Vide quand aucun gâteau de la commande ne porte cette taille :
+                    on le DIT, plutôt que de taire la ganache. */}
+                <span className={`block text-[13px] leading-tight
+                  ${ditLeGateau(g) ? '' : 'text-danger font-bold'}`}>
+                  {ditLeGateau(g) || `aucun gâteau de ${g.pers} personnes dans la commande`}
+                </span>
+                <span className="block text-[11.5px] text-ink-mute">
+                  {[g.client, g.commande].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              <button onClick={() => onFait(g)} disabled={enCours === g.ordre}
+                className="shrink-0 rounded-lg px-3 py-2 text-[12px] font-bold
+                           bg-bordeaux text-cream disabled:opacity-50">
+                {enCours === g.ordre ? '…' : 'fait'}
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </>
+  )
+}
+
 function Titre({ n, children }) {
   return (
     <div className="flex items-center gap-2.5 mt-6 mb-2">
@@ -413,6 +474,34 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [histoireOuverte, setHistoireOuverte] = useState(false)   // fenêtre « Historique », fermée par défaut
   const [pesee, setPesee] = useState(null)                        // le bac de sirop à peser avant de cocher
   const [qtyOrdre, setQtyOrdre] = useState(null)                  // le gâteau dont on corrige la quantité
+  // La ganache en cours d'envoi : le bouton attend, on ne clique pas deux fois.
+  const [ganacheEnCours, setGanacheEnCours] = useState(null)
+
+  /**
+   * « Fait » sur une ganache : on valide son ordre chez Odoo.
+   *
+   * « fait valide l'ordre » (Layla, 2026-09-15). Il n'y a rien à cocher dans
+   * l'app : cet ordre-là n'appartient à aucun gâteau de la liste, il se ferme
+   * chez Odoo et disparaît au rechargement suivant.
+   */
+  const ganacherFait = async g => {
+    if (ganacheEnCours) return
+    setGanacheEnCours(g.ordre)
+    try {
+      const [r] = await validerDansOdoo([g.ordre], true, user?.id)
+      if (r && r.test) toast('Mode test : rien envoyé à Odoo')
+      else if (r && !r.ok) toast.error(`Odoo a refusé : ${r.message || 'raison inconnue'}`)
+      else {
+        toast.success(`${g.chocolat} — c'est noté`)
+        // On la retire tout de suite : Odoo mettra un moment à se mettre à jour.
+        setData(d => (d ? { ...d, ganaches: (d.ganaches || []).filter(x => x.ordre !== g.ordre) } : d))
+      }
+    } catch (e) {
+      toast.error(e.message || String(e))
+    } finally {
+      setGanacheEnCours(null)
+    }
+  }
   const [soldeEnCours, setSoldeEnCours] = useState(false)
   const [ouvertes, setOuvertes] = useState({})
   const [lots, setLots] = useState({})       // combien de tournées on déclare, base par base
@@ -1712,6 +1801,15 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
               <Groupe titre="STOCK" list={gateaux.filter(o => !o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquerGateau} bloqueGateau={bloquantsGateau}
                 onQty={o => setQtyOrdre({ ...o, txt: String(o.qty) })} />
+              {/* ⚠️ ENTRE LE STOCK ET LES COMMANDES, parce que c'est CELUI QUI
+                  MONTE qui ganache (Layla, 2026-09-15) : il finit ses gâteaux,
+                  il trouve la liste juste après. « CD- Ganache cakedesign » a
+                  son propre ordre chez Odoo et n'apparaissait nulle part — la
+                  S47031, livrée le 5 septembre, avait encore la sienne
+                  « confirmée » dix jours plus tard. */}
+              <AGanacher ganaches={data?.ganaches} gateaux={gateaux} faits={faits}
+                onFait={ganacherFait} enCours={ganacheEnCours} />
+
               <Groupe titre="COMMANDE" list={gateaux.filter(o => o.scode)} sel={sel} onToggle={toggle} faits={faits} onFait={marquerGateau} bloqueGateau={bloquantsGateau}
  />
 

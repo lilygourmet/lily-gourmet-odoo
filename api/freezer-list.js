@@ -1882,7 +1882,119 @@ async function fetchFabrication(uid, jours) {
       quand: m.date_planned_start || '',
     })
   }
-  return { ofs, ordres, recettes: recettesPrepa, stocks: stockDe, catalogue }
+  return { ofs, ordres, recettes: recettesPrepa, stocks: stockDe, catalogue,
+    ganaches: await ganaches(uid, iso(jRetard), iso(j1)) }
+}
+
+// ============================================================
+// LES GÂTEAUX À GANACHER.
+//
+// « CD- Ganache cakedesign » est une ligne de commande à part, avec son propre
+// ordre de fabrication — et personne ne le voyait. Deux raisons, toutes deux
+// dans ce fichier : `parseCakedesign` l'écarte comme un ingrédient, et
+// `fetchFabrication` ne cherche que les articles « CD* » quand la ganache
+// s'appelle « CD- ». Résultat vécu : la commande S47031 livrée le 5 septembre,
+// son ordre de ganache encore « confirmé » dix jours plus tard.
+//
+// LE LIEN AVEC LE GÂTEAU se fait par le NOMBRE DE PERSONNES, écrit dans les
+// deux articles : ganache « (Chocolat noir, 5) » ↔ gâteau « (5, Praliné
+// Amandes caramélisées) ». Vérifié sur les neuf commandes de septembre : huit
+// retrouvent leur gâteau. La neuvième n'a aucun gâteau de cette taille — sa
+// ligne s'affiche quand même, sans nom de gâteau : mieux vaut une question
+// posée qu'une ganache oubliée.
+//
+// ⚠️ Silencieux de bout en bout : une ganache manquée ne doit pas emporter
+// l'écran de fabrication avec elle.
+// ============================================================
+async function ganaches(uid, depuis, jusqua) {
+  try {
+    const mos = await odooSearchRead(uid, 'mrp.production', [
+      ['state', 'in', ['confirmed', 'progress', 'to_close']],
+      ['product_id.name', 'ilike', 'Ganache cakedesign'],
+      ['date_planned_start', '>=', depuis],
+      ['date_planned_start', '<=', jusqua],
+    ], ['id', 'name', 'product_id', 'product_qty', 'origin', 'date_planned_start'],
+    { limit: 200, order: 'date_planned_start asc' })
+    if (!mos.length) return []
+
+    // Ce qu'il faut peser : la ganache elle-même, dans son mouvement de composant.
+    const mvs = await odooSearchRead(uid, 'stock.move',
+      [['raw_material_production_id', 'in', mos.map(m => m.id)]],
+      ['raw_material_production_id', 'product_id', 'product_uom_qty', 'product_uom'], { limit: 400 })
+    const poids = {}
+    for (const mv of mvs) {
+      const id = Array.isArray(mv.raw_material_production_id)
+        ? mv.raw_material_production_id[0] : mv.raw_material_production_id
+      let q = mv.product_uom_qty || 0
+      const u = (Array.isArray(mv.product_uom) ? mv.product_uom[1] : '') || 'g'
+      poids[id] = (poids[id] || 0) + (/^kg$/i.test(u) ? q * 1000 : q)
+    }
+
+    // Les commandes concernées, pour le nom du client et la date de livraison.
+    const scodes = [...new Set(mos.map(m => (String(m.origin || '').match(/\bS\d{3,}\b/) || [])[0]).filter(Boolean))]
+    const cmds = scodes.length ? await odooSearchRead(uid, 'sale.order',
+      [['name', 'in', scodes]], ['name', 'partner_id', 'commitment_date'], { limit: 200 }) : []
+    const parCode = Object.fromEntries(cmds.map(c => [c.name, c]))
+
+    // Les gâteaux de ces mêmes commandes, et le fond qu'ils consomment : c'est
+    // lui qui donne le format (« 15 cm »), que la ligne de commande ne dit pas.
+    const gats = scodes.length ? await odooSearchRead(uid, 'mrp.production', [
+      ['origin', 'in', scodes],
+      ['product_id.name', 'like', 'CD-'],
+      ['state', '!=', 'cancel'],
+    ], ['id', 'name', 'product_id', 'origin'], { limit: 300 }) : []
+    const vrais = gats.filter(g => !/ganache/i.test(String(g.product_id[1])))
+    const mvg = vrais.length ? await odooSearchRead(uid, 'stock.move',
+      [['raw_material_production_id', 'in', vrais.map(g => g.id)]],
+      ['raw_material_production_id', 'product_id'], { limit: 800 }) : []
+    const fondDe = {}
+    for (const mv of mvg) {
+      const id = Array.isArray(mv.raw_material_production_id)
+        ? mv.raw_material_production_id[0] : mv.raw_material_production_id
+      const n = Array.isArray(mv.product_id) ? mv.product_id[1] : ''
+      if (fondDe[id]) continue
+      const f = parseCakedesign(n)
+      if (f && f.taille) fondDe[id] = f.taille
+    }
+
+    /** Les nombres écrits entre parenthèses : « (5, Praliné…) » → [5]. */
+    const nombresDe = n => [...String(n).matchAll(/\(([^)]*)\)/g)]
+      .flatMap(m => m[1].split(',')).map(x => x.trim())
+      .filter(x => /^\d+$/.test(x)).map(Number)
+
+    return mos.map(m => {
+      const nom = Array.isArray(m.product_id) ? m.product_id[1] : ''
+      // « CD- Ganache cakedesign (Chocolat noir, 5) » → ['Chocolat noir', '5'].
+      const dedans = ((String(nom).match(/\(([^)]*)\)\s*$/) || [])[1] || '')
+        .split(',').map(x => x.trim())
+      const chocolat = dedans.find(x => /chocolat/i.test(x)) || ''
+      const pers = Number(dedans.find(x => /^\d+$/.test(x))) || 0
+      const code = (String(m.origin || '').match(/\bS\d{3,}\b/) || [])[0] || ''
+      const cmd = parCode[code]
+      // Le gâteau de la même commande qui porte ce nombre de personnes.
+      const g = vrais.find(x => x.origin === code && nombresDe(x.product_id[1]).includes(pers))
+      const parfums = g ? [...String(g.product_id[1]).matchAll(/\(([^)]*)\)/g)]
+        .flatMap(x => x[1].split(',')).map(x => x.trim())
+        .filter(x => x && !/^\d+$/.test(x) && !/carr|rond|rectang/i.test(x)) : []
+      return {
+        ordre: m.name,
+        chocolat,
+        pers,
+        grammes: Math.round(poids[m.id] || 0),
+        qty: m.product_qty || 1,
+        commande: code,
+        client: cmd && Array.isArray(cmd.partner_id) ? cmd.partner_id[1] : '',
+        quand: (cmd && cmd.commitment_date) || m.date_planned_start || '',
+        // Vides quand aucun gâteau ne porte ce nombre de personnes : l'écran
+        // le dit alors en rouge plutôt que de taire la ganache.
+        taille: (g && fondDe[g.id]) || '',
+        parfum: parfums.length ? parfums[parfums.length - 1] : '',
+      }
+    })
+  } catch (e) {
+    console.warn('[ganaches]', (e && e.message) || e)
+    return []
+  }
 }
 
 // ============================================================

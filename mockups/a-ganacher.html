@@ -1,0 +1,307 @@
+<title>Les gâteaux à ganacher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,600&family=Karla:wght@400;500;700&display=swap">
+
+<style>
+  /* Palette de l'app (tailwind.config.js). On ne s'en invente pas une autre. */
+  :root {
+    --ground:#f7f3ec; --surface:#fff; --edge:#f1eadd; --line:#e5d8c3;
+    --ink:#1a0f0a; --ink-soft:#4a3a30; --ink-mute:#8a7a70;
+    --bordeaux:#993556; --gold:#b8893c; --danger:#a32d2d; --ok:#4a7a3a;
+    /* Les deux chocolats, pris sur la matière elle-même. */
+    --noir:#3d2418; --blanc:#e8d9b8;
+    --serif:'Fraunces',Georgia,'Times New Roman',serif;
+    --sans:'Karla',ui-sans-serif,system-ui,-apple-system,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#16100d; --surface:#221a15; --edge:#33261f; --line:#3d2e25;
+      --ink:#f6efe6; --ink-soft:#d6c6b8; --ink-mute:#9c8a7c;
+      --bordeaux:#d97d97; --gold:#d4a95c; --danger:#e08a8a; --ok:#8fc07a;
+      --noir:#5a3826; --blanc:#e8d9b8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#16100d; --surface:#221a15; --edge:#33261f; --line:#3d2e25;
+    --ink:#f6efe6; --ink-soft:#d6c6b8; --ink-mute:#9c8a7c;
+    --bordeaux:#d97d97; --gold:#d4a95c; --danger:#e08a8a; --ok:#8fc07a;
+    --noir:#5a3826; --blanc:#e8d9b8;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1060px; margin:0 auto; padding:40px 24px 80px; }
+  :focus-visible { outline:2px solid var(--bordeaux); outline-offset:2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+
+  header { border-bottom:2px solid var(--line); padding-bottom:22px; margin-bottom:36px; }
+  .kicker { font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+            color:var(--bordeaux); font-weight:700; margin:0 0 8px; }
+  h1 { font-family:var(--serif); font-style:italic; font-weight:600;
+       font-size:clamp(30px,5vw,46px); line-height:1.05; margin:0 0 12px;
+       text-wrap:balance; letter-spacing:-.01em; }
+  .chapo { max-width:64ch; color:var(--ink-soft); margin:0; font-size:17px; }
+  .chapo b { color:var(--ink); font-weight:700; }
+
+  h2 { font-family:var(--serif); font-size:24px; font-weight:600;
+       margin:0 0 6px; line-height:1.15; text-wrap:balance; }
+  .sous { color:var(--ink-soft); margin:0 0 18px; max-width:62ch; }
+  section { margin-bottom:44px; }
+
+  /* ---------- la chaîne cassée ---------- */
+  .chaine { display:flex; flex-direction:column; gap:0; max-width:640px; }
+  .maillon {
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:11px 14px; font-size:14.5px;
+  }
+  .maillon b { display:block; font-size:12px; color:var(--ink-mute);
+               letter-spacing:.08em; text-transform:uppercase; margin-bottom:2px; }
+  .maillon.perdu { border:1.5px dashed var(--danger); background:transparent; }
+  .maillon.perdu b { color:var(--danger); }
+  .fleche { color:var(--ink-mute); font-size:13px; padding:5px 0 5px 20px; }
+  .decale { margin-left:28px; }
+
+  /* ---------- le bloc proposé ---------- */
+  .bloc {
+    background:var(--surface); border:1px solid var(--line); border-radius:22px;
+    padding:16px; box-shadow:0 18px 40px rgba(75,35,28,.12); max-width:460px;
+  }
+  .bloc-titre { font-size:15px; font-weight:700; margin:0 0 12px; }
+  .cg { display:grid; grid-template-columns:auto 1fr; gap:12px;
+        padding:12px 0; border-top:1px solid var(--edge); align-items:start; }
+  .cg:first-of-type { border-top:0; padding-top:2px; }
+  /* La pastille EST le chocolat : on la lit sans lire le mot. */
+  .pion { width:34px; height:34px; border-radius:50%; border:2px solid var(--line); }
+  .pion.noir { background:var(--noir); border-color:var(--noir); }
+  .pion.blanc { background:var(--blanc); border-color:#cbb994; }
+  .cg-quoi { min-width:0; }
+  .cg-choco { font-size:15px; font-weight:800; line-height:1.15; }
+  .cg-choco .g { font-weight:400; color:var(--ink-mute); }
+  .cg-gateau { font-size:14px; line-height:1.25; margin-top:1px; }
+  .cg-qui { font-size:12.5px; color:var(--ink-mute); margin-top:2px; }
+  .cg-jour { font-size:12px; font-weight:700; color:var(--bordeaux);
+             letter-spacing:.06em; text-transform:uppercase; margin:16px 0 2px; }
+  .cg-jour:first-child { margin-top:0; }
+  .alerte { color:var(--danger); font-weight:700; }
+
+  /* ---------- les trois placements ---------- */
+  .choix { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:18px; }
+  .carte { background:var(--surface); border:1px solid var(--line);
+           border-radius:16px; padding:16px; }
+  .carte.retenu { border:2px solid var(--bordeaux); }
+  .carte h3 { font-family:var(--serif); font-size:18px; font-weight:600; margin:0 0 4px; }
+  .carte .tag { font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+                font-weight:700; color:var(--bordeaux); display:block; margin-bottom:6px; }
+  .carte p { margin:0 0 8px; font-size:14.5px; color:var(--ink-soft); }
+  .carte p:last-child { margin-bottom:0; }
+  .pour { color:var(--ok); font-weight:700; }
+  .contre { color:var(--danger); font-weight:700; }
+
+  /* ---------- les faits ---------- */
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { text-align:left; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+       color:var(--ink-mute); font-weight:700; padding:0 10px 7px; border-bottom:2px solid var(--line); }
+  td { padding:9px 10px; border-bottom:1px solid var(--edge); vertical-align:top; }
+  td.n { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .scroll { overflow-x:auto; }
+  .ko { color:var(--danger); font-weight:700; }
+  .okk { color:var(--ok); font-weight:700; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="kicker">Fabrication CD · proposition</p>
+    <h1>Les gâteaux à ganacher</h1>
+    <p class="chapo">
+      Quand une commande porte un <b>CD- Ganache cakedesign</b>, quelqu'un doit
+      masquer le gâteau au chocolat — noir ou blanc. Aujourd'hui <b>aucun écran
+      ne le dit</b>. Voici ce que j'ai trouvé dans Odoo, et ce que je propose.
+      Rien n'est codé.
+    </p>
+  </header>
+
+  <!-- ============ CE QUI SE PASSE ============ -->
+  <section>
+    <h2>Ce qui se passe aujourd'hui</h2>
+    <p class="sous">La commande S47031, celle que tu m'as montrée. Le gâteau a été
+      fait et livré le 5 septembre ; la ganache, elle, n'a jamais bougé.</p>
+
+    <div class="chaine">
+      <div class="maillon">
+        <b>La commande</b>S47031 · Lahlou zahia · livrée le 5 septembre
+      </div>
+      <div class="fleche">└ deux lignes, l'une à côté de l'autre</div>
+      <div class="maillon decale">
+        <b>Le gâteau</b>CD- Cake Design 1 étage (5, Praliné Amandes caramélisées)
+      </div>
+      <div class="fleche decale">└ il descend jusqu'au fond congelé…</div>
+      <div class="maillon decale" style="margin-left:56px">
+        <b>Ce que Fabrication CD suit</b>15 cm cakedesign (Praliné Amandes caramélisées)
+      </div>
+      <div class="fleche">└ et à côté, sans lien</div>
+      <div class="maillon perdu decale">
+        <b>La ganache — vue par personne</b>
+        CD- Ganache cakedesign (Chocolat noir, 5) → 480 g de
+        « SM. Ganache pour masquer CD (Chocolat noir) »<br>
+        <span class="alerte">Son ordre WHLVP/MO/198507 est encore « confirmé », dix jours après la livraison.</span>
+      </div>
+    </div>
+
+    <p class="sous" style="margin-top:18px">
+      Deux raisons, toutes deux dans le code : la ganache est écartée d'office
+      (<code>parseCakedesign</code> la traite comme un ingrédient), et Fabrication CD
+      ne va chercher que les articles <b>CD*</b> — or la ganache s'appelle <b>CD-</b>.
+    </p>
+  </section>
+
+  <!-- ============ CE QUE JE PROPOSE ============ -->
+  <section>
+    <h2>Ce que je propose : un bloc « à ganacher »</h2>
+    <p class="sous">Trois lignes par gâteau : le chocolat, le gâteau, le client.
+      La pastille <b>est</b> le chocolat — on la lit sans lire le mot.</p>
+
+    <div class="bloc">
+      <p class="bloc-titre">🍫 À ganacher</p>
+
+      <p class="cg-jour">Mercredi 16 septembre</p>
+      <div class="cg">
+        <span class="pion blanc"></span>
+        <span class="cg-quoi">
+          <span class="cg-choco">Chocolat blanc <span class="g">· 480 g</span></span>
+          <span class="cg-gateau">Cake design 45 cm · Praliné amandes caramélisées</span>
+          <span class="cg-qui">Splendor art · S52294</span>
+        </span>
+      </div>
+
+      <p class="cg-jour">Vendredi 3 octobre</p>
+      <div class="cg">
+        <span class="pion noir"></span>
+        <span class="cg-quoi">
+          <span class="cg-choco">Chocolat noir <span class="g">· 8 × 480 g</span></span>
+          <span class="cg-gateau">Gâteau forme carré 15 cm · Praliné amandes caramélisées</span>
+          <span class="cg-qui">Sofia Benslimane · S52682</span>
+        </span>
+      </div>
+      <div class="cg">
+        <span class="pion noir"></span>
+        <span class="cg-quoi">
+          <span class="cg-choco">Chocolat noir <span class="g">· 480 g</span></span>
+          <span class="cg-gateau">Cake design 50 cm · Praliné amandes caramélisées</span>
+          <span class="cg-qui">Souad Chami · S51550</span>
+        </span>
+      </div>
+
+      <p class="cg-jour">Samedi 12 septembre — en retard</p>
+      <div class="cg">
+        <span class="pion noir"></span>
+        <span class="cg-quoi">
+          <span class="cg-choco">Chocolat noir <span class="g">· 480 g</span></span>
+          <span class="cg-gateau alerte">Aucun gâteau de 5 personnes dans la commande</span>
+          <span class="cg-qui">Soumaya Alaoui Abdellaoui · S52683</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMMENT ON RETROUVE LE GÂTEAU ============ -->
+  <section>
+    <h2>Comment l'app sait de quel gâteau il s'agit</h2>
+    <p class="sous">Par le <b>nombre de personnes</b>, qui est écrit dans les deux
+      articles. Ganache « (Chocolat noir, <b>5</b>) » ↔ gâteau « (<b>5</b>, Praliné
+      amandes caramélisées) ». Vérifié sur les neuf commandes depuis le 1<sup>er</sup> septembre :</p>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Commande</th><th>Livraison</th><th>Ganache</th><th>Gâteau retrouvé</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="n">S52464</td><td class="n">5 sept.</td><td>blanc · 20</td><td>Cake design (20, Vanille)</td><td class="okk">✓</td></tr>
+          <tr><td class="n">S47031</td><td class="n">5 sept.</td><td>noir · 5</td><td>Cake design (5, Praliné amandes)</td><td class="okk">✓</td></tr>
+          <tr><td class="n">S52506</td><td class="n">11 sept.</td><td>blanc · 5</td><td>Cake design (5, Praliné amandes)</td><td class="okk">✓</td></tr>
+          <tr><td class="n">S52340</td><td class="n">12 sept.</td><td>blanc · 5</td><td>Cake design (5, Vanille)</td><td class="okk">✓</td></tr>
+          <tr><td class="n">S52271</td><td class="n">12 sept.</td><td>blanc · 5</td><td>Cake design (5, Praliné amandes)</td><td class="okk">✓</td></tr>
+          <tr><td class="n">S52683</td><td class="n">12 sept.</td><td>noir · 5</td><td>— rien à 5 personnes</td><td class="ko">✗</td></tr>
+          <tr><td class="n">S52294</td><td class="n">16 sept.</td><td>blanc · 15</td><td>Cake design (15, Praliné amandes)</td><td class="okk">✓</td></tr>
+          <tr><td class="n">S52682</td><td class="n">3 oct.</td><td>noir · 5 ×8</td><td>Gâteau forme (5, carré)</td><td class="okk">✓</td></tr>
+          <tr><td class="n">S51550</td><td class="n">3 oct.</td><td>noir · 20</td><td>Cake design (20, Praliné amandes)</td><td class="okk">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sous" style="margin-top:16px">
+      <b>Huit sur neuf.</b> Le neuvième (S52683) n'a aucun gâteau de 5 personnes —
+      juste un topper d'anniversaire. La ligne s'affiche quand même, en rouge :
+      mieux vaut une question posée qu'une ganache oubliée.
+    </p>
+  </section>
+
+  <!-- ============ OÙ LE METTRE ============ -->
+  <section>
+    <h2>Où le mettre — à toi de choisir</h2>
+    <p class="sous">C'est la seule chose que je ne peux pas décider : ça dépend de
+      qui ganache, et de l'écran qu'il a sous les yeux.</p>
+
+    <div class="choix">
+      <div class="carte retenu">
+        <span class="tag">Ma proposition</span>
+        <h3>En haut de Fabrication CD</h3>
+        <p>Le bloc ci-dessus, avant les gâteaux, comme « Ce qui a été fait » à
+          l'annexe. Il disparaît quand il n'y a rien.</p>
+        <p><span class="pour">Pour</span> — c'est l'écran du labo cake design, celui
+          qu'on ouvre le matin. Le montage et la ganache s'y suivent.</p>
+        <p><span class="contre">Contre</span> — un bloc de plus en haut d'un écran
+          déjà chargé.</p>
+      </div>
+
+      <div class="carte">
+        <span class="tag">Autre façon</span>
+        <h3>Une pastille sur le gâteau</h3>
+        <p>Un 🍫 sur la case du fond congelé concerné, qui s'ouvre sur le détail.</p>
+        <p><span class="pour">Pour</span> — rien de neuf à l'écran, l'information
+          est là où est le gâteau.</p>
+        <p><span class="contre">Contre</span> — une même case sert plusieurs
+          commandes ; la pastille dirait « il y en a » sans dire laquelle.</p>
+      </div>
+
+      <div class="carte">
+        <span class="tag">Autre façon</span>
+        <h3>Son propre onglet</h3>
+        <p>Un écran « À ganacher », rangeable comme les autres.</p>
+        <p><span class="pour">Pour</span> — on y va exprès, rien ne se mélange.</p>
+        <p><span class="contre">Contre</span> — un écran de plus pour environ
+          <b>une ganache tous les trois jours</b> ; le risque est qu'on n'y aille
+          jamais.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CE QUI RESTE À DIRE ============ -->
+  <section>
+    <h2>Trois questions avant de coder</h2>
+    <div class="choix">
+      <div class="carte">
+        <h3>Qui ganache ?</h3>
+        <p>Si ce n'est pas la même personne que celle qui monte, l'écran n'est
+          peut-être pas le bon.</p>
+      </div>
+      <div class="carte">
+        <h3>Quand ?</h3>
+        <p>Le jour de la livraison, ou la veille ? Le bloc se range par jour —
+          reste à savoir lequel.</p>
+      </div>
+      <div class="carte">
+        <h3>Et une fois fait ?</h3>
+        <p>Un bouton « c'est fait » qui valide l'ordre Odoo, comme ailleurs ? Ou
+          juste un rappel à lire ?</p>
+      </div>
+    </div>
+  </section>
+
+</div>
