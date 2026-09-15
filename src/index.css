@@ -403,8 +403,9 @@ html, body {
   .feuille-impr .fi-table td:nth-child(1) { width: 26%; border-left: 0; }
   .feuille-impr .fi-table th:nth-child(2),
   .feuille-impr .fi-table td:nth-child(2) { width: 30%; }
+  /* La date s'écrit en entier, elle a besoin d'un peu plus de place qu'une heure. */
   .feuille-impr .fi-table th:nth-child(4),
-  .feuille-impr .fi-table td:nth-child(4) { width: 18%; border-right: 0; }
+  .feuille-impr .fi-table td:nth-child(4) { width: 22%; border-right: 0; }
 }
 
 /* Les feuilles de fournée n'existent qu'à l'impression.

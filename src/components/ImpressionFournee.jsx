@@ -200,7 +200,7 @@ function Feuille({ f }) {
             <th>En stock</th>
             <th>Sorti ({u})</th>
             <th>Par</th>
-            <th>Heure</th>
+            <th>Date</th>
           </tr>
         </thead>
         <tbody>
