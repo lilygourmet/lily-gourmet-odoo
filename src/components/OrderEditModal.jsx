@@ -9,6 +9,8 @@ import CakeDayPlanning from './CakeDayPlanning'
 import { toast } from '../lib/toast'
 import { creneauClient, finCreneau, heurePreparation, heureLisible, estLigneLivraison } from '../lib/creneau'
 import { confirmDialog } from '../lib/confirmDialog'
+import { sendTemplate } from '../lib/conversations'
+import { canSeeWatiInfo } from '../lib/auth'
 import { filePhoto } from '../lib/photoCompress'
 
 // Fenêtre « ✏️ Articles » : modifie les articles d'une commande Odoo (ajouter /
@@ -206,6 +208,41 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
     if (!ok) return
     await updateOrderDate(order.id, dDate, dTime)
     logModif(`Devient une livraison → client ${heureLisible(dTime)}-${heureLisible(fin)}, prêt ${heurePreparation(dTime)}`)
+    await proposerMessageClient(fin)
+  }
+
+  /**
+   * PRÉVENIR LE CLIENT — mais seulement si Layla le décide.
+   *
+   * « L'envoi au client reste un choix » (Layla, 2026-09-15) : rien ne part
+   * tout seul. On le propose ici pour lui éviter l'aller-retour par
+   * Conversations, avec le texte exact sous les yeux.
+   *
+   * ⚠️ Modèle `wati_info` : c'est le seul qui passe HORS de la fenêtre de 24 h,
+   * et sa variable ne supporte AUCUN retour à la ligne — d'où la phrase d'un
+   * seul tenant.
+   */
+  async function proposerMessageClient(fin) {
+    if (!order.clientPhone || !canSeeWatiInfo(user)) return
+    const jour = dDate.split('-').reverse().join('/')
+    const texte = `Bonjour, votre commande ${order.name} sera livrée le ${jour} `
+      + `entre ${heureLisible(dTime)} et ${heureLisible(fin)}. À très vite ! 🚚`
+    const ok = await confirmDialog(
+      `Prévenir le client maintenant ?\n\nIl recevra :\n« ${texte} »`,
+      { confirmLabel: 'Envoyer', cancelLabel: 'Pas maintenant' })
+    if (!ok) return
+    try {
+      await sendTemplate({
+        clientPhone: order.clientPhone,
+        templateName: 'wati_info',
+        parameters: [{ name: '1', value: texte }],
+        bodyText: texte, freeText: texte, userId: user?.id,
+      })
+      toast.success('Client prévenu ✓')
+      logModif(`Créneau envoyé au client : ${heureLisible(dTime)}-${heureLisible(fin)}`)
+    } catch (e) {
+      toast.error(`Message NON envoyé (${e?.message || 'erreur'}) — à faire depuis Conversations.`)
+    }
   }
 
   async function saveEdits() {
