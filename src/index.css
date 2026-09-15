@@ -286,6 +286,17 @@ html, body {
     font-weight: 700;
     margin-bottom: 4mm;
   }
+  /* Où va la fournée quand elle sert à deux recettes. */
+  .feuille-impr .fi-detail {
+    font-size: 9.5pt;
+    color: #333;
+    border-left: 0.6mm solid #999;
+    padding-left: 2.5mm;
+    margin: 0 0 4mm;
+    line-height: 1.5;
+  }
+  .feuille-impr .fi-detail b { font-variant-numeric: tabular-nums; }
+
   .feuille-impr .fi-lab {
     font-size: 7.5pt;
     letter-spacing: .12em;

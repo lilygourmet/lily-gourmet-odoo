@@ -287,7 +287,7 @@ export const parTourneeEntiere = c =>
  * manque se rattrape à la demi-tournée près (ou à la quantité exacte pour une
  * préparation figée ou dont la recette est écrite à l'unité).
  */
-function echelle(c, facteur) {
+export function echelle(c, facteur) {
   const besoin = c.besoin * facteur
   // ⚠️ Compter ce qui est DÉJÀ déclaré, comme le fait le serveur. Sans ça, un
   // composant fabriqué ce matin redevenait bloquant dès qu'on choisissait

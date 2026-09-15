@@ -44,11 +44,13 @@ const gateau = {
 describe('les feuilles d’une fournée', () => {
   it('une feuille par chose qui a une RECETTE, jamais pour ce qui se pèse', () => {
     const f = feuillesAImprimer(gateau, 80)
+    // Le plus PROFOND d'abord : le crumble est à deux étages du gâteau, les
+    // trois autres à un seul, et la tête vient en dernier.
     expect(f.map(x => x.produit)).toEqual([
-      'SM. Marmelade Passion Mangue',
-      'SM. Mousse Cheese Passion',
       'SM. Crumble Pistache',
       'SM. Crunchy Citron Passion',
+      'SM. Mousse Cheese Passion',
+      'SM. Marmelade Passion Mangue',
       'SM- Cheesecake Exotique Indiv',
     ])
     // ni la farine, ni la feuilletine, ni la crème whipping : on ne les fabrique pas
@@ -110,5 +112,63 @@ describe('ce qui est coché d’avance', () => {
     expect(coches['SM. Crumble Pistache']).toBe(true)           // 50 g sur 2 400
     expect(coches['SM. Marmelade Passion Mangue']).toBe(false)  // il en reste 3,4 kg
     expect(coches['SM- Cheesecake Exotique Indiv']).toBe(true)  // c'est ce qu'on vient faire
+  })
+})
+
+// ============================================================
+// UN MÊME ARTICLE À DEUX ENDROITS : LES BESOINS S'ADDITIONNENT.
+//
+// « dans cette recette il manque 1/2 creme citron si j'imprime le tout. soit
+// tu additionne les meme creme en laissant une explication » (Layla,
+// 2026-09-15).
+//
+// Le vrai Vitrine citron 20 cm, 29 pièces, relevé dans Odoo :
+//   · le gâteau demande 3 480 g de crème citron TOUT COURT
+//   · il demande aussi 9 280 g de crème au beurre citron…
+//   · …dont la recette contient 3 850 g de crème citron pour 9 425 g produits
+//   → soit 3 790 g de plus. 7 270 g en tout, et non 3 480.
+// ============================================================
+const cremeCitron = (besoin, stock = 0) => c('SM. Creme Citron Production', 'g', besoin, stock, {
+  fabrique: true, aLaQuantite: true, produira: besoin, tourneeTaille: besoin,
+  pourQuantite: besoin, recette: [{ produit: 'SM. Citron Liquide', qty: 779, unite: 'g' }],
+})
+
+const vitrine = {
+  produit: 'SM- 20 cm Vitrine (Citron)', libelle: 'Vitrine citron · 20 cm',
+  unite: 'u', tournee: 29, tourneeTaille: 29, stock: 0, recette: [],
+  composants: [
+    // la crème au beurre : 9 425 g par fournée, dont 3 850 de crème citron
+    c('SM. Creme au Beurre Citron Production', 'g', 9280, 0, {
+      fabrique: true, aLaQuantite: true, produira: 9280,
+      tourneeTaille: 9425, pourQuantite: 9280,
+      recette: [{ produit: 'SM. Creme Citron Production', qty: 3850, unite: 'g' }],
+      enfants: [cremeCitron(3790)],
+    }),
+    cremeCitron(3480),
+  ],
+}
+
+describe('quand la même crème sert à deux endroits', () => {
+  it('LE BUG : les deux besoins s’additionnent, une seule feuille', () => {
+    const f = feuillesAImprimer(vitrine, 29)
+    const citron = f.filter(x => x.produit === 'SM. Creme Citron Production')
+    expect(citron).toHaveLength(1)
+    // 3 480 pour le gâteau + 3 790 pour la crème au beurre
+    expect(citron[0].qty).toBeCloseTo(7270, 0)
+  })
+
+  it('et la feuille DIT où ça va', () => {
+    const f = feuillesAImprimer(vitrine, 29)
+    const citron = f.find(x => x.produit === 'SM. Creme Citron Production')
+    const par = Object.fromEntries(citron.pour.map(p => [p.nom, Math.round(p.qty)]))
+    expect(par['SM- 20 cm Vitrine (Citron)']).toBe(3480)
+    expect(par['SM. Creme au Beurre Citron Production']).toBe(3790)
+  })
+
+  it('et elle se fait AVANT la crème au beurre qui la contient', () => {
+    const f = feuillesAImprimer(vitrine, 29).map(x => x.produit)
+    expect(f.indexOf('SM. Creme Citron Production'))
+      .toBeLessThan(f.indexOf('SM. Creme au Beurre Citron Production'))
+    expect(f[f.length - 1]).toBe('SM- 20 cm Vitrine (Citron)')
   })
 })

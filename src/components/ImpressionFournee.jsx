@@ -77,6 +77,10 @@ export function ChoixImpression({
                     ${on ? 'font-bold' : 'text-ink-mute'}`}>{propre(f.libelle)}</span>
                   <span className="block text-[12px] text-ink-mute">
                     {f.stock > 0.001 ? `il en reste ${qte(f.stock, f.unite)}` : 'rien en stock'}
+                    {/* Sert à deux endroits : on additionne, et on le dit. */}
+                    {f.pour.length > 1 && (
+                      <b className="text-bordeaux"> · pour {f.pour.length} recettes</b>
+                    )}
                   </span>
                 </span>
                 {/* ⚠️ On tape des GRAMMES même quand Odoo compte en kilos —
@@ -149,6 +153,21 @@ function Feuille({ f }) {
       )}
       <h2 className="fi-titre">{propre(f.libelle)}</h2>
       <div className="fi-qty">{qte(f.qty, f.unite)} à faire</div>
+
+      {/* ⚠️ OÙ VA CETTE FOURNÉE, quand elle sert à plus d'un endroit. Sans
+          cette ligne, le pâtissier fait 7 270 g de crème citron sans savoir
+          pourquoi — et la prochaine fois il en refera 3 480.
+          « soit tu additionnes les mêmes crèmes en laissant une explication »
+          (Layla, 2026-09-15). */}
+      {f.pour.length > 1 && (
+        <div className="fi-detail">
+          {f.pour.map((p, n) => (
+            <div key={p.nom + n}>
+              <b>{qte(p.qty, f.unite)}</b> pour {propre(p.nom)}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="fi-lab">Ce qu'il faut</div>
       {f.ingredients.map((i, n) => (
