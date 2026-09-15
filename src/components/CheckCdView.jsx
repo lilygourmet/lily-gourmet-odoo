@@ -40,10 +40,17 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
   const [tour, setTour] = useState(0)
   const [vue, setVue] = useState('controle')   // 'controle' | 'attente'
   const [enAttente, setEnAttente] = useState([])
-  const rafraichir = () => { setChargement(true); setTour(t => t + 1) }
+  // On efface l'erreur ICI (et pas dans l'effet) : c'est le seul chemin qui le
+  // relance, et un `setState` posé à même l'effet est interdit par le lint.
+  const rafraichir = () => { setErreur(null); setChargement(true); setTour(t => t + 1) }
 
   useEffect(() => {
     let vivant = true
+    // ⚠️ Le `catch` de CETTE chaîne est obligatoire. Sans lui, une panne d'Odoo
+    // laissait `etages` vide sans rien dire, et l'écran annonçait « Rien à
+    // contrôler : tous les gâteaux sont marqués faits » — alors qu'il ne savait
+    // rien du tout. L'erreur était en plus avalée plus bas par un `.catch(() => {})`
+    // placé AVANT celui qui remplit `setErreur`, devenu inatteignable.
     Promise.all([loadEtagesEnAttente(30), loadFreezerDoneIds(), loadDejaEnvoyes()])
       .then(([list, sort, deja]) => {
         if (!vivant) return
@@ -53,11 +60,12 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
         // déjà contrôlé ici : il n'y a plus rien à en faire
         setEtages(list.filter(e => !deja[e.mo_id]?.odoo_ok))
       })
-    // Les gâteaux déjà récupérés par le client et toujours pas marqués faits :
-    // c'est ce qui reste en plan, et que le rendez-vous de 8h n'a pas pu passer.
-    loadEnAttente(7).then(r => { if (vivant) setEnAttente(r.gateaux) }).catch(() => { })
       .catch(e => { if (vivant) setErreur(e.message || String(e)) })
       .finally(() => { if (vivant) setChargement(false) })
+    // Les gâteaux déjà récupérés par le client et toujours pas marqués faits :
+    // c'est ce qui reste en plan, et que le rendez-vous de 8h n'a pas pu passer.
+    // Celui-là peut échouer en silence : ce n'est que le second onglet.
+    loadEnAttente(7).then(r => { if (vivant) setEnAttente(r.gateaux) }).catch(() => { })
     return () => { vivant = false }
   }, [tour])
 
@@ -220,7 +228,9 @@ export default function CheckCdView({ user, onLogout, onNavigate, activeView }) 
 
         {erreur && <div className="bg-[#fdecec] text-[#8c2020] rounded-xl px-3.5 py-3 text-[13px] mb-3">{erreur}</div>}
         {chargement && <div className="text-center py-10 text-[13px] text-ink-mute">Lecture d'Odoo…</div>}
-        {!chargement && !etages.length && (
+        {/* Jamais « rien à contrôler » quand la lecture a échoué : on n'affirme
+            le vide que si Odoo a vraiment répondu. */}
+        {!chargement && !erreur && !etages.length && (
           <div className="text-center py-10 text-[13px] text-ink-mute">
             Rien à contrôler : tous les gâteaux sont marqués faits.
           </div>

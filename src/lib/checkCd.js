@@ -45,7 +45,10 @@ export async function envoyerEnValidation(moIds, actorId) {
 
 /** Ce qui a déjà été envoyé (pour ne pas le reproposer). */
 export async function loadDejaEnvoyes() {
-  const { data, error } = await supabase.from('check_cd_done').select('odoo_mo_id, odoo_ok, odoo_msg, checked_at')
+  // ⚠️ Sans `.limit()`, Supabase s'arrête à 1 000 lignes SANS le dire : passé ce
+  // cap, des étages déjà contrôlés reviendraient dans la liste comme neufs.
+  const { data, error } = await supabase.from('check_cd_done')
+    .select('odoo_mo_id, odoo_ok, odoo_msg, checked_at').limit(50000)
   if (error) throw error
   const parId = {}
   for (const x of data || []) parId[x.odoo_mo_id] = x

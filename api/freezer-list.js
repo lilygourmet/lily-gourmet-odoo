@@ -234,7 +234,20 @@ async function fetchListForDate(date, uid, includeDone = false) {
 // que si le A est en stock ; un B sans A (Cœur, bombé, Rose/Bleu) n'est
 // jamais traité automatiquement — Layla s'en occupe à la main.
 // ============================================================
+// ⚠️ Odoo a RENOMMÉ ces articles le 2026-09-12 : « 20 cm CD* (Citron) » est
+// devenu « SM CD*- 20 cm (Citron) ». On reconnaît les DEUX écritures — l'ancienne
+// vit encore dans les ordres d'avant. Sans ça, plus aucun étage congelé n'était
+// reconnu : Check CD- grisait tout en « Pas encore fabriqué » (52 sur 56).
+//
+// Ce qu'il ne faut SURTOUT pas attraper, d'où la taille en cm ET la parenthèse
+// du parfum :
+//  • « SM CD*. Craquant », « SM CD*. Sirop Imbibage kg » — un POINT, pas un
+//    tiret : ce sont les préparations, pas l'étage congelé ;
+//  • « SM CD*- 20 cm Cakedesign Rose/Bleu », « SM CD*- 27x27 Cakedesign » — les
+//    tailles hors normes, qui se font directement à partir de génoise/crème et
+//    n'ont pas d'étage congelé — Layla les valide à la main.
 const EST_ETAGE_CD = n => /^\s*\d+\s*cm\s*CD\*/i.test(String(n || ''))
+  || /^\s*SM\s*CD\*-\s*\d+\s*cm\s*\(/i.test(String(n || ''))
 
 async function etatsCheckCd(uid, moIds) {
   const mos = await odooSearchRead(uid, 'mrp.production', [['id', 'in', moIds]],
