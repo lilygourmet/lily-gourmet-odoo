@@ -356,28 +356,38 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         <div className="max-w-[1000px] mx-auto px-4 py-5 pb-28">
           {erreur && <p className="text-danger text-[14px] mb-3">{erreur}</p>}
           <Onglets onglet={onglet} onChange={k => { setOnglet(k); setGateau(null); setCherche('') }} />
-          <button onClick={() => setHistoOuvert(true)}
-            className="w-full mb-4 rounded-2xl border-2 border-cream-deep bg-cream-warm
-                       py-3 text-[15px] font-bold text-ink-mute">
-            🕓 Ce qui a été fait
-            {dujour > 0 && <span className="text-ink"> · {dujour}</span>}
-          </button>
-          {isAdmin(user) && (
-            <button onClick={majRecettes} disabled={relit}
-              className="w-full mb-4 rounded-2xl border-2 border-cream-deep bg-cream-warm
-                         py-3 text-[15px] font-bold text-ink-mute disabled:opacity-50">
-              {relit ? 'Lecture chez Odoo…' : '🔄 Mettre à jour les recettes'}
-            </button>
-          )}
-          {/* ⚠️ HORS DE TOUT ARTICLE. « non à l'extérieur de l'article, il n'est
-              pas lié à l'article » (Layla, 2026-09-15) : la feuille de sortie
-              s'imprime par paquets depuis l'accueil, et les feuilles attendent
-              à côté du congélateur. Elle ne connaît donc aucune recette. */}
-          <button onClick={imprimerSortie}
-            className="w-full mb-4 rounded-2xl border-2 border-cream-deep bg-cream-warm
-                       py-3 text-[15px] font-bold text-ink-mute">
-            ✍️ Feuille de sortie de stock
-          </button>
+          {/* LES TROIS OUTILS, EN PETITES CASES. « des petites cases » (Layla,
+              2026-09-15) : ils prenaient trois pleines largeurs et repoussaient
+              les gâteaux sous la ligne de flottaison. Ils tiennent maintenant
+              sur une ligne, l'emoji au-dessus du mot.
+              ⚠️ « Mettre à jour les recettes » est un outil d'entretien : il
+              n'apparaît que pour l'admin, et la rangée se répartit alors entre
+              deux cases au lieu de trois. */}
+          <div className="flex gap-2 mb-4">
+            {[
+              { cle: 'fait', emoji: '🕓', mot: 'Ce qui a été fait',
+                dit: 'Ce qui a été fait',
+                badge: dujour > 0 ? dujour : null, onClick: () => setHistoOuvert(true) },
+              { cle: 'sortie', emoji: '✍️', mot: 'Feuille de sortie',
+                dit: 'Feuille de sortie de stock', onClick: imprimerSortie },
+              ...(isAdmin(user) ? [{ cle: 'maj', emoji: '🔄',
+                mot: relit ? 'Lecture…' : 'Mettre à jour',
+                dit: 'Mettre à jour les recettes', onClick: majRecettes,
+                off: relit }] : []),
+            ].map(o => (
+              // ⚠️ Le mot écrit est court pour tenir dans la case ; `aria-label`
+              // garde la phrase entière, pour qui lit l'écran à voix haute.
+              <button key={o.cle} onClick={o.onClick} disabled={o.off} aria-label={o.dit}
+                className="flex-1 min-w-0 rounded-2xl border-2 border-cream-deep bg-cream-warm
+                           px-1.5 py-2 text-center disabled:opacity-50">
+                <span className="block text-[17px] leading-none">{o.emoji}</span>
+                <span className="block text-[11.5px] font-bold text-ink-mute leading-tight mt-1">
+                  {o.mot}
+                  {o.badge && <b className="text-ink"> · {o.badge}</b>}
+                </span>
+              </button>
+            ))}
+          </div>
           {sortiePrete && <FeuillesImpression sortie />}
           {histoOuvert && <HistoriqueAnnexe histo={histo} onFermer={() => setHistoOuvert(false)} />}
           {confirme && <Confirmation {...confirme} />}

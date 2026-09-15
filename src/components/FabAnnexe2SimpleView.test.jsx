@@ -127,8 +127,8 @@ describe('mettre à jour les recettes', () => {
     await ouvrirLaFiche()
     const avant = listesLues
     fireEvent.click(screen.getByText(/^← /))
-    await waitFor(() => expect(screen.getByText('🔄 Mettre à jour les recettes')).toBeTruthy())
-    fireEvent.click(screen.getByText('🔄 Mettre à jour les recettes'))
+    await waitFor(() => expect(screen.getByLabelText('Mettre à jour les recettes')).toBeTruthy())
+    fireEvent.click(screen.getByLabelText('Mettre à jour les recettes'))
     await waitFor(() => expect(relireRecettes).toHaveBeenCalled())
     // et l'écran repart chercher les fiches au lieu de resservir les siennes
     await waitFor(() => expect(listesLues).toBeGreaterThan(avant))
@@ -228,7 +228,7 @@ describe('la feuille de sortie de stock', () => {
     const print = vi.fn()
     window.print = print
     render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
-    const b = await screen.findByText('✍️ Feuille de sortie de stock')
+    const b = await screen.findByLabelText('Feuille de sortie de stock')
     fireEvent.click(b)
     // La feuille est posée dans la page, prête à partir.
     await waitFor(() => expect(document.querySelector('.print-feuilles')).toBeTruthy())
