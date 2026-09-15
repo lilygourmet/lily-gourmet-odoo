@@ -659,6 +659,19 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
 
   // Ce qui est réservé pour un lot de gâteaux (leurs ordres et toute leur
   // descendance) sur un composant donné : ça leur appartient déjà.
+  // Ce qu'Odoo a mis de côté POUR CET ORDRE-LÀ. C'est bien dans le frigo, mais le
+  // stock « libre » ne le compte plus : il est promis. Sans ça, un ordre est
+  // bloqué PARCE QUE sa matière lui a été réservée — vécu avec WHLVP/MO/202790
+  // (crème au beurre vanille STK) : 2,22 kg en stock, 2,22 kg réservés pour lui,
+  // donc 0 de libre, et le bouton « c'est fait » refusait (Layla, 2026-09-15).
+  // Le serveur, lui, comptait déjà cette réserve dans la recette affichée : la
+  // ligne disait « il y en a assez » pendant que le bouton disait le contraire.
+  const reserveDe = (nomOrdre, produit) => {
+    if (!nomOrdre) return 0
+    const o = ((data && data.ordres) || []).find(x => x.name === nomOrdre)
+    return (o && o.reserves && o.reserves[produit]) || 0
+  }
+
   const reservePour = (lot, produit) => {
     if (!lot || !lot.length) return 0
     const dedans = new Set()
@@ -1103,7 +1116,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // Ce qu'il faut avoir fait AVANT de pouvoir cocher : les préparations que ce
   // produit consomme et qui ne sont pas en stock (crème pâtissière avant la crème
   // au beurre vanille, crèmes avant le gâteau…).
-  const bloquants = (produit, qty, usage = '', lot = null) => {
+  // `sien` = le n° de l'ordre qu'on est en train de juger, quand il en a un.
+  // Ce qu'Odoo lui a réservé compte comme disponible : c'est sa matière.
+  const bloquants = (produit, qty, usage = '', lot = null, sien = null) => {
     const r = recettes[produit]
     if (!r) return []
     // ⚠️ À L'ÉCHELLE de ce qu'on fait, comme `manquePour` juste en dessous.
@@ -1120,7 +1135,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         const besoin = enKg((Number(l.qty) || 0) * f, l.unite)
         return bloqueSur({
           besoin: f ? besoin.q : 0, unite: besoin.u,
-          dispo: stockDeProduit(l.produit) + reservePour(lot, l.produit),
+          dispo: stockDeProduit(l.produit) + reservePour(lot, l.produit) + reserveDe(sien, l.produit),
           aRecette: !!recettes[l.produit],
           declare: lot ? estDeclare(lot, l.produit, usage) : !!faits[clePrepa(l.produit, usage)],
         })
@@ -1677,7 +1692,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                     return (
                       <Gateau key={b.ordre} o={o} on={sel.includes(o.name)} onToggle={() => toggle(o.name)}
                         fait={!!faits[b.ordre]} onFait={() => marquer(b.ordre, b.produit, b.qty)}
-                        bloque={bloquants(b.produit, b.qty)}
+                        bloque={bloquants(b.produit, b.qty, '', null, b.ordre)}
  />
                     )
                   })}
