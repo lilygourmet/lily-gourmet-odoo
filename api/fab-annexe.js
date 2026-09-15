@@ -129,6 +129,27 @@ function memo(cle, faire) {
  *   « je ne veux pas de reliquat » (Layla). Dès qu'on a assez pour passer le
  *   mini, la case s'en va ; on refait le tour demain.
  */
+/**
+ * L'URGENCE D'UN ARTICLE : où en est son stock par rapport à son mini.
+ *
+ * « classe-moi À faire par ordre d'urgence selon le stock » (Layla,
+ * 2026-09-15). La liste sortait par ordre alphabétique — le Royal Chocolat à
+ * zéro se retrouvait derrière une base de tarte dont il reste de quoi tenir.
+ *
+ * On compare en PART, pas en nombre : un gâteau à 0 sur un mini de 3 est aussi
+ * urgent qu'un autre à 0 sur un mini de 100. Zéro d'un côté comme de l'autre,
+ * même rouge, même place en tête.
+ *
+ * Rend un nombre entre 0 (il n'y a plus rien) et 1 (on est pile sur le mini).
+ * Un mini à zéro ne se montre qu'à stock zéro : l'urgence y est maximale.
+ */
+export function urgence(a, stock, dejaFait = 0) {
+  const mini = Number(a?.mini) || 0
+  if (!(mini > 0)) return 0
+  const dispo = Math.max(0, Number(stock) || 0) + (Number(dejaFait) || 0)
+  return Math.min(1, dispo / mini)
+}
+
 export function etatArticle(a, stock, dejaFait = 0) {
   const dispo = Math.max(0, stock || 0) + (dejaFait || 0)
   const reste = Math.max(0, (a.maxi || 0) - dispo)
@@ -1162,7 +1183,7 @@ export default async function handler(req, res) {
           produit: a.produit, libelle: a.libelle || a.produit,
           photo: a.photo || gateauDe(a.produit),
           unite: uniteDe(p), stock, mini: a.mini, maxi: a.maxi, tournee: a.tournee,
-          dejaFait, reste,
+          dejaFait, reste, urgence: urgence(a, stock, dejaFait),
           etat: stock <= 0 ? 'rupture' : 'refaire',
         })
         continue
@@ -1191,7 +1212,7 @@ export default async function handler(req, res) {
         photo: a.photo || gateauDe(a.produit) || a.produit,
         unite: uniteDe(p),
         stock, mini: a.mini, maxi: a.maxi, tournee: fournee,
-        dejaFait, reste,
+        dejaFait, reste, urgence: urgence(a, stock, dejaFait),
         etat: stock <= 0 ? 'rupture' : 'refaire',
         figes: a.figes || [],
         figesNom: a.figes_nom || 'Monté sur place',
@@ -1212,6 +1233,14 @@ export default async function handler(req, res) {
           : [],
       })
     }
+
+    // ⚠️ DU PLUS URGENT AU MOINS URGENT. Ce qui est à zéro d'abord, puis ce
+    // qui s'en approche — et à égalité, le plus gros manque passe devant.
+    // L'ordre alphabétique d'avant ne voulait rien dire pour l'atelier.
+    articles.sort((x, y) =>
+      (x.urgence ?? 1) - (y.urgence ?? 1)
+      || (y.reste || 0) - (x.reste || 0)
+      || String(x.libelle || x.produit).localeCompare(String(y.libelle || y.produit), 'fr'))
 
     res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json({ articles })
