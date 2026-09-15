@@ -23,9 +23,20 @@ describe('etatArticle', () => {
     expect(etatArticle(tiramisu, 8, 0).aFaire).toBe(false)    // au-dessus
   })
 
-  it('garde une tournée commencée tant que le maxi n’est pas atteint', () => {
-    // 3 + 10 = 13 : au-dessus du mini, mais il manque 8 pour le maxi.
-    expect(etatArticle(tiramisu, 3, 10)).toMatchObject({ aFaire: true, reste: 8 })
+  // ⚠️ RÈGLE CHANGÉE LE 2026-09-15 : « je ne veux pas de reliquat » (Layla).
+  // Avant, une tournée commencée restait à l'écran tant que le maxi n'était
+  // pas atteint. Le 15/09 à 15h15 elle déclare 20 cheesecakes ; la case revient
+  // avec 7 (23 en stock + 20 faits, maxi 50), elle reclique, et un ordre de
+  // 7 cheesecakes que personne n'a faits part chez Odoo. Dès qu'on a de quoi
+  // passer le mini, la case s'en va.
+  it('s’en va dès qu’on a passé le mini, même si le maxi n’est pas atteint', () => {
+    // 3 + 10 = 13 : au-dessus du mini de 7, il manque encore 8 pour le maxi.
+    expect(etatArticle(tiramisu, 3, 10)).toMatchObject({ aFaire: false, reste: 8 })
+  })
+
+  it('mais reste tant qu’on est SOUS le mini', () => {
+    // 3 + 2 = 5, sous le mini de 7 : il y a encore du travail.
+    expect(etatArticle(tiramisu, 3, 2)).toMatchObject({ aFaire: true, reste: 16 })
   })
 
   it('un mini à 0 ne se montre qu’à zéro', () => {

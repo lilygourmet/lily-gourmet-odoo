@@ -120,8 +120,14 @@ function memo(cle, faire) {
  *   (Layla, 2026-09-10 : « si j'ai fait, enlever de la liste »).
  * • ⚠️ Un stock NÉGATIF compte zéro : c'est un compteur faux, pas une dette.
  *   La crème légère à −1 390 g réclamait 1 390 g pour un maxi de 0.
- * • Une tournée COMMENCÉE reste à l'écran tant que le maxi n'est pas atteint :
- *   c'est là qu'on voit le reliquat.
+ * • ⚠️ PAS DE RELIQUAT. Une tournée commencée restait à l'écran tant que le
+ *   maxi n'était pas atteint, pour qu'on voie ce qui manquait encore. Mais
+ *   c'était une case rouge de plus, qui ressemblait à un travail à faire :
+ *   le 2026-09-15 à 15h15 Layla déclare 20 cheesecakes, la case revient avec
+ *   7 — 23 en stock + 20 faits, maxi 50 — et deux minutes plus tard un ordre
+ *   de 7 cheesecakes que personne n'a faits part chez Odoo.
+ *   « je ne veux pas de reliquat » (Layla). Dès qu'on a assez pour passer le
+ *   mini, la case s'en va ; on refait le tour demain.
  */
 export function etatArticle(a, stock, dejaFait = 0) {
   const dispo = Math.max(0, stock || 0) + (dejaFait || 0)
@@ -131,7 +137,7 @@ export function etatArticle(a, stock, dejaFait = 0) {
   // proposer tout seul donnait « Crème légère vanille citron — à faire 1 g »
   // (Layla, 2026-09-10). Mettre un maxi suffit à le faire revenir.
   if (!((a.maxi || 0) > 0)) return { dispo, reste: 0, aFaire: false }
-  return { dispo, reste, aFaire: dispo <= (a.mini || 0) || (dejaFait > 0 && reste > 0) }
+  return { dispo, reste, aFaire: dispo <= (a.mini || 0) }
 }
 
 /**
