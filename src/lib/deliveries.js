@@ -25,16 +25,28 @@ export const loadLivreurs = memoCache(_loadLivreurs, 5 * 60 * 1000)
 
 // État (livreur_id, livraison_faite, statut, assigned_by) pour une liste de n° de commande.
 /**
- * Créneau annoncé au client par commande : { [order_num]: '22-08-26 13h-15h' }.
- * Vient d'Odoo (livraison_hour) via la synchro. Les commandes prises avant la
- * règle du créneau ont un créneau d'1 h : elles gardent leur heure d'origine.
+ * Créneau annoncé au client par commande : { [order_num]: '13h-15h' }.
+ *
+ * ⚠️ On regarde D'ABORD chez nous (`livraisons.creneau`). Le champ d'Odoo
+ * (`livraison_hour`, recopié dans `orders.delivery_slot` par la synchro) ne sert
+ * plus que de repli : Odoo le RECALCULE tout seul depuis l'heure de préparation
+ * — heure arrondie, créneau d'une heure. Sur 12 000 commandes d'historique il
+ * n'existait pas un seul créneau de 2 h, et le livreur voyait donc l'heure de
+ * préparation (12h30) au lieu du créneau promis (13h-15h). (2026-09-15.)
+ *
+ * Une commande saisie directement dans Odoo n'a pas de créneau chez nous : on
+ * garde son affichage d'origine, son heure EST déjà celle promise au client.
  */
 export async function loadDeliverySlots(orderNums) {
   const nums = [...new Set((orderNums || []).filter(Boolean))]
   if (!nums.length) return {}
+  const aNous = await supabase.from('livraisons').select('order_num, creneau').in('order_num', nums)
+  const out = {}
+  for (const l of (aNous.data || [])) if (l.creneau) out[l.order_num] = l.creneau
   const { data, error } = await supabase.from('orders').select('order_num, delivery_slot').in('order_num', nums)
-  if (error) return {}   // créneau non affiché : on ne casse pas la liste des livraisons
-  return Object.fromEntries((data || []).map(o => [o.order_num, o.delivery_slot]))
+  if (error) return out   // créneau non affiché : on ne casse pas la liste des livraisons
+  for (const o of (data || [])) if (!out[o.order_num]) out[o.order_num] = o.delivery_slot
+  return out
 }
 
 export async function loadDeliveryStates(orderNums) {

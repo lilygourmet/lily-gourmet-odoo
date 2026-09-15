@@ -1564,7 +1564,12 @@ async function handleOrderLine(req, res) {
       // Commande livrée : l'heure reçue est le DÉBUT du créneau client (l'écran de
       // modification l'affiche ainsi), Odoo garde l'heure de préparation.
       const oLines = await odooSearchRead(uid, 'sale.order.line', [['order_id', '=', orderId]], ['name'])
-      const estLivraison = (oLines || []).some(l => estLigneLivraison(String(l.name || '').split('\n')[0]))
+      // ⚠️ PAS de `split('\n')[0]` : Odoo écrit ces noms avec un retour à la ligne
+      // DEVANT — « \n  Livraison (Souissi) ». La première ligne était donc vide, la
+      // livraison n'était jamais reconnue, et changer l'heure d'une livraison ne
+      // décalait pas l'heure de préparation. (Trouvé le 2026-09-15.)
+      // `estLigneLivraison` fait déjà le `trim()` qu'il faut.
+      const estLivraison = (oLines || []).some(l => estLigneLivraison(l.name))
       const prep = estLivraison ? heurePreparation(time) : time
       const vals = { commitment_date: moroccoLocalToUtc(deliveryDate, prep) }
       const [y, m, d] = deliveryDate.split('-')
@@ -1577,6 +1582,11 @@ async function handleOrderLine(req, res) {
         if (Number.isFinite(hh)) vals.livraison_hour = `${jour} ${hh}h-${hh + 1}h`
       }
       await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'sale.order', 'write', [[orderId], vals]])
+      if (estLivraison) {
+        const c = creneauClient(prep)
+        const nom = (await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['name']))[0]?.name
+        if (c) await garderCreneau(nom, `${heureLisible(c.debut)}-${heureLisible(c.fin)}`)
+      }
       return res.status(200).json({ ok: true })
     }
 
@@ -2487,6 +2497,9 @@ async function handleOrderCreateDevis(req, res) {
     if (warehouseId) vals.warehouse_id = warehouseId   // entrepôt choisi (ex. Vitrine), sinon défaut Odoo
 
     // Date + heure de livraison (créneau d'1h, format Odoo "DD-MM-YY HHh-HHh")
+    // `creneauPromis` : le créneau de 2 h annoncé au client. Odoo écrase le sien,
+    // on le garde donc chez nous une fois la commande créée (voir garderCreneau).
+    let creneauPromis = ''
     if (deliveryDate) {
       const time = deliveryTime || '00:00'
       // Ligne « Livraison » : l'heure saisie est le DÉBUT du créneau de 2 h annoncé
@@ -2498,7 +2511,10 @@ async function handleOrderCreateDevis(req, res) {
       const jour = `${d}-${m}-${y.slice(2)}`
       if (estLivraison) {
         const c = creneauClient(prep)
-        if (c) vals.livraison_hour = `${jour} ${heureLisible(c.debut)}-${heureLisible(c.fin)}`
+        if (c) {
+          creneauPromis = `${heureLisible(c.debut)}-${heureLisible(c.fin)}`
+          vals.livraison_hour = `${jour} ${creneauPromis}`
+        }
       } else {
         const hh = parseInt(time.split(':')[0], 10)
         if (Number.isFinite(hh)) vals.livraison_hour = `${jour} ${hh}h-${hh + 1}h`
@@ -2543,6 +2559,7 @@ async function handleOrderCreateDevis(req, res) {
     }
     if (!orderId) orderId = await odooCreate(uid, 'sale.order', vals)
     const created = await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]], ['name'])   // nom de la commande (utilisé plus bas)
+    if (creneauPromis) await garderCreneau(created?.[0]?.name, creneauPromis)
 
     // Photos (modèle de gâteau) → attachées à CHAQUE ARTICLE précis (sa ligne), pas à
     // la commande entière. Ainsi chaque gâteau/accessoire montre UNIQUEMENT sa photo
@@ -2807,6 +2824,8 @@ async function handleDevisList(req, res) {
       }
     } catch (_) { /* attachments indispo → pas d'indicateur photo */ }
 
+    // Le créneau promis vient de CHEZ NOUS, pas d'Odoo (voir creneauxDe).
+    const creneaux = await creneauxDe(orders.map(o => o.name))
     const result = orders.map(o => {
       const pid = Array.isArray(o.partner_id) ? o.partner_id[0] : null
       return {
@@ -2817,7 +2836,7 @@ async function handleDevisList(req, res) {
         clientPhone: pid ? (phoneById.get(pid) || '') : '',
         amountText: fmtAmount(o.amount_total),
         pickupText: fmtPickup(o.commitment_date),
-        slotText: slotTextOf(o),
+        slotText: slotTextOf(o, creneaux),
         dateOrder: o.date_order || '',
         deliveryAt: o.commitment_date || '',
         note: (o.note && typeof o.note === 'string') ? o.note.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '',
@@ -2897,6 +2916,8 @@ async function handleOrdersConfirmed(req, res) {
       }
     } catch (_) { /* indispo */ }
 
+    // Le créneau promis vient de CHEZ NOUS, pas d'Odoo (voir creneauxDe).
+    const creneaux = await creneauxDe(orders.map(o => o.name))
     const result = orders.map(o => {
       const pid = Array.isArray(o.partner_id) ? o.partner_id[0] : null
       return {
@@ -2907,7 +2928,7 @@ async function handleOrdersConfirmed(req, res) {
         clientPhone: pid ? (phoneById.get(pid) || '') : '',
         amountText: fmtAmount(o.amount_total),
         pickupText: fmtPickup(o.commitment_date),
-        slotText: slotTextOf(o),
+        slotText: slotTextOf(o, creneaux),
         dateOrder: o.date_order || '',
         deliveryAt: o.commitment_date || '',
         productLines: linesByOrder.get(o.id) || [],
@@ -3219,9 +3240,42 @@ function moroccoLocalToUtc(dateStr, timeStr) {
   return dt.toISOString().slice(0, 19).replace('T', ' ')
 }
 
+/**
+ * LE CRÉNEAU PROMIS, GARDÉ CHEZ NOUS.
+ *
+ * ⚠️ On n'écrit PAS le créneau dans Odoo : `livraison_hour` lui appartient et il
+ * le recalcule tout seul depuis l'heure de préparation (heure arrondie, créneau
+ * d'une heure). Sur 12 000 commandes d'historique il n'existait pas un seul
+ * créneau de 2 h — le nôtre était écrasé à chaque écriture. (2026-09-15.)
+ *
+ * On le range donc dans `livraisons`, une table à nous. Format « 13h-15h ».
+ */
+async function garderCreneau(orderName, creneau) {
+  if (!orderName || !creneau || !supabaseUrl || !supabaseServiceKey) return
+  try {
+    const sb = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
+    await sb.from('livraisons').upsert(
+      { order_num: orderName, creneau, updated_at: new Date().toISOString() },
+      { onConflict: 'order_num' })
+  } catch (e) { console.warn('[creneau]', e?.message || e) }   // jamais bloquant
+}
+
+/** Les créneaux promis, par n° de commande : { S52797: '13h-15h' }. */
+async function creneauxDe(names) {
+  const nums = [...new Set((names || []).filter(Boolean))]
+  if (!nums.length || !supabaseUrl || !supabaseServiceKey) return {}
+  try {
+    const sb = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
+    const { data } = await sb.from('livraisons').select('order_num, creneau').in('order_num', nums)
+    return Object.fromEntries((data || []).filter(x => x.creneau).map(x => [x.order_num, x.creneau]))
+  } catch { return {} }   // pas de créneau : on retombe sur l'affichage d'avant
+}
+
 // Créneau annoncé au client (« 22/08/2026 entre 13h et 15h ») pour une commande
 // livrée ; vide pour un retrait ou une commande prise avant la règle du créneau.
-function slotTextOf(o) {
+function slotTextOf(o, creneaux) {
+  const c = creneaux && creneaux[o.name]
+  if (c) return texteCreneauClient(fmtPickup(o.commitment_date).slice(0, 10), c)
   return texteCreneauClient(fmtPickup(o.commitment_date).slice(0, 10), o.livraison_hour)
 }
 function fmtPickup(s) {
@@ -4037,6 +4091,8 @@ async function handleSearchOrders(req, res) {
       linesByOrder.get(oid).push({ text: nm, qty: String(l.product_uom_qty), price: String(l.price_total) })
     }
 
+    // Le créneau promis vient de CHEZ NOUS, pas d'Odoo (voir creneauxDe).
+    const creneaux = await creneauxDe(orders.map(o => o.name))
     const result = orders.map(o => {
       const pid = Array.isArray(o.partner_id) ? o.partner_id[0] : null
       return {
@@ -4048,7 +4104,7 @@ async function handleSearchOrders(req, res) {
         clientPhone: pid ? (phoneById.get(pid) || '') : '',
         amountText: fmtAmount(o.amount_total),
         pickupText: fmtPickup(o.commitment_date),
-        slotText: slotTextOf(o),
+        slotText: slotTextOf(o, creneaux),
         deliveryAt: o.commitment_date || '',
         productLines: linesByOrder.get(o.id) || [],
       }
