@@ -13,16 +13,24 @@ import { ChoixImpression } from './ImpressionFournee'
 afterEach(cleanup)
 
 // Deux composants et la tête, comme les rend `feuillesAImprimer`.
+//
+// ⚠️ `qty` (ce qu'on propose de faire) et `manque` (ce qui fait vraiment
+// défaut) ne disent PAS la même chose : le sirop, il en reste 11,51 kg pour
+// 8,12 de besoin — il n'en manque rien — mais l'app propose quand même une
+// fournée de 11,1, pour en faire d'avance. C'est `manque` qui décide du vert.
 const feuilles = [
   { produit: 'SM. Creme Citron Production', libelle: 'Creme Citron Production',
-    unite: 'g', stock: 0, qty: 7270, chemin: ['SM- 20 cm Vitrine (Citron)', 'SM. Creme Citron Production'],
+    unite: 'g', stock: 0, besoin: 7270, manque: 7270, qty: 7270,
+    chemin: ['SM- 20 cm Vitrine (Citron)', 'SM. Creme Citron Production'],
     pour: [{ nom: 'SM- 20 cm Vitrine (Citron)', qty: 3480 },
            { nom: 'SM. Creme au Beurre Citron Production', qty: 3790 }], ingredients: [] },
   { produit: 'SM. Sirop Imbibage Production KG', libelle: 'Sirop Imbibage Production KG',
-    unite: 'kg', stock: 11.51, qty: 0, chemin: ['SM- 20 cm Vitrine (Citron)', 'SM. Sirop Imbibage Production KG'],
+    unite: 'kg', stock: 11.51, besoin: 8.12, manque: 0, qty: 11.1,
+    chemin: ['SM- 20 cm Vitrine (Citron)', 'SM. Sirop Imbibage Production KG'],
     pour: [], ingredients: [] },
   { produit: 'SM- 20 cm Vitrine (Citron)', libelle: 'Vitrine citron · 20 cm',
-    unite: 'u', stock: 0, qty: 29, chemin: ['SM- 20 cm Vitrine (Citron)'],
+    unite: 'u', stock: 0, besoin: 29, manque: 29, qty: 29,
+    chemin: ['SM- 20 cm Vitrine (Citron)'],
     pour: [], ingredients: [] },
 ]
 
@@ -37,11 +45,13 @@ const poser = (extra = {}) => render(
 const nomDe = t => [...document.querySelectorAll('span')].find(e => e.textContent === t)
 
 describe('le panneau « Tu imprimes quoi ? »', () => {
-  it('ce qu’on a DÉJÀ s’écrit en vert', () => {
+  it('ce qu’on a DÉJÀ s’écrit en vert, même si l’app propose d’en refaire', () => {
     poser()
     expect(nomDe('Sirop Imbibage Production KG').className).toMatch(/text-ok/)
-    expect(screen.getByText('il en reste 11 510 g'.replace(/ /g, ' ')) ||
-      screen.getByText(/il en reste/)).toBeTruthy()
+    // ⚠️ Sa quantité proposée vaut 11 100 g : c'est bien `manque` qui décide,
+    // pas `qty`. Avant, la ligne restait rouge et cochée.
+    expect(screen.getByLabelText(/Quantité de Sirop/).value.replace(/\u202f|\u00a0/g, ' '))
+      .toBe('11 100')
   })
 
   it('et n’est PAS coché', () => {

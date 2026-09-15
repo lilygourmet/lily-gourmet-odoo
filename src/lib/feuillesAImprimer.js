@@ -84,6 +84,7 @@ export function feuillesAImprimer(tete, quantiteTete, quantites = {}) {
   // donc ADDITIONNER ce que chacun lui demande.
   const ordre = [...prof.keys()].sort((a, b) => prof.get(a) - prof.get(b))
   const qty = new Map([[tete.produit, quantiteTete]])
+  const besoins = new Map([[tete.produit, quantiteTete]])
   const pour = new Map()                 // produit → [{ nom, qty }]
 
   for (const nom of ordre) {
@@ -93,6 +94,7 @@ export function feuillesAImprimer(tete, quantiteTete, quantites = {}) {
       .filter(x => x.qty > 0)
     pour.set(nom, dus)
     const besoin = dus.reduce((t, x) => t + x.qty, 0)
+    besoins.set(nom, besoin)
     qty.set(nom, quantites[nom] ?? aFairePour(noeuds.get(nom), besoin))
   }
 
@@ -100,11 +102,24 @@ export function feuillesAImprimer(tete, quantiteTete, quantites = {}) {
   return ordre.slice().reverse().map(nom => {
     const n = noeuds.get(nom)
     const q = qty.get(nom)
+    const stock = Math.max(0, Number(n.stock) || 0)
+    // ⚠️ CE QUI MANQUE VRAIMENT, et pas « ce qu'on propose d'en faire ».
+    // Les deux ne disent pas la même chose : quand il y en a assez, le serveur
+    // propose quand même une fournée entière — c'est exprès, on peut vouloir
+    // en préparer d'avance. S'en servir pour décider de la couleur, c'était
+    // afficher en rouge et cocher un article dont on a plein le congélateur.
+    // « ce qui est déjà en stock s'écrit en vert et non cliqué » (Layla).
+    // Le DÉJÀ DÉCLARÉ du jour compte comme présent, comme partout ailleurs :
+    // le stock d'Odoo ne monte qu'à la validation.
+    const dispo = stock + Math.max(0, Number(n.dejaFait) || 0)
+    const besoin = besoins.get(nom) || 0
     return {
       produit: nom,
       libelle: n.libelle || nom,
       unite: n.unite,
-      stock: Math.max(0, Number(n.stock) || 0),
+      stock,
+      besoin: Math.round(besoin * 1000) / 1000,
+      manque: Math.max(0, Math.round((besoin - dispo) * 1000) / 1000),
       qty: q,
       // ⚠️ Le chemin le plus COURT jusqu'à la tête : celui qu'on lit le mieux
       // en haut de la feuille.
@@ -147,8 +162,12 @@ function cheminVers(nom, tete, liens) {
  */
 export function cocheesParDefaut(feuilles) {
   const out = {}
-  for (const f of feuilles || []) out[f.produit] = f.qty > 0
+  // ⚠️ Sur ce qui MANQUE, pas sur ce qu'on propose d'en faire — voir `manque`.
+  for (const f of feuilles || []) out[f.produit] = assezEnStock(f) === false
   const tete = (feuilles || [])[feuilles.length - 1]
   if (tete) out[tete.produit] = true
   return out
 }
+
+/** Y en a-t-il déjà assez ? C'est ce qui décide du vert et du décochage. */
+export const assezEnStock = f => !((Number(f?.manque) || 0) > 0.001)

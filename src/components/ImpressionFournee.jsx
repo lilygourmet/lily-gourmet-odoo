@@ -12,6 +12,7 @@
 // ============================================================
 import { createPortal } from 'react-dom'
 import { qte, propre, nb, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
+import { assezEnStock } from '../lib/feuillesAImprimer'
 
 /**
  * Le panneau « Tu imprimes quoi ? ».
@@ -63,7 +64,10 @@ export function ChoixImpression({
             // ⚠️ IL Y EN A DÉJÀ ASSEZ : rien à faire, donc rien à imprimer.
             // « ce qui est déjà en stock s'écrit en vert et non cliqué »
             // (Layla, 2026-09-15) — même langage que les cases de « À faire ».
-            const assez = !(f.qty > 0)
+            // Sur ce qui MANQUE, jamais sur la quantité proposée : quand il y
+            // en a assez, l'app propose quand même une fournée (pour en faire
+            // d'avance), et la ligne serait restée rouge et cochée.
+            const assez = assezEnStock(f)
             return (
               <div key={f.produit}
                 className="flex items-center gap-2.5 py-2 border-t border-cream-deep first:border-0"
