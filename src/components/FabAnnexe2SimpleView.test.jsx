@@ -194,10 +194,10 @@ describe('le bouton imprimer', () => {
     fireEvent.click(screen.getByText('🖨 Imprimer'))
     const champ = await screen.findByLabelText(/Quantité de Sirop imbibage/)
     // 5,55 kg chez Odoo → 5 550 g dans le champ
-    expect(champ.value.replace(/ | /g, ' ')).toBe('5 550')
+    expect(champ.value.replace(/\u202f|\u00a0/g, ' ')).toBe('5 550')
     fireEvent.change(champ, { target: { value: '3000' } })
     await waitFor(() =>
       expect(screen.getByLabelText(/Quantité de Sirop imbibage/).value
-        .replace(/ | /g, ' ')).toBe('3 000'))
+        .replace(/\u202f|\u00a0/g, ' ')).toBe('3 000'))
   })
 })
