@@ -399,11 +399,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // range, donc il se fige ; le ↺ l'en retire et l'app reprend la main.
   const feuilles = impr ? feuillesAImprimer(noeud, q, choisies) : []
   const coches = impr?.coches ?? cocheesParDefaut(feuilles)
-  // ⚠️ La feuille du dessus est toujours celle qu'on regarde : « Juste cette
-  // fiche » n'imprime qu'elle, et c'est la dernière de la liste.
-  const aImprimer = impr?.mode === 'seule'
-    ? feuilles.slice(-1)
-    : feuilles.filter(f => coches[f.produit])
+  const aImprimer = feuilles.filter(f => coches[f.produit])
 
   /**
    * On ferme le panneau AVANT d'imprimer : il est en position fixe, il
@@ -411,9 +407,22 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * repeindre, d'où le `setTimeout` — sans lui, Safari imprime le panneau.
    */
   const lancerImpression = () => {
+    const seule = impr?.mode === 'seule'
+    const quoi = aImprimer
     setImpr(null)
-    setFeuillesPretes(aImprimer)
-    setTimeout(() => { window.print(); setFeuillesPretes(null) }, 60)
+    // L'ANCIENNE FAÇON, inchangée : la fiche telle qu'elle est à l'écran, par
+    // la zone `print-area`. C'est ce que « comme d'habitude » veut dire.
+    if (seule) { setTimeout(() => window.print(), 60); return }
+    setFeuillesPretes(quoi)
+    // ⚠️ La classe sur <body> dit au CSS de retirer tout le reste du document
+    // pendant l'impression. Sans elle, les feuilles seraient « invisibles »
+    // sous l'ancienne règle — et surtout tassées sur une seule page.
+    document.body.classList.add('impr-feuilles')
+    setTimeout(() => {
+      window.print()
+      document.body.classList.remove('impr-feuilles')
+      setFeuillesPretes(null)
+    }, 60)
   }
   const decoupe = decoupeDe(noeud)
   // L'étape de mise en forme qu'on confirmera en validant — la base de flan.

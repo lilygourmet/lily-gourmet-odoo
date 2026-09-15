@@ -10,6 +10,7 @@
 // Deux écrans dans ce fichier : le PANNEAU qui demande quoi imprimer, et les
 // FEUILLES elles-mêmes, invisibles à l'écran et seules visibles sur le papier.
 // ============================================================
+import { createPortal } from 'react-dom'
 import { qte, propre, nb, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
 
 /**
@@ -123,10 +124,17 @@ export function ChoixImpression({
  * termine par le cadre à remplir au crayon.
  */
 export function FeuillesImpression({ feuilles }) {
-  return (
-    <div className="print-area hidden print:block">
+  // ⚠️ POSÉES DIRECTEMENT DANS <body>, par un portail. C'est ce qui permet
+  // « chaque recette sur une page » (Layla, 2026-09-15) : le CSS d'impression
+  // retire alors tout le reste du document (`display: none`) au lieu de le
+  // rendre seulement invisible, et les feuilles coulent dans le flux normal.
+  // Dans l'ancienne façon, la zone imprimée était en position ABSOLUE — et un
+  // bloc en position absolue ne se pagine pas : tout s'entassait sur une page.
+  return createPortal(
+    <div className="print-feuilles">
       {feuilles.map(f => <Feuille key={f.produit} f={f} />)}
-    </div>
+    </div>,
+    document.body,
   )
 }
 

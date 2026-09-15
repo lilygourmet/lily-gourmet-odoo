@@ -179,15 +179,21 @@ html, body {
    ============================================================ */
 
 @media print {
-  body * {
+  /* ⚠️ Ces trois règles ne valent PAS quand on imprime des feuilles de
+     fournée : elles rendent le reste « invisible » sans lui retirer sa place,
+     d'où la position absolue — et un bloc en position absolue ne se PAGINE
+     pas. Une recette par page était impossible tant qu'elles s'appliquaient.
+     Voir `.print-feuilles` plus bas. */
+  body:not(.impr-feuilles) * {
     visibility: hidden;
   }
 
-  .print-area, .print-area * {
+  body:not(.impr-feuilles) .print-area,
+  body:not(.impr-feuilles) .print-area * {
     visibility: visible;
   }
 
-  .print-area {
+  body:not(.impr-feuilles) .print-area {
     position: absolute;
     left: 0;
     top: 0;
@@ -226,6 +232,24 @@ html, body {
   .print-no-break {
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+
+  /* ------------------------------------------------------------
+     CHAQUE RECETTE SUR UNE PAGE (Layla, 2026-09-15).
+     Les feuilles sont posées directement dans <body> (un portail React), et
+     tout le reste est retiré pour de bon — `display: none`, pas seulement
+     « invisible ». Elles coulent alors dans le flux normal du document, et
+     c'est la seule façon dont le navigateur respecte les sauts de page.
+     ------------------------------------------------------------ */
+  body.impr-feuilles > *:not(.print-feuilles) {
+    display: none !important;
+  }
+  .print-feuilles {
+    display: block;
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* ------------------------------------------------------------
@@ -313,6 +337,9 @@ html, body {
   .feuille-impr .fi-duo > span { flex: 0 0 auto; }
   .feuille-impr .fi-duo .fi-trait:last-child { flex: 0 0 24mm; }
 }
+
+/* Les feuilles de fournée n'existent qu'à l'impression. */
+.print-feuilles { display: none; }
 
 /* Le rappel des transferts : la ligne suivante monte à la place de la précédente.
    Immobile pour qui a demandé moins d'animations. */
