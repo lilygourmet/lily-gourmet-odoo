@@ -311,6 +311,16 @@ export function echelle(c, facteur) {
       out.tournees = Math.max(1, Math.ceil((besoin - dispo) / c.tourneeTaille))
       out.produira = out.tournees * c.tourneeTaille
     }
+  } else if (ok && (c.fige || c.aLaQuantite)) {
+    // ⚠️ QUAND IL Y EN A ASSEZ, `produira` restait celui de la quantité
+    // d'AVANT la mise à l'échelle. Vécu le 2026-09-15 : sur une crème au
+    // beurre citron ramenée à 2 880 g, sa crème au beurre nature n'en demande
+    // plus que 1 658 — mais sa fiche en proposait 5 425, la dose de la fournée
+    // entière. Ce qui se fait À LA QUANTITÉ suit donc le besoin, qu'il en
+    // manque ou non. Ce qui se fait par FOURNÉES ENTIÈRES, lui, ne bouge pas :
+    // une tournée reste une tournée (règle de Layla, 2026-09-10).
+    out.produira = /^u$/i.test(String(c.unite || '').trim())
+      ? Math.ceil(besoin) : Math.round(besoin * 1000) / 1000
   }
   if (c.enfants) out.enfants = c.enfants.map(x => echelle(x, facteur))
   return out

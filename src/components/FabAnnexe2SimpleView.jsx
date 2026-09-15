@@ -168,11 +168,25 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // Au MILLIÈME, pas au centième : en kilos, 0,01 c'est 10 grammes — taper
   // 2 605 g serait revenu à 2 610. (Layla, 2026-09-11 : « attention à la
   // conversion ».)
+  // ⚠️ LE PRÉVU N'EST RETENU QUE POUR L'ARTICLE DE TÊTE.
+  //
+  // Il est rangé par NOM D'ARTICLE, sans savoir de quelle recette il vient —
+  // et il traverse les jours, exprès (« si c'est le lendemain ça restera
+  // toujours le 25 »). Appliqué à un composant, il débordait donc d'une
+  // recette sur l'autre : la crème au beurre citron en demandait 1 658 g de
+  // nature, et sa fiche en proposait 2 762,87 — le chiffre figé d'un autre
+  // gâteau. « ou d'une crème au beurre nature d'une autre recette figé »
+  // (Layla, 2026-09-15).
+  //
+  // Une décision de Layla porte sur CE QU'ELLE VIENT FAIRE — « 25 Royal
+  // Chocolat ». Ce qu'un composant demande, c'est la recette qui le dit, et
+  // elle seule. Un chiffre tapé sur un composant vaut le temps de la visite
+  // (`quantites`), plus longtemps.
   const poser = (produit, q) => {
     const v = Math.max(0, Math.round(q * 1000) / 1000)
     setQuantites(x => ({ ...x, [produit]: v }))
     // « Il faut le garder tant que réinitialiser n'a pas été noté » (Layla).
-    setPrevus(poserPrevu(produit, v))
+    if (produit === chemin[0]) setPrevus(poserPrevu(produit, v))
   }
 
   /**
@@ -384,11 +398,18 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     )
   }
   // Le prévu du jour sert de quantité de départ : il a décidé de la recette.
-  const choisies = { ...Object.fromEntries(Object.entries(prevus).map(([p, v]) => [p, v.q])), ...quantites }
+  // Seul le prévu de la TÊTE entre dans le calcul — voir `poser`. Y verser
+  // tous les prévus, c'était faire entrer dans cette recette des chiffres
+  // décidés dans une autre.
+  const prevuTete = prevus[chemin[0]]?.q
+  const choisies = { ...(prevuTete !== undefined ? { [chemin[0]]: prevuTete } : {}), ...quantites }
   const { tete, noeud } = noeudDuChemin(brut, chemin, choisies)
   if (!noeud) { setChemin([]); return null }
 
-  const q = quantites[noeud.produit] ?? prevus[noeud.produit]?.q ?? defautDe(noeud)
+  const estTete = noeud.produit === tete.produit
+  const q = quantites[noeud.produit]
+    ?? (estTete ? prevus[noeud.produit]?.q : undefined)
+    ?? defautDe(noeud)
   // Les gâteaux que l'article de tête sert. Seul le catalogue « Déclarer » les
   // connaît (`pour`) ; la fiche, ouverte article par article, ne les a pas.
   const gateauxMere = (tout || []).find(x => x.produit === tete.produit)?.pour || []
@@ -531,10 +552,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                 : undefined}
               faits={faits} envoi={envoi}
               verrouille={!!prevus[tete.produit]?.fige && noeud.produit === tete.produit}
-              onLiberer={prevus[noeud.produit] ? () => {
-                setPrevus(oublierPrevu(noeud.produit))
-                setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
-              } : undefined}
+              onLiberer={(estTete ? prevus[noeud.produit] : quantites[noeud.produit] !== undefined)
+                ? () => {
+                  if (estTete) setPrevus(oublierPrevu(noeud.produit))
+                  setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
+                } : undefined}
               onOuvrir={p => { figer(q); setChemin([...chemin, p]) }}
               onFait={() => {
                 // Une DÉCOUPE : si on a cuit quelque chose, on demande combien
