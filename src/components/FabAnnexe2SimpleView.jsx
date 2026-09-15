@@ -78,6 +78,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [impr, setImpr] = useState(null)
   // Ce qui part vraiment à l'imprimante, le temps de l'appel à `window.print`.
   const [feuillesPretes, setFeuillesPretes] = useState(null)
+  // La feuille de sortie de stock : le nom de la recette, ou null.
+  const [sortiePrete, setSortiePrete] = useState(null)
 
   const ouvert = chemin[0] || null
   const nav = { user, onLogout, onNavigate, activeView }
@@ -435,13 +437,16 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * repeindre, d'où le `setTimeout` — sans lui, Safari imprime le panneau.
    */
   const lancerImpression = () => {
-    const seule = impr?.mode === 'seule'
+    const mode = impr?.mode
     const quoi = aImprimer
     setImpr(null)
     // L'ANCIENNE FAÇON, inchangée : la fiche telle qu'elle est à l'écran, par
     // la zone `print-area`. C'est ce que « comme d'habitude » veut dire.
-    if (seule) { setTimeout(() => window.print(), 60); return }
-    setFeuillesPretes(quoi)
+    if (mode === 'seule') { setTimeout(() => window.print(), 60); return }
+    // La feuille de sortie de stock : un papier vierge, avec seulement le nom
+    // de la recette déjà écrit — c'est de là qu'on imprime, l'app le sait.
+    if (mode === 'sortie') setSortiePrete(tete.libelle || tete.produit)
+    else setFeuillesPretes(quoi)
     // ⚠️ La classe sur <body> dit au CSS de retirer tout le reste du document
     // pendant l'impression. Sans elle, les feuilles seraient « invisibles »
     // sous l'ancienne règle — et surtout tassées sur une seule page.
@@ -453,6 +458,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       window.removeEventListener('afterprint', ranger)
       document.body.classList.remove('impr-feuilles')
       setFeuillesPretes(null)
+      setSortiePrete(null)
     }
     window.addEventListener('afterprint', ranger)
     setTimeout(() => window.print(), 60)
@@ -489,7 +495,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             onImprimer={lancerImpression}
             onFermer={() => setImpr(null)} />
         )}
-        {feuillesPretes && <FeuillesImpression feuilles={feuillesPretes} />}
+        {(feuillesPretes || sortiePrete) && (
+          <FeuillesImpression feuilles={feuillesPretes} sortie={sortiePrete} />
+        )}
         {sortie !== null
           ? (() => {
             // La question porte soit sur l'article, soit sur ce qu'on vient de
@@ -532,7 +540,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
             )
           })()
           : (
-            <div className={feuillesPretes ? undefined : 'print-area'}>
+            <div className={(feuillesPretes || sortiePrete) ? undefined : 'print-area'}>
             {/* ⚠️ À L'IMPRESSION SEULEMENT : D'OÙ VIENT CETTE FICHE.
                 Sur une feuille posée au plan de travail, « Crème au beurre »
                 ne dit ni laquelle ni pour quel gâteau — et l'écran, lui, a le

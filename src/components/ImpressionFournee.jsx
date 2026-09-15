@@ -27,8 +27,11 @@ export function ChoixImpression({
   onImprimer, onFermer,
 }) {
   const seule = mode === 'seule'
-  const visibles = seule ? feuilles.slice(-1) : feuilles
-  const combien = seule ? 1 : feuilles.filter(f => coches[f.produit]).length
+  // La feuille de sortie de stock ne dépend d'aucune cascade : c'est un
+  // papier vierge, avec seulement le nom de la recette déjà écrit dessus.
+  const sortie = mode === 'sortie'
+  const visibles = sortie ? [] : seule ? feuilles.slice(-1) : feuilles
+  const combien = seule || sortie ? 1 : feuilles.filter(f => coches[f.produit]).length
   // La tête est la DERNIÈRE feuille : c'est elle qui donne la profondeur.
   const profondeurDe = f => Math.max(0, f.chemin.length - 1)
 
@@ -44,19 +47,26 @@ export function ChoixImpression({
         </div>
 
         <div className="px-4 pt-3 flex-shrink-0">
-          <div className="grid grid-cols-2 gap-1.5 bg-cream-deep rounded-2xl p-1">
+          <div className="grid grid-cols-3 gap-1.5 bg-cream-deep rounded-2xl p-1">
             {[['seule', 'Juste cette fiche', "comme d'habitude"],
-              ['tout', 'Tout ce qui manque', 'la cascade entière']].map(([k, t, s]) => (
+              ['tout', 'Tout ce qui manque', 'la cascade entière'],
+              ['sortie', 'Sortie de stock', 'à remplir à la main']].map(([k, t, s]) => (
               <button key={k} onClick={() => onMode(k)} aria-pressed={mode === k}
-                className={`rounded-xl py-2.5 px-2 text-[13.5px] font-bold leading-tight
+                className={`rounded-xl py-2.5 px-1.5 text-[12.5px] font-bold leading-tight
                   ${mode === k ? 'bg-cream-warm text-bordeaux shadow-sm' : 'text-ink-mute'}`}>
-                {t}<span className="block font-normal text-[11.5px] opacity-80">{s}</span>
+                {t}<span className="block font-normal text-[11px] opacity-80">{s}</span>
               </button>
             ))}
           </div>
         </div>
 
         <div className="px-4 py-3 flex-1 overflow-y-auto overscroll-contain">
+          {sortie && (
+            <p className="text-[13.5px] text-ink-soft leading-snug py-2">
+              Une feuille vierge, avec le nom de la recette déjà écrit dessus.
+              L'employé y note ce qu'il prend au congélateur, et signe en bas.
+            </p>
+          )}
           {visibles.map(f => {
             const on = seule || !!coches[f.produit]
             const p = seule ? 0 : profondeurDe(f)
@@ -137,7 +147,7 @@ export function ChoixImpression({
  * une page » (Layla). Chacune dit d'où elle vient, ce qu'il faut peser, et se
  * termine par le cadre à remplir au crayon.
  */
-export function FeuillesImpression({ feuilles }) {
+export function FeuillesImpression({ feuilles, sortie }) {
   // ⚠️ POSÉES DIRECTEMENT DANS <body>, par un portail. C'est ce qui permet
   // « chaque recette sur une page » (Layla, 2026-09-15) : le CSS d'impression
   // retire alors tout le reste du document (`display: none`) au lieu de le
@@ -146,9 +156,51 @@ export function FeuillesImpression({ feuilles }) {
   // bloc en position absolue ne se pagine pas : tout s'entassait sur une page.
   return createPortal(
     <div className="print-feuilles">
-      {feuilles.map(f => <Feuille key={f.produit} f={f} />)}
+      {(feuilles || []).map(f => <Feuille key={f.produit} f={f} />)}
+      {sortie && <FeuilleSortie recette={sortie} />}
     </div>,
     document.body,
+  )
+}
+
+/**
+ * LA FEUILLE DE SORTIE DE STOCK, à remplir au stylo.
+ *
+ * Une par recette (Layla, 2026-09-15) : un seul nom, un seul signataire. Le
+ * nom de la recette est déjà écrit — c'est de là qu'on imprime, l'app le sait.
+ * Tout le reste est du vide.
+ */
+function FeuilleSortie({ recette }) {
+  return (
+    <article className="feuille-impr feuille-sortie">
+      <h2 className="fs-titre">Sortie de stock</h2>
+
+      <div className="fs-entete">
+        <div className="fs-champ fs-grand">
+          <b>Pour quelle recette</b>
+          <span className="fs-rempli">{propre(recette)}</span>
+        </div>
+        <div className="fs-duo">
+          <div className="fs-champ"><b>Nom de l'employé</b><i /></div>
+          <div className="fs-champ fs-court"><b>Date</b><i /></div>
+        </div>
+      </div>
+
+      <table className="fs-table">
+        <thead>
+          <tr><th>Ce qui a été pris</th><th className="fs-qte">Quantité</th></tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 14 }, (_, n) => (
+            <tr key={n}><td /><td className="fs-qte" /></tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="fs-signature">
+        <div className="fs-case"><b>Signature</b><i /></div>
+      </div>
+    </article>
   )
 }
 

@@ -366,6 +366,103 @@ html, body {
     margin: 0 2.5mm 1.2mm;
   }
 
+  /* ------------------------------------------------------------
+     LA FEUILLE DE SORTIE DE STOCK, à remplir au stylo.
+     Une par recette (Layla, 2026-09-15) : un seul nom, un seul signataire.
+     Le nom de la recette est déjà écrit ; tout le reste est du vide.
+     ------------------------------------------------------------ */
+  .feuille-sortie .fs-titre {
+    font-size: 21pt;
+    font-weight: 800;
+    line-height: 1.05;
+    margin: 0 0 6mm;
+  }
+  .feuille-sortie .fs-entete {
+    border-top: 0.5mm solid #000;
+    border-bottom: 0.5mm solid #000;
+    padding: 4mm 0 1mm;
+  }
+  .feuille-sortie .fs-champ {
+    display: flex;
+    align-items: baseline;
+    gap: 3mm;
+    padding-bottom: 4mm;
+  }
+  .feuille-sortie .fs-champ > b {
+    flex: 0 0 auto;
+    font-size: 8pt;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #555;
+    font-weight: 700;
+  }
+  .feuille-sortie .fs-champ > i {
+    flex: 1;
+    border-bottom: 0.3mm solid #000;
+    height: 7mm;
+  }
+  /* Ce que l'app sait déjà : écrit, pas à remplir. */
+  .feuille-sortie .fs-rempli {
+    flex: 1;
+    border-bottom: 0.3mm solid #000;
+    font-size: 14pt;
+    font-weight: 800;
+    line-height: 1.2;
+    padding-bottom: 1mm;
+  }
+  .feuille-sortie .fs-duo { display: flex; gap: 8mm; }
+  .feuille-sortie .fs-duo .fs-champ { flex: 1; }
+  .feuille-sortie .fs-duo .fs-court { flex: 0 0 34%; }
+
+  .feuille-sortie .fs-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 5mm;
+  }
+  .feuille-sortie .fs-table th {
+    font-size: 8pt;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #555;
+    font-weight: 700;
+    text-align: left;
+    padding: 0 2.5mm 1.5mm;
+    border-bottom: 0.4mm solid #000;
+  }
+  .feuille-sortie .fs-table td {
+    height: 11.5mm;
+    border: 0.25mm solid #999;
+    border-top: 0;
+    padding: 0 2.5mm;
+  }
+  .feuille-sortie .fs-table th:first-child,
+  .feuille-sortie .fs-table td:first-child { border-left: 0; }
+  .feuille-sortie .fs-qte { width: 34%; border-right: 0 !important; }
+
+  .feuille-sortie .fs-signature {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6mm;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .feuille-sortie .fs-case { flex: 0 0 62mm; }
+  .feuille-sortie .fs-case b {
+    display: block;
+    font-size: 8pt;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #555;
+    font-weight: 700;
+    margin-bottom: 1.5mm;
+  }
+  .feuille-sortie .fs-case i {
+    display: block;
+    height: 22mm;
+    border: 0.3mm solid #000;
+    border-radius: 1mm;
+  }
+
   /* 5. le tableau à remplir, collé en bas de page.
      « Juste des chiffres à remplir, un tableau plus simple » (Layla,
      2026-09-15) : quatre colonnes, une ligne haute où écrire, rien d'autre. */
