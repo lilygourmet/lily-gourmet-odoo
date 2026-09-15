@@ -78,8 +78,32 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [impr, setImpr] = useState(null)
   // Ce qui part vraiment à l'imprimante, le temps de l'appel à `window.print`.
   const [feuillesPretes, setFeuillesPretes] = useState(null)
-  // La feuille de sortie de stock : le nom de la recette, ou null.
-  const [sortiePrete, setSortiePrete] = useState(null)
+  // La feuille de sortie de stock à remplir à la main : vrai le temps de
+  // l'impression. Elle n'appartient à aucun article — voir `imprimerSortie`.
+  const [sortiePrete, setSortiePrete] = useState(false)
+
+  /**
+   * Imprimer ce que le portail contient, et ranger APRÈS.
+   *
+   * ⚠️ La classe sur <body> dit au CSS de retirer tout le reste du document.
+   * Et on range à `afterprint`, pas après `print()` : sur iPad, `print()` rend
+   * la main tout de suite, avant que la feuille soit partie — tout remettre en
+   * place là, c'est imprimer du vide.
+   */
+  const imprimerLePortail = () => {
+    document.body.classList.add('impr-feuilles')
+    const ranger = () => {
+      window.removeEventListener('afterprint', ranger)
+      document.body.classList.remove('impr-feuilles')
+      setFeuillesPretes(null)
+      setSortiePrete(false)
+    }
+    window.addEventListener('afterprint', ranger)
+    setTimeout(() => window.print(), 60)
+  }
+
+  /** La feuille de sortie de stock, vierge — on l'imprime par paquets. */
+  const imprimerSortie = () => { setSortiePrete(true); imprimerLePortail() }
 
   const ouvert = chemin[0] || null
   const nav = { user, onLogout, onNavigate, activeView }
@@ -345,6 +369,16 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               {relit ? 'Lecture chez Odoo…' : '🔄 Mettre à jour les recettes'}
             </button>
           )}
+          {/* ⚠️ HORS DE TOUT ARTICLE. « non à l'extérieur de l'article, il n'est
+              pas lié à l'article » (Layla, 2026-09-15) : la feuille de sortie
+              s'imprime par paquets depuis l'accueil, et les feuilles attendent
+              à côté du congélateur. Elle ne connaît donc aucune recette. */}
+          <button onClick={imprimerSortie}
+            className="w-full mb-4 rounded-2xl border-2 border-cream-deep bg-cream-warm
+                       py-3 text-[15px] font-bold text-ink-mute">
+            ✍️ Feuille de sortie de stock
+          </button>
+          {sortiePrete && <FeuillesImpression sortie />}
           {histoOuvert && <HistoriqueAnnexe histo={histo} onFermer={() => setHistoOuvert(false)} />}
           {confirme && <Confirmation {...confirme} />}
 
@@ -437,31 +471,14 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * repeindre, d'où le `setTimeout` — sans lui, Safari imprime le panneau.
    */
   const lancerImpression = () => {
-    const mode = impr?.mode
+    const seule = impr?.mode === 'seule'
     const quoi = aImprimer
     setImpr(null)
     // L'ANCIENNE FAÇON, inchangée : la fiche telle qu'elle est à l'écran, par
     // la zone `print-area`. C'est ce que « comme d'habitude » veut dire.
-    if (mode === 'seule') { setTimeout(() => window.print(), 60); return }
-    // La feuille de sortie de stock : un papier vierge, avec seulement le nom
-    // de la recette déjà écrit — c'est de là qu'on imprime, l'app le sait.
-    if (mode === 'sortie') setSortiePrete(tete.libelle || tete.produit)
-    else setFeuillesPretes(quoi)
-    // ⚠️ La classe sur <body> dit au CSS de retirer tout le reste du document
-    // pendant l'impression. Sans elle, les feuilles seraient « invisibles »
-    // sous l'ancienne règle — et surtout tassées sur une seule page.
-    document.body.classList.add('impr-feuilles')
-    // ⚠️ ON RANGE À `afterprint`, PAS APRÈS `print()`. Sur iPad, `print()`
-    // rend la main tout de suite, avant que la feuille soit partie : tout
-    // remettre en place là, c'est imprimer du vide.
-    const ranger = () => {
-      window.removeEventListener('afterprint', ranger)
-      document.body.classList.remove('impr-feuilles')
-      setFeuillesPretes(null)
-      setSortiePrete(null)
-    }
-    window.addEventListener('afterprint', ranger)
-    setTimeout(() => window.print(), 60)
+    if (seule) { setTimeout(() => window.print(), 60); return }
+    setFeuillesPretes(quoi)
+    imprimerLePortail()
   }
   const decoupe = decoupeDe(noeud)
   // L'étape de mise en forme qu'on confirmera en validant — la base de flan.

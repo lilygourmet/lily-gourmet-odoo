@@ -96,22 +96,15 @@ describe('le panneau « Tu imprimes quoi ? »', () => {
   })
 })
 
-// « ou je peux trouver cette feuille ? » (Layla, 2026-09-15) — nulle part.
-// Elle est devenue le troisième choix du bouton 🖨, là où on imprime déjà sa
-// fournée : le pâtissier prend la feuille de sortie avec le reste.
-describe('la feuille de sortie de stock', () => {
-  it('est le troisième choix, et n’imprime qu’une feuille', () => {
-    poser({ mode: 'sortie' })
-    expect(screen.getByText('Sortie de stock')).toBeTruthy()
-    expect(screen.getByText('Imprimer 1 feuille')).toBeTruthy()
-    // Pas de cascade à cocher : c'est un papier vierge.
-    expect(screen.queryByLabelText('Creme Citron Production')).toBeNull()
-    expect(screen.getByText(/nom de la recette déjà écrit/)).toBeTruthy()
-  })
-
-  it('les deux autres choix restent là', () => {
+// ⚠️ LA FEUILLE DE SORTIE N'EST PAS ICI. « non à l'extérieur de l'article, il
+// n'est pas lié à l'article » (Layla, 2026-09-15) : elle s'imprime depuis
+// l'accueil, par paquets, et n'appartient à aucune recette. Le panneau, lui,
+// n'a que ses deux façons d'imprimer une fournée.
+describe('les façons d’imprimer', () => {
+  it('il y en a deux, et pas une de plus', () => {
     poser()
     expect(screen.getByText('Juste cette fiche')).toBeTruthy()
     expect(screen.getByText('Tout ce qui manque')).toBeTruthy()
+    expect(screen.queryByText('Sortie de stock')).toBeNull()
   })
 })

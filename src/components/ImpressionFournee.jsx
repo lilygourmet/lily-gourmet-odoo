@@ -27,11 +27,8 @@ export function ChoixImpression({
   onImprimer, onFermer,
 }) {
   const seule = mode === 'seule'
-  // La feuille de sortie de stock ne dépend d'aucune cascade : c'est un
-  // papier vierge, avec seulement le nom de la recette déjà écrit dessus.
-  const sortie = mode === 'sortie'
-  const visibles = sortie ? [] : seule ? feuilles.slice(-1) : feuilles
-  const combien = seule || sortie ? 1 : feuilles.filter(f => coches[f.produit]).length
+  const visibles = seule ? feuilles.slice(-1) : feuilles
+  const combien = seule ? 1 : feuilles.filter(f => coches[f.produit]).length
   // La tête est la DERNIÈRE feuille : c'est elle qui donne la profondeur.
   const profondeurDe = f => Math.max(0, f.chemin.length - 1)
 
@@ -47,26 +44,19 @@ export function ChoixImpression({
         </div>
 
         <div className="px-4 pt-3 flex-shrink-0">
-          <div className="grid grid-cols-3 gap-1.5 bg-cream-deep rounded-2xl p-1">
+          <div className="grid grid-cols-2 gap-1.5 bg-cream-deep rounded-2xl p-1">
             {[['seule', 'Juste cette fiche', "comme d'habitude"],
-              ['tout', 'Tout ce qui manque', 'la cascade entière'],
-              ['sortie', 'Sortie de stock', 'à remplir à la main']].map(([k, t, s]) => (
+              ['tout', 'Tout ce qui manque', 'la cascade entière']].map(([k, t, s]) => (
               <button key={k} onClick={() => onMode(k)} aria-pressed={mode === k}
-                className={`rounded-xl py-2.5 px-1.5 text-[12.5px] font-bold leading-tight
+                className={`rounded-xl py-2.5 px-2 text-[13.5px] font-bold leading-tight
                   ${mode === k ? 'bg-cream-warm text-bordeaux shadow-sm' : 'text-ink-mute'}`}>
-                {t}<span className="block font-normal text-[11px] opacity-80">{s}</span>
+                {t}<span className="block font-normal text-[11.5px] opacity-80">{s}</span>
               </button>
             ))}
           </div>
         </div>
 
         <div className="px-4 py-3 flex-1 overflow-y-auto overscroll-contain">
-          {sortie && (
-            <p className="text-[13.5px] text-ink-soft leading-snug py-2">
-              Une feuille vierge, avec le nom de la recette déjà écrit dessus.
-              L'employé y note ce qu'il prend au congélateur, et signe en bas.
-            </p>
-          )}
           {visibles.map(f => {
             const on = seule || !!coches[f.produit]
             const p = seule ? 0 : profondeurDe(f)
@@ -157,7 +147,7 @@ export function FeuillesImpression({ feuilles, sortie }) {
   return createPortal(
     <div className="print-feuilles">
       {(feuilles || []).map(f => <Feuille key={f.produit} f={f} />)}
-      {sortie && <FeuilleSortie recette={sortie} />}
+      {sortie && <FeuilleSortie />}
     </div>,
     document.body,
   )
@@ -166,20 +156,20 @@ export function FeuillesImpression({ feuilles, sortie }) {
 /**
  * LA FEUILLE DE SORTIE DE STOCK, à remplir au stylo.
  *
- * Une par recette (Layla, 2026-09-15) : un seul nom, un seul signataire. Le
- * nom de la recette est déjà écrit — c'est de là qu'on imprime, l'app le sait.
- * Tout le reste est du vide.
+ * Une par recette : un seul nom, un seul signataire (Layla, 2026-09-15).
+ *
+ * ⚠️ ELLE N'APPARTIENT À AUCUN ARTICLE — « non à l'extérieur de l'article, il
+ * n'est pas lié à l'article » (Layla). On l'imprime depuis l'accueil, par
+ * paquets, et les feuilles attendent à côté du congélateur. La recette
+ * s'écrit donc à la main, comme le reste.
  */
-function FeuilleSortie({ recette }) {
+function FeuilleSortie() {
   return (
     <article className="feuille-impr feuille-sortie">
       <h2 className="fs-titre">Sortie de stock</h2>
 
       <div className="fs-entete">
-        <div className="fs-champ fs-grand">
-          <b>Pour quelle recette</b>
-          <span className="fs-rempli">{propre(recette)}</span>
-        </div>
+        <div className="fs-champ fs-grand"><b>Pour quelle recette</b><i /></div>
         <div className="fs-duo">
           <div className="fs-champ"><b>Nom de l'employé</b><i /></div>
           <div className="fs-champ fs-court"><b>Date</b><i /></div>

@@ -219,3 +219,21 @@ describe('le panneau « tout ce qui manque »', () => {
     expect(nom.className).not.toMatch(/text-ok/)
   })
 })
+
+// « non a l'exterieur de l'article. il n'est pas lié a l'article »
+// (Layla, 2026-09-15) : la feuille de sortie s'imprime depuis l'ACCUEIL, sans
+// ouvrir quoi que ce soit, et n'appartient à aucune recette.
+describe('la feuille de sortie de stock', () => {
+  it('s’imprime depuis l’accueil, sans ouvrir d’article', async () => {
+    const print = vi.fn()
+    window.print = print
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    const b = await screen.findByText('✍️ Feuille de sortie de stock')
+    fireEvent.click(b)
+    // La feuille est posée dans la page, prête à partir.
+    await waitFor(() => expect(document.querySelector('.print-feuilles')).toBeTruthy())
+    expect(document.querySelector('.feuille-sortie')).toBeTruthy()
+    // Pour quelle recette : une ligne vide, pas un nom.
+    expect(screen.getByText('Pour quelle recette')).toBeTruthy()
+  })
+})
