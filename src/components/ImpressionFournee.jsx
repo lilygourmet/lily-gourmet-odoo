@@ -146,19 +146,27 @@ function Feuille({ f }) {
   const u = uniteAffichee(f.unite)
   return (
     <article className="feuille-impr">
-      {/* D'où vient cette feuille : sur le plan de travail, « Crème au beurre »
-          ne dit ni laquelle ni pour quel gâteau. */}
-      {f.chemin.length > 1 && (
-        <div className="fi-chemin">{f.chemin.map(propre).join(' › ')}</div>
-      )}
-      <h2 className="fi-titre">{propre(f.libelle)}</h2>
-      <div className="fi-qty">{qte(f.qty, f.unite)} à faire</div>
+      {/* 1. D'OÙ VIENT CETTE FEUILLE. Sur le plan de travail, « Crème au
+             beurre » ne dit ni laquelle ni pour quel gâteau. */}
+      <header className="fi-tete">
+        {f.chemin.length > 1 && (
+          <div className="fi-chemin">{f.chemin.slice(0, -1).map(propre).join(' › ')}</div>
+        )}
+        <h2 className="fi-titre">{propre(f.libelle)}</h2>
+      </header>
 
-      {/* ⚠️ OÙ VA CETTE FOURNÉE, quand elle sert à plus d'un endroit. Sans
-          cette ligne, le pâtissier fait 7 270 g de crème citron sans savoir
-          pourquoi — et la prochaine fois il en refera 3 480.
-          « soit tu additionnes les mêmes crèmes en laissant une explication »
-          (Layla, 2026-09-15). */}
+      {/* 2. LA QUANTITÉ, seule au milieu de sa bande. C'est le chiffre qu'on
+             vient chercher des yeux depuis l'autre bout du labo. */}
+      <div className="fi-bande">
+        <span className="fi-bande-lab">À faire</span>
+        <span className="fi-bande-qty">{qte(f.qty, f.unite)}</span>
+      </div>
+
+      {/* 3. OÙ VA CETTE FOURNÉE, quand elle sert à plus d'un endroit. Sans
+             cette ligne, le pâtissier fait 7 270 g de crème citron sans savoir
+             pourquoi — et la prochaine fois il n'en refait que 3 480.
+             « soit tu additionnes les mêmes crèmes en laissant une
+             explication » (Layla, 2026-09-15). */}
       {f.pour.length > 1 && (
         <div className="fi-detail">
           {f.pour.map((p, n) => (
@@ -169,31 +177,38 @@ function Feuille({ f }) {
         </div>
       )}
 
-      <div className="fi-lab">Ce qu'il faut</div>
-      {f.ingredients.map((i, n) => (
-        <div key={i.produit + n} className="fi-ing">
-          <span>{propre(i.produit)}</span>
-          <b>{qte(i.besoin, i.unite)}</b>
-        </div>
-      ))}
+      {/* 4. LA RECETTE. Des pointillés jusqu'au chiffre : on suit la ligne du
+             doigt sans se tromper de rang. */}
+      <section className="fi-recette">
+        <div className="fi-lab">Ce qu'il faut</div>
+        {f.ingredients.map((i, n) => (
+          <div key={i.produit + n} className="fi-ing">
+            <span>{propre(i.produit)}</span>
+            <i className="fi-pts" />
+            <b>{qte(i.besoin, i.unite)}</b>
+          </div>
+        ))}
+      </section>
 
-      {/* LE CADRE À REMPLIR. Le stock d'avant est imprimé, ce qui est sorti se
-          note au crayon. Le nom est répété en gros : « oui je ressaisis le
-          soir » (Layla, 2026-09-14) — il faut retrouver l'écran vite. */}
+      {/* 5. LE CADRE À REMPLIR, en bas de page. Le stock d'avant est imprimé,
+             ce qui est sorti se note au crayon. Le nom y est répété en gros :
+             « oui je ressaisis le soir » (Layla) — il faut retrouver l'écran
+             vite, une feuille à la main. */}
       <div className="fi-cadre">
         <div className="fi-lab">À remplir après la fournée</div>
         <div className="fi-cadre-nom">{propre(f.libelle)}</div>
         <div className="fi-champ">
           <span>En stock avant de commencer</span>
+          <i className="fi-pts" />
           <b>{qte(f.stock, f.unite)}</b>
         </div>
-        <div className="fi-champ">
+        <div className="fi-champ fi-champ-vide">
           <span>Il en est sorti</span>
           <i className="fi-trait" /><b className="fi-u">{u}</b>
         </div>
         <div className="fi-champ fi-duo">
           <span>Par</span><i className="fi-trait" />
-          <span>à</span><i className="fi-trait" />
+          <span>à</span><i className="fi-trait fi-trait-court" />
         </div>
       </div>
     </article>

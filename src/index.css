@@ -254,99 +254,152 @@ html, body {
 
   /* ------------------------------------------------------------
      LES FEUILLES DE FOURNÉE (Fabrication Annexe 2).
-     « Une feuille par article et que ça fit en une page » (Layla,
-     2026-09-14). Une page par article, le cadre à remplir en bas, et un
-     corps de texte serré pour qu'une recette de quinze lignes tienne.
+     « Une feuille par article et que ça fit en une page » (2026-09-14), puis
+     « arrange-moi la mise en page pour que ça soit clair la quantité à faire,
+     espacer les parties » (2026-09-15).
+
+     Cinq zones, dans cet ordre, franchement séparées :
+       1. d'où vient la feuille      petit, gris, au-dessus du titre
+       2. LA QUANTITÉ À FAIRE        une bande, le chiffre énorme
+       3. où va la fournée           seulement si elle sert à deux recettes
+       4. la recette                 pointillés jusqu'au chiffre
+       5. le cadre à remplir         collé en bas de page
      ------------------------------------------------------------ */
   .feuille-impr {
     page-break-after: always;
     break-after: page;
     font-size: 11pt;
-    line-height: 1.35;
+    line-height: 1.4;
     color: #000;
+    /* La hauteur minimale pousse le cadre en bas de page : toutes les feuilles
+       se ressemblent, la main va toujours au même endroit. Prudente (23 cm
+       pour 26,7 disponibles) — une recette longue déborderait sinon. */
+    min-height: 23cm;
+    display: flex;
+    flex-direction: column;
   }
   .feuille-impr:last-child {
     page-break-after: auto;
     break-after: auto;
   }
+
+  /* 1. d'où vient la feuille */
+  .feuille-impr .fi-tete {
+    border-bottom: 0.4mm solid #000;
+    padding-bottom: 3mm;
+    margin-bottom: 7mm;
+  }
   .feuille-impr .fi-chemin {
-    font-size: 8.5pt;
+    font-size: 9pt;
     color: #555;
-    font-weight: 700;
-    margin-bottom: 2mm;
+    margin-bottom: 1.5mm;
   }
   .feuille-impr .fi-titre {
-    font-size: 17pt;
+    font-size: 21pt;
     font-weight: 800;
-    line-height: 1.1;
-    margin: 0 0 1mm;
+    line-height: 1.05;
+    margin: 0;
+    letter-spacing: -0.01em;
   }
-  .feuille-impr .fi-qty {
-    font-size: 13pt;
+
+  /* 2. LA QUANTITÉ À FAIRE — ce qu'on vient chercher des yeux */
+  .feuille-impr .fi-bande {
+    display: flex;
+    align-items: baseline;
+    gap: 5mm;
+    border: 0.5mm solid #000;
+    border-radius: 1.5mm;
+    padding: 4mm 6mm;
+    margin-bottom: 7mm;
+  }
+  .feuille-impr .fi-bande-lab {
+    font-size: 9pt;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #444;
     font-weight: 700;
-    margin-bottom: 4mm;
   }
-  /* Où va la fournée quand elle sert à deux recettes. */
+  .feuille-impr .fi-bande-qty {
+    margin-left: auto;
+    font-size: 26pt;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* 3. où va la fournée */
   .feuille-impr .fi-detail {
-    font-size: 9.5pt;
+    font-size: 10pt;
     color: #333;
-    border-left: 0.6mm solid #999;
-    padding-left: 2.5mm;
-    margin: 0 0 4mm;
-    line-height: 1.5;
+    border-left: 0.8mm solid #888;
+    padding-left: 3mm;
+    margin: 0 0 7mm;
+    line-height: 1.6;
   }
   .feuille-impr .fi-detail b { font-variant-numeric: tabular-nums; }
 
+  /* 4. la recette */
   .feuille-impr .fi-lab {
-    font-size: 7.5pt;
-    letter-spacing: .12em;
+    font-size: 8.5pt;
+    letter-spacing: .14em;
     text-transform: uppercase;
     color: #555;
     font-weight: 700;
-    margin-bottom: 1mm;
+    margin-bottom: 2.5mm;
   }
   .feuille-impr .fi-ing {
     display: flex;
-    justify-content: space-between;
-    gap: 8mm;
-    padding: 1.1mm 0;
-    border-top: 0.2mm solid #ddd;
+    align-items: baseline;
+    padding: 1.6mm 0;
+    font-size: 11.5pt;
   }
-  .feuille-impr .fi-ing b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .feuille-impr .fi-ing b {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+  /* Les pointillés qui mènent au chiffre : on suit la ligne du doigt. */
+  .feuille-impr .fi-pts {
+    flex: 1;
+    border-bottom: 0.25mm dotted #999;
+    margin: 0 2.5mm 1.2mm;
+  }
 
-  /* Le cadre reste d'un bloc : coupé en deux, il ne se remplit plus. */
+  /* 5. le cadre à remplir, collé en bas */
   .feuille-impr .fi-cadre {
-    margin-top: 6mm;
-    border: 0.5mm solid #000;
-    border-radius: 1mm;
-    padding: 3mm 4mm 4mm;
+    /* `auto` le pousse en bas de page : la main va toujours au même endroit. */
+    margin-top: auto;
+    border: 0.6mm solid #000;
+    border-radius: 1.5mm;
+    padding: 4mm 5mm 5mm;
     page-break-inside: avoid;
     break-inside: avoid;
   }
   .feuille-impr .fi-cadre-nom {
-    font-size: 13pt;
+    font-size: 14pt;
     font-weight: 800;
     line-height: 1.1;
-    margin: 0 0 2mm;
+    margin: 0 0 3mm;
   }
   .feuille-impr .fi-champ {
     display: flex;
     align-items: baseline;
-    gap: 3mm;
-    padding: 2mm 0;
-    border-top: 0.2mm dotted #999;
-    font-size: 10pt;
+    padding: 2.4mm 0;
+    border-top: 0.2mm solid #ddd;
+    font-size: 10.5pt;
   }
-  .feuille-impr .fi-champ > span:first-child { flex: 1; }
   .feuille-impr .fi-champ b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .feuille-impr .fi-champ-vide { font-weight: 700; }
   .feuille-impr .fi-trait {
-    flex: 0 0 32mm;
-    border-bottom: 0.35mm solid #000;
-    height: 5mm;
+    flex: 0 0 38mm;
+    border-bottom: 0.4mm solid #000;
+    height: 6mm;
+    margin: 0 2mm;
   }
-  .feuille-impr .fi-u { width: 5mm; }
-  .feuille-impr .fi-duo > span { flex: 0 0 auto; }
-  .feuille-impr .fi-duo .fi-trait:last-child { flex: 0 0 24mm; }
+  .feuille-impr .fi-u { width: 6mm; }
+  .feuille-impr .fi-duo { gap: 0; }
+  .feuille-impr .fi-duo .fi-trait-court { flex: 0 0 24mm; }
 }
 
 /* Les feuilles de fournée n'existent qu'à l'impression.
