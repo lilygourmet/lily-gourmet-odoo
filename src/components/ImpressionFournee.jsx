@@ -244,8 +244,12 @@ function Feuille({ f }) {
 
       {/* 5. LE TABLEAU À REMPLIR, en bas de page. « Juste des chiffres à
              remplir, un tableau plus simple » (Layla, 2026-09-15) : ni titre,
-             ni cadre, ni nom répété — il est déjà en haut de la feuille. Le
-             stock d'avant est imprimé, le reste est du vide où écrire. */}
+             ni cadre, ni nom répété — il est déjà en haut de la feuille.
+             ⚠️ TOUT est vide, « En stock » compris : « je ne veux pas voir la
+             quantité de stock dans le carré du bas », « je veux l'écrire
+             moi-même » (Layla, 2026-09-16). Le chiffre d'Odoo s'affiche encore
+             à l'ÉCRAN, dans le panneau « Tu imprimes quoi ? » — c'est sur le
+             PAPIER qu'il ne doit pas apparaître, pour être compté à la main. */}
       <table className="fi-table">
         <thead>
           <tr>
@@ -257,8 +261,7 @@ function Feuille({ f }) {
         </thead>
         <tbody>
           <tr>
-            <td>{qte(f.stock, f.unite)}</td>
-            <td /><td /><td />
+            <td /><td /><td /><td />
           </tr>
         </tbody>
       </table>
