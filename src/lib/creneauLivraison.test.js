@@ -88,3 +88,19 @@ describe('ce que le client lit', () => {
     expect(estCreneau2h('09h30-11h30')).toBe(true)
   })
 })
+
+describe('la ligne reste reconnue quoi qu’Odoo y mette', () => {
+  it('une note ajoutée sous le nom ne la cache plus', () => {
+    expect(estLigneLivraison('Livraison (Agdal)\n⚠️ Sonner au portail')).toBe(true)
+    expect(estLigneLivraison('\n  Livraison (Agdal)\n⚠️ 3e étage')).toBe(true)
+  })
+
+  it('mais un article dont la livraison n’est qu’une note ne compte pas', () => {
+    expect(estLigneLivraison('Royal Chocolat 20 cm\nLivraison (Agdal)')).toBe(false)
+  })
+
+  it('vide ou blanc : ce n’est pas une livraison', () => {
+    expect(estLigneLivraison('')).toBe(false)
+    expect(estLigneLivraison('\n   \n')).toBe(false)
+  })
+})

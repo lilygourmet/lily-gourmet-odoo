@@ -30,8 +30,19 @@ const toHHMM = (mn) => `${String(Math.floor(mn / 60) % 24).padStart(2, '0')}:${S
  * depuis l'écriture du module. On accepte la parenthèse, mais rien d'autre :
  * « Livraison express » reste un article différent.
  */
-export const estLigneLivraison = (name) =>
-  /^livraison\s*(\(.*\))?$/i.test(String(name || '').trim())
+/**
+ * ⚠️ On regarde la PREMIÈRE LIGNE UTILE, pas la chaîne entière.
+ *
+ * Odoo écrit ces noms avec un retour à la ligne DEVANT — « \n  Livraison
+ * (Souissi) » — et peut ajouter une note en dessous. Un code qui lisait
+ * `split('\n')[0]` obtenait une chaîne vide et ne reconnaissait aucune
+ * livraison : changer l'heure ne décalait alors pas la préparation.
+ * (Trouvé le 2026-09-15.)
+ */
+export const estLigneLivraison = (name) => {
+  const premiere = String(name || '').split('\n').map(s => s.trim()).find(Boolean) || ''
+  return /^livraison\s*(\(.*\))?$/i.test(premiere)
+}
 
 /**
  * Heure saisie (= début du créneau, 13:00) → heure à enregistrer dans Odoo (12:30).

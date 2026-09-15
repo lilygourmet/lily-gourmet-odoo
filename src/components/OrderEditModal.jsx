@@ -7,7 +7,7 @@ import { createModification } from '../lib/modifications'
 import { ConfiguratorModal, PRICE_EDITABLE } from './ProductConfigurator'
 import CakeDayPlanning from './CakeDayPlanning'
 import { toast } from '../lib/toast'
-import { creneauClient, finCreneau, heurePreparation, heureLisible } from '../lib/creneau'
+import { creneauClient, finCreneau, heurePreparation, heureLisible, estLigneLivraison } from '../lib/creneau'
 import { confirmDialog } from '../lib/confirmDialog'
 import { filePhoto } from '../lib/photoCompress'
 
@@ -177,12 +177,44 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
   }
 
   // Enregistre les articles ajoutés + les quantités / prix modifiés (lignes changées).
+  /**
+   * LA COMMANDE VIENT DE DEVENIR UNE LIVRAISON.
+   *
+   * Ajouter une ligne « Livraison » ne touchait rien d'autre : l'heure de
+   * préparation ne reculait pas de 30 min et aucun créneau n'était enregistré.
+   * Le pâtissier n'avait donc pas son avance, et le livreur voyait l'heure
+   * brute. (Layla, 2026-09-15.)
+   *
+   * ⚠️ On DEMANDE avant de décaler : sur une commande déjà confirmée, l'heure
+   * bouge dans le calendrier et en cuisine, sous les yeux de tout le monde.
+   *
+   * ⚠️ Et on n'envoie RIEN au client : « l'envoi au client reste un choix »
+   * (Layla). Le message part de Conversations, quand elle le décide.
+   */
+  async function proposerCreneau() {
+    if (estLivree || !dTime) return                 // créneau déjà en place
+    const aLivraison = [...lines, ...draft].some(l => estLigneLivraison(l.rawName ?? l.name))
+    if (!aLivraison) return
+    const fin = finCreneau(dTime)
+    const ok = await confirmDialog(
+      `Cette commande devient une livraison.\n\n` +
+      `Le client sera livré entre ${heureLisible(dTime)} et ${heureLisible(fin)}.\n` +
+      `La cuisine préparera pour ${heureLisible(heurePreparation(dTime))} — 30 minutes avant.\n\n` +
+      `L'heure va donc changer dans le calendrier et en cuisine.\n` +
+      `Le client ne sera pas prévenu : tu lui enverras le message toi-même.`,
+      { confirmLabel: 'Oui, décaler', cancelLabel: 'Non, laisser l’heure' })
+    if (!ok) return
+    await updateOrderDate(order.id, dDate, dTime)
+    logModif(`Devient une livraison → client ${heureLisible(dTime)}-${heureLisible(fin)}, prêt ${heurePreparation(dTime)}`)
+  }
+
   async function saveEdits() {
     const changed = lines.filter(l => l._dirty)
     if (changed.length === 0 && draft.length === 0) { onClose(); return }
     setBusy(true)
     try {
       await commitDraft()
+      await proposerCreneau()
       for (const l of changed) {
         const photos = l._photoFiles?.length ? await Promise.all(l._photoFiles.map(filePhoto)) : null
         await updateOrderLine(order.id, l.id, { qty: l.qty, price: l.price, name: l.rawName, discount: l.discount, photos })
