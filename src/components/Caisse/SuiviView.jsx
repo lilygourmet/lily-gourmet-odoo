@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, loadConfirmedReleveLines, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, analyserVirements, ECART_MINI } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, analyserVirements, ECART_MINI } from '../../lib/caisse'
 import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
@@ -75,7 +75,6 @@ function BanqueSection({ user }) {
   const [confirmEnv, setConfirmEnv] = useState(null)
   const [suggestEnv, setSuggestEnv] = useState(null)
   const [query, setQuery] = useState('')
-  const [takenLines, setTakenLines] = useState([])
   const [freeLines, setFreeLines] = useState([])
   const [hideNoSugg, setHideNoSugg] = useState(false)
   const [ecartList, setEcartList] = useState([])
@@ -95,7 +94,6 @@ function BanqueSection({ user }) {
   async function reload() {
     const data = await loadEnveloppesForSuivi({ type: 'banque', month, year, statusFilter })
     setList(data)
-    try { setTakenLines(await loadConfirmedReleveLines()) } catch { /* ignore */ }
     try { setFreeLines(await loadAllFreeReleveLines()) } catch { /* ignore */ }
     try { setEcartList(await loadBanqueEnvelopesWithEcart()) } catch { /* ignore */ }
     try { setEcartValidesList(await loadBanqueEcartsValides()) } catch { /* ignore */ }
@@ -562,7 +560,7 @@ function BanqueSection({ user }) {
       )}
 
       {confirmEnv && (
-        <ConfirmChoiceModal env={confirmEnv} takenLines={takenLines} onClose={() => setConfirmEnv(null)} onPick={handlePickLine} />
+        <ConfirmChoiceModal env={confirmEnv} onClose={() => setConfirmEnv(null)} onPick={handlePickLine} />
       )}
 
       {suggestEnv && (
@@ -1051,17 +1049,49 @@ function SuggestModal({ env, onClose, onAttach }) {
   )
 }
 
-// Choix de la bonne ligne du relevé pour une enveloppe « à confirmer »
-function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
+// Choix de la bonne ligne du relevé pour une enveloppe « à confirmer ».
+//
+// Les choix proposés sont ceux MÉMORISÉS au moment du rapprochement. Entre-temps, une
+// autre caisse a pu prendre l'une de ces lignes : il fallait donc les confronter à ce qui
+// est RÉELLEMENT libre, à l'ouverture de la fenêtre.
+//
+// On le faisait en comparant des bouts de texte — les libellés gardés sur les caisses
+// vertes — sur leurs 40 premiers caractères. Trop fragile : le virement de BAMHAOUD OUAFA,
+// déjà pris par la caisse de Boutayna boudaz, restait proposé à celle d'ines elfechtali.
+// La confirmation aurait échoué (elle ne rattache qu'une ligne libre), mais le choix
+// périmé faisait légitimement craindre un doublon.
+// Désormais on interroge les lignes libres : une ligne prise par n'importe quelle caisse
+// en disparaît, quel que soit son libellé.
+function ConfirmChoiceModal({ env, onClose, onPick }) {
+  const [libres, setLibres] = useState(null)
+  useEffect(() => {
+    let vivant = true
+    ;(async () => {
+      try {
+        const [l, miennes] = await Promise.all([
+          loadFreeReleveLines(env.amount_cash, env.payment_method),
+          loadEnvReleveLines(env.id),
+        ])
+        // Une ligne déjà marquée prise par CETTE caisse lui reste disponible (voir
+        // confirmReleveLine) : sans ça une caisse bloquée ne pourrait plus se débloquer.
+        if (vivant) setLibres([...l, ...miennes.filter(m => !l.some(x => x.key === m.key))])
+      } catch { if (vivant) setLibres([]) }
+    })()
+    return () => { vivant = false }
+  }, [env.id, env.amount_cash, env.payment_method])
+
   const normLine = s => (s || '').replace(/\s+/g, ' ').trim().toUpperCase()
-  const taken = takenLines.map(normLine)
   let candidates = []
   try { candidates = JSON.parse(env.releve_candidates || '[]') } catch { candidates = [] }
-  // Retire les lignes déjà attribuées à une enveloppe verte
-  candidates = candidates.filter(c => {
-    const key = normLine(`${c.d} · ${c.l}`)
-    return !taken.some(t => t.startsWith(key.slice(0, 40)) || key.startsWith(t.slice(0, 40)))
-  })
+  const nbMemorisees = candidates.length
+  if (libres) {
+    candidates = candidates.filter(c => libres.some(l => {
+      if (l.ligne_date !== c.d) return false
+      const a = normLine(l.label), b = normLine(c.l)
+      return a.startsWith(b.slice(0, 30)) || b.startsWith(a.slice(0, 30))
+    }))
+  }
+  const perimees = libres ? nbMemorisees - candidates.length : 0
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
       <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
@@ -1069,8 +1099,14 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 12 }}>
           {fmtMoney(env.amount_cash)}{env.virement_client ? ` · ${env.virement_client}` : ''} — choisis la ligne qui correspond :
         </div>
-        {candidates.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucune ligne mémorisée. Tu peux confirmer sans choisir.</div>
+        {libres === null ? (
+          <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Vérification des lignes encore libres…</div>
+        ) : candidates.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>
+            {nbMemorisees
+              ? `Les ${nbMemorisees} ligne(s) proposées ont été prises par d'autres caisses entre-temps. Utilise « Lier » pour en choisir une autre.`
+              : 'Aucune ligne mémorisée. Tu peux confirmer sans choisir.'}
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
             {candidates.map((c, i) => (
@@ -1079,6 +1115,11 @@ function ConfirmChoiceModal({ env, takenLines = [], onClose, onPick }) {
                 <b>{c.d}</b> · {c.l}
               </button>
             ))}
+          </div>
+        )}
+        {perimees > 0 && candidates.length > 0 && (
+          <div style={{ fontSize: 11, color: '#8a7a70', marginBottom: 10 }}>
+            {perimees} ligne(s) retirée(s) : déjà prise(s) par une autre caisse.
           </div>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
