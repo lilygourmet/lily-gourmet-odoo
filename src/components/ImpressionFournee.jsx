@@ -190,27 +190,26 @@ function Feuille({ f }) {
         ))}
       </section>
 
-      {/* 5. LE CADRE À REMPLIR, en bas de page. Le stock d'avant est imprimé,
-             ce qui est sorti se note au crayon. Le nom y est répété en gros :
-             « oui je ressaisis le soir » (Layla) — il faut retrouver l'écran
-             vite, une feuille à la main. */}
-      <div className="fi-cadre">
-        <div className="fi-lab">À remplir après la fournée</div>
-        <div className="fi-cadre-nom">{propre(f.libelle)}</div>
-        <div className="fi-champ">
-          <span>En stock avant de commencer</span>
-          <i className="fi-pts" />
-          <b>{qte(f.stock, f.unite)}</b>
-        </div>
-        <div className="fi-champ fi-champ-vide">
-          <span>Il en est sorti</span>
-          <i className="fi-trait" /><b className="fi-u">{u}</b>
-        </div>
-        <div className="fi-champ fi-duo">
-          <span>Par</span><i className="fi-trait" />
-          <span>à</span><i className="fi-trait fi-trait-court" />
-        </div>
-      </div>
+      {/* 5. LE TABLEAU À REMPLIR, en bas de page. « Juste des chiffres à
+             remplir, un tableau plus simple » (Layla, 2026-09-15) : ni titre,
+             ni cadre, ni nom répété — il est déjà en haut de la feuille. Le
+             stock d'avant est imprimé, le reste est du vide où écrire. */}
+      <table className="fi-table">
+        <thead>
+          <tr>
+            <th>En stock</th>
+            <th>Sorti ({u})</th>
+            <th>Par</th>
+            <th>Heure</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{qte(f.stock, f.unite)}</td>
+            <td /><td /><td />
+          </tr>
+        </tbody>
+      </table>
     </article>
   )
 }

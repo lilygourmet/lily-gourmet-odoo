@@ -366,40 +366,45 @@ html, body {
     margin: 0 2.5mm 1.2mm;
   }
 
-  /* 5. le cadre à remplir, collé en bas */
-  .feuille-impr .fi-cadre {
-    /* `auto` le pousse en bas de page : la main va toujours au même endroit. */
+  /* 5. le tableau à remplir, collé en bas de page.
+     « Juste des chiffres à remplir, un tableau plus simple » (Layla,
+     2026-09-15) : quatre colonnes, une ligne haute où écrire, rien d'autre. */
+  .feuille-impr .fi-table {
+    /* `auto` le pousse en bas : la main va toujours au même endroit. */
     margin-top: auto;
-    border: 0.6mm solid #000;
-    border-radius: 1.5mm;
-    padding: 4mm 5mm 5mm;
+    width: 100%;
+    border-collapse: collapse;
     page-break-inside: avoid;
     break-inside: avoid;
   }
-  .feuille-impr .fi-cadre-nom {
-    font-size: 14pt;
-    font-weight: 800;
-    line-height: 1.1;
-    margin: 0 0 3mm;
-  }
-  .feuille-impr .fi-champ {
-    display: flex;
-    align-items: baseline;
-    padding: 2.4mm 0;
-    border-top: 0.2mm solid #ddd;
-    font-size: 10.5pt;
-  }
-  .feuille-impr .fi-champ b { font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .feuille-impr .fi-champ-vide { font-weight: 700; }
-  .feuille-impr .fi-trait {
-    flex: 0 0 38mm;
+  .feuille-impr .fi-table th {
+    font-size: 8.5pt;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #555;
+    font-weight: 700;
+    text-align: left;
+    padding: 0 2.5mm 1.5mm;
     border-bottom: 0.4mm solid #000;
-    height: 6mm;
-    margin: 0 2mm;
   }
-  .feuille-impr .fi-u { width: 6mm; }
-  .feuille-impr .fi-duo { gap: 0; }
-  .feuille-impr .fi-duo .fi-trait-court { flex: 0 0 24mm; }
+  .feuille-impr .fi-table td {
+    height: 14mm;
+    vertical-align: middle;
+    padding: 0 2.5mm;
+    font-size: 12pt;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    border: 0.25mm solid #999;
+    border-top: 0;
+  }
+  /* Les colonnes : le stock et ce qui est sorti prennent la place, le nom et
+     l'heure se contentent du reste. */
+  .feuille-impr .fi-table th:nth-child(1),
+  .feuille-impr .fi-table td:nth-child(1) { width: 26%; border-left: 0; }
+  .feuille-impr .fi-table th:nth-child(2),
+  .feuille-impr .fi-table td:nth-child(2) { width: 30%; }
+  .feuille-impr .fi-table th:nth-child(4),
+  .feuille-impr .fi-table td:nth-child(4) { width: 18%; border-right: 0; }
 }
 
 /* Les feuilles de fournée n'existent qu'à l'impression.
