@@ -418,11 +418,16 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // pendant l'impression. Sans elle, les feuilles seraient « invisibles »
     // sous l'ancienne règle — et surtout tassées sur une seule page.
     document.body.classList.add('impr-feuilles')
-    setTimeout(() => {
-      window.print()
+    // ⚠️ ON RANGE À `afterprint`, PAS APRÈS `print()`. Sur iPad, `print()`
+    // rend la main tout de suite, avant que la feuille soit partie : tout
+    // remettre en place là, c'est imprimer du vide.
+    const ranger = () => {
+      window.removeEventListener('afterprint', ranger)
       document.body.classList.remove('impr-feuilles')
       setFeuillesPretes(null)
-    }, 60)
+    }
+    window.addEventListener('afterprint', ranger)
+    setTimeout(() => window.print(), 60)
   }
   const decoupe = decoupeDe(noeud)
   // L'étape de mise en forme qu'on confirmera en validant — la base de flan.

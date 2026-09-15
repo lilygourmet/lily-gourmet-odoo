@@ -338,8 +338,14 @@ html, body {
   .feuille-impr .fi-duo .fi-trait:last-child { flex: 0 0 24mm; }
 }
 
-/* Les feuilles de fournée n'existent qu'à l'impression. */
-.print-feuilles { display: none; }
+/* Les feuilles de fournée n'existent qu'à l'impression.
+   ⚠️ SOUS `@media screen`, sans quoi cette règle écraserait celle du bloc
+   `@media print` plus haut — même poids, mais écrite après, donc elle gagne.
+   Résultat vécu le 2026-09-15 : la feuille restait cachée même au moment
+   d'imprimer, et il ne sortait rien du tout. */
+@media screen {
+  .print-feuilles { display: none; }
+}
 
 /* Le rappel des transferts : la ligne suivante monte à la place de la précédente.
    Immobile pour qui a demandé moins d'animations. */
