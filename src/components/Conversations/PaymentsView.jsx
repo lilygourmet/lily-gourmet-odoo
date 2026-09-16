@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { toast } from '../../lib/toast'
 import { Paperclip } from 'lucide-react'
-import { loadPaymentsToValidate, validatePayment, rejectPayment, getMediaSignedUrl, lirePreuvesPaiement } from '../../lib/conversations'
+import { loadPaymentsToValidate, validatePayment, rejectPayment, getMediaSignedUrl, lirePreuvesPaiement, loadPayeursLus } from '../../lib/conversations'
 import { canValidatePayments } from '../../lib/auth'
 
 function fmtDate(ts) {
@@ -25,6 +25,7 @@ export default function PaymentsView({ user }) {
   const [tab, setTab] = usePersistedState('lily.payments.tab', 'todo') // 'todo' = à valider | 'done' = déjà validés
   const [q, setQ] = useState('')
   const [lecture, setLecture] = useState(null)   // avancement de la lecture des pièces jointes
+  const [payeurs, setPayeurs] = useState({})     // nom de l'émetteur lu sur chaque pièce jointe
 
   const canValidate = canValidatePayments(user)
 
@@ -57,6 +58,7 @@ export default function PaymentsView({ user }) {
     setLoading(true); setError('')
     try {
       const data = await loadPaymentsToValidate()
+      try { setPayeurs(await loadPayeursLus()) } catch { /* pas bloquant */ }
       setItems(data)
       // Prépare les URL affichables (lien direct si http, sinon URL signée)
       const map = {}
@@ -135,6 +137,13 @@ export default function PaymentsView({ user }) {
           {m.payment_order_ref && <div className="text-[12px] text-ink mt-0.5">Commande : <span className="font-medium">{m.payment_order_ref}</span></div>}
           {m.payment_amount != null && <div className="text-[13px] text-ink font-semibold mt-0.5">{fmtAmount(m.payment_amount)}</div>}
           <div className="text-[10px] text-ink-mute mt-0.5">Reçu le {fmtDate(m.sent_at)}</div>
+          {/* Le nom lu sur la pièce jointe : c'est lui qui relie le virement à la commande
+              quand un proche a payé. Affiché pour être vérifiable à l'œil — un nom faux se
+              repère bien plus vite qu'il ne se devine. */}
+          {payeurs[m.id] && (payeurs[m.id].p
+            ? <div className="text-[11px] text-ink-soft mt-1">💳 Payé par <span className="font-medium text-ink">{payeurs[m.id].p}</span></div>
+            : <div className="text-[11px] text-ink-mute mt-1">💳 nom de l'émetteur illisible</div>
+          )}
           {validated && (
             <div className="text-[11px] text-emerald-700 mt-1.5">Validé{m.validator?.full_name ? ` par ${m.validator.full_name}` : ''} · {fmtDate(m.payment_validated_at)}</div>
           )}
