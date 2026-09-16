@@ -26,6 +26,9 @@ export default function PaymentsView({ user }) {
   const [q, setQ] = useState('')
   const [lecture, setLecture] = useState(null)   // avancement de la lecture des pièces jointes
   const [payeurs, setPayeurs] = useState({})     // nom de l'émetteur lu sur chaque pièce jointe
+  // Mois à lire (AAAA-MM). Vide = tout. La lecture part des preuves les plus récentes :
+  // sans ce choix, viser un vieux mois obligeait à lire tous les suivants d'abord.
+  const [moisLecture, setMoisLecture] = useState('')
 
   const canValidate = canValidatePayments(user)
 
@@ -42,6 +45,7 @@ export default function PaymentsView({ user }) {
     setLecture({ fait: 0, total: 0 })
     try {
       const r = await lirePreuvesPaiement({
+        mois: moisLecture || null,
         onProgress: (fait, total) => setLecture({ fait, total }),
       })
       await refresh()
@@ -195,14 +199,21 @@ export default function PaymentsView({ user }) {
           onClick={() => setTab('done')}
           className={`px-4 py-1.5 text-[12px] font-medium rounded-full transition-all ${tab === 'done' ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft hover:bg-cream-warm'}`}
         >Traités ({nbDone})</button>
+        <input
+          type="month"
+          value={moisLecture}
+          onChange={e => setMoisLecture(e.target.value)}
+          title="Laisse vide pour tout lire, ou choisis un mois précis"
+          className="ml-auto px-3 py-1.5 text-[12px] rounded-full border border-line text-ink-soft bg-cream-warm"
+        />
         <button
           onClick={handleLireJointes}
           disabled={!!lecture}
           title="Lit les pièces jointes pour y trouver le nom de la personne qui a payé — ce qui permet de rapprocher les virements faits par un proche"
-          className="ml-auto px-4 py-1.5 text-[12px] font-medium rounded-full border border-line text-ink-soft hover:bg-cream-warm disabled:opacity-60"
+          className="px-4 py-1.5 text-[12px] font-medium rounded-full border border-line text-ink-soft hover:bg-cream-warm disabled:opacity-60"
         >{lecture
           ? `⏳ Lecture ${lecture.fait}/${lecture.total || '…'}`
-          : '🔎 Lire les pièces jointes'}</button>
+          : (moisLecture ? `🔎 Lire ${moisLecture}` : '🔎 Lire les pièces jointes')}</button>
       </div>
 
       {/* Recherche par n° de commande ou nom du client */}

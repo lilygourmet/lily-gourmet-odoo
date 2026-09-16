@@ -1144,15 +1144,24 @@ async function enregistrerPayeurs(map) {
  * à l'IA, et il y en a plusieurs centaines. On enregistre au fur et à mesure : une lecture
  * interrompue ne perd rien et ne se repaie pas.
  */
-export async function lirePreuvesPaiement({ limite = 0, onProgress } = {}) {
+export async function lirePreuvesPaiement({ limite = 0, mois = null, onProgress } = {}) {
   const deja = await chargerPayeurs()
-  const { data, error } = await supabase
+  let q = supabase
     .from('messages')
     .select('id, media_url, media_type, payment_client_name, conversation:conversations!messages_conversation_id_fkey(client_name)')
     .eq('is_payment_proof', true)
     .not('media_url', 'is', null)
     .order('sent_at', { ascending: false })
     .limit(3000)
+  // `mois` au format AAAA-MM. Sans lui, la lecture part des preuves les plus RÉCENTES :
+  // viser juin voulait dire lire septembre et août d'abord, et payer pour rien.
+  if (mois) {
+    const [a, m] = mois.split('-').map(Number)
+    const debut = `${mois}-01`
+    const fin = m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, '0')}-01`
+    q = q.gte('sent_at', debut).lt('sent_at', fin)
+  }
+  const { data, error } = await q
   if (error) throw error
 
   // limite 0 = tout lire d'une traite. L'enregistrement régulier plus bas rend la chose
