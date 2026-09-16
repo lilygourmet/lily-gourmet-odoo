@@ -30,7 +30,7 @@ import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
-import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec } from '../lib/feuillesAImprimer'
+import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock } from '../lib/feuillesAImprimer'
 
 /**
  * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
@@ -369,6 +369,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     const feuillesChoisies = pretes.length === choisis.length && choisis.length
       ? feuillesDePlusieurs(pretes.map(a => ({ noeud: a, qty: prevus[a.produit]?.q ?? a.tournee })))
       : []
+    // ⚠️ On n'imprime pas ce dont il y a déjà assez — même règle que le panneau
+    // d'une fiche. Les gâteaux cochés, eux, sortent toujours : c'est ce qu'on
+    // est venu faire.
+    const aImprimerAssemble = feuillesChoisies
+      .filter(f => choisis.includes(f.produit) || !assezEnStock(f))
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader {...nav} />
@@ -407,7 +412,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               </button>
             ))}
           </div>
-          {sortiePrete && <FeuillesImpression sortie />}
+          {(feuillesPretes || sortiePrete) && (
+            <FeuillesImpression feuilles={feuillesPretes} sortie={sortiePrete} />
+          )}
           {histoOuvert && <HistoriqueAnnexe histo={histo} onFermer={() => setHistoOuvert(false)} />}
           {confirme && <Confirmation {...confirme} />}
 
@@ -439,6 +446,12 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
 
           {assemblage && (
             <Assemblage feuilles={feuillesChoisies} gateaux={choisis}
+              aImprimer={aImprimerAssemble.length}
+              onImprimer={() => {
+                setAssemblage(false)
+                setFeuillesPretes(aImprimerAssemble)
+                imprimerLePortail()
+              }}
               onFermer={() => setAssemblage(false)}
               onOuvrir={f => {
                 // ⚠️ On ouvre la préparation AVEC SON TOTAL : une cuve pour les

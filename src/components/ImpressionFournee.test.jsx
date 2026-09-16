@@ -108,3 +108,61 @@ describe('les façons d’imprimer', () => {
     expect(screen.queryByText('Sortie de stock')).toBeNull()
   })
 })
+
+// « je veux pouvoir imprimer en cascade » (Layla, 2026-09-16) — depuis
+// plusieurs gâteaux cochés, pas seulement depuis une fiche.
+import { Assemblage } from './FabAnnexe2Simple'
+
+const assemblees = [
+  { produit: 'SM. Creme Citron Gingembre', libelle: 'Creme Citron Gingembre',
+    unite: 'g', qty: 31787, stock: 0, besoin: 31787, manque: 31787, chemin: [], ingredients: [],
+    pour: [{ nom: 'SM- Tarte Citron Gin 23 cm', qty: 11844 },
+           { nom: 'SM- Tarte Citron Gin 18 cm', qty: 7146 },
+           { nom: 'SM- Tarte Citron Gin Indiv', qty: 12797 }] },
+  { produit: 'SM- Tarte Citron Gin 23 cm', libelle: 'Tarte · 23 cm', unite: 'u',
+    qty: 18, stock: 1, besoin: 18, manque: 17, chemin: [], pour: [], ingredients: [] },
+  { produit: 'SM- Tarte Citron Gin 18 cm', libelle: 'Tarte · 18 cm', unite: 'u',
+    qty: 18, stock: 7, besoin: 18, manque: 11, chemin: [], pour: [], ingredients: [] },
+]
+const gateaux = ['SM- Tarte Citron Gin 23 cm', 'SM- Tarte Citron Gin 18 cm']
+
+describe('assembler plusieurs gâteaux', () => {
+  it('montre la crème additionnée, et ce que chaque tarte lui prend', () => {
+    render(<Assemblage feuilles={assemblees} gateaux={gateaux}
+      onOuvrir={() => {}} onFermer={() => {}} />)
+    const lu = t => screen.getByText(t)
+    expect(lu(/Creme Citron Gingembre/)).toBeTruthy()
+    expect(screen.getByText(/31.787 g/)).toBeTruthy()
+    expect(screen.getByText(/pour Tarte Citron Gin 23 cm/)).toBeTruthy()
+    expect(screen.getByText(/pour Tarte Citron Gin Indiv/)).toBeTruthy()
+  })
+
+  it('les gâteaux cochés ne sont pas des préparations à monter', () => {
+    render(<Assemblage feuilles={assemblees} gateaux={gateaux}
+      onOuvrir={() => {}} onFermer={() => {}} />)
+    expect(screen.queryByText('Tarte · 23 cm')).toBeNull()
+  })
+
+  it('un appui ouvre la préparation avec SON TOTAL', () => {
+    const onOuvrir = vi.fn()
+    render(<Assemblage feuilles={assemblees} gateaux={gateaux}
+      onOuvrir={onOuvrir} onFermer={() => {}} />)
+    fireEvent.click(screen.getByText(/Creme Citron Gingembre/))
+    expect(onOuvrir).toHaveBeenCalled()
+    expect(onOuvrir.mock.calls[0][0].qty).toBe(31787)
+  })
+
+  it('et on imprime toute la fournée d’un coup', () => {
+    const onImprimer = vi.fn()
+    render(<Assemblage feuilles={assemblees} gateaux={gateaux} aImprimer={3}
+      onImprimer={onImprimer} onOuvrir={() => {}} onFermer={() => {}} />)
+    fireEvent.click(screen.getByText(/Imprimer 3 feuilles/))
+    expect(onImprimer).toHaveBeenCalled()
+  })
+
+  it('pas de bouton imprimer quand on ne le lui donne pas', () => {
+    render(<Assemblage feuilles={assemblees} gateaux={gateaux}
+      onOuvrir={() => {}} onFermer={() => {}} />)
+    expect(screen.queryByText(/Imprimer/)).toBeNull()
+  })
+})

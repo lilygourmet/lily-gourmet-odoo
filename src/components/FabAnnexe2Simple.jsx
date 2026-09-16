@@ -137,7 +137,7 @@ export function CasesAFaire({ articles, onOuvrir, choisis, cochables, onCocher }
  * Un appui ouvre la préparation avec LA QUANTITÉ TOTALE : on monte une cuve
  * pour les trois tartes, pas trois cuves.
  */
-export function Assemblage({ feuilles, gateaux, onOuvrir, onFermer }) {
+export function Assemblage({ feuilles, gateaux, onOuvrir, onFermer, onImprimer, aImprimer }) {
   // Les têtes (les gâteaux cochés) ne sont pas des préparations à monter : on
   // les fait après, chacune de son côté.
   const preps = (feuilles || []).filter(f => !gateaux.includes(f.produit))
@@ -189,6 +189,22 @@ export function Assemblage({ feuilles, gateaux, onOuvrir, onFermer }) {
             </button>
           ))}
         </div>
+
+        {/* ⚠️ IMPRIMER TOUTE LA FOURNÉE, préparations communes comprises.
+            « je veux pouvoir imprimer en cascade » (Layla, 2026-09-16) :
+            la même liasse que depuis une fiche, mais pour tous les gâteaux
+            cochés — une seule feuille pour la crème des trois tartes, une
+            seule demande à l'économat. Ce dont il y a déjà assez n'est pas
+            imprimé, comme dans le panneau de la fiche. */}
+        {!!onImprimer && (
+          <div className="px-4 pb-4 pt-2 flex-shrink-0 border-t border-cream-deep">
+            <button onClick={onImprimer} disabled={!aImprimer}
+              className="w-full rounded-2xl bg-bordeaux text-cream py-3.5 text-[16px]
+                         font-bold disabled:opacity-40">
+              🖨 {aImprimer <= 1 ? 'Imprimer 1 feuille' : `Imprimer ${aImprimer} feuilles`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
