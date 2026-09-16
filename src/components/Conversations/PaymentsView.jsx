@@ -143,7 +143,7 @@ export default function PaymentsView({ user }) {
           {/* Le nom lu sur la pièce jointe : c'est lui qui relie le virement à la commande
               quand un proche a payé. Affiché pour être vérifiable à l'œil — un nom faux se
               repère bien plus vite qu'il ne se devine. */}
-          {payeurs[m.id] && (payeurs[m.id].p
+          {payeurs[m.id] && (payeurs[m.id].p && !/GOURMET/i.test(payeurs[m.id].p)
             ? <div className="text-[11px] text-ink-soft mt-1">💳 Payé par <span className="font-medium text-ink">{payeurs[m.id].p}</span></div>
             : <div className="text-[11px] text-ink-mute mt-1">💳 nom de l'émetteur illisible</div>
           )}

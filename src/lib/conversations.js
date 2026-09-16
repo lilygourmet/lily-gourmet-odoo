@@ -1116,6 +1116,11 @@ async function preuveEnImage(url, mediaType) {
  */
 const CLE_PAYEURS = 'paiements_payeurs'
 
+// Le nom de l'entreprise qui REÇOIT l'argent contient toujours « gourmet ». Lu comme
+// émetteur, il ferait correspondre n'importe quel virement à n'importe quelle cliente.
+// Les lectures faites avant ce garde-fou sont écartées ici ET relues au prochain clic.
+const estBeneficiaire = n => /GOURMET/i.test(n || '')
+
 async function chargerPayeurs() {
   const r = await fetch('/api/wati-webhook?action=saisies', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1166,7 +1171,9 @@ export async function lirePreuvesPaiement({ limite = 0, mois = null, onProgress 
 
   // limite 0 = tout lire d'une traite. L'enregistrement régulier plus bas rend la chose
   // sans risque : fermer l'onglet en cours de route ne perd rien et ne se repaie pas.
-  const restant = (data || []).filter(m => !deja[m.id])
+  // À relire : jamais lu, ou lu avec le nom du bénéficiaire (erreur d'une version passée).
+  const aRelire = m => !deja[m.id] || estBeneficiaire(deja[m.id].p)
+  const restant = (data || []).filter(aRelire)
   const aLire = limite > 0 ? restant.slice(0, limite) : restant
   let lues = 0, trouves = 0
   for (const m of aLire) {
@@ -1189,7 +1196,7 @@ export async function lirePreuvesPaiement({ limite = 0, mois = null, onProgress 
     if (lues % 10 === 0) await enregistrerPayeurs(deja)
   }
   if (lues) await enregistrerPayeurs(deja)
-  const restantes = (data || []).filter(m => !deja[m.id]).length
+  const restantes = (data || []).filter(aRelire).length
   return { lues, trouves, restantes }
 }
 
@@ -1205,6 +1212,6 @@ export async function loadPayeursLus() {
 export async function loadPayeursConnus() {
   const map = await chargerPayeurs()
   return Object.values(map)
-    .filter(v => v && v.p && v.c)
+    .filter(v => v && v.p && v.c && !estBeneficiaire(v.p))
     .map(v => ({ payeur: v.p, cliente: v.c }))
 }
