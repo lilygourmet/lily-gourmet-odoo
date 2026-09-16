@@ -1144,7 +1144,7 @@ async function enregistrerPayeurs(map) {
  * à l'IA, et il y en a plusieurs centaines. On enregistre au fur et à mesure : une lecture
  * interrompue ne perd rien et ne se repaie pas.
  */
-export async function lirePreuvesPaiement({ limite = 50, onProgress } = {}) {
+export async function lirePreuvesPaiement({ limite = 0, onProgress } = {}) {
   const deja = await chargerPayeurs()
   const { data, error } = await supabase
     .from('messages')
@@ -1155,7 +1155,10 @@ export async function lirePreuvesPaiement({ limite = 50, onProgress } = {}) {
     .limit(3000)
   if (error) throw error
 
-  const aLire = (data || []).filter(m => !deja[m.id]).slice(0, limite)
+  // limite 0 = tout lire d'une traite. L'enregistrement régulier plus bas rend la chose
+  // sans risque : fermer l'onglet en cours de route ne perd rien et ne se repaie pas.
+  const restant = (data || []).filter(m => !deja[m.id])
+  const aLire = limite > 0 ? restant.slice(0, limite) : restant
   let lues = 0, trouves = 0
   for (const m of aLire) {
     let emetteur = ''
