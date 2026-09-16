@@ -49,7 +49,27 @@ function aFairePour(noeud, besoin) {
  * ce que l'app propose, exactement comme sur la fiche.
  */
 export function feuillesAImprimer(tete, quantiteTete, quantites = {}) {
-  if (!tete) return []
+  return feuillesDePlusieurs(tete ? [{ noeud: tete, qty: quantiteTete }] : [], quantites)
+}
+
+/**
+ * LES FEUILLES DE PLUSIEURS GÂTEAUX À LA FOIS.
+ *
+ * « est-ce que je peux sélectionner recette du même thème pour assembler les
+ * mêmes crèmes » (Layla, 2026-09-16). Trois tartes citron gingembre attendaient
+ * ce matin : l'atelier montait la même crème TROIS fois, parce qu'on ouvre les
+ * fiches une par une. 11 844 + 7 146 + 12 797 = 31 787 g en une seule cuve.
+ *
+ * Rien de neuf dans le calcul : additionner ce que plusieurs parents demandent
+ * au même enfant, c'est déjà ce qu'on fait DANS une cascade depuis le 15/09
+ * (la crème citron du Vitrine 20 cm, demandée par le gâteau ET par sa crème au
+ * beurre). Les têtes sont simplement plusieurs.
+ *
+ * `tetes` : [{ noeud, qty }].
+ */
+export function feuillesDePlusieurs(tetes, quantites = {}) {
+  const racines = (tetes || []).filter(t => t && t.noeud)
+  if (!racines.length) return []
 
   // ---- 1. LA FORME DE LA CASCADE, sans une seule quantité ----
   // On relève qui contient qui, dans quelle proportion, et à quelle profondeur
@@ -57,8 +77,8 @@ export function feuillesAImprimer(tete, quantiteTete, quantites = {}) {
   // donne l'ordre de fabrication : un article est toujours plus profond que
   // tous ceux qui le contiennent.
   const liens = []                       // { parent, enfant, part }
-  const noeuds = new Map([[tete.produit, tete]])
-  const prof = new Map([[tete.produit, 0]])
+  const noeuds = new Map(racines.map(t => [t.noeud.produit, t.noeud]))
+  const prof = new Map(racines.map(t => [t.noeud.produit, 0]))
   const vus = new Set()
 
   const relever = (noeud, p) => {
@@ -77,18 +97,19 @@ export function feuillesAImprimer(tete, quantiteTete, quantites = {}) {
       relever(c, p + 1)
     }
   }
-  relever(tete, 0)
+  for (const t of racines) relever(t.noeud, 0)
 
   // ---- 2. LES QUANTITÉS, du moins profond au plus profond ----
   // Dans cet ordre, tout ce qui contient un article a déjà été fixé : on peut
   // donc ADDITIONNER ce que chacun lui demande.
   const ordre = [...prof.keys()].sort((a, b) => prof.get(a) - prof.get(b))
-  const qty = new Map([[tete.produit, quantiteTete]])
-  const besoins = new Map([[tete.produit, quantiteTete]])
+  const qty = new Map(racines.map(t => [t.noeud.produit, t.qty]))
+  const besoins = new Map(racines.map(t => [t.noeud.produit, t.qty]))
   const pour = new Map()                 // produit → [{ nom, qty }]
+  const estRacine = new Set(racines.map(t => t.noeud.produit))
 
   for (const nom of ordre) {
-    if (nom === tete.produit) continue
+    if (estRacine.has(nom)) continue
     const dus = liens.filter(l => l.enfant === nom)
       .map(l => ({ nom: l.parent, qty: l.part * (qty.get(l.parent) || 0) }))
       .filter(x => x.qty > 0)
@@ -121,9 +142,11 @@ export function feuillesAImprimer(tete, quantiteTete, quantites = {}) {
       besoin: Math.round(besoin * 1000) / 1000,
       manque: Math.max(0, Math.round((besoin - dispo) * 1000) / 1000),
       qty: q,
-      // ⚠️ Le chemin le plus COURT jusqu'à la tête : celui qu'on lit le mieux
-      // en haut de la feuille.
-      chemin: cheminVers(nom, tete.produit, liens),
+      // ⚠️ Le chemin le plus COURT jusqu'à UNE tête : celui qu'on lit le mieux
+      // en haut de la feuille. Avec plusieurs gâteaux cochés, on prend le
+      // premier qui mène jusqu'ici — le détail de « qui en prend combien » est
+      // dans `pour`, et il les cite tous.
+      chemin: cheminVers(nom, racines.map(t => t.noeud.produit), liens),
       // Où va cette fournée, quand elle sert à plus d'un endroit. C'est
       // l'explication que Layla demande sur la feuille.
       pour: (pour.get(nom) || []).map(x => ({
@@ -138,10 +161,11 @@ export function feuillesAImprimer(tete, quantiteTete, quantites = {}) {
   })
 }
 
-/** Le chemin le plus court de la tête jusqu'à cet article. */
-function cheminVers(nom, tete, liens) {
-  const file = [[tete]]
-  const vus = new Set([tete])
+/** Le chemin le plus court d'une des têtes jusqu'à cet article. */
+function cheminVers(nom, tetes, liens) {
+  const departs = Array.isArray(tetes) ? tetes : [tetes]
+  const file = departs.map(t => [t])
+  const vus = new Set(departs)
   while (file.length) {
     const chemin = file.shift()
     const dernier = chemin[chemin.length - 1]
@@ -153,6 +177,41 @@ function cheminVers(nom, tete, liens) {
     }
   }
   return [nom]
+}
+
+/**
+ * LE THÈME D'UN ARTICLE : son gâteau mère.
+ *
+ * « autorise que le même thème » (Layla, 2026-09-16). C'est le `pour` que le
+ * serveur pose déjà sur chaque article — « E- Tarte citron gingembre » pour les
+ * trois tartes, « E- Tarte Caramel Beurre Salé » pour les trois bases CBS. Le
+ * même groupement que l'onglet « Déclarer ».
+ *
+ * Un article sans gâteau mère n'a pas de thème : il ne s'assemble avec rien.
+ */
+export const themesDe = a => (a?.pour || []).filter(Boolean)
+
+/** Deux articles se cochent-ils ensemble ? Oui s'ils ont un gâteau en commun. */
+export function memeTheme(a, b) {
+  if (!a || !b) return false
+  if (a.produit === b.produit) return true
+  const t = new Set(themesDe(a))
+  return themesDe(b).some(x => t.has(x))
+}
+
+/**
+ * Ce qu'on peut encore cocher, une fois le premier choisi.
+ *
+ * Rien de coché : tout est ouvert. Sinon, seuls ceux du même thème — les
+ * autres restent à l'écran mais ne répondent plus, pour qu'on comprenne
+ * pourquoi plutôt que de les voir disparaître.
+ */
+export function cochablesAvec(articles, choisis) {
+  const pris = (articles || []).filter(a => choisis.includes(a.produit))
+  if (!pris.length) return (articles || []).map(a => a.produit)
+  return (articles || [])
+    .filter(a => pris.some(p => memeTheme(p, a)))
+    .map(a => a.produit)
 }
 
 /**

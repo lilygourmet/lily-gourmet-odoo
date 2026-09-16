@@ -1,0 +1,313 @@
+<title>Assembler les crèmes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,600&family=Karla:wght@400;500;700&display=swap">
+
+<style>
+  /* Palette de l'app (tailwind.config.js). On ne s'en invente pas une autre. */
+  :root {
+    --ground:#f7f3ec; --surface:#fff; --edge:#f1eadd; --line:#e5d8c3;
+    --ink:#1a0f0a; --ink-soft:#4a3a30; --ink-mute:#8a7a70;
+    --bordeaux:#993556; --gold:#b8893c; --danger:#a32d2d; --ok:#4a7a3a;
+    --serif:'Fraunces',Georgia,'Times New Roman',serif;
+    --sans:'Karla',ui-sans-serif,system-ui,-apple-system,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#16100d; --surface:#221a15; --edge:#33261f; --line:#3d2e25;
+      --ink:#f6efe6; --ink-soft:#d6c6b8; --ink-mute:#9c8a7c;
+      --bordeaux:#d97d97; --gold:#d4a95c; --danger:#e08a8a; --ok:#8fc07a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#16100d; --surface:#221a15; --edge:#33261f; --line:#3d2e25;
+    --ink:#f6efe6; --ink-soft:#d6c6b8; --ink-mute:#9c8a7c;
+    --bordeaux:#d97d97; --gold:#d4a95c; --danger:#e08a8a; --ok:#8fc07a;
+  }
+
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+         font-family:var(--sans); font-size:16px; line-height:1.5;
+         -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1060px; margin:0 auto; padding:40px 24px 80px; }
+  :focus-visible { outline:2px solid var(--bordeaux); outline-offset:2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+
+  header { border-bottom:2px solid var(--line); padding-bottom:22px; margin-bottom:36px; }
+  .kicker { font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+            color:var(--bordeaux); font-weight:700; margin:0 0 8px; }
+  h1 { font-family:var(--serif); font-style:italic; font-weight:600;
+       font-size:clamp(30px,5vw,46px); line-height:1.05; margin:0 0 12px;
+       text-wrap:balance; letter-spacing:-.01em; }
+  .chapo { max-width:64ch; color:var(--ink-soft); margin:0; font-size:17px; }
+  .chapo b { color:var(--ink); font-weight:700; }
+
+  h2 { font-family:var(--serif); font-size:24px; font-weight:600;
+       margin:0 0 6px; line-height:1.15; text-wrap:balance; }
+  .sous { color:var(--ink-soft); margin:0 0 18px; max-width:62ch; }
+  section { margin-bottom:46px; }
+
+  .duo { display:grid; grid-template-columns:340px 1fr; gap:30px; align-items:start; }
+  @media (max-width:880px) { .duo { grid-template-columns:1fr; } }
+  .num { font-family:var(--serif); font-size:13px; font-weight:600;
+         letter-spacing:.14em; text-transform:uppercase; color:var(--gold);
+         display:block; margin-bottom:6px; }
+  .note { border-left:3px solid var(--gold); padding:2px 0 2px 14px;
+          color:var(--ink-soft); font-size:15px; margin-top:14px; }
+  .note b { color:var(--ink); }
+
+  /* ---------- l'écran ---------- */
+  .tel { background:var(--surface); border:1px solid var(--line);
+         border-radius:22px; padding:14px; box-shadow:0 18px 40px rgba(75,35,28,.12); }
+  .tel h3 { font-size:14px; font-weight:700; margin:0 0 10px; color:var(--ink-mute); }
+  .cases { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .case { position:relative; text-align:left; border:2px solid var(--line);
+          background:var(--edge); border-radius:16px; padding:0; overflow:hidden;
+          cursor:pointer; font:inherit; color:inherit; }
+  .case[aria-pressed="true"] { border-color:var(--bordeaux);
+          box-shadow:0 0 0 3px color-mix(in srgb, var(--bordeaux) 16%, transparent); }
+  .case .photo { height:62px; background:
+      repeating-linear-gradient(135deg, var(--line) 0 8px, var(--edge) 8px 16px); }
+  .case .pastille { position:absolute; left:8px; top:8px; background:var(--danger);
+          color:#fff; border-radius:999px; padding:2px 9px;
+          font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .case .coche { position:absolute; right:8px; top:8px; width:22px; height:22px;
+          border-radius:7px; border:2px solid var(--line); background:var(--surface);
+          display:grid; place-items:center; font-size:13px; font-weight:800;
+          color:transparent; line-height:1; }
+  .case[aria-pressed="true"] .coche { background:var(--bordeaux);
+          border-color:var(--bordeaux); color:#fff; }
+  .case .txt { padding:8px 10px 10px; }
+  .case .nom { font-size:13.5px; font-weight:700; line-height:1.15; display:block; }
+  .case .stk { font-size:13px; font-weight:800; margin-top:3px; display:block;
+               font-variant-numeric:tabular-nums; }
+  .case .stk.vert { color:var(--ok); } .case .stk.rouge { color:var(--danger); }
+
+  .barre { margin-top:12px; display:flex; align-items:center; gap:10px;
+           background:var(--bordeaux); color:#fff; border-radius:16px; padding:11px 14px; }
+  .barre b { font-size:15px; }
+  .barre span { margin-left:auto; font-size:14px; font-weight:700; opacity:.9; }
+  .barre.vide { background:var(--edge); color:var(--ink-mute); }
+
+  /* ---------- le total ---------- */
+  .bloc { background:var(--surface); border:1px solid var(--line); border-radius:22px;
+          padding:16px; box-shadow:0 18px 40px rgba(75,35,28,.12); }
+  .bloc h3 { font-family:var(--serif); font-size:19px; font-weight:600; margin:0 0 3px; }
+  .bloc .sst { font-size:13px; color:var(--ink-mute); margin:0 0 14px; }
+  .prep { border-top:1px solid var(--edge); padding:12px 0; }
+  .prep:first-of-type { border-top:0; padding-top:2px; }
+  .prep-t { display:flex; align-items:baseline; gap:10px; }
+  .prep-t b { font-size:15.5px; font-weight:800; }
+  .prep-t .q { margin-left:auto; font-size:20px; font-weight:800;
+               font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .prep-t .q.gros { color:var(--bordeaux); }
+  .detail { border-left:3px solid var(--line); padding-left:12px; margin-top:7px; }
+  .detail div { font-size:13px; color:var(--ink-mute); line-height:1.6; }
+  .detail b { color:var(--ink); font-variant-numeric:tabular-nums; }
+  .gain { margin-top:14px; border-radius:12px; padding:10px 13px;
+          background:color-mix(in srgb, var(--ok) 12%, transparent);
+          color:var(--ok); font-size:14px; font-weight:700; }
+
+  /* ---------- les cartes de fin ---------- */
+  .choix { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:18px; }
+  .carte { background:var(--surface); border:1px solid var(--line);
+           border-radius:16px; padding:16px; }
+  .carte h3 { font-family:var(--serif); font-size:18px; font-weight:600; margin:0 0 6px; }
+  .carte p { margin:0 0 8px; font-size:14.5px; color:var(--ink-soft); }
+  .carte p:last-child { margin-bottom:0; }
+  .carte .q { color:var(--bordeaux); font-weight:700; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="kicker">Fabrication Annexe 2 · proposition</p>
+    <h1>Assembler les crèmes</h1>
+    <p class="chapo">
+      Trois tartes citron gingembre attendent dans « À faire ». Elles partagent
+      la même crème — et aujourd'hui l'atelier la monte <b>trois fois</b>, parce
+      qu'on ouvre les fiches une par une. Voici ce que donnerait le fait de
+      pouvoir les cocher ensemble. Les chiffres sont les vrais, relevés ce matin.
+    </p>
+  </header>
+
+  <!-- ============ 1. COCHER ============ -->
+  <section>
+    <div class="duo">
+      <div class="tel">
+        <h3>À faire</h3>
+        <div class="cases" id="cases"></div>
+        <div class="barre vide" id="barre"><b>Coche ce que tu vas faire</b></div>
+      </div>
+      <div>
+        <span class="num">Premier temps</span>
+        <h2>Une case à cocher sur chaque gâteau</h2>
+        <p class="sous">Comme dans Fabrication CD, où l'on coche déjà les gâteaux
+          pour voir leur recette additionnée. Rien ne change tant qu'on ne coche
+          rien : un appui sur la photo ouvre la fiche, comme aujourd'hui.</p>
+        <p class="note"><b>Essaie</b> — coche les trois tartes et regarde le total
+          se faire à droite.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. LE TOTAL ============ -->
+  <section>
+    <div class="duo">
+      <div>
+        <span class="num">Deuxième temps</span>
+        <h2>Une seule crème, et on sait où elle va</h2>
+        <p class="sous">Les préparations communes s'additionnent, et chacune dit
+          ce que chaque gâteau lui prend — la même explication que sur les feuilles
+          d'impression.</p>
+        <p class="note">Ce qui n'est PAS partagé reste à part : les trois fonds de
+          tarte sont de tailles différentes, ils ne s'additionnent pas.</p>
+      </div>
+      <div class="bloc">
+        <h3 id="t-titre">Ce qu'il faut préparer</h3>
+        <p class="sst" id="t-sous">coche des gâteaux à gauche</p>
+        <div id="total"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. ET APRÈS ============ -->
+  <section>
+    <h2>Ce que ça change, et ce que ça ne change pas</h2>
+    <div class="choix">
+      <div class="carte">
+        <h3>Une cuve au lieu de trois</h3>
+        <p>La crème citron gingembre se monte <b>une fois</b>, pour les trois
+          tartes. Une chauffe, une balance, un nettoyage.</p>
+      </div>
+      <div class="carte">
+        <h3>Une feuille au lieu de trois</h3>
+        <p>À l'impression, une seule feuille pour la crème — avec le détail de ce
+          qui va où, comme on l'a fait pour la cascade.</p>
+      </div>
+      <div class="carte">
+        <h3>Une seule demande à l'économat</h3>
+        <p>Le citron, le sucre et les œufs des trois tartes sur un seul papier :
+          un aller au lieu de trois.</p>
+      </div>
+    </div>
+
+    <div class="choix" style="margin-top:18px">
+      <div class="carte">
+        <h3>Ce qui ne bouge pas</h3>
+        <p>Sans rien cocher, l'écran est exactement celui d'aujourd'hui. On ouvre
+          une fiche, on la fait, on la déclare.</p>
+      </div>
+      <div class="carte">
+        <h3>Une question</h3>
+        <p><span class="q">Que se passe-t-il quand on déclare ?</span> On déclare
+          la crème une fois, puis chaque tarte séparément ? Ou tout d'un coup ?</p>
+      </div>
+      <div class="carte">
+        <h3>Une autre</h3>
+        <p><span class="q">Coche-t-on librement, ou seulement du même thème ?</span>
+          Rien n'empêche de cocher un tiramisu avec une tarte — ça marche, il n'y
+          a juste rien de commun.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  // Les trois tartes citron gingembre, relevées dans l'app le 2026-09-16.
+  const GATEAUX = [
+    { id: '23', nom: 'Tarte citron gingembre · 23 cm', faire: 18, stock: 1,
+      prep: [
+        { nom: 'Crème Citron Gingembre', q: 11844, u: 'g', commun: true },
+        { nom: 'Fond de tarte digestif 23 cm', q: 18, u: 'u', commun: false },
+      ] },
+    { id: '18', nom: 'Tarte citron gingembre · 18 cm', faire: 18, stock: 7,
+      prep: [
+        { nom: 'Crème Citron Gingembre', q: 7146, u: 'g', commun: true },
+        { nom: 'Fond de tarte digestif 18 cm', q: 18, u: 'u', commun: false },
+      ] },
+    { id: 'in', nom: 'Tarte citron gingembre · indiv', faire: 191, stock: 204,
+      prep: [
+        { nom: 'Crème Citron Gingembre', q: 12797, u: 'g', commun: true },
+        { nom: 'Fond de tarte digestif indiv', q: 191, u: 'u', commun: false },
+      ] },
+  ]
+
+  const nb = v => Math.round(v).toLocaleString('fr-FR')
+  const choisis = new Set()
+
+  const cases = document.getElementById('cases')
+  const barre = document.getElementById('barre')
+  const total = document.getElementById('total')
+  const tSous = document.getElementById('t-sous')
+
+  function dessine() {
+    cases.innerHTML = ''
+    for (const g of GATEAUX) {
+      const on = choisis.has(g.id)
+      const b = document.createElement('button')
+      b.type = 'button'; b.className = 'case'; b.setAttribute('aria-pressed', on)
+      b.onclick = () => { on ? choisis.delete(g.id) : choisis.add(g.id); dessine() }
+      b.innerHTML = '<span class="photo"></span>'
+        + '<span class="pastille"></span><span class="coche">✓</span>'
+        + '<span class="txt"><span class="nom"></span><span class="stk"></span></span>'
+      b.querySelector('.pastille').textContent = nb(g.faire)
+      b.querySelector('.nom').textContent = g.nom
+      const s = b.querySelector('.stk')
+      s.textContent = nb(g.stock) + ' u'
+      s.className = 'stk ' + (g.stock > 0 ? 'vert' : 'rouge')
+      cases.append(b)
+    }
+
+    // la barre du bas
+    const n = choisis.size
+    barre.className = 'barre' + (n ? '' : ' vide')
+    barre.innerHTML = n
+      ? `<b>${n} gâteau${n > 1 ? 'x' : ''} choisi${n > 1 ? 's' : ''}</b><span>voir ce qu'il faut ›</span>`
+      : '<b>Coche ce que tu vas faire</b>'
+
+    // le total
+    const pris = GATEAUX.filter(g => choisis.has(g.id))
+    tSous.textContent = pris.length
+      ? `pour ${pris.length} gâteau${pris.length > 1 ? 'x' : ''}`
+      : 'coche des gâteaux à gauche'
+    const par = new Map()
+    for (const g of pris) {
+      for (const p of g.prep) {
+        const e = par.get(p.nom) || { nom: p.nom, u: p.u, q: 0, de: [] }
+        e.q += p.q; e.de.push({ nom: g.nom, q: p.q })
+        par.set(p.nom, e)
+      }
+    }
+    total.innerHTML = ''
+    for (const e of par.values()) {
+      const d = document.createElement('div')
+      d.className = 'prep'
+      const plusieurs = e.de.length > 1
+      d.innerHTML = '<div class="prep-t"><b></b><span class="q"></span></div>'
+      d.querySelector('b').textContent = e.nom
+      const q = d.querySelector('.q')
+      q.textContent = `${nb(e.q)} ${e.u}`
+      if (plusieurs) q.classList.add('gros')
+      if (plusieurs) {
+        const det = document.createElement('div')
+        det.className = 'detail'
+        det.innerHTML = e.de.map(x =>
+          `<div><b>${nb(x.q)} ${e.u}</b> pour ${x.nom.replace('Tarte citron gingembre · ', '')}</div>`).join('')
+        d.append(det)
+      }
+      total.append(d)
+    }
+    const communes = [...par.values()].filter(e => e.de.length > 1)
+    if (communes.length) {
+      const g = document.createElement('div')
+      g.className = 'gain'
+      const cuves = communes.reduce((t, e) => t + e.de.length, 0)
+      g.textContent = `${cuves} cuves deviennent ${communes.length} — `
+        + communes.map(e => `${nb(e.q)} ${e.u} de ${e.nom.toLowerCase()}`).join(', ') + ' en une fois'
+      total.append(g)
+    }
+  }
+  dessine()
+</script>

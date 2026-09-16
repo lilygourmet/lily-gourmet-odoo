@@ -228,3 +228,103 @@ describe('ce qu’on demande à l’économat', () => {
     expect(aBesoinDeLEconomat(mousse)).toBe(true)
   })
 })
+
+// ============================================================
+// ASSEMBLER PLUSIEURS GÂTEAUX, ET LE THÈME QUI DÉCIDE.
+//
+// « est-ce que je peux sélectionner recette du même thème pour assembler les
+// mêmes crèmes » puis « autorise que le même thème » (Layla, 2026-09-16).
+//
+// LE CAS RÉEL, relevé le 16/09 : trois tartes citron gingembre attendaient
+// dans « À faire », et l'atelier montait la même crème TROIS fois.
+// ============================================================
+import { feuillesDePlusieurs, memeTheme, themesDe, cochablesAvec } from './feuillesAImprimer'
+
+const creme = besoin => c('SM. Creme Citron Gingembre', 'g', besoin, 0, {
+  fabrique: true, aLaQuantite: true, produira: besoin, tourneeTaille: 7164,
+  pourQuantite: besoin, recette: [{ produit: 'SM. Citron Liquide', qty: 1440, unite: 'g' }],
+})
+const fond = (nom, n) => c(nom, 'u', n, 0, {
+  fabrique: true, aLaQuantite: true, produira: n, tourneeTaille: 1,
+  pourQuantite: n, recette: [{ produit: 'SM. Fond de tarte digestif', qty: 260, unite: 'g' }],
+})
+const tarte = (produit, libelle, qty, cremeG, nomFond) => ({
+  produit, libelle, unite: 'u', tournee: qty, tourneeTaille: qty, stock: 0, recette: [],
+  pour: ['E- Tarte citron gingembre'],
+  composants: [creme(cremeG), fond(nomFond, qty)],
+})
+
+const t23 = tarte('SM- Tarte Citron Gin 23 cm', 'Tarte · 23 cm', 18, 11844, 'SM. Fond de tarte digestif 23 cm')
+const t18 = tarte('SM- Tarte Citron Gin 18 cm', 'Tarte · 18 cm', 18, 7146, 'SM. Fond de tarte digestif 18 cm')
+const tin = tarte('SM- Tarte Citron Gin Indiv', 'Tarte · indiv', 191, 12797, 'SM. fond de tarte digestif indiv')
+
+describe('assembler plusieurs gâteaux', () => {
+  it('LA CRÈME COMMUNE S’ADDITIONNE — une cuve au lieu de trois', () => {
+    const f = feuillesDePlusieurs([
+      { noeud: t23, qty: 18 }, { noeud: t18, qty: 18 }, { noeud: tin, qty: 191 },
+    ])
+    const cremes = f.filter(x => x.produit === 'SM. Creme Citron Gingembre')
+    expect(cremes).toHaveLength(1)
+    expect(cremes[0].qty).toBeCloseTo(11844 + 7146 + 12797, 0)
+  })
+
+  it('et elle dit ce que chaque tarte lui prend', () => {
+    const f = feuillesDePlusieurs([
+      { noeud: t23, qty: 18 }, { noeud: t18, qty: 18 }, { noeud: tin, qty: 191 },
+    ])
+    const par = Object.fromEntries(f.find(x => x.produit === 'SM. Creme Citron Gingembre')
+      .pour.map(p => [p.nom, Math.round(p.qty)]))
+    expect(par['SM- Tarte Citron Gin 23 cm']).toBe(11844)
+    expect(par['SM- Tarte Citron Gin 18 cm']).toBe(7146)
+    expect(par['SM- Tarte Citron Gin Indiv']).toBe(12797)
+  })
+
+  it('CE QUI N’EST PAS COMMUN reste à part : trois fonds, trois tailles', () => {
+    const f = feuillesDePlusieurs([
+      { noeud: t23, qty: 18 }, { noeud: t18, qty: 18 }, { noeud: tin, qty: 191 },
+    ]).map(x => x.produit)
+    expect(f).toContain('SM. Fond de tarte digestif 23 cm')
+    expect(f).toContain('SM. Fond de tarte digestif 18 cm')
+    expect(f).toContain('SM. fond de tarte digestif indiv')
+  })
+
+  it('les trois gâteaux gardent chacun leur feuille, en dernier', () => {
+    const f = feuillesDePlusieurs([{ noeud: t23, qty: 18 }, { noeud: t18, qty: 18 }])
+    const noms = f.map(x => x.produit)
+    expect(noms.slice(-2).sort()).toEqual(
+      ['SM- Tarte Citron Gin 18 cm', 'SM- Tarte Citron Gin 23 cm'])
+  })
+
+  it('un seul gâteau donne exactement ce que donnait l’ancienne façon', () => {
+    const a = feuillesDePlusieurs([{ noeud: t23, qty: 18 }])
+    const b = feuillesAImprimer(t23, 18)
+    expect(a.map(x => [x.produit, x.qty])).toEqual(b.map(x => [x.produit, x.qty]))
+  })
+})
+
+describe('le thème — « autorise que le même thème »', () => {
+  const tiramisu = { produit: 'SM- Tiramisu 20cm', pour: ['E- Tiramisu'], composants: [] }
+
+  it('deux articles du même gâteau mère vont ensemble', () => {
+    expect(memeTheme(t23, t18)).toBe(true)
+    expect(themesDe(t23)).toEqual(['E- Tarte citron gingembre'])
+  })
+
+  it('une tarte et un tiramisu, non', () => {
+    expect(memeTheme(t23, tiramisu)).toBe(false)
+  })
+
+  it('un article sans gâteau mère ne s’assemble avec rien', () => {
+    expect(memeTheme(t23, { produit: 'SM. Sirop', pour: [] })).toBe(false)
+  })
+
+  it('rien de coché : tout est ouvert', () => {
+    expect(cochablesAvec([t23, t18, tiramisu], [])).toEqual(
+      ['SM- Tarte Citron Gin 23 cm', 'SM- Tarte Citron Gin 18 cm', 'SM- Tiramisu 20cm'])
+  })
+
+  it('une tarte cochée : le tiramisu ne répond plus', () => {
+    expect(cochablesAvec([t23, t18, tin, tiramisu], ['SM- Tarte Citron Gin 23 cm']))
+      .toEqual(['SM- Tarte Citron Gin 23 cm', 'SM- Tarte Citron Gin 18 cm', 'SM- Tarte Citron Gin Indiv'])
+  })
+})
