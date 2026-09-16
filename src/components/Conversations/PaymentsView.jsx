@@ -47,7 +47,7 @@ export default function PaymentsView({ user }) {
       await refresh()
       toast(r.lues
         ? `${r.lues} preuve(s) lue(s), ${r.trouves} nom(s) d'émetteur trouvé(s)`
-          + (r.restantes ? ' — reclique pour continuer' : ' — tout est lu')
+          + (r.restantes ? ` — ${r.restantes} restante(s), reclique pour continuer` : ' — tout est lu')
         : 'Toutes les preuves ont déjà été lues.')
     } catch (e) { toast('Erreur : ' + (e?.message || e)) }
     finally { setLecture(null) }
