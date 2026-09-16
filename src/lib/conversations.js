@@ -1066,3 +1066,107 @@ export async function loadClientsCdCounts(phones) {
   const d = await res.json().catch(() => ({}))
   return d.counts || {}
 }
+
+// ============================================================
+// LECTURE DES PREUVES DE VIREMENT — le nom de l'ÉMETTEUR
+// ============================================================
+
+/**
+ * Ramène la pièce jointe d'une preuve à une image que l'IA peut regarder.
+ * Une capture d'écran part telle quelle ; un reçu PDF est rendu en image, comme le fait
+ * déjà la lecture des relevés scannés.
+ */
+async function preuveEnImage(url, mediaType) {
+  const rep = await fetch(url)
+  if (!rep.ok) throw new Error('pièce jointe illisible')
+  const blob = await rep.blob()
+  const estPdf = /pdf/i.test(mediaType || '') || /\.pdf($|\?)/i.test(url)
+  if (!estPdf) {
+    return await new Promise((ok, ko) => {
+      const fr = new FileReader()
+      fr.onload = () => ok(fr.result)
+      fr.onerror = ko
+      fr.readAsDataURL(blob)
+    })
+  }
+  const pdfjsLib = await import('pdfjs-dist')
+  const worker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
+  pdfjsLib.GlobalWorkerOptions.workerSrc = worker
+  const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise
+  // La première page suffit : l'émetteur figure toujours dans l'en-tête du reçu.
+  const page = await pdf.getPage(1)
+  const viewport = page.getViewport({ scale: 2 })
+  const canvas = document.createElement('canvas')
+  canvas.width = viewport.width
+  canvas.height = viewport.height
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
+  const img = canvas.toDataURL('image/jpeg', 0.75)
+  canvas.width = canvas.height = 0
+  return img
+}
+
+/**
+ * Lit les preuves de virement pas encore lues et y relève le nom de l'ÉMETTEUR.
+ *
+ * C'est le chaînon manquant du rapprochement : la banque écrit qui PAIE, Odoo écrit qui
+ * ACHÈTE. La preuve, elle, est déjà rattachée à la commande et à la cliente par l'équipe —
+ * il ne manquait que le nom du payeur pour relier les deux.
+ *
+ * `onProgress(fait, total)` permet d'afficher l'avancement : chaque document est un appel
+ * à l'IA, et il y en a plusieurs centaines.
+ * Une preuve illisible est marquée lue quand même, avec un émetteur vide : sans ça, chaque
+ * relance repaierait la lecture des mêmes documents indéchiffrables.
+ */
+export async function lirePreuvesPaiement({ depuis = null, limite = 100, onProgress } = {}) {
+  let q = supabase
+    .from('messages')
+    .select('id, media_url, media_type, payment_client_name')
+    .eq('is_payment_proof', true)
+    .is('payment_read_at', null)
+    .not('media_url', 'is', null)
+    .order('sent_at', { ascending: false })
+    .limit(limite)
+  if (depuis) q = q.gte('sent_at', depuis)
+  const { data, error } = await q
+  if (error) throw error
+
+  const preuves = data || []
+  let lues = 0, trouves = 0
+  for (const m of preuves) {
+    let emetteur = null
+    try {
+      const url = m.media_url.startsWith('http') ? m.media_url : await getMediaSignedUrl(m.media_url)
+      const image = await preuveEnImage(url, m.media_type)
+      const rep = await fetch('/api/wati-webhook?action=paiement-emetteur', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image }),
+      })
+      if (rep.ok) emetteur = (await rep.json()).emetteur || null
+    } catch { /* document illisible : on le marque lu pour ne pas le relire sans fin */ }
+    await supabase.from('messages')
+      .update({ payment_payer_name: emetteur, payment_read_at: new Date().toISOString() })
+      .eq('id', m.id)
+    lues++
+    if (emetteur) trouves++
+    onProgress && onProgress(lues, preuves.length)
+  }
+  return { lues, trouves, restantes: preuves.length === limite }
+}
+
+/**
+ * Les couples « qui a payé » -> « pour quelle cliente », tirés des preuves déjà lues.
+ * C'est ce que le rapprochement consulte quand aucune ligne ne porte le nom de la cliente.
+ */
+export async function loadPayeursConnus() {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('payment_payer_name, payment_client_name, conversation:conversations!messages_conversation_id_fkey(client_name)')
+    .eq('is_payment_proof', true)
+    .not('payment_payer_name', 'is', null)
+    .limit(5000)
+  if (error) throw error
+  return (data || [])
+    .map(m => ({ payeur: m.payment_payer_name, cliente: m.payment_client_name || m.conversation?.client_name || null }))
+    .filter(x => x.payeur && x.cliente)
+}

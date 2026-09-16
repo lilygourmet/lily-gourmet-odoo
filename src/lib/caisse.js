@@ -2,7 +2,8 @@
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
 import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI } from './releveDoublons'
-import { reconcileEnvelopes, nomAutreCliente, nomDansLibelle, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
+import { reconcileEnvelopes, nomAutreCliente, nomDansLibelle, setPayeursConnus, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
+import { loadPayeursConnus } from './conversations'
 export { ECART_MINI }
 
 // ============================================================
@@ -683,7 +684,16 @@ export async function takeReleveLine(key, envId) {
 // seul le CALCUL a besoin d'être refait : les regles de rapprochement changent, les
 // caisses arrivent apres coup. Ici on ne fait qu'ECRIRE le resultat — aucune ligne n'est
 // creee, et les caisses deja vertes ne sont pas touchees (comme un import normal).
+// Charge les couples « qui a payé » -> « pour quelle cliente » relevés sur les preuves de
+// virement, et les donne au rapprochement. Sans eux, un virement fait par le mari ou par
+// une société ne rejoint jamais la commande de la cliente. Silencieux en cas d'échec : le
+// rapprochement doit tourner même si les preuves ne sont pas lisibles.
+export async function chargerPayeursConnus() {
+  try { setPayeursConnus(await loadPayeursConnus()) } catch { setPayeursConnus([]) }
+}
+
 export async function relancerRapprochement({ annulerFaux = true } = {}) {
+  await chargerPayeursConnus()
   // D'ABORD défaire les rapprochements faux : leurs lignes retournent dans « non liées » et
   // leurs caisses redeviennent cherchables, donc le calcul qui suit peut les refaire bien.
   const annules = annulerFaux ? await annulerRapprochementsFaux() : []
@@ -750,6 +760,7 @@ export async function relancerRapprochement({ annulerFaux = true } = {}) {
 // (montant, puis fenêtre de dates, puis nom), donc le diagnostic ne peut pas diverger du
 // comportement réel.
 export async function analyserVirements(year, month) {
+  await chargerPayeursConnus()
   const { start, end } = monthBounds(year, month)
   const finInclus = new Date(new Date(end) - 86400000).toISOString().slice(0, 10)
   const caisses = (await loadBanqueEnvelopesBetween(start, finInclus))
@@ -850,6 +861,7 @@ export async function analyserVirements(year, month) {
 // `simulation` : ne rien écrire, seulement RENDRE le avant / après. C'est le seul moyen de
 // répondre à « est-ce que ça va faire mieux ? » sans avoir à l'essayer pour de vrai.
 export async function refaireMois(year, month, { simulation = true } = {}) {
+  await chargerPayeursConnus()
   const { start, end } = monthBounds(year, month)
   const finInclus = new Date(new Date(end) - 86400000).toISOString().slice(0, 10)
   const caisses = await loadBanqueEnvelopesBetween(start, finInclus)
