@@ -3934,7 +3934,9 @@ async function copieDevisLgTraiteur(orderName, lignesLN, commitmentUtc) {
 // ⚠️ LISTE BLANCHE OBLIGATOIRE : sans elle, n'importe qui pourrait écraser
 // `tab_lock_code` par cet endpoint.
 // ============================================================
-const CLES_SAISIES = new Set(['valider_annexe_saisies', 'valider_saisies', 'fabrication_bases'])
+// 'paiements_payeurs' : les noms d'émetteurs lus sur les preuves de virement. Rangés ici
+// plutôt que dans des colonnes, pour qu'aucune commande SQL ne soit à lancer à la main.
+const CLES_SAISIES = new Set(['valider_annexe_saisies', 'valider_saisies', 'fabrication_bases', 'paiements_payeurs'])
 
 async function handleSaisies(req, res) {
   const cle = String(req.body?.cle || '')

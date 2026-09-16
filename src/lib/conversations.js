@@ -1106,6 +1106,34 @@ async function preuveEnImage(url, mediaType) {
 }
 
 /**
+ * Les noms d'émetteurs déjà lus, rangés dans les réglages de l'app (app_config) plutôt que
+ * dans des colonnes de la base : Layla n'a aucune commande SQL à lancer, et la lecture
+ * marche dès le déploiement.
+ *
+ * Forme : { "<id du message>": { p: "<émetteur ou vide>", c: "<cliente>" } }
+ * Une entrée présente avec un émetteur vide veut dire « document illisible, déjà essayé » :
+ * sans ça, chaque relance repaierait la lecture des mêmes documents indéchiffrables.
+ */
+const CLE_PAYEURS = 'paiements_payeurs'
+
+async function chargerPayeurs() {
+  const r = await fetch('/api/wati-webhook?action=saisies', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cle: CLE_PAYEURS }),
+  })
+  if (!r.ok) return {}
+  return (await r.json()).valeurs || {}
+}
+
+async function enregistrerPayeurs(map) {
+  const r = await fetch('/api/wati-webhook?action=saisies', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cle: CLE_PAYEURS, valeurs: map }),
+  })
+  if (!r.ok) throw new Error('noms d\'émetteurs non enregistrés (' + r.status + ')')
+}
+
+/**
  * Lit les preuves de virement pas encore lues et y relève le nom de l'ÉMETTEUR.
  *
  * C'est le chaînon manquant du rapprochement : la banque écrit qui PAIE, Odoo écrit qui
@@ -1113,27 +1141,24 @@ async function preuveEnImage(url, mediaType) {
  * il ne manquait que le nom du payeur pour relier les deux.
  *
  * `onProgress(fait, total)` permet d'afficher l'avancement : chaque document est un appel
- * à l'IA, et il y en a plusieurs centaines.
- * Une preuve illisible est marquée lue quand même, avec un émetteur vide : sans ça, chaque
- * relance repaierait la lecture des mêmes documents indéchiffrables.
+ * à l'IA, et il y en a plusieurs centaines. On enregistre au fur et à mesure : une lecture
+ * interrompue ne perd rien et ne se repaie pas.
  */
-export async function lirePreuvesPaiement({ depuis = null, limite = 100, onProgress } = {}) {
-  let q = supabase
+export async function lirePreuvesPaiement({ limite = 50, onProgress } = {}) {
+  const deja = await chargerPayeurs()
+  const { data, error } = await supabase
     .from('messages')
-    .select('id, media_url, media_type, payment_client_name')
+    .select('id, media_url, media_type, payment_client_name, conversation:conversations!messages_conversation_id_fkey(client_name)')
     .eq('is_payment_proof', true)
-    .is('payment_read_at', null)
     .not('media_url', 'is', null)
     .order('sent_at', { ascending: false })
-    .limit(limite)
-  if (depuis) q = q.gte('sent_at', depuis)
-  const { data, error } = await q
+    .limit(3000)
   if (error) throw error
 
-  const preuves = data || []
+  const aLire = (data || []).filter(m => !deja[m.id]).slice(0, limite)
   let lues = 0, trouves = 0
-  for (const m of preuves) {
-    let emetteur = null
+  for (const m of aLire) {
+    let emetteur = ''
     try {
       const url = m.media_url.startsWith('http') ? m.media_url : await getMediaSignedUrl(m.media_url)
       const image = await preuveEnImage(url, m.media_type)
@@ -1142,31 +1167,27 @@ export async function lirePreuvesPaiement({ depuis = null, limite = 100, onProgr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image }),
       })
-      if (rep.ok) emetteur = (await rep.json()).emetteur || null
-    } catch { /* document illisible : on le marque lu pour ne pas le relire sans fin */ }
-    await supabase.from('messages')
-      .update({ payment_payer_name: emetteur, payment_read_at: new Date().toISOString() })
-      .eq('id', m.id)
+      if (rep.ok) emetteur = (await rep.json()).emetteur || ''
+    } catch { /* document illisible : on le note quand même, pour ne pas le relire sans fin */ }
+    deja[m.id] = { p: emetteur, c: m.payment_client_name || m.conversation?.client_name || '' }
     lues++
     if (emetteur) trouves++
-    onProgress && onProgress(lues, preuves.length)
+    onProgress && onProgress(lues, aLire.length)
+    // Enregistrement régulier : une lecture interrompue ne perd pas ce qui est déjà lu.
+    if (lues % 10 === 0) await enregistrerPayeurs(deja)
   }
-  return { lues, trouves, restantes: preuves.length === limite }
+  if (lues) await enregistrerPayeurs(deja)
+  const restantes = (data || []).filter(m => !deja[m.id]).length
+  return { lues, trouves, restantes }
 }
 
 /**
- * Les couples « qui a payé » -> « pour quelle cliente », tirés des preuves déjà lues.
+ * Les couples « qui a payé » -> « pour quelle cliente ».
  * C'est ce que le rapprochement consulte quand aucune ligne ne porte le nom de la cliente.
  */
 export async function loadPayeursConnus() {
-  const { data, error } = await supabase
-    .from('messages')
-    .select('payment_payer_name, payment_client_name, conversation:conversations!messages_conversation_id_fkey(client_name)')
-    .eq('is_payment_proof', true)
-    .not('payment_payer_name', 'is', null)
-    .limit(5000)
-  if (error) throw error
-  return (data || [])
-    .map(m => ({ payeur: m.payment_payer_name, cliente: m.payment_client_name || m.conversation?.client_name || null }))
-    .filter(x => x.payeur && x.cliente)
+  const map = await chargerPayeurs()
+  return Object.values(map)
+    .filter(v => v && v.p && v.c)
+    .map(v => ({ payeur: v.p, cliente: v.c }))
 }
