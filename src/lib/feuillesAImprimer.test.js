@@ -44,24 +44,28 @@ const gateau = {
 describe('les feuilles d’une fournée', () => {
   it('une feuille par chose qui a une RECETTE, jamais pour ce qui se pèse', () => {
     const f = feuillesAImprimer(gateau, 80)
-    // Le plus PROFOND d'abord : le crumble est à deux étages du gâteau, les
-    // trois autres à un seul, et la tête vient en dernier.
+    // ⚠️ LE PARENT D'ABORD (Layla, 2026-09-16) : le gâteau, puis ce qu'il
+    // demande, puis ce que CELA demande. Le crumble, à deux étages, vient en
+    // dernier.
     expect(f.map(x => x.produit)).toEqual([
-      'SM. Crumble Pistache',
-      'SM. Crunchy Citron Passion',
-      'SM. Mousse Cheese Passion',
-      'SM. Marmelade Passion Mangue',
       'SM- Cheesecake Exotique Indiv',
+      'SM. Marmelade Passion Mangue',
+      'SM. Mousse Cheese Passion',
+      'SM. Crunchy Citron Passion',
+      'SM. Crumble Pistache',
     ])
     // ni la farine, ni la feuilletine, ni la crème whipping : on ne les fabrique pas
     expect(f.some(x => /Farine|Feuilletine|whipping/.test(x.produit))).toBe(false)
   })
 
-  it('dans l’ORDRE DU TRAVAIL : le crumble avant le crunchy, la tête en dernier', () => {
+  // ⚠️ RÈGLE CHANGÉE LE 2026-09-16 : « le parent en premier, ainsi de suite »
+  // (Layla). Jusque-là la liasse sortait dans l'ordre du travail, le plus
+  // profond d'abord. Elle se lit maintenant comme la recette : de haut en bas.
+  it('LE PARENT D’ABORD : la tête en tête, le crumble après le crunchy', () => {
     const f = feuillesAImprimer(gateau, 80)
-    expect(f.findIndex(x => x.produit === 'SM. Crumble Pistache'))
-      .toBeLessThan(f.findIndex(x => x.produit === 'SM. Crunchy Citron Passion'))
-    expect(f[f.length - 1].produit).toBe('SM- Cheesecake Exotique Indiv')
+    expect(f[0].produit).toBe('SM- Cheesecake Exotique Indiv')
+    expect(f.findIndex(x => x.produit === 'SM. Crunchy Citron Passion'))
+      .toBeLessThan(f.findIndex(x => x.produit === 'SM. Crumble Pistache'))
   })
 
   it('chaque feuille porte sa quantité, son stock et son chemin', () => {
@@ -165,11 +169,13 @@ describe('quand la même crème sert à deux endroits', () => {
     expect(par['SM. Creme au Beurre Citron Production']).toBe(3790)
   })
 
-  it('et elle se fait AVANT la crème au beurre qui la contient', () => {
+  it('et elle vient APRÈS la crème au beurre qui la contient', () => {
+    // Le parent d'abord : le gâteau, sa crème au beurre, puis la crème citron
+    // que celle-ci contient — même si à l'atelier on la monte en premier.
     const f = feuillesAImprimer(vitrine, 29).map(x => x.produit)
-    expect(f.indexOf('SM. Creme Citron Production'))
-      .toBeLessThan(f.indexOf('SM. Creme au Beurre Citron Production'))
-    expect(f[f.length - 1]).toBe('SM- 20 cm Vitrine (Citron)')
+    expect(f[0]).toBe('SM- 20 cm Vitrine (Citron)')
+    expect(f.indexOf('SM. Creme au Beurre Citron Production'))
+      .toBeLessThan(f.indexOf('SM. Creme Citron Production'))
   })
 })
 
@@ -288,10 +294,10 @@ describe('assembler plusieurs gâteaux', () => {
     expect(f).toContain('SM. fond de tarte digestif indiv')
   })
 
-  it('les trois gâteaux gardent chacun leur feuille, en dernier', () => {
+  it('les gâteaux cochés ouvrent la liasse, chacun sa feuille', () => {
     const f = feuillesDePlusieurs([{ noeud: t23, qty: 18 }, { noeud: t18, qty: 18 }])
     const noms = f.map(x => x.produit)
-    expect(noms.slice(-2).sort()).toEqual(
+    expect(noms.slice(0, 2).sort()).toEqual(
       ['SM- Tarte Citron Gin 18 cm', 'SM- Tarte Citron Gin 23 cm'])
   })
 

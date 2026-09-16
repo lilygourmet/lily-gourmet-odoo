@@ -3,9 +3,9 @@
 //
 // Le 🖨 garde ses deux métiers (Layla, 2026-09-14) :
 //   • « Juste cette fiche » — ce que le bouton faisait jusqu'ici ;
-//   • « Tout ce qui manque » — une feuille par chose à fabriquer, de la plus
-//     profonde à la tête, parce qu'on ne monte pas le crunchy avant d'avoir
-//     le crumble.
+//   • « Tout ce qui manque » — une feuille par chose à fabriquer, LE PARENT
+//     D'ABORD (Layla, 2026-09-16) : le gâteau, puis ce qu'il demande, puis ce
+//     que cela demande. La liasse se lit comme la recette se lit.
 //
 // Deux écrans dans ce fichier : le PANNEAU qui demande quoi imprimer, et les
 // FEUILLES elles-mêmes, invisibles à l'écran et seules visibles sur le papier.
@@ -158,9 +158,10 @@ export function FeuillesImpression({ feuilles, sortie }) {
     <div className="print-feuilles">
       {(feuilles || []).map(f => (
         <Fragment key={f.produit}>
-          {/* ⚠️ LA DEMANDE PASSE AVANT LA RECETTE : on ne fabrique pas ce qu'on
-              n'a pas encore été chercher. Les deux feuilles se suivent, pour
-              qu'on prenne la crème au moment de faire la crème (Layla). */}
+          {/* ⚠️ LA DEMANDE PASSE AVANT SA RECETTE : on ne fabrique pas ce qu'on
+              n'a pas encore été chercher. Les deux feuilles restent collées
+              l'une à l'autre, où que la recette tombe dans la liasse — on prend
+              la crème au moment de faire la crème (Layla). */}
           {aBesoinDeLEconomat(f) && <FeuilleEconomat f={f} tete={tete} />}
           <Feuille f={f} />
         </Fragment>

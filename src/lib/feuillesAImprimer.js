@@ -39,11 +39,11 @@ function aFairePour(noeud, besoin) {
 }
 
 /**
- * Les feuilles, de la plus profonde à la tête.
+ * Les feuilles, LE PARENT D'ABORD, puis ce qu'il demande, et ainsi de suite.
  *
- * L'ordre est celui du travail : on ne monte pas le crunchy avant d'avoir le
- * crumble, et on ne fait pas la crème au beurre avant la crème citron qu'elle
- * contient. La tête est donc la DERNIÈRE feuille.
+ * « le parent en premier, ainsi de suite » (Layla, 2026-09-16) — et de la même
+ * façon quel que soit l'endroit d'où l'on imprime : une fiche, ou plusieurs
+ * gâteaux cochés. La liasse se lit comme la recette se lit, de haut en bas.
  *
  * `quantites` est la table de l'écran — un chiffre tapé à la main y prime sur
  * ce que l'app propose, exactement comme sur la fiche.
@@ -119,8 +119,15 @@ export function feuillesDePlusieurs(tetes, quantites = {}) {
     qty.set(nom, quantites[nom] ?? aFairePour(noeuds.get(nom), besoin))
   }
 
-  // ---- 3. LES FEUILLES, la plus profonde d'abord ----
-  return ordre.slice().reverse().map(nom => {
+  // ---- 3. LES FEUILLES, LE PARENT D'ABORD ----
+  // « le parent en premier, ainsi de suite » (Layla, 2026-09-16), quel que soit
+  // l'endroit d'où l'on imprime. On lit la liasse comme on lit la recette : le
+  // gâteau, puis ce qu'il demande, puis ce que CELA demande. `ordre` est déjà
+  // rangé par profondeur croissante — il n'y a rien à retourner.
+  //
+  // ⚠️ Ça renverse ce que je faisais jusqu'au 16/09 (le plus profond d'abord,
+  // « l'ordre du travail »). Sa liasse se lit de haut en bas, pas de bas en haut.
+  return ordre.map(nom => {
     const n = noeuds.get(nom)
     const q = qty.get(nom)
     const stock = Math.max(0, Number(n.stock) || 0)
