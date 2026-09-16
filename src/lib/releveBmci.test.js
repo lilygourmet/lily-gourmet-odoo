@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { reconcileEnvelopes, parseBmciReleve, nomAutreCliente, nomDansLibelle, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
+import { describe, it, expect, afterEach } from 'vitest'
+import { reconcileEnvelopes, parseBmciReleve, nomAutreCliente, nomDansLibelle, setPayeursConnus, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
 
 // Une enveloppe déjà justifiée par une PREUVE PHOTO manuelle (proof_url sans
 // releve_status) ne doit pas être re-rapprochée à l'import du relevé, et son
@@ -575,5 +575,41 @@ describe('reconcileEnvelopes — payé par un tiers', () => {
     const { results } = reconcileEnvelopes([caisse], [sienne, ligne], {})
     expect(results[0].status).toBe('trouve')
     expect(results[0].line.label).toBe('VIR INST RECU PERRET HORTENSE')
+  })
+})
+
+// La banque écrit le nom de QUI PAIE, Odoo celui de QUI ACHÈTE. Les preuves de virement
+// donnent les couples : LEBDAR NAWAL paie pour Maryam el bairi.
+describe('payeurs connus — un proche paie pour la cliente', () => {
+  const ligne = { credit: 600, dateIso: '2026-06-02', type: 'virement_recu', label: 'VIR INST RECU LEBDAR NAWAL' }
+  const caisse = {
+    id: 'MB', amount_cash: 600, payment_method: 'virement',
+    releve_status: null, session_date: '2026-06-03', virement_client: 'Maryam el bairi',
+  }
+  afterEach(() => setPayeursConnus([]))
+
+  it('sans les couples, rien ne change', () => {
+    setPayeursConnus([])
+    expect(nomDansLibelle('Maryam el bairi', 'VIR INST RECU LEBDAR NAWAL')).toBe(false)
+  })
+
+  it('avec le couple, la ligne est reconnue comme la sienne', () => {
+    setPayeursConnus([{ payeur: 'LEBDAR NAWAL', cliente: 'Maryam el bairi' }])
+    expect(nomDansLibelle('Maryam el bairi', 'VIR INST RECU LEBDAR NAWAL')).toBe(true)
+  })
+
+  it('et la caisse se rapproche toute seule', () => {
+    setPayeursConnus([{ payeur: 'LEBDAR NAWAL', cliente: 'Maryam el bairi' }])
+    expect(reconcileEnvelopes([caisse], [ligne], {}).results[0].status).toBe('trouve')
+  })
+
+  it('le couple ne vaut QUE pour sa cliente', () => {
+    setPayeursConnus([{ payeur: 'LEBDAR NAWAL', cliente: 'Maryam el bairi' }])
+    expect(nomDansLibelle('Iraqui yaqot', 'VIR INST RECU LEBDAR NAWAL')).toBe(false)
+  })
+
+  it('reconnaît le payeur écrit autrement sur le relevé', () => {
+    setPayeursConnus([{ payeur: 'NAWAL LEBDAR', cliente: 'Maryam el bairi' }])
+    expect(nomDansLibelle('Maryam el bairi', 'VIR INST RECU LEBDAR NAWAL')).toBe(true)
   })
 })

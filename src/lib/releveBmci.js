@@ -375,11 +375,30 @@ function candidatesFor(method, credits) {
 // l'app ne reconnaisse plus la cliente, et le virement restait « non lié » pour toujours.
 // C'est la comparaison qui sert déjà à repérer les doublons : une seule règle pour une
 // seule question, « est-ce la même personne ? ».
+// Couples « qui a payé » -> « pour quelle cliente », relevés sur les preuves de virement.
+// La banque écrit le nom de QUI PAIE, Odoo celui de QUI ACHÈTE : sans ces couples, un
+// virement fait par le mari ou par une société ne rejoint jamais sa commande.
+// Renseigné par l'écran Paiements ; vide, tout se comporte comme avant.
+let PAYEURS = []
+export function setPayeursConnus(couples) { PAYEURS = couples || [] }
+
+// Ce libellé est-il celui d'un proche connu pour avoir payé POUR cette cliente ?
+function payeurConnuDe(client, label) {
+  if (!PAYEURS.length) return false
+  const nomLigne = nomDeLigne(label)
+  if (!nomFiable(nomLigne)) return false
+  return PAYEURS.some(p =>
+    memePersonne(nomDeLigne(p.cliente), nomDeLigne(client))
+    && memePersonne(nomDeLigne(p.payeur), nomLigne))
+}
+
 export function nomDansLibelle(client, label) {
   const toks = nameTokens(client)
   if (!toks.length) return false
   const L = norm(label)
   if (toks.some(t => L.includes(t))) return true
+  // Un proche qui paie pour elle vaut son nom : c'est bien son virement.
+  if (payeurConnuDe(client, label)) return true
   // Mot à mot (voir memePersonne) : c'est ce qui reconnaît « Iraqui yaqot » dans
   // « VIRT RECU MLLE YACOUT IRAQI ». La comparaison du nom entier reste en second filet,
   // elle rattrape les cas où un mot manque d'un côté.

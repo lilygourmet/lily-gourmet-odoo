@@ -111,6 +111,7 @@ export default async function handler(req, res) {
   if (action === 'deco-planche') return handleDecoPlanche(req, res)
   if (action === 'nav-usage') return handleNavUsage(req, res)
   if (action === 'releve-ocr') return handleReleveOcr(req, res)
+  if (action === 'paiement-emetteur') return handlePaiementEmetteur(req, res)
   if (action === 'translate-ar') return handleTranslateAr(req, res)
   if (action === 'order-line') return handleOrderLine(req, res)
   if (action === 'sync-mos') return handleSyncMos(req, res)
@@ -2441,6 +2442,61 @@ Réponds UNIQUEMENT en JSON strict, sans aucun texte autour :
     return res.status(200).json({ transactions: all })
   } catch (e) {
     console.error('[releve-ocr]', e?.message || e)
+    return res.status(500).json({ error: e?.message || 'erreur serveur' })
+  }
+}
+
+// Lit une preuve de virement (capture mobile ou reçu PDF) pour n'en tirer QU'UNE chose :
+// le nom de la personne qui a PAYÉ.
+//
+// Tout le reste est déjà connu de l'app : la preuve est rattachée à la commande et à la
+// cliente par l'équipe, avec le montant. Ce qui manque, c'est le nom que la BANQUE écrira
+// sur le relevé — celui de l'émetteur. Lui seul permet de relier « VIR INST RECU LEBDAR
+// NAWAL » à la commande de Maryam el bairi.
+async function handlePaiementEmetteur(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') return res.status(200).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST requis' })
+
+  const { image } = req.body || {}
+  if (!image) return res.status(400).json({ error: 'image requise' })
+
+  const prompt = `Tu regardes la preuve d'un virement bancaire marocain : capture d'écran d'une application mobile, reçu de banque, ou SMS de confirmation.
+
+Trouve le nom de la personne ou de la société qui a ÉMIS le virement — celui qui a payé.
+Selon le document, il apparaît comme « émetteur », « donneur d'ordre », « de », « from », « expéditeur », ou dans l'en-tête (« Bonjour Mme LEBDAR »).
+
+ATTENTION, ne le confonds pas avec :
+- le BÉNÉFICIAIRE, qui est toujours Lily Gourmet (ou une variante : Lilly gourmet, LILY GOURMET SARL). Ce n'est jamais la réponse.
+- le nom de la banque (Saham, CIH, BMCE, Attijariwafa, BMCI, CFG, Barid...).
+- le motif du virement.
+
+Réponds UNIQUEMENT en JSON strict, sans aucun texte autour :
+{"emetteur":"<NOM COMPLET EN MAJUSCULES>","montant":<nombre ou null>,"date":"AAAA-MM-JJ ou null"}
+
+Si le nom de l'émetteur n'est pas lisible ou pas présent, renvoie {"emetteur":null,"montant":null,"date":null}.`
+
+  try {
+    const result = await generateText({
+      model: 'claude-haiku-4-5',
+      messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image', image }] }],
+    })
+    const m = (result.text || '').match(/\{[\s\S]*\}/)
+    if (!m) return res.status(200).json({ emetteur: null })
+    const data = JSON.parse(m[0])
+    let emetteur = String(data.emetteur || '').trim().toUpperCase()
+    // Garde-fou : le bénéficiaire, c'est nous. Si l'IA l'a rendu, c'est qu'elle s'est
+    // trompée de ligne — mieux vaut rien qu'un nom qui ferait tout correspondre.
+    if (/LIL+Y\s*GOURMET/i.test(emetteur)) emetteur = ''
+    return res.status(200).json({
+      emetteur: emetteur || null,
+      montant: typeof data.montant === 'number' ? data.montant : null,
+      date: /^\d{4}-\d{2}-\d{2}$/.test(data.date || '') ? data.date : null,
+    })
+  } catch (e) {
+    console.error('[paiement-emetteur]', e?.message || e)
     return res.status(500).json({ error: e?.message || 'erreur serveur' })
   }
 }
