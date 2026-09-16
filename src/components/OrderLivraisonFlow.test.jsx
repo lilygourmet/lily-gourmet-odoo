@@ -313,3 +313,21 @@ describe('choisir le créneau', () => {
     expect(creneau('10h – 12h')).toBeFalsy()
   })
 })
+
+describe('le bloc livreur est collé à la ligne Livraison', () => {
+  // « Ça doit apparaître à côté de livraison, pas en haut » (Layla, 2026-09-16).
+  it('il est APRÈS la ligne Livraison, pas en tête de fiche', async () => {
+    lignes.push(
+      { id: 1, name: 'Royal Chocolat', rawName: 'Royal Chocolat', qty: 1, price: 400, discount: 0 },
+      { id: 7, name: 'Livraison\nzone : Souissi', rawName: 'Livraison\nzone : Souissi', qty: 1, price: 50, discount: 0 },
+    )
+    await ouvrir()
+    const bloc = screen.getByText(/Assigner le livreur/)
+    const gateau = screen.getByText('Royal Chocolat')
+    const livraison = screen.getByText('Livraison')
+    // Ordre dans la page : gâteau, puis Livraison, puis le bloc livreur.
+    const avant = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(avant(gateau, livraison), 'le gâteau vient avant la livraison').toBe(true)
+    expect(avant(livraison, bloc), 'le bloc livreur suit la ligne Livraison').toBe(true)
+  })
+})

@@ -142,12 +142,6 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
     }).catch(() => {})
   }, [order.name])
   // Détecte une ligne « Livraison (…) » (le produit livraison s'appelle toujours ainsi).
-  // ⚠️ MÊME règle que partout ailleurs (`estLigneLivraison`), pas une troisième
-  // maison. Celle d'avant lisait `split('\n')[0]` : pour une ligne qu'Odoo écrit
-  // « \n  Livraison (Souissi) », la première ligne est VIDE — le bloc livreur et
-  // adresse disparaissait, et Layla ne pouvait plus assigner de livreur.
-  // (Trouvé le 2026-09-16.)
-  const hasLivraison = aLivraison
 
   async function saveLivraison() {
     if (!livreurId) { toast.error('Choisis un livreur.'); return }
@@ -356,6 +350,30 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
     }
   }
 
+  // 🚚 Le livreur et l'adresse se règlent JUSTE SOUS la ligne « Livraison » —
+  // « ça doit apparaître à côté de livraison, pas en haut » (Layla,
+  // 2026-09-16). C'est là qu'on y pense, pas en tête de fiche.
+  const blocLivreur = (
+          <div className="mb-2 p-2.5 rounded-lg bg-bordeaux/5 border border-bordeaux/20">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1.5">🚚 Assigner le livreur</div>
+      <div className="flex gap-1.5 flex-wrap">
+        {livreurs.length === 0 && <span className="text-[11px] text-ink-mute italic">Aucun livreur trouvé.</span>}
+        {livreurs.map(l => (
+          <button key={l.id} onClick={() => setLivreurId(livreurId === l.id ? null : l.id)}
+            className={`px-3 py-1.5 rounded-full text-[12px] font-medium border transition-colors ${livreurId === l.id ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line hover:border-bordeaux'}`}>
+            {l.full_name || l.username}
+          </button>
+        ))}
+      </div>
+      <div className="text-[11px] font-semibold text-ink-soft mb-1 mt-2.5">📍 Adresse / localisation (pour le livreur)</div>
+      <textarea value={livraisonLoc} onChange={e => setLivraisonLoc(e.target.value)} rows={2}
+        placeholder="Adresse écrite, lien Google Maps / WhatsApp, ou coordonnées GPS…"
+        className="w-full px-3 py-2 border border-line rounded-lg text-[13px] bg-white focus:outline-none focus:border-bordeaux" />
+      <button onClick={saveLivraison} disabled={busy || !livreurId}
+        className="mt-2 px-3 py-1.5 bg-bordeaux text-cream rounded-lg text-[12px] font-medium disabled:opacity-50">Enregistrer le livreur / l'adresse</button>
+    </div>
+  )
+
   // Y a-t-il des modifs non enregistrées ? + total des articles mis à jour en direct.
   const dirty = (Array.isArray(lines) && lines.some(l => l._dirty)) || draft.length > 0
   const total = Array.isArray(lines)
@@ -444,27 +462,6 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
           </div>
         )}
 
-        {/* Livreur + adresse — seulement si la commande contient une livraison */}
-        {hasLivraison && (
-          <div className="mx-5 mb-3 p-2.5 rounded-lg bg-bordeaux/5 border border-bordeaux/20">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1.5">🚚 Assigner le livreur</div>
-            <div className="flex gap-1.5 flex-wrap">
-              {livreurs.length === 0 && <span className="text-[11px] text-ink-mute italic">Aucun livreur trouvé.</span>}
-              {livreurs.map(l => (
-                <button key={l.id} onClick={() => setLivreurId(livreurId === l.id ? null : l.id)}
-                  className={`px-3 py-1.5 rounded-full text-[12px] font-medium border transition-colors ${livreurId === l.id ? 'bg-bordeaux text-cream border-bordeaux' : 'bg-white text-ink-soft border-line hover:border-bordeaux'}`}>
-                  {l.full_name || l.username}
-                </button>
-              ))}
-            </div>
-            <div className="text-[11px] font-semibold text-ink-soft mb-1 mt-2.5">📍 Adresse / localisation (pour le livreur)</div>
-            <textarea value={livraisonLoc} onChange={e => setLivraisonLoc(e.target.value)} rows={2}
-              placeholder="Adresse écrite, lien Google Maps / WhatsApp, ou coordonnées GPS…"
-              className="w-full px-3 py-2 border border-line rounded-lg text-[13px] bg-white focus:outline-none focus:border-bordeaux" />
-            <button onClick={saveLivraison} disabled={busy || !livreurId}
-              className="mt-2 px-3 py-1.5 bg-bordeaux text-cream rounded-lg text-[12px] font-medium disabled:opacity-50">Enregistrer le livreur / l'adresse</button>
-          </div>
-        )}
 
         {isConfirmed && (
           <div className="mx-5 mb-3 text-[11px] text-warn-ink bg-warn-bg border border-warn/40 rounded-lg px-3 py-2">
@@ -481,7 +478,8 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
           ) : lines.length === 0 ? (
             <div className="text-[13px] text-ink-mute py-4">Aucun article.</div>
           ) : lines.map(l => (
-            <div key={l.id} className="bg-white border border-line rounded-xl p-3 mb-2">
+            <div key={l.id}>
+            <div className="bg-white border border-line rounded-xl p-3 mb-2">
               <div className="text-[14px] text-ink font-medium">{firstLine(l.rawName ?? l.name)}</div>
               {/* Détails modifiables : parfum, thème, âge, message — apparaît tel quel dans le message WhatsApp au client */}
               <div className="text-[10px] text-ink-mute mt-1.5">Parfum / thème / âge <span className="opacity-70">(apparaît dans le message WhatsApp)</span></div>
@@ -564,6 +562,8 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
                 <button onClick={() => { setWarnFor(l.id); setWarnText('') }}
                   className="mt-1.5 text-[11px] text-[#B36B00] font-medium hover:underline">+ Attention sur cet article</button>
               )}
+            </div>
+            {estLigneLivraison(l.rawName ?? l.name) && blocLivreur}
             </div>
           ))}
 
