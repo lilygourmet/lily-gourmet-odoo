@@ -237,3 +237,27 @@ describe('la feuille de sortie de stock', () => {
     expect(screen.getByText('Pour quelle recette')).toBeTruthy()
   })
 })
+
+// « quand j'imprime juste cette fiche ça doit sortir de la même manière que la
+// cascade » (Layla, 2026-09-16) : plus d'écran recopié tel quel, la même
+// feuille que les autres — avec son tableau à remplir.
+describe('« juste cette fiche »', () => {
+  it('sort la feuille de la cascade, pas l’écran', async () => {
+    window.print = vi.fn()
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+    await waitFor(() => expect(document.querySelector('.feuille-impr')).toBeTruthy())
+    // Une seule RECETTE — celle qu'on regarde — et elle porte le tableau à
+    // remplir, comme dans la cascade.
+    const recettes = document.querySelectorAll('.feuille-impr:not(.feuille-economat)')
+    expect(recettes).toHaveLength(1)
+    expect(recettes[0].textContent).toMatch(/Sirop imbibage/)
+    expect(recettes[0].querySelector('.fi-table')).toBeTruthy()
+    // ⚠️ Et sa demande à l'économat vient AVEC, et AVANT : on ne fabrique pas
+    // ce qu'on n'a pas été chercher. Même liasse que la cascade.
+    const toutes = [...document.querySelectorAll('.feuille-impr')]
+    expect(toutes).toHaveLength(2)
+    expect(toutes[0].classList.contains('feuille-economat')).toBe(true)
+  })
+})

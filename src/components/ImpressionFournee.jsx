@@ -46,7 +46,7 @@ export function ChoixImpression({
 
         <div className="px-4 pt-3 flex-shrink-0">
           <div className="grid grid-cols-2 gap-1.5 bg-cream-deep rounded-2xl p-1">
-            {[['seule', 'Juste cette fiche', "comme d'habitude"],
+            {[['seule', 'Juste cette fiche', 'cette recette seule'],
               ['tout', 'Tout ce qui manque', 'la cascade entière']].map(([k, t, s]) => (
               <button key={k} onClick={() => onMode(k)} aria-pressed={mode === k}
                 className={`rounded-xl py-2.5 px-2 text-[13.5px] font-bold leading-tight

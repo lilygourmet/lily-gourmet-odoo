@@ -481,12 +481,14 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * repeindre, d'où le `setTimeout` — sans lui, Safari imprime le panneau.
    */
   const lancerImpression = () => {
-    const seule = impr?.mode === 'seule'
-    const quoi = aImprimer
+    // ⚠️ LES DEUX FAÇONS SORTENT LA MÊME FEUILLE. « quand j'imprime juste cette
+    // fiche ça doit sortir de la même manière que la cascade » (Layla,
+    // 2026-09-16). « Juste cette fiche » n'imprime donc plus l'écran tel quel :
+    // elle imprime la feuille de la cascade, celle de l'article qu'on regarde
+    // — avec sa demande à l'économat et son tableau à remplir, comme les autres.
+    // La tête est la DERNIÈRE de la liste, c'est elle qu'on a sous les yeux.
+    const quoi = impr?.mode === 'seule' ? feuilles.slice(-1) : aImprimer
     setImpr(null)
-    // L'ANCIENNE FAÇON, inchangée : la fiche telle qu'elle est à l'écran, par
-    // la zone `print-area`. C'est ce que « comme d'habitude » veut dire.
-    if (seule) { setTimeout(() => window.print(), 60); return }
     setFeuillesPretes(quoi)
     imprimerLePortail()
   }
