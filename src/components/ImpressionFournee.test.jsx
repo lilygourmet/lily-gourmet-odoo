@@ -166,3 +166,29 @@ describe('assembler plusieurs gâteaux', () => {
     expect(screen.queryByText(/Imprimer/)).toBeNull()
   })
 })
+
+// « je dois choisir quoi imprimer comme la cascade » (Layla, 2026-09-16) :
+// depuis plusieurs gâteaux cochés, le même panneau que depuis une fiche —
+// mais sans les deux façons d'imprimer, qui n'ont plus de sens là.
+describe('le panneau ouvert depuis l’assemblage', () => {
+  it('n’a pas les deux façons d’imprimer', () => {
+    render(<ChoixImpression feuilles={feuilles} mode="tout" coches={coches} tapes={{}}
+      sous="pour 3 gâteaux"
+      onCoche={() => {}} onQuantite={() => {}} onRendre={() => {}}
+      onImprimer={() => {}} onFermer={() => {}} />)
+    expect(screen.queryByText('Juste cette fiche')).toBeNull()
+    expect(screen.queryByText('Tout ce qui manque')).toBeNull()
+  })
+
+  it('mais garde les cases et les quantités', () => {
+    const onCoche = vi.fn()
+    render(<ChoixImpression feuilles={feuilles} mode="tout" coches={coches} tapes={{}}
+      sous="pour 3 gâteaux"
+      onCoche={onCoche} onQuantite={() => {}} onRendre={() => {}}
+      onImprimer={() => {}} onFermer={() => {}} />)
+    expect(screen.getByText('pour 3 gâteaux')).toBeTruthy()
+    expect(screen.getByLabelText(/Quantité de Creme Citron/)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Creme Citron Production'))
+    expect(onCoche).toHaveBeenCalledWith('SM. Creme Citron Production', false)
+  })
+})

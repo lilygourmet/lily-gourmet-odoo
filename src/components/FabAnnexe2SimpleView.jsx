@@ -74,6 +74,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // (Layla, 2026-09-16). Vide = l'écran d'avant, à la lettre.
   const [choisis, setChoisis] = useState([])
   const [assemblage, setAssemblage] = useState(false)
+  // Le panneau « Tu imprimes quoi ? » ouvert depuis l'assemblage : on y coche
+  // et on y corrige les quantités, exactement comme depuis une fiche.
+  const [imprAssemble, setImprAssemble] = useState(null)
   // L'historique : un bouton, par date (Layla, 2026-09-09).
   const [histo, setHisto] = useState(null)
   const [histoOuvert, setHistoOuvert] = useState(false)
@@ -366,14 +369,23 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // Les fiches complètes des gâteaux cochés : sans elles, pas de cascade à
     // additionner. Elles arrivent par `precharger`, déclenché au premier clic.
     const pretes = choisis.map(p => details[p]).filter(Boolean)
+    // ⚠️ `quantites` passe dans le calcul : un chiffre corrigé dans le panneau
+    // d'impression se fige, et tout ce qui en dépend suit — comme sur la fiche.
     const feuillesChoisies = pretes.length === choisis.length && choisis.length
-      ? feuillesDePlusieurs(pretes.map(a => ({ noeud: a, qty: prevus[a.produit]?.q ?? a.tournee })))
+      ? feuillesDePlusieurs(
+        pretes.map(a => ({ noeud: a, qty: quantites[a.produit] ?? prevus[a.produit]?.q ?? a.tournee })),
+        quantites)
       : []
-    // ⚠️ On n'imprime pas ce dont il y a déjà assez — même règle que le panneau
-    // d'une fiche. Les gâteaux cochés, eux, sortent toujours : c'est ce qu'on
-    // est venu faire.
-    const aImprimerAssemble = feuillesChoisies
-      .filter(f => choisis.includes(f.produit) || !assezEnStock(f))
+    // ⚠️ Coché d'avance : ce dont il n'y a pas assez — même règle que le
+    // panneau d'une fiche. Les gâteaux cochés, eux, le sont toujours : c'est ce
+    // qu'on est venu faire.
+    const cochesAssemble = (() => {
+      const d = Object.fromEntries(feuillesChoisies.map(f =>
+        [f.produit, choisis.includes(f.produit) || !assezEnStock(f)]))
+      return Object.fromEntries(feuillesChoisies.map(f =>
+        [f.produit, imprAssemble?.choix?.[f.produit] ?? d[f.produit]]))
+    })()
+    const aImprimerAssemble = feuillesChoisies.filter(f => cochesAssemble[f.produit])
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader {...nav} />
@@ -412,6 +424,21 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               </button>
             ))}
           </div>
+          {imprAssemble && (
+            <ChoixImpression
+              feuilles={feuillesChoisies} mode="tout" coches={cochesAssemble}
+              tapes={quantites}
+              sous={`pour ${choisis.length} gâteau${choisis.length > 1 ? 'x' : ''}`}
+              onCoche={(p, v) => setImprAssemble(x => ({ ...x, choix: { ...(x.choix || {}), [p]: v } }))}
+              onQuantite={(p, v) => poser(p, v)}
+              onRendre={p => setQuantites(x => { const n = { ...x }; delete n[p]; return n })}
+              onImprimer={() => {
+                setImprAssemble(null)
+                setFeuillesPretes(aImprimerAssemble)
+                imprimerLePortail()
+              }}
+              onFermer={() => setImprAssemble(null)} />
+          )}
           {(feuillesPretes || sortiePrete) && (
             <FeuillesImpression feuilles={feuillesPretes} sortie={sortiePrete} />
           )}
@@ -447,11 +474,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
           {assemblage && (
             <Assemblage feuilles={feuillesChoisies} gateaux={choisis}
               aImprimer={aImprimerAssemble.length}
-              onImprimer={() => {
-                setAssemblage(false)
-                setFeuillesPretes(aImprimerAssemble)
-                imprimerLePortail()
-              }}
+              onImprimer={() => { setAssemblage(false); setImprAssemble({ choix: {} }) }}
               onFermer={() => setAssemblage(false)}
               onOuvrir={f => {
                 // ⚠️ On ouvre la préparation AVEC SON TOTAL : une cuve pour les

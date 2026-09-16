@@ -25,7 +25,7 @@ import { assezEnStock, aDemander, aBesoinDeLEconomat } from '../lib/feuillesAImp
  */
 export function ChoixImpression({
   feuilles, mode, onMode, coches, onCoche, tapes, onQuantite, onRendre,
-  onImprimer, onFermer,
+  onImprimer, onFermer, sous,
 }) {
   const seule = mode === 'seule'
   const visibles = seule ? feuilles.slice(-1) : feuilles
@@ -40,10 +40,15 @@ export function ChoixImpression({
                       overflow-hidden flex flex-col max-h-[85vh]">
         <div className="flex items-center gap-2 px-4 pt-4 pb-3 flex-shrink-0 border-b border-cream-deep">
           <b className="text-[16px]">🖨 Tu imprimes quoi ?</b>
+          {!!sous && <span className="text-[12.5px] text-ink-mute">{sous}</span>}
           <button onClick={onFermer}
             className="ml-auto bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px]">fermer</button>
         </div>
 
+        {/* ⚠️ LES DEUX FAÇONS N'EXISTENT QUE DEPUIS UNE FICHE. Quand le panneau
+            s'ouvre depuis plusieurs gâteaux cochés, il n'y a rien à choisir :
+            c'est leur fournée entière ou rien. */}
+        {!!onMode && (
         <div className="px-4 pt-3 flex-shrink-0">
           <div className="grid grid-cols-2 gap-1.5 bg-cream-deep rounded-2xl p-1">
             {[['seule', 'Juste cette fiche', 'cette recette seule'],
@@ -56,6 +61,7 @@ export function ChoixImpression({
             ))}
           </div>
         </div>
+        )}
 
         <div className="px-4 py-3 flex-1 overflow-y-auto overscroll-contain">
           {visibles.map(f => {
