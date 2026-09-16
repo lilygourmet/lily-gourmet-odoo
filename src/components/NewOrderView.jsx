@@ -7,7 +7,8 @@ import NewConversationModal from './Conversations/NewConversationModal'
 import ClientEditModal from './ClientEditModal'
 import { loadLivreurs, assignDelivery, setLivraisonLocalisation } from '../lib/deliveries'
 import { confirmDialog } from '../lib/confirmDialog'
-import { estLigneLivraison, heurePreparation, finCreneau, heureLisible } from '../lib/creneau'
+import { estLigneLivraison, heurePreparation, finCreneau, heureLisible,
+  CRENEAUX_LIVRAISON, libelleCreneau } from '../lib/creneau'
 import { toast } from '../lib/toast'
 import Skeleton from './Skeleton'
 
@@ -438,6 +439,25 @@ export default function NewOrderView({ user, initialClient = null, embedded = fa
             <input type="time" value={deliveryTime} onChange={e => setDeliveryTime(e.target.value)}
               className="px-2 py-1.5 border border-line rounded-lg text-[13px] bg-white" />
           </div>
+          {/* Le créneau se CHOISIT — « je dois choisir l'horaire de livraison à
+              chaque fois que je clique livraison » (Layla, 2026-09-16). Les
+              mêmes cinq créneaux que sur la page commande du client. L'heure
+              libre reste juste au-dessus, pour ce qui sort du cadre. */}
+          {hasLivraison && (
+            <div className="mt-2">
+              <div className="text-[11px] text-ink-mute mb-1">Créneau de livraison (2 h)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {CRENEAUX_LIVRAISON.map(c => (
+                  <button key={c} onClick={() => setDeliveryTime(c)}
+                    className={`px-3 py-1.5 rounded-full text-[12px] font-medium border ${
+                      deliveryTime === c ? 'bg-bordeaux text-cream border-bordeaux'
+                        : 'bg-white border-line text-ink-soft hover:border-bordeaux'}`}>
+                    {libelleCreneau(c)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Livraison : le client reçoit un créneau de 2 h, la cuisine prépare 30 min avant. */}
           {hasLivraison && creneauSaisi && (
             <div className="mt-1.5 px-2.5 py-2 rounded-lg bg-cream-warm/60 border border-line text-[11px] leading-relaxed">

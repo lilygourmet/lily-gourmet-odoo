@@ -18,7 +18,7 @@
 // ============================================================
 import { describe, it, expect } from 'vitest'
 import { estLigneLivraison, heurePreparation, creneauClient, heureLisible,
-  texteCreneauClient, estCreneau2h } from './creneau'
+  texteCreneauClient, estCreneau2h, CRENEAUX_LIVRAISON, libelleCreneau } from './creneau'
 
 describe('reconnaître une ligne de livraison', () => {
   it('⚠️ le nom tel qu’Odoo l’écrit vraiment : un retour à la ligne devant', () => {
@@ -104,3 +104,24 @@ describe('la ligne reste reconnue quoi qu’Odoo y mette', () => {
     expect(estLigneLivraison('\n   \n')).toBe(false)
   })
 })
+
+
+describe('les créneaux qu’on propose', () => {
+  // « Je dois choisir l'horaire de livraison à chaque fois que je clique
+  // livraison » (Layla, 2026-09-16). Ce sont les MÊMES que ceux que voit le
+  // client sur son lien de commande — sinon on lui promet autre chose.
+  it('cinq créneaux de 2 h, écrits comme sur la page client', () => {
+    expect(CRENEAUX_LIVRAISON.map(libelleCreneau)).toEqual([
+      '10h – 12h', '12h – 14h', '14h – 16h', '16h – 18h', '18h – 20h',
+    ])
+  })
+
+  it('chacun dure bien deux heures, et la cuisine part 30 min avant', () => {
+    for (const c of CRENEAUX_LIVRAISON) {
+      expect(creneauClient(heurePreparation(c))).toEqual({ debut: c, fin: finDe(c) })
+    }
+    expect(heurePreparation('10:00')).toBe('09:30')
+    expect(heurePreparation('18:00')).toBe('17:30')
+  })
+})
+const finDe = h => `${String(Number(h.slice(0, 2)) + 2).padStart(2, '0')}:00`
