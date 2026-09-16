@@ -1644,6 +1644,9 @@ async function handleOrderLine(req, res) {
     }
 
     await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'sale.order', 'write', [[orderId], { order_line: [command] }]])
+    // ⚠️ La ligne vient de changer : la commande est peut-être devenue (ou a
+    // cessé d'être) une livraison. Le serveur s'en occupe, pas l'écran.
+    await majCreneauApresLigne(uid, orderId)
 
     // Photo (modèle de gâteau) → attachée à L'ARTICLE (sale.order.line), pas à l'entête,
     // pour que chaque CD- garde SA propre photo dans le calendrier / l'impression.
@@ -3306,8 +3309,67 @@ function moroccoLocalToUtc(dateStr, timeStr) {
  *
  * On le range donc dans `livraisons`, une table à nous. Format « 13h-15h ».
  */
+/**
+ * LE SERVEUR TIENT LE CRÉNEAU, PAS LE NAVIGATEUR.
+ *
+ * L'écran demandait confirmation avant de décaler — mais chez Layla la question
+ * n'apparaissait jamais, et la ligne partait quand même chez Odoo : le créneau
+ * n'était nulle part et l'heure ne bougeait pas. « Toujours rien »
+ * (2026-09-16). On ne peut pas dépendre d'un écran pour la cohérence des
+ * données : le serveur voit TOUT passer, quel que soit l'écran.
+ *
+ * La règle, après chaque ajout ou retrait de ligne :
+ *   • devenue une livraison, pas encore de créneau
+ *       → DEVIS : on décale la préparation de 30 min et on pose le créneau.
+ *         Rien n'est encore en cuisine, personne n'est surpris.
+ *       → CONFIRMÉE : on pose le créneau SANS toucher l'heure. Le livreur et le
+ *         client sont justes tout de suite ; l'écran, lui, propose le décalage,
+ *         qui déplace la commande au calendrier — ça, ça se demande.
+ *   • n'est plus une livraison
+ *       → on efface le créneau, et on rend les 30 min si c'est nous qui les
+ *         avions prises (un créneau enregistré = c'est nous).
+ */
+async function majCreneauApresLigne(uid, orderId) {
+  try {
+    const DB = process.env.ODOO_DB, PWD = process.env.ODOO_PASSWORD
+    const o = (await odooSearchRead(uid, 'sale.order', [['id', '=', orderId]],
+      ['name', 'state', 'commitment_date', 'order_line']))[0]
+    if (!o || !o.name) return
+    const lignes = (o.order_line || []).length
+      ? await odooSearchRead(uid, 'sale.order.line', [['id', 'in', o.order_line]], ['name'])
+      : []
+    const livraison = lignes.some(l => estLigneLivraison(l.name))
+    const dejaLa = (await creneauxDe([o.name]))[o.name] || ''
+    const brouillon = o.state === 'draft' || o.state === 'sent'
+
+    if (livraison && !dejaLa) {
+      if (!o.commitment_date) return                 // pas d'heure : rien à calculer
+      // ⚠️ L'heure qui est dans Odoo EST celle promise au client — c'est celle
+      // qu'on a saisie. Le créneau part donc d'elle, dans les deux cas. Seule
+      // l'heure de CUISINE change : on la recule de 30 min, et seulement sur un
+      // devis (sur une commande confirmée, c'est l'écran qui le demande).
+      const promis = new Date(String(o.commitment_date).replace(' ', 'T') + 'Z')
+      const hh = m => m.toLocaleString('fr-FR', { timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      const lisible = t => { const [h, m] = hh(t).split(':'); return `${parseInt(h, 10)}h${m !== '00' ? m : ''}` }
+      await garderCreneau(o.name, `${lisible(promis)}-${lisible(new Date(promis.getTime() + 120 * 60000))}`)
+      if (brouillon) {
+        const prep = new Date(promis.getTime() - 30 * 60000)
+        await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'sale.order', 'write',
+          [[orderId], { commitment_date: prep.toISOString().slice(0, 19).replace('T', ' ') }]])
+      }
+    } else if (!livraison && dejaLa) {
+      await garderCreneau(o.name, null)
+      if (brouillon && o.commitment_date) {
+        const rendu = new Date(new Date(String(o.commitment_date).replace(' ', 'T') + 'Z').getTime() + 30 * 60000)
+        await odooJsonRpc('object', 'execute_kw', [DB, uid, PWD, 'sale.order', 'write',
+          [[orderId], { commitment_date: rendu.toISOString().slice(0, 19).replace('T', ' ') }]])
+      }
+    }
+  } catch (e) { console.warn('[creneau ligne]', e?.message || e) }   // jamais bloquant
+}
+
 async function garderCreneau(orderName, creneau) {
-  if (!orderName || !creneau || !supabaseUrl || !supabaseServiceKey) return
+  if (!orderName || !supabaseUrl || !supabaseServiceKey) return   // `creneau` null = on efface
   try {
     const sb = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
     await sb.from('livraisons').upsert(
