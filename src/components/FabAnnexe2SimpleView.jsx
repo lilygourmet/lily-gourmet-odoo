@@ -19,7 +19,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { enClairErreur } from '../lib/erreurs'
 import { hasValidJwt, isAdmin } from '../lib/auth'
-import { CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
+import { Assemblage, CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
 import HistoriqueAnnexe from './HistoriqueAnnexe'
 import { ChoixImpression, FeuillesImpression } from './ImpressionFournee'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
@@ -30,7 +30,7 @@ import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
-import { feuillesAImprimer, cocheesParDefaut } from '../lib/feuillesAImprimer'
+import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec } from '../lib/feuillesAImprimer'
 
 /**
  * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
@@ -70,6 +70,10 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [tout, setTout] = useState(() => dernierEcran('fab_annexe2_tout'))
   const [cherche, setCherche] = useState('')
   const [gateau, setGateau] = useState(null)
+  // ⚠️ LES GÂTEAUX COCHÉS, pour monter leurs crèmes communes d'un coup
+  // (Layla, 2026-09-16). Vide = l'écran d'avant, à la lettre.
+  const [choisis, setChoisis] = useState([])
+  const [assemblage, setAssemblage] = useState(false)
   // L'historique : un bouton, par date (Layla, 2026-09-09).
   const [histo, setHisto] = useState(null)
   const [histoOuvert, setHistoOuvert] = useState(false)
@@ -350,6 +354,21 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       : null
     const ouvrir = p => { setFaits({}); setQuantites({}); setCuites({}); setChemin([p]) }
     const dujour = (histo || []).filter(l => (l.jour || todayISO()) === todayISO()).length
+
+    // ---------- assembler plusieurs gâteaux ----------
+    // ⚠️ LE THÈME, c'est le gâteau mère, et seul le catalogue « Déclarer » le
+    // connaît (`pour`). On le recolle donc ici sur les cases de « À faire ».
+    const themes = Object.fromEntries((tout || []).map(x => [x.produit, x.pour || []]))
+    const avecTheme = (articles || []).map(a => ({ ...a, pour: themes[a.produit] || [] }))
+    const cochables = cochablesAvec(avecTheme, choisis)
+    const cocher = (p, on) =>
+      setChoisis(x => (on ? [...x, p] : x.filter(y => y !== p)))
+    // Les fiches complètes des gâteaux cochés : sans elles, pas de cascade à
+    // additionner. Elles arrivent par `precharger`, déclenché au premier clic.
+    const pretes = choisis.map(p => details[p]).filter(Boolean)
+    const feuillesChoisies = pretes.length === choisis.length && choisis.length
+      ? feuillesDePlusieurs(pretes.map(a => ({ noeud: a, qty: prevus[a.produit]?.q ?? a.tournee })))
+      : []
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader {...nav} />
@@ -394,7 +413,42 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
 
           {onglet === 'faire' && (articles === null
             ? <Skeleton rows={4} />
-            : <CasesAFaire articles={articles} onOuvrir={ouvrir} />)}
+            : <CasesAFaire articles={articles} onOuvrir={ouvrir}
+                choisis={choisis} cochables={cochables}
+                onCocher={(p, on) => { cocher(p, on); if (on) precharger([p]) }} />)}
+
+          {/* ⚠️ LA BARRE NE PARAÎT QU'UNE FOIS QUELQUE CHOSE DE COCHÉ : sans
+              case cochée, l'écran est exactement celui d'avant. */}
+          {onglet === 'faire' && choisis.length > 0 && (
+            <div className="fixed left-0 right-0 bottom-0 z-[60] px-3 pb-[calc(12px+env(safe-area-inset-bottom))]">
+              <div className="max-w-[1000px] mx-auto flex items-center gap-2
+                              bg-bordeaux text-cream rounded-2xl px-4 py-3 shadow-2xl">
+                <b className="text-[15px]">
+                  {choisis.length} gâteau{choisis.length > 1 ? 'x' : ''} choisi{choisis.length > 1 ? 's' : ''}
+                </b>
+                <button onClick={() => setChoisis([])}
+                  className="text-[12.5px] underline opacity-90">tout décocher</button>
+                <button onClick={() => setAssemblage(true)}
+                  disabled={!feuillesChoisies.length}
+                  className="ml-auto text-[14px] font-bold disabled:opacity-60">
+                  {feuillesChoisies.length ? "voir ce qu'il faut ›" : 'un instant…'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {assemblage && (
+            <Assemblage feuilles={feuillesChoisies} gateaux={choisis}
+              onFermer={() => setAssemblage(false)}
+              onOuvrir={f => {
+                // ⚠️ On ouvre la préparation AVEC SON TOTAL : une cuve pour les
+                // trois tartes, pas celle d'une seule.
+                setAssemblage(false)
+                setFaits({}); setCuites({})
+                setQuantites({ [f.produit]: f.qty })
+                setChemin([f.produit])
+              }} />
+          )}
 
           {onglet === 'declarer' && (
             <>

@@ -261,3 +261,33 @@ describe('« juste cette fiche »', () => {
     expect(toutes[0].classList.contains('feuille-economat')).toBe(true)
   })
 })
+
+// ============================================================
+// ASSEMBLER PLUSIEURS GÂTEAUX DU MÊME THÈME.
+//
+// « est-ce que je peux sélectionner recette du même thème pour assembler les
+// mêmes crèmes » puis « autorise que le même thème » (Layla, 2026-09-16).
+// ============================================================
+describe('cocher plusieurs gâteaux', () => {
+  it('sans rien de coché, l’écran est celui d’avant — pas de barre', async () => {
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    await waitFor(() => expect(screen.getByText('Sirop imbibage')).toBeTruthy())
+    expect(screen.queryByText(/gâteau choisi/)).toBeNull()
+  })
+
+  it('cocher fait paraître la barre du bas', async () => {
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    await waitFor(() => expect(screen.getByText('Sirop imbibage')).toBeTruthy())
+    fireEvent.click(screen.getByLabelText('Choisir Sirop imbibage'))
+    await waitFor(() => expect(screen.getByText('1 gâteau choisi')).toBeTruthy())
+  })
+
+  it('et « tout décocher » la fait disparaître', async () => {
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    await waitFor(() => expect(screen.getByText('Sirop imbibage')).toBeTruthy())
+    fireEvent.click(screen.getByLabelText('Choisir Sirop imbibage'))
+    await waitFor(() => expect(screen.getByText('tout décocher')).toBeTruthy())
+    fireEvent.click(screen.getByText('tout décocher'))
+    await waitFor(() => expect(screen.queryByText(/gâteau choisi/)).toBeNull())
+  })
+})

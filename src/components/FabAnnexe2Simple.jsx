@@ -32,7 +32,7 @@ const photoDe = photoFabAnnexe
  * pas de mini ni de maxi — c'est le réglage de Layla, pas le travail de
  * l'atelier.
  */
-export function CasesAFaire({ articles, onOuvrir }) {
+export function CasesAFaire({ articles, onOuvrir, choisis, cochables, onCocher }) {
   const liste = articles || []
   if (!liste.length) {
     return (
@@ -47,10 +47,32 @@ export function CasesAFaire({ articles, onOuvrir }) {
     <div className="grid gap-3 md:gap-2.5
                     grid-cols-[repeat(auto-fill,minmax(150px,1fr))]
                     md:grid-cols-[repeat(auto-fill,minmax(124px,1fr))]">
-      {liste.map(a => (
-        <button key={a.produit} onClick={() => onOuvrir(a.produit)}
-          className="text-left rounded-2xl border border-cream-deep bg-cream-warm overflow-hidden
-                     shadow-sm active:scale-[0.98] transition-transform">
+      {liste.map(a => {
+      // ⚠️ COCHER PLUSIEURS GÂTEAUX du même thème, pour monter leurs crèmes
+      // communes en une seule cuve (Layla, 2026-09-16). Sans rien de coché, la
+      // case se comporte exactement comme avant : un appui ouvre la fiche.
+      const coche = !!choisis?.includes(a.produit)
+      // Hors thème dès qu'un premier est choisi : la case reste à l'écran mais
+      // ne répond plus, pour qu'on comprenne pourquoi plutôt que de la voir
+      // disparaître.
+      const horsTheme = !!onCocher && !!cochables && !cochables.includes(a.produit)
+      return (
+        <div key={a.produit} className={`relative ${horsTheme ? 'opacity-40' : ''}`}>
+        {onCocher && !a.absent && (
+          <button type="button" role="checkbox" aria-checked={coche} disabled={horsTheme}
+            aria-label={`Choisir ${propre(a.libelle || a.produit)}`}
+            onClick={e => { e.stopPropagation(); onCocher(a.produit, !coche) }}
+            className={`absolute right-2 top-2 z-10 w-7 h-7 rounded-lg border-2 grid place-items-center
+              text-[15px] font-extrabold leading-none shadow-sm ${coche
+      ? 'bg-bordeaux border-bordeaux text-cream'
+      : 'bg-cream-warm border-cream-deep text-transparent'}`}>
+            ✓
+          </button>
+        )}
+        <button onClick={() => (horsTheme ? null : onOuvrir(a.produit))} disabled={horsTheme}
+          className={`w-full text-left rounded-2xl border bg-cream-warm overflow-hidden
+                     shadow-sm active:scale-[0.98] transition-transform ${coche
+      ? 'border-bordeaux ring-2 ring-bordeaux/25' : 'border-cream-deep'}`}>
           <div className="relative">
             <img src={photoDe(a.photo || a.produit)} alt="" loading="lazy"
               className="w-full aspect-square object-cover bg-cream-deep" />
@@ -97,7 +119,77 @@ export function CasesAFaire({ articles, onOuvrir }) {
             )}
           </div>
         </button>
-      ))}
+        </div>
+      )
+      })}
+    </div>
+  )
+}
+
+/**
+ * CE QU'IL FAUT PRÉPARER POUR PLUSIEURS GÂTEAUX À LA FOIS.
+ *
+ * « est-ce que je peux sélectionner recette du même thème pour assembler les
+ * mêmes crèmes » (Layla, 2026-09-16). Les préparations communes sont déjà
+ * additionnées par `feuillesDePlusieurs` ; ici on les montre, et chacune dit
+ * ce que chaque gâteau lui prend.
+ *
+ * Un appui ouvre la préparation avec LA QUANTITÉ TOTALE : on monte une cuve
+ * pour les trois tartes, pas trois cuves.
+ */
+export function Assemblage({ feuilles, gateaux, onOuvrir, onFermer }) {
+  // Les têtes (les gâteaux cochés) ne sont pas des préparations à monter : on
+  // les fait après, chacune de son côté.
+  const preps = (feuilles || []).filter(f => !gateaux.includes(f.produit))
+  return (
+    <div className="fixed inset-0 z-[70] bg-ink/40 flex items-start justify-center p-3 pt-10"
+      onPointerDown={e => { if (e.target === e.currentTarget) onFermer() }}>
+      <div className="bg-cream rounded-2xl w-full max-w-[520px] shadow-2xl
+                      overflow-hidden flex flex-col max-h-[85vh]">
+        <div className="flex items-center gap-2 px-4 pt-4 pb-3 flex-shrink-0 border-b border-cream-deep">
+          <b className="text-[16px]">Ce qu'il faut préparer</b>
+          <span className="text-[12.5px] text-ink-mute">
+            pour {gateaux.length} gâteau{gateaux.length > 1 ? 'x' : ''}
+          </span>
+          <button onClick={onFermer}
+            className="ml-auto bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px]">fermer</button>
+        </div>
+
+        <div className="px-4 py-3 flex-1 overflow-y-auto overscroll-contain">
+          {!preps.length && (
+            <p className="text-center text-[14px] text-ink-mute py-8">
+              Rien de commun à monter entre ces gâteaux.
+            </p>
+          )}
+          {preps.map(f => (
+            <button key={f.produit} onClick={() => onOuvrir(f)}
+              className="w-full text-left border-t border-cream-deep first:border-0 py-3">
+              <span className="flex items-baseline gap-3">
+                <span className="flex-1 min-w-0 text-[15px] font-bold leading-tight">
+                  {propre(f.libelle || f.produit)}
+                </span>
+                <span className={`text-[19px] font-extrabold tabular-nums whitespace-nowrap
+                  ${f.pour.length > 1 ? 'text-bordeaux' : ''}`}>
+                  {qte(f.qty, f.unite)}
+                </span>
+                <span className="text-ink-mute text-[15px]">›</span>
+              </span>
+              {/* ⚠️ Ce que CHAQUE gâteau lui prend — sans ça, le pâtissier monte
+                  32 kg de crème sans savoir pourquoi. Même explication que sur
+                  les feuilles d'impression. */}
+              {f.pour.length > 1 && (
+                <span className="block border-l-[3px] border-cream-deep pl-2.5 mt-1.5">
+                  {f.pour.map((p, n) => (
+                    <span key={p.nom + n} className="block text-[12.5px] text-ink-mute leading-relaxed">
+                      <b className="text-ink tabular-nums">{qte(p.qty, f.unite)}</b> pour {propre(p.nom)}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
