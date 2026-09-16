@@ -2472,7 +2472,7 @@ Trouve le nom de la personne ou de la société qui a ÉMIS le virement — celu
 Selon le document, il apparaît comme « émetteur », « donneur d'ordre », « de », « from », « expéditeur », ou dans l'en-tête (« Bonjour Mme LEBDAR »).
 
 ATTENTION, ne le confonds pas avec :
-- le BÉNÉFICIAIRE, qui est toujours Lily Gourmet (ou une variante : Lilly gourmet, LILY GOURMET SARL). Ce n'est jamais la réponse.
+- le BÉNÉFICIAIRE, qui est toujours l'entreprise qui reçoit l'argent. Son nom contient TOUJOURS le mot GOURMET, sous des formes variées : « Lily gourmet », « Lilly gourmet », « L ET N GOURMET », « LILY GOURMET SARL ». Ce n'est JAMAIS la réponse, même si c'est le nom le plus visible du document.
 - le nom de la banque (Saham, CIH, BMCE, Attijariwafa, BMCI, CFG, Barid...).
 - le motif du virement.
 
@@ -2492,7 +2492,9 @@ Si le nom de l'émetteur n'est pas lisible ou pas présent, renvoie {"emetteur":
     let emetteur = String(data.emetteur || '').trim().toUpperCase()
     // Garde-fou : le bénéficiaire, c'est nous. Si l'IA l'a rendu, c'est qu'elle s'est
     // trompée de ligne — mieux vaut rien qu'un nom qui ferait tout correspondre.
-    if (/LIL+Y\s*GOURMET/i.test(emetteur)) emetteur = ''
+    // Le mot GOURMET suffit à le reconnaître sous toutes ses formes : vécu « L ET N
+    // GOURMET », que le filtre « Lily Gourmet » laissait passer.
+    if (/GOURMET/i.test(emetteur)) emetteur = ''
     return res.status(200).json({
       emetteur: emetteur || null,
       montant: typeof data.montant === 'number' ? data.montant : null,
