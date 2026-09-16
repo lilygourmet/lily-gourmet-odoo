@@ -269,8 +269,9 @@ function BanqueSection({ user }) {
           `${suspects.length} caisse(s) verte(s) portent le nom d'une AUTRE cliente que celui écrit par la banque :\n\n`
           + suspects.slice(0, 8).map(a => `• ${a.client} (${a.date}) ← « ${a.label.slice(0, 45)} »`).join('\n')
           + (suspects.length > 8 ? `\n… et ${suspects.length - 8} autre(s)` : '')
-          + '\n\nLes remettre en attente ? (leurs lignes retournent dans « non liées »)\n'
-          + 'Réponds Non si tu les as liées toi-même exprès.',
+          + '\n\nLes remettre en attente ? Leurs lignes retournent dans « non liées », et le\n'
+          + 'calcul qui suit peut les refaire — mieux, maintenant qu\'il connaît les payeurs.\n\n'
+          + '« Annuler » les laisse telles quelles : à choisir si tu les as liées toi-même exprès.',
           { confirmLabel: 'Les remettre en attente' })
       }
       const r = await relancerRapprochement({ annulerFaux })
