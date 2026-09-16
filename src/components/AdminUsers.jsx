@@ -171,6 +171,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_transfert_boutique: formData.permTransfertBoutique,
         perm_transfert_produits: formData.permTransfertProduits,
         perm_inventaire: formData.permInventaire,
+        perm_minmax_cd: formData.permMinMaxCd,
+        perm_minmax_annexe: formData.permMinMaxAnnexe,
         perm_facture_ocp: formData.permFactureOcp,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
@@ -255,6 +257,8 @@ export default function AdminUsers({ currentUser, onClose }) {
         perm_transfert_boutique: formData.permTransfertBoutique,
         perm_transfert_produits: formData.permTransfertProduits,
         perm_inventaire: formData.permInventaire,
+        perm_minmax_cd: formData.permMinMaxCd,
+        perm_minmax_annexe: formData.permMinMaxAnnexe,
         perm_facture_ocp: formData.permFactureOcp,
         perm_ai_tools: formData.permAiTools,
         perm_modification: formData.permModification,
@@ -857,6 +861,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
     permTransfertBoutique: initialData?.perm_transfert_boutique !== undefined ? initialData.perm_transfert_boutique : false,
     permTransfertProduits: initialData?.perm_transfert_produits !== undefined ? initialData.perm_transfert_produits : false,
     permInventaire: initialData?.perm_inventaire !== undefined ? initialData.perm_inventaire : false,
+    permMinMaxCd: initialData?.perm_minmax_cd !== undefined ? initialData.perm_minmax_cd : false,
+    permMinMaxAnnexe: initialData?.perm_minmax_annexe !== undefined ? initialData.perm_minmax_annexe : false,
     permFactureOcp: initialData?.perm_facture_ocp !== undefined ? initialData.perm_facture_ocp : false,
     permAiTools: initialData?.perm_ai_tools !== undefined ? initialData.perm_ai_tools : false,
     permModification: initialData?.perm_modification !== undefined ? initialData.perm_modification : false,
@@ -1069,6 +1075,8 @@ function UserForm({ onSubmit, onCancel, initialData, isNew, teams = [], employes
             <PermCheckbox id="perm-transfert-boutique" label="Transferts — atelier Prod boutique" desc="Travaille à la boutique : envoie vers l'annexe et confirme ce qui arrive à la boutique." checked={isAdmin || formData.permTransfertBoutique} onChange={v => update('permTransfertBoutique', v)} />
             <PermCheckbox id="perm-transfert-produits" label="Transferts Produits (SM)" desc="Accès à l'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus." checked={isAdmin || formData.permTransfertProduits} onChange={v => update('permTransfertProduits', v)} />
             <PermCheckbox id="perm-inventaire" label="Inventaire annexe" desc="Compter le stock de l'annexe : saisir les quantités réelles, article par article." checked={isAdmin || formData.permInventaire} onChange={v => update('permInventaire', v)} />
+            <PermCheckbox id="perm-minmax-cd" label="Mini / maxi CD" desc="Régler les mini/maxi du cake design. ⚠️ Sensible : changer un mini change ce que l'atelier fabriquera demain." checked={isAdmin || formData.permMinMaxCd} onChange={v => update('permMinMaxCd', v)} />
+            <PermCheckbox id="perm-minmax-annexe" label="Mini / maxi Annexe" desc="Régler les mini/maxi de l'annexe. ⚠️ Sensible : changer un mini change ce que l'atelier fabriquera demain." checked={isAdmin || formData.permMinMaxAnnexe} onChange={v => update('permMinMaxAnnexe', v)} />
           </PermGroup>
 
           <PermGroup emoji="🏬" title="Vitrine & Stock (boutique)">

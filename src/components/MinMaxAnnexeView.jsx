@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
-import { isAdmin } from '../lib/auth'
+import { canSeeMinMaxAnnexe } from '../lib/auth'
 import {
   loadCatalogueAnnexe, saveCatalogueAnnexe, retirerDuCatalogue, loadToutFabAnnexe,
   saveFigesAnnexe, loadArticleFabAnnexe, parGateauMere,
@@ -230,12 +230,15 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
     try { await retirerDuCatalogue(l.produit) } catch (e) { toast.error('Pas retiré : ' + (e.message || e)) }
   }
 
-  if (!isAdmin(user)) {
+  // ⚠️ LE 8ᵉ ENDROIT d'une permission : le verrou DANS l'écran. L'oublier, c'est
+  // donner la permission, voir l'onglet apparaître… et tomber sur « réservé aux
+  // administrateurs ». (Layla, 2026-09-16)
+  if (!canSeeMinMaxAnnexe(user)) {
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
         <p className="max-w-[560px] mx-auto px-4 py-16 text-center text-ink-mute text-[14px]">
-          Cet écran est réservé aux administrateurs : changer un mini change ce que
+          Cet écran demande une permission : changer un mini change ce que
           l'atelier fabriquera demain matin.
         </p>
       </div>

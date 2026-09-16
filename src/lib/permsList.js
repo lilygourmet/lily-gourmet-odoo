@@ -26,6 +26,8 @@ export const PERMS = [
   { key: 'perm_transfert_boutique', group: 'Production & Calendrier', label: 'Transferts — atelier Prod boutique', desc: 'Travaille à la boutique : ENVOIE vers l\'annexe et RÉCEPTIONNE ce qui vient de l\'annexe.' },
   { key: 'perm_transfert_produits', group: 'Production & Calendrier', label: 'Transferts Produits (SM)', desc: 'Accès à l\'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus.' },
   { key: 'perm_inventaire', group: 'Production & Calendrier', label: 'Inventaire annexe', desc: 'Compter le stock de l\'annexe : saisir les quantités réelles, article par article.' },
+  { key: 'perm_minmax_cd', group: 'Production & Calendrier', label: 'Mini / maxi CD', desc: 'Régler les mini/maxi du cake design. ⚠️ Sensible : changer un mini change ce que l\'atelier fabriquera demain.' },
+  { key: 'perm_minmax_annexe', group: 'Production & Calendrier', label: 'Mini / maxi Annexe', desc: 'Régler les mini/maxi de l\'annexe. ⚠️ Sensible : changer un mini change ce que l\'atelier fabriquera demain.' },
 
   // Vitrine & Stock (boutique)
   { key: 'perm_stock_patissier', group: 'Vitrine & Stock (boutique)', label: 'Vitrine — saisie pâtissier', desc: 'Saisir la vitrine sucrée du matin.' },

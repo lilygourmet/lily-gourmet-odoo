@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadMinMax, saveMinMax, loadStockMinMax } from '../lib/fabrication'
-import { isAdmin } from '../lib/auth'
+import { canSeeMinMaxCd } from '../lib/auth'
 
 // ====== « Mini / maxi CD » : les seuils que l'APP tient, plus Odoo ======
 // Le 2026-09-08, les 55 règles de réapprovisionnement CD* d'Odoo ont été
@@ -99,12 +99,15 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
     setEnCours('')
   }
 
-  if (!isAdmin(user)) {
+  // ⚠️ LE 8ᵉ ENDROIT d'une permission : le verrou DANS l'écran. L'oublier, c'est
+  // donner la permission, voir l'onglet apparaître… et tomber sur « réservé aux
+  // administrateurs ». (Layla, 2026-09-16)
+  if (!canSeeMinMaxCd(user)) {
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
         <p className="max-w-[560px] mx-auto px-4 py-16 text-center text-ink-mute text-[14px]">
-          Cet écran est réservé aux administrateurs : changer un mini change ce que
+          Cet écran demande une permission : changer un mini change ce que
           l'atelier fabriquera demain matin.
         </p>
       </div>
