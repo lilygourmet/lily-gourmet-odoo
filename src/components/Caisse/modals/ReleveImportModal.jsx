@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
 import { parseStatement, reconcileEnvelopes, CAISSE_APRES_DERNIERE_LIGNE } from '../../../lib/releveBmci'
-import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, markMatchedReleveLines, saveReleveImport, freeReleveLinesOf } from '../../../lib/caisse'
+import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, markMatchedReleveLines, saveReleveImport, freeReleveLinesOf, chargerPayeursConnus } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 import { confirmDialog } from '../../../lib/confirmDialog'
 
@@ -32,6 +32,9 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
         for (const t of transactions) { t._fileIdx = i; allTx.push(t) }
       }
       setBanks(banksFound)
+      // Les couples payeur -> cliente relevés sur les preuves : sans eux, un virement fait
+      // par un proche ne rejoint jamais la commande.
+      await chargerPayeursConnus()
       const isos = allTx.filter(t => t.dateIso).map(t => t.dateIso).sort()
       // Les espèces/chèques sont déposés APRÈS la vente (parfois > 1 mois) → on remonte 120 j avant.
       const start = new Date(isos[0]); start.setDate(start.getDate() - 120)

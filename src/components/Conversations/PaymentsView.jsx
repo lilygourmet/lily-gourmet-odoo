@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { toast } from '../../lib/toast'
 import { Paperclip } from 'lucide-react'
-import { loadPaymentsToValidate, validatePayment, rejectPayment, getMediaSignedUrl } from '../../lib/conversations'
+import { loadPaymentsToValidate, validatePayment, rejectPayment, getMediaSignedUrl, lirePreuvesPaiement } from '../../lib/conversations'
 import { canValidatePayments } from '../../lib/auth'
 
 function fmtDate(ts) {
@@ -24,8 +24,34 @@ export default function PaymentsView({ user }) {
   const [busyId, setBusyId] = useState(null)
   const [tab, setTab] = usePersistedState('lily.payments.tab', 'todo') // 'todo' = à valider | 'done' = déjà validés
   const [q, setQ] = useState('')
+  const [lecture, setLecture] = useState(null)   // avancement de la lecture des pièces jointes
 
   const canValidate = canValidatePayments(user)
+
+  // Lit les pièces jointes pour y relever le nom de l'ÉMETTEUR du virement.
+  //
+  // La banque écrit le nom de QUI PAIE, Odoo celui de QUI ACHÈTE : quand un proche paie
+  // pour la cliente, rien ne relie les deux et le virement reste « non lié » pour toujours.
+  // La preuve, elle, est déjà rattachée à la commande — il ne manque que ce nom-là.
+  //
+  // Chaque document est un appel à l'IA : on y va par paquets, et on annonce combien il
+  // reste, plutôt que de lancer des centaines de lectures d'un coup sans prévenir.
+  async function handleLireJointes() {
+    if (lecture) return
+    setLecture({ fait: 0, total: 0 })
+    try {
+      const r = await lirePreuvesPaiement({
+        limite: 50,
+        onProgress: (fait, total) => setLecture({ fait, total }),
+      })
+      await refresh()
+      toast(r.lues
+        ? `${r.lues} preuve(s) lue(s), ${r.trouves} nom(s) d'émetteur trouvé(s)`
+          + (r.restantes ? ' — reclique pour continuer' : ' — tout est lu')
+        : 'Toutes les preuves ont déjà été lues.')
+    } catch (e) { toast('Erreur : ' + (e?.message || e)) }
+    finally { setLecture(null) }
+  }
 
   async function refresh() {
     setLoading(true); setError('')
@@ -161,6 +187,14 @@ export default function PaymentsView({ user }) {
           onClick={() => setTab('done')}
           className={`px-4 py-1.5 text-[12px] font-medium rounded-full transition-all ${tab === 'done' ? 'bg-bordeaux text-cream' : 'border border-line text-ink-soft hover:bg-cream-warm'}`}
         >Traités ({nbDone})</button>
+        <button
+          onClick={handleLireJointes}
+          disabled={!!lecture}
+          title="Lit les pièces jointes pour y trouver le nom de la personne qui a payé — ce qui permet de rapprocher les virements faits par un proche"
+          className="ml-auto px-4 py-1.5 text-[12px] font-medium rounded-full border border-line text-ink-soft hover:bg-cream-warm disabled:opacity-60"
+        >{lecture
+          ? `⏳ Lecture ${lecture.fait}/${lecture.total || '…'}`
+          : '🔎 Lire les pièces jointes'}</button>
       </div>
 
       {/* Recherche par n° de commande ou nom du client */}
