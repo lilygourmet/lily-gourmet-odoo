@@ -367,6 +367,86 @@ html, body {
   }
 
   /* ------------------------------------------------------------
+     LA DEMANDE À L'ÉCONOMAT — le papier qu'on tend à l'économe.
+     Une par recette, glissée JUSTE AVANT sa feuille de travail : on ne
+     fabrique pas ce qu'on n'a pas encore été chercher (Layla, 2026-09-16).
+     ------------------------------------------------------------ */
+  .feuille-economat .fe-lab {
+    font-size: 8.5pt;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #555;
+    font-weight: 700;
+    margin: 0;
+  }
+  .feuille-economat .fe-titre {
+    font-size: 19pt;
+    font-weight: 800;
+    line-height: 1.05;
+    margin: 1mm 0 0;
+  }
+  .feuille-economat .fe-qty { font-size: 12pt; font-weight: 700; margin: 0.5mm 0 0; }
+  .feuille-economat .fe-pour { font-size: 9.5pt; color: #555; margin: 1mm 0 0; }
+  .feuille-economat .fe-sep { border-top: 0.5mm solid #000; margin-top: 4mm; }
+  .feuille-economat .fe-ligne {
+    display: flex;
+    align-items: baseline;
+    gap: 3mm;
+    font-size: 9.5pt;
+    color: #555;
+    padding: 3mm 0 4mm;
+  }
+  .feuille-economat .fe-ligne i { flex: 1; border-bottom: 0.3mm solid #000; height: 6mm; }
+  .feuille-economat .fe-ligne .fe-court { flex: 0 0 30mm; }
+
+  .feuille-economat .fe-table { width: 100%; border-collapse: collapse; }
+  .feuille-economat .fe-table th {
+    font-size: 8pt;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #555;
+    font-weight: 700;
+    text-align: left;
+    padding: 0 2.5mm 1.5mm;
+    border-bottom: 0.4mm solid #000;
+  }
+  .feuille-economat .fe-table td {
+    padding: 2.6mm 2.5mm;
+    border-bottom: 0.2mm solid #ddd;
+    font-size: 11.5pt;
+  }
+  .feuille-economat .fe-n { text-align: right; font-variant-numeric: tabular-nums;
+                            font-weight: 700; white-space: nowrap; }
+  /* La colonne où l'économe écrit ce qu'il a vraiment pesé. */
+  .feuille-economat .fe-servi { width: 26%; border-left: 0.25mm solid #999; }
+  .feuille-economat th.fe-servi { text-align: right; }
+
+  .feuille-economat .fe-sign {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: auto;
+    padding-top: 6mm;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .feuille-economat .fe-case { flex: 0 0 62mm; }
+  .feuille-economat .fe-case b {
+    display: block;
+    font-size: 8pt;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #555;
+    font-weight: 700;
+    margin-bottom: 1.5mm;
+  }
+  .feuille-economat .fe-case i {
+    display: block;
+    height: 20mm;
+    border: 0.3mm solid #000;
+    border-radius: 1mm;
+  }
+
+  /* ------------------------------------------------------------
      LA FEUILLE DE SORTIE DE STOCK, à remplir au stylo.
      Une par recette (Layla, 2026-09-15) : un seul nom, un seul signataire.
      Le nom de la recette est déjà écrit ; tout le reste est du vide.

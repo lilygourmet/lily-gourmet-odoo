@@ -10,9 +10,10 @@
 // Deux écrans dans ce fichier : le PANNEAU qui demande quoi imprimer, et les
 // FEUILLES elles-mêmes, invisibles à l'écran et seules visibles sur le papier.
 // ============================================================
+import { Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { qte, propre, nb, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
-import { assezEnStock } from '../lib/feuillesAImprimer'
+import { assezEnStock, aDemander, aBesoinDeLEconomat } from '../lib/feuillesAImprimer'
 
 /**
  * Le panneau « Tu imprimes quoi ? ».
@@ -144,12 +145,75 @@ export function FeuillesImpression({ feuilles, sortie }) {
   // rendre seulement invisible, et les feuilles coulent dans le flux normal.
   // Dans l'ancienne façon, la zone imprimée était en position ABSOLUE — et un
   // bloc en position absolue ne se pagine pas : tout s'entassait sur une page.
+  // La tête donne son nom et son nombre aux demandes d'économat : « pour
+  // Cheesecake Exotique indiv · 80 pièces ».
+  const tete = (feuilles || [])[(feuilles || []).length - 1]
   return createPortal(
     <div className="print-feuilles">
-      {(feuilles || []).map(f => <Feuille key={f.produit} f={f} />)}
+      {(feuilles || []).map(f => (
+        <Fragment key={f.produit}>
+          {/* ⚠️ LA DEMANDE PASSE AVANT LA RECETTE : on ne fabrique pas ce qu'on
+              n'a pas encore été chercher. Les deux feuilles se suivent, pour
+              qu'on prenne la crème au moment de faire la crème (Layla). */}
+          {aBesoinDeLEconomat(f) && <FeuilleEconomat f={f} tete={tete} />}
+          <Feuille f={f} />
+        </Fragment>
+      ))}
       {sortie && <FeuilleSortie />}
     </div>,
     document.body,
+  )
+}
+
+/**
+ * LA DEMANDE À L'ÉCONOMAT — le papier qu'on tend à l'économe.
+ *
+ * Rien que ce que l'annexe ne fabrique pas elle-même, avec une colonne vide où
+ * il note ce qu'il a servi, et la signature du PÂTISSIER en bas : c'est lui qui
+ * a pris (Layla, 2026-09-16).
+ *
+ * Une feuille par recette, « pour l'instant » : on prend la crème au moment de
+ * faire la crème, plutôt que tout sortir d'un coup en début de journée.
+ */
+function FeuilleEconomat({ f, tete }) {
+  return (
+    <article className="feuille-impr feuille-economat">
+      <p className="fe-lab">Demande à l'économat</p>
+      <h2 className="fe-titre">{propre(f.libelle)}</h2>
+      <p className="fe-qty">pour {qte(f.qty, f.unite)}</p>
+      {tete && tete.produit !== f.produit && (
+        <p className="fe-pour">{propre(tete.libelle)} · {qte(tete.qty, tete.unite)}</p>
+      )}
+
+      <div className="fe-sep" />
+      <div className="fe-ligne">
+        <span>Demandé par</span><i />
+        <span>le</span><i className="fe-court" />
+      </div>
+
+      <table className="fe-table">
+        <thead>
+          <tr>
+            <th>Ce qu'il faut</th>
+            <th className="fe-n">Quantité</th>
+            <th className="fe-servi">Servi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {aDemander(f).map((i, n) => (
+            <tr key={i.produit + n}>
+              <td>{propre(i.produit)}</td>
+              <td className="fe-n">{qte(i.besoin, i.unite)}</td>
+              <td className="fe-servi" />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="fe-sign">
+        <div className="fe-case"><b>Signature du pâtissier</b><i /></div>
+      </div>
+    </article>
   )
 }
 

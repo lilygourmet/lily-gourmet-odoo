@@ -129,8 +129,10 @@ export function feuillesAImprimer(tete, quantiteTete, quantites = {}) {
       pour: (pour.get(nom) || []).map(x => ({
         nom: x.nom, qty: Math.round(x.qty * 1000) / 1000,
       })),
+      // ⚠️ `fabrique` voyage avec : c'est lui qui sépare ce qu'on va chercher
+      // à l'économat de ce que l'annexe fait elle-même (voir `aDemander`).
       ingredients: ingredientsPour(n, q).map(c => ({
-        produit: c.produit, unite: c.unite, besoin: c.besoin,
+        produit: c.produit, unite: c.unite, besoin: c.besoin, fabrique: !!c.fabrique,
       })),
     }
   })
@@ -171,3 +173,33 @@ export function cocheesParDefaut(feuilles) {
 
 /** Y en a-t-il déjà assez ? C'est ce qui décide du vert et du décochage. */
 export const assezEnStock = f => !((Number(f?.manque) || 0) > 0.001)
+
+/**
+ * CE QU'IL FAUT ALLER CHERCHER À L'ÉCONOMAT pour cette feuille.
+ *
+ * « sortir une feuille par recette avec les ingrédients MP à demander à
+ * l'économe » (Layla, 2026-09-15).
+ *
+ * La règle tient en une phrase : tout ce que l'annexe ne fabrique PAS elle-même.
+ * Pas besoin de lire les préfixes — l'app sait déjà si un article a une recette.
+ * Une préparation (`SM.`) a la sienne, dans la même liasse ; une matière
+ * première n'en a pas, donc elle vient d'ailleurs.
+ *
+ * ⚠️ SAUF L'EAU DU ROBINET. Elle sort du mur, on ne la demande à personne —
+ * l'app l'écarte déjà des blocages, pour la même raison.
+ *
+ * ⚠️ ON DEMANDE TOUT, sans retirer le stock de l'annexe. Ce stock-là n'est pas
+ * tenu à jour (crème whipping à −1,49 kg le 2026-09-16, sucre à 47 tonnes vu
+ * un autre jour) : en déduire une quantité donnerait des demandes fausses,
+ * tantôt trop grosses, tantôt nulles.
+ */
+const EAU_DU_ROBINET = /eau\s+(du\s+)?robinet/i
+
+export function aDemander(f) {
+  return (f?.ingredients || [])
+    .filter(i => !i.fabrique && !EAU_DU_ROBINET.test(String(i.produit || '')))
+    .filter(i => (Number(i.besoin) || 0) > 0)
+}
+
+/** Cette feuille a-t-elle quelque chose à demander ? Sinon, pas de papier. */
+export const aBesoinDeLEconomat = f => aDemander(f).length > 0

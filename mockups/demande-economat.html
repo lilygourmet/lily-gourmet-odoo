@@ -1,0 +1,273 @@
+<title>La demande à l'économat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,600&family=Karla:wght@400;500;700&display=swap">
+
+<style>
+  /* Palette de l'app (tailwind.config.js). On ne s'en invente pas une autre. */
+  :root {
+    --ground:#f7f3ec; --surface:#fff; --edge:#f1eadd; --line:#e5d8c3;
+    --ink:#1a0f0a; --ink-soft:#4a3a30; --ink-mute:#8a7a70;
+    --bordeaux:#993556; --gold:#b8893c; --danger:#a32d2d; --ok:#4a7a3a;
+    --serif:'Fraunces',Georgia,'Times New Roman',serif;
+    --sans:'Karla',ui-sans-serif,system-ui,-apple-system,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#16100d; --surface:#221a15; --edge:#33261f; --line:#3d2e25;
+      --ink:#f6efe6; --ink-soft:#d6c6b8; --ink-mute:#9c8a7c;
+      --bordeaux:#d97d97; --gold:#d4a95c; --danger:#e08a8a; --ok:#8fc07a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#16100d; --surface:#221a15; --edge:#33261f; --line:#3d2e25;
+    --ink:#f6efe6; --ink-soft:#d6c6b8; --ink-mute:#9c8a7c;
+    --bordeaux:#d97d97; --gold:#d4a95c; --danger:#e08a8a; --ok:#8fc07a;
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1060px; margin:0 auto; padding:40px 24px 80px; }
+  :focus-visible { outline:2px solid var(--bordeaux); outline-offset:2px; }
+
+  header { border-bottom:2px solid var(--line); padding-bottom:22px; margin-bottom:36px; }
+  .kicker { font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+            color:var(--bordeaux); font-weight:700; margin:0 0 8px; }
+  h1 { font-family:var(--serif); font-style:italic; font-weight:600;
+       font-size:clamp(30px,5vw,46px); line-height:1.05; margin:0 0 12px;
+       text-wrap:balance; letter-spacing:-.01em; }
+  .chapo { max-width:64ch; color:var(--ink-soft); margin:0; font-size:17px; }
+  .chapo b { color:var(--ink); font-weight:700; }
+
+  h2 { font-family:var(--serif); font-size:24px; font-weight:600;
+       margin:0 0 6px; line-height:1.15; text-wrap:balance; }
+  .sous { color:var(--ink-soft); margin:0 0 18px; max-width:62ch; }
+  section { margin-bottom:44px; }
+
+  /* ---------- la règle : ce qui y va, ce qui n'y va pas ---------- */
+  .regle { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; }
+  .col { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:15px 17px; }
+  .col h3 { font-size:13px; letter-spacing:.1em; text-transform:uppercase;
+            font-weight:700; margin:0 0 10px; }
+  .col.oui h3 { color:var(--ok); }
+  .col.non h3 { color:var(--danger); }
+  .col ul { margin:0; padding-left:18px; }
+  .col li { font-size:14.5px; margin-bottom:5px; color:var(--ink-soft); }
+  .col li b { color:var(--ink); }
+  .col .pourquoi { font-size:12.5px; color:var(--ink-mute); font-style:italic; }
+
+  /* ---------- les feuilles ---------- */
+  .feuilles { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:22px; }
+  .feuille {
+    background:#fff; color:#141414; border:1px solid var(--line); border-radius:3px;
+    padding:22px 22px 20px; box-shadow:0 18px 40px rgba(75,35,28,.12);
+    font-size:13px; display:flex; flex-direction:column;
+  }
+  .f-lab { font-size:9.5px; letter-spacing:.13em; text-transform:uppercase;
+           color:#6b6259; font-weight:700; }
+  .f-titre { font-size:19px; font-weight:800; line-height:1.1; margin:2px 0 0; }
+  .f-qty { font-size:15px; font-weight:700; margin-top:1px; }
+  .f-pour { font-size:11px; color:#6b6259; margin-top:3px; }
+  .f-sep { border-top:2px solid #141414; margin:12px 0 0; }
+  .f-ligne { display:flex; align-items:baseline; gap:8px; font-size:12px;
+             color:#6b6259; padding:8px 0 10px; }
+  .f-ligne i { flex:1; border-bottom:1px solid #141414; height:14px; }
+
+  table { width:100%; border-collapse:collapse; }
+  th { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:#6b6259;
+       font-weight:700; text-align:left; padding:0 6px 5px; border-bottom:1.5px solid #141414; }
+  th.n, td.n { text-align:right; }
+  td { padding:6px; border-bottom:1px solid #ece7de; font-size:13px; }
+  td.n { font-variant-numeric:tabular-nums; font-weight:700; white-space:nowrap; }
+  td.servi { border-left:1px solid #b9b2a7; width:24%; }
+  th.servi { border-left:1px solid #b9b2a7; }
+
+  .f-sign { display:flex; justify-content:flex-end; margin-top:auto; padding-top:16px; }
+  .f-case { flex:0 0 46mm; }
+  .f-case b { display:block; font-size:9px; letter-spacing:.1em; text-transform:uppercase;
+              color:#6b6259; font-weight:700; margin-bottom:4px; }
+  .f-case i { display:block; height:18mm; border:1px solid #141414; border-radius:2px; }
+
+  /* ---------- les questions ---------- */
+  .choix { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:18px; }
+  .carte { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .carte.retenu { border:2px solid var(--bordeaux); }
+  .carte .tag { font-size:11px; letter-spacing:.12em; text-transform:uppercase;
+                font-weight:700; color:var(--bordeaux); display:block; margin-bottom:6px; }
+  .carte h3 { font-family:var(--serif); font-size:18px; font-weight:600; margin:0 0 6px; }
+  .carte p { margin:0 0 8px; font-size:14.5px; color:var(--ink-soft); }
+  .carte p:last-child { margin-bottom:0; }
+  .pour { color:var(--ok); font-weight:700; }
+  .contre { color:var(--danger); font-weight:700; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="kicker">Fabrication Annexe 2 · proposition</p>
+    <h1>La demande à l'économat</h1>
+    <p class="chapo">
+      Quand on imprime toute la cascade, chaque recette sort déjà sa feuille de
+      travail. Il manque <b>le papier qu'on tend à l'économe</b> : rien que les
+      matières premières, avec de la place pour cocher ce qui a été servi.
+      Les chiffres ci-dessous sont les vrais, pour 80 Cheesecake Exotique indiv.
+      Rien n'est codé.
+    </p>
+  </header>
+
+  <!-- ============ LA RÈGLE ============ -->
+  <section>
+    <h2>Ce qui va sur la feuille, et ce qui n'y va pas</h2>
+    <p class="sous">L'app connaît déjà la différence : elle sait ce qui se
+      fabrique à l'annexe et ce qui vient de l'économat.</p>
+
+    <div class="regle">
+      <div class="col oui">
+        <h3>✓ Ce qu'on demande</h3>
+        <ul>
+          <li><b>MP-</b> — crème, beurre, sucre, purées, pectine…</li>
+          <li><b>F-</b> — les fruits frais</li>
+          <li>et tout ce qui n'a <b>pas de recette</b> : si l'annexe ne sait pas
+            le faire, c'est qu'il vient d'ailleurs</li>
+        </ul>
+      </div>
+      <div class="col non">
+        <h3>✗ Ce qu'on ne demande pas</h3>
+        <ul>
+          <li><b>SM.</b> — les préparations : elles ont leur propre feuille dans
+            la même liasse</li>
+          <li><b>MP- Eau robinet</b> — elle sort du mur
+            <span class="pourquoi">l'app l'écarte déjà des blocages, pour la même raison</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LES FEUILLES ============ -->
+  <section>
+    <h2>Une feuille par recette</h2>
+    <p class="sous">Deux exemples de la même fournée. La <b>masse gélatine</b> ne
+      figure pas sur la première : elle se fabrique à l'annexe, elle a sa feuille
+      à elle.</p>
+
+    <div class="feuilles">
+
+      <article class="feuille">
+        <p class="f-lab">Demande à l'économat</p>
+        <h3 class="f-titre">Mousse Cheese Passion</h3>
+        <p class="f-qty">pour 2 880 g</p>
+        <p class="f-pour">Cheesecake Exotique indiv · 80 pièces</p>
+        <div class="f-sep"></div>
+        <div class="f-ligne"><span>Demandé par</span><i></i><span>le</span><i style="flex:0 0 26mm"></i></div>
+
+        <table>
+          <thead>
+            <tr><th>Ce qu'il faut</th><th class="n">Quantité</th><th class="servi n">Servi</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Crème whipping</td><td class="n">1 658 g</td><td class="servi"></td></tr>
+            <tr><td>Fromage Milky food</td><td class="n">1 161 g</td><td class="servi"></td></tr>
+            <tr><td>Sucre Granule</td><td class="n">480 g</td><td class="servi"></td></tr>
+            <tr><td>Oeufs jaune</td><td class="n">323 g</td><td class="servi"></td></tr>
+            <tr><td>Purée de Passion</td><td class="n">262 g</td><td class="servi"></td></tr>
+          </tbody>
+        </table>
+
+        <div class="f-sign"><div class="f-case"><b>Signature économe</b><i></i></div></div>
+      </article>
+
+      <article class="feuille">
+        <p class="f-lab">Demande à l'économat</p>
+        <h3 class="f-titre">Marmelade Passion Mangue</h3>
+        <p class="f-qty">pour 2 000 g</p>
+        <p class="f-pour">Cheesecake Exotique indiv · 80 pièces</p>
+        <div class="f-sep"></div>
+        <div class="f-ligne"><span>Demandé par</span><i></i><span>le</span><i style="flex:0 0 26mm"></i></div>
+
+        <table>
+          <thead>
+            <tr><th>Ce qu'il faut</th><th class="n">Quantité</th><th class="servi n">Servi</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Purée de Mangue</td><td class="n">615 g</td><td class="servi"></td></tr>
+            <tr><td>Purée de Passion</td><td class="n">600 g</td><td class="servi"></td></tr>
+            <tr><td>Mangue (fruit)</td><td class="n">462 g</td><td class="servi"></td></tr>
+            <tr><td>Sucre Granule</td><td class="n">154 g</td><td class="servi"></td></tr>
+            <tr><td>Glucose Atomisé</td><td class="n">154 g</td><td class="servi"></td></tr>
+            <tr><td>Pectine NH</td><td class="n">18 g</td><td class="servi"></td></tr>
+          </tbody>
+        </table>
+
+        <div class="f-sign"><div class="f-case"><b>Signature économe</b><i></i></div></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============ LA QUESTION QUI COMPTE ============ -->
+  <section>
+    <h2>Une feuille par recette, ou une seule pour toute la fournée ?</h2>
+    <p class="sous">C'est la seule vraie décision. Sur le Cheesecake Exotique, la
+      cascade compte <b>cinq recettes</b> — donc cinq feuilles de travail. Avec une
+      demande par recette, cela ferait <b>neuf papiers</b> à sortir d'un coup.</p>
+
+    <div class="choix">
+      <div class="carte retenu">
+        <span class="tag">Ce que tu as demandé</span>
+        <h3>Une par recette</h3>
+        <p>Chaque demande suit sa feuille de travail dans la liasse.</p>
+        <p><span class="pour">Pour</span> — on prend la crème au moment de faire
+          la crème ; ce qui reste au frais n'est pas sorti trop tôt.</p>
+        <p><span class="contre">Contre</span> — neuf papiers, et autant d'allers
+          à l'économat. Le sucre est demandé trois fois.</p>
+      </div>
+
+      <div class="carte">
+        <span class="tag">Autre façon</span>
+        <h3>Une seule, tout additionné</h3>
+        <p>Une feuille en tête de liasse, avec le sucre des trois recettes
+          réuni sur une ligne.</p>
+        <p><span class="pour">Pour</span> — un seul aller, un seul papier à ne
+          pas perdre. L'économe pèse une fois.</p>
+        <p><span class="contre">Contre</span> — tout sort en même temps, et on ne
+          sait plus ce qui va où.</p>
+      </div>
+
+      <div class="carte">
+        <span class="tag">Autre façon</span>
+        <h3>Les deux</h3>
+        <p>Une feuille récapitulative en tête, et le détail par recette derrière.</p>
+        <p><span class="pour">Pour</span> — l'économe sert sur la première,
+          l'atelier se repère sur les autres.</p>
+        <p><span class="contre">Contre</span> — encore plus de papier.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LES PETITES QUESTIONS ============ -->
+  <section>
+    <h2>Trois détails à trancher</h2>
+    <div class="choix">
+      <div class="carte">
+        <h3>La colonne « servi »</h3>
+        <p>Utile si l'économe note ce qu'il a vraiment pesé — comme sur la feuille
+          de fournée. Sinon on l'enlève et la feuille respire.</p>
+      </div>
+      <div class="carte">
+        <h3>La signature</h3>
+        <p>Celle de l'économe, pour dire qu'il a servi. Ou celle du pâtissier, pour
+          dire qu'il a pris. Ou les deux.</p>
+      </div>
+      <div class="carte">
+        <h3>Ce qu'on a déjà</h3>
+        <p>Faut-il demander la quantité entière, ou seulement ce qui manque en
+          tenant compte du stock de l'annexe ?</p>
+      </div>
+    </div>
+  </section>
+
+</div>

@@ -172,3 +172,59 @@ describe('quand la même crème sert à deux endroits', () => {
     expect(f[f.length - 1]).toBe('SM- 20 cm Vitrine (Citron)')
   })
 })
+
+// ============================================================
+// LA DEMANDE À L'ÉCONOMAT.
+//
+// « sortir une feuille par recette avec les ingrédients MP à demander à
+// l'économe » (Layla, 2026-09-15).
+// ============================================================
+import { aDemander, aBesoinDeLEconomat } from './feuillesAImprimer'
+
+const mousse = {
+  produit: 'SM. Mousse Cheese Passion', libelle: 'Mousse Cheese Passion',
+  unite: 'kg', qty: 2.88,
+  ingredients: [
+    { produit: 'MP- Crème whipping', unite: 'g', besoin: 1658, fabrique: false },
+    { produit: 'MP- Fromage Milky food', unite: 'g', besoin: 1161, fabrique: false },
+    { produit: 'SM. Masse Gélatine', unite: 'g', besoin: 122, fabrique: true },
+    { produit: 'MP- Eau robinet', unite: 'g', besoin: 175, fabrique: false },
+    { produit: 'MP- Sucre Granule', unite: 'g', besoin: 480, fabrique: false },
+    { produit: 'F- Mangue', unite: 'g', besoin: 462, fabrique: false },
+    { produit: 'MP- Pectine NH', unite: 'g', besoin: 0, fabrique: false },
+  ],
+}
+
+describe('ce qu’on demande à l’économat', () => {
+  it('tout ce que l’annexe ne fabrique PAS elle-même', () => {
+    expect(aDemander(mousse).map(i => i.produit)).toEqual([
+      'MP- Crème whipping', 'MP- Fromage Milky food', 'MP- Sucre Granule', 'F- Mangue',
+    ])
+  })
+
+  it('jamais une préparation : elle a sa propre feuille dans la liasse', () => {
+    expect(aDemander(mousse).some(i => /Masse Gélatine/.test(i.produit))).toBe(false)
+  })
+
+  it('jamais l’eau du robinet : elle sort du mur', () => {
+    expect(aDemander(mousse).some(i => /Eau robinet/i.test(i.produit))).toBe(false)
+  })
+
+  it('les fruits, si : ils viennent de l’économat comme le reste', () => {
+    expect(aDemander(mousse).some(i => i.produit === 'F- Mangue')).toBe(true)
+  })
+
+  it('ni les lignes à zéro', () => {
+    expect(aDemander(mousse).some(i => /Pectine/.test(i.produit))).toBe(false)
+  })
+
+  it('pas de papier quand il n’y a rien à demander', () => {
+    // La crème au beurre citron : sa recette n'est faite que de préparations.
+    const toutMaison = { ingredients: [
+      { produit: 'SM. Creme au Beurre Nature Production', besoin: 5425, fabrique: true },
+      { produit: 'SM. Creme Citron Production', besoin: 3850, fabrique: true },
+    ] }
+    expect(aBesoinDeLEconomat(toutMaison)).toBe(false)
+    expect(aBesoinDeLEconomat(mousse)).toBe(true)
+  })
+})
