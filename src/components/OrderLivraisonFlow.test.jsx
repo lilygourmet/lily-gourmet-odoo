@@ -76,13 +76,18 @@ const ouvrir = async () => {
   await waitFor(() => expect(screen.getByText('Mme Alaoui')).toBeTruthy())
 }
 
+/** ⚠️ Il y a DEUX boutons « Enregistrer » quand la commande a une livraison :
+ *  celui du livreur, et celui de la commande. On vise le second, au texte exact. */
 const boutonEnregistrer = () =>
-  screen.getAllByText(/Enregistrer/i).find(b => b.tagName === 'BUTTON')
+  [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Enregistrer')
 
-/** Touche une quantité : c'est ce qui déclenche l'enregistrement. */
+/** Touche la quantité de l'article : c'est ce qui rend « Enregistrer » actif.
+ *  ⚠️ On vise la case sous le libellé « Qté » — l'écran a plusieurs champs
+ *  numériques (prix, remise), et prendre le premier venu ne marquait rien. */
 const toucherUneQuantite = () => {
-  const q = document.querySelector('input[type="number"]')
-  fireEvent.change(q, { target: { value: '2' } })
+  const label = [...document.querySelectorAll('label')].find(l => /Qté/.test(l.textContent))
+  expect(label, 'la case « Qté » doit exister').toBeTruthy()
+  fireEvent.change(label.querySelector('input'), { target: { value: '2' } })
 }
 
 const ajouterLivraisonPuisEnregistrer = async () => {
@@ -206,5 +211,63 @@ describe('le créneau se voit TOUT DE SUITE', () => {
     await ouvrir()
     expect(screen.queryByText(/entre 15h et 17h/)).toBeNull()
     expect(screen.getByText('Date / heure de retrait-livraison')).toBeTruthy()
+  })
+})
+
+describe('le scénario exact de Layla', () => {
+  // « La commande confirmée, je l'ai annulée et remise en devis, puis j'ai
+  // ajouté un article livraison » (Layla, 2026-09-16) — et rien ne s'est passé.
+  const ligneLivraison = { id: 7, name: 'Livraison\nzone : Souissi',
+    rawName: 'Livraison\nzone : Souissi', qty: 1, price: 50, discount: 0 }
+
+  it('⚠️ le nom TEL QUE L’APP L’ÉCRIT dans Odoo est reconnu', async () => {
+    // Pas « Livraison (Souissi) » : l'attribut Odoo s'appelle « zone », donc la
+    // ligne s'écrit « Livraison » + retour à la ligne + « zone : Souissi ».
+    lignes.push(ligneLivraison)
+    reponses.push(true, false)
+    await ouvrir()
+    toucherUneQuantite()
+    fireEvent.click(boutonEnregistrer())
+    await waitFor(() => expect(updateOrderDate).toHaveBeenCalled())
+  })
+
+  it('sur un DEVIS (brouillon) aussi, pas seulement sur une commande confirmée', async () => {
+    lignes.push(ligneLivraison)
+    reponses.push(true, false)
+    render(<OrderEditModal order={{ ...commande, state: 'draft' }}
+      onClose={() => {}} onChanged={() => {}} user={user} embedded />)
+    await waitFor(() => expect(screen.getByText('Mme Alaoui')).toBeTruthy())
+    toucherUneQuantite()
+    fireEvent.click(boutonEnregistrer())
+    await waitFor(() => expect(updateOrderDate).toHaveBeenCalled())
+    expect(confirmDialog.mock.calls[0][0]).toContain('devient une livraison')
+  })
+})
+
+describe('le bloc livreur + adresse', () => {
+  // ⚠️ Il se cachait pour une ligne qu'Odoo écrit avec un retour à la ligne
+  // devant : sa détection lisait `split('\n')[0]`, donc une chaîne vide.
+  // Layla ne pouvait alors PAS assigner de livreur. (2026-09-16.)
+  const commeOdooLEcrit = { id: 7, name: '\n  Livraison (Souissi)',
+    rawName: '\n  Livraison (Souissi)', qty: 1, price: 50, discount: 0 }
+  const commeLAppLEcrit = { id: 8, name: 'Livraison\nzone : Souissi',
+    rawName: 'Livraison\nzone : Souissi', qty: 1, price: 50, discount: 0 }
+
+  it('⚠️ il s’affiche AUSSI pour le nom écrit par Odoo', async () => {
+    lignes.push(commeOdooLEcrit)
+    await ouvrir()
+    expect(screen.getByText(/Enregistrer le livreur/)).toBeTruthy()
+  })
+
+  it('et toujours pour le nom écrit par l’app', async () => {
+    lignes.push(commeLAppLEcrit)
+    await ouvrir()
+    expect(screen.getByText(/Enregistrer le livreur/)).toBeTruthy()
+  })
+
+  it('mais pas sur un simple retrait', async () => {
+    lignes.push({ id: 9, name: 'Royal Chocolat', rawName: 'Royal Chocolat', qty: 1, price: 400, discount: 0 })
+    await ouvrir()
+    expect(screen.queryByText(/Enregistrer le livreur/)).toBeNull()
   })
 })

@@ -141,7 +141,12 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
     }).catch(() => {})
   }, [order.name])
   // Détecte une ligne « Livraison (…) » (le produit livraison s'appelle toujours ainsi).
-  const hasLivraison = Array.isArray(lines) && lines.some(l => /^\s*livraison\b/i.test(firstLine(l.rawName ?? l.name ?? '')))
+  // ⚠️ MÊME règle que partout ailleurs (`estLigneLivraison`), pas une troisième
+  // maison. Celle d'avant lisait `split('\n')[0]` : pour une ligne qu'Odoo écrit
+  // « \n  Livraison (Souissi) », la première ligne est VIDE — le bloc livreur et
+  // adresse disparaissait, et Layla ne pouvait plus assigner de livreur.
+  // (Trouvé le 2026-09-16.)
+  const hasLivraison = aLivraison
 
   async function saveLivraison() {
     if (!livreurId) { toast.error('Choisis un livreur.'); return }
