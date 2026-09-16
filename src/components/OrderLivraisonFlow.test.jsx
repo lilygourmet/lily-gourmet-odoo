@@ -271,3 +271,45 @@ describe('le bloc livreur + adresse', () => {
     expect(screen.queryByText(/Enregistrer le livreur/)).toBeNull()
   })
 })
+
+describe('choisir le créneau', () => {
+  // « Je dois choisir l'horaire de livraison à chaque fois que je clique
+  // livraison » (Layla, 2026-09-16).
+  const ligneLivraison = { id: 7, name: 'Livraison\nzone : Souissi',
+    rawName: 'Livraison\nzone : Souissi', qty: 1, price: 50, discount: 0 }
+  const creneau = t => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === t)
+
+  it('les 5 créneaux de 2 h sont proposés, comme sur la page client', async () => {
+    lignes.push(ligneLivraison)
+    await ouvrir()
+    for (const t of ['10h – 12h', '12h – 14h', '14h – 16h', '16h – 18h', '18h – 20h']) {
+      expect(creneau(t), t).toBeTruthy()
+    }
+  })
+
+  it('en choisir un change le créneau annoncé au client', async () => {
+    lignes.push(ligneLivraison)
+    await ouvrir()
+    expect(screen.getByText(/entre 15h et 17h/)).toBeTruthy()   // heure d'origine
+    fireEvent.click(creneau('10h – 12h'))
+    expect(screen.getByText(/entre 10h et 12h/)).toBeTruthy()
+    expect(screen.getByText(/9h30/)).toBeTruthy()               // cuisine 30 min avant
+  })
+
+  it('le créneau choisi est celui qui part chez Odoo', async () => {
+    lignes.push(ligneLivraison)
+    reponses.push(true, false)
+    await ouvrir()
+    fireEvent.click(creneau('18h – 20h'))
+    toucherUneQuantite()
+    fireEvent.click(boutonEnregistrer())
+    await waitFor(() => expect(updateOrderDate).toHaveBeenCalled())
+    expect(updateOrderDate).toHaveBeenCalledWith(42, '2026-09-16', '18:00')
+  })
+
+  it('⚠️ pas de créneaux sur un retrait', async () => {
+    lignes.push({ id: 9, name: 'Royal Chocolat', rawName: 'Royal Chocolat', qty: 1, price: 400, discount: 0 })
+    await ouvrir()
+    expect(creneau('10h – 12h')).toBeFalsy()
+  })
+})

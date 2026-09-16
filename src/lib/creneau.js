@@ -106,3 +106,18 @@ export function texteCreneau(timePrep) {
   const c = creneauClient(timePrep)
   return c ? `entre ${heureLisible(c.debut)} et ${heureLisible(c.fin)}` : ''
 }
+
+/**
+ * LES CRÉNEAUX PROPOSÉS — les mêmes que sur la page commande du client.
+ *
+ * « Je dois choisir l'horaire de livraison à chaque fois que je clique
+ * livraison » (Layla, 2026-09-16) : le créneau se CHOISIT, il ne se déduit pas
+ * de l'heure de retrait. Ce sont des heures rondes, de deux heures.
+ *
+ * L'heure libre reste possible à côté : une livraison peut sortir du cadre.
+ */
+export const CRENEAUX_LIVRAISON = ['10:00', '12:00', '14:00', '16:00', '18:00']
+
+/** « 10:00 » → « 10h – 12h », pour l'afficher sur un bouton. */
+export const libelleCreneau = (debut) =>
+  `${heureLisible(debut)} – ${heureLisible(finCreneau(debut))}`

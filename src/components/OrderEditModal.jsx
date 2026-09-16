@@ -7,7 +7,8 @@ import { createModification } from '../lib/modifications'
 import { ConfiguratorModal, PRICE_EDITABLE } from './ProductConfigurator'
 import CakeDayPlanning from './CakeDayPlanning'
 import { toast } from '../lib/toast'
-import { creneauClient, finCreneau, heurePreparation, heureLisible, estLigneLivraison } from '../lib/creneau'
+import { creneauClient, finCreneau, heurePreparation, heureLisible, estLigneLivraison,
+  CRENEAUX_LIVRAISON, libelleCreneau } from '../lib/creneau'
 import { confirmDialog } from '../lib/confirmDialog'
 import { sendTemplate } from '../lib/conversations'
 import { canSeeWatiInfo } from '../lib/auth'
@@ -399,6 +400,24 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
             <button onClick={saveDate} disabled={busy || !dDate}
               className="px-3 py-1.5 bg-bordeaux text-cream rounded-lg text-[12px] font-medium disabled:opacity-50">OK</button>
           </div>
+          {/* Le créneau se CHOISIT — il ne se déduit pas de l'heure de retrait.
+              (Layla, 2026-09-16.) L'heure libre reste dispo juste au-dessus,
+              pour une livraison qui sort du cadre. */}
+          {aLivraison && (
+            <div className="mt-2">
+              <div className="text-[11px] text-ink-mute mb-1">Créneau de livraison (2 h)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {CRENEAUX_LIVRAISON.map(c => (
+                  <button key={c} onClick={() => setDTime(c)}
+                    className={`px-3 py-1.5 rounded-full text-[12px] font-medium border ${
+                      dTime === c ? 'bg-bordeaux text-cream border-bordeaux'
+                        : 'bg-white border-line text-ink-soft hover:border-bordeaux'}`}>
+                    {libelleCreneau(c)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {aLivraison && dTime && (
             <div className="mt-1 text-[11px] text-ink-mute">
               Client : livraison <b>entre {heureLisible(dTime)} et {heureLisible(finCreneau(dTime))}</b> · prête pour <b>{heureLisible(heurePreparation(dTime))}</b>
