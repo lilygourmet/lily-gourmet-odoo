@@ -1181,6 +1181,11 @@ export async function lirePreuvesPaiement({ limite = 50, onProgress } = {}) {
   return { lues, trouves, restantes }
 }
 
+/** Les noms d'émetteurs lus, par message : pour les AFFICHER et les vérifier à l'œil. */
+export async function loadPayeursLus() {
+  return chargerPayeurs()
+}
+
 /**
  * Les couples « qui a payé » -> « pour quelle cliente ».
  * C'est ce que le rapprochement consulte quand aucune ligne ne porte le nom de la cliente.
