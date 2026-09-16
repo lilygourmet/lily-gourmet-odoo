@@ -50,6 +50,12 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
   // affiche et on renvoie le DÉBUT du créneau client — sinon chaque enregistrement
   // retirerait encore 30 min et l'heure reculerait à chaque fois.
   const estLivree = !!order.slotText
+  // ⚠️ `estLivree` dit « le créneau est DÉJÀ posé ». `aLivraison` dit « il y a
+  // une ligne Livraison dans la commande, là, maintenant » — panier compris.
+  // C'est ce second qui commande l'AFFICHAGE : sinon, le temps d'ajouter la
+  // ligne et d'enregistrer, Layla ne voyait aucun créneau. « Quand je clique
+  // livraison, ça me donne pas quel créneau horaire ? » (2026-09-16.)
+  const aLivraison = [...(lines || []), ...draft].some(l => estLigneLivraison(l.rawName ?? l.name))
   const [dDate, setDDate] = useState(_pickup.date)
   const [dTime, setDTime] = useState((estLivree ? creneauClient(_pickup.time)?.debut : _pickup.time) || '16:00')
 
@@ -194,9 +200,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
    * (Layla). Le message part de Conversations, quand elle le décide.
    */
   async function proposerCreneau() {
-    if (estLivree || !dTime) return                 // créneau déjà en place
-    const aLivraison = [...lines, ...draft].some(l => estLigneLivraison(l.rawName ?? l.name))
-    if (!aLivraison) return
+    if (estLivree || !dTime || !aLivraison) return  // déjà en place, ou pas une livraison
     const fin = finCreneau(dTime)
     const ok = await confirmDialog(
       `Cette commande devient une livraison.\n\n` +
@@ -380,7 +384,7 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
         {/* Date + heure de retrait/livraison — modifiable (même si confirmée) */}
         <div className="mx-5 mb-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-mute mb-1">
-            {estLivree ? 'Livraison — début du créneau' : 'Date / heure de retrait-livraison'}
+            {aLivraison ? 'Livraison — début du créneau' : 'Date / heure de retrait-livraison'}
           </div>
           <div className="flex items-center gap-1.5">
             <input type="date" value={dDate} onChange={e => setDDate(e.target.value)}
@@ -390,9 +394,10 @@ export default function OrderEditModal({ order, onClose, onChanged, user, embedd
             <button onClick={saveDate} disabled={busy || !dDate}
               className="px-3 py-1.5 bg-bordeaux text-cream rounded-lg text-[12px] font-medium disabled:opacity-50">OK</button>
           </div>
-          {estLivree && dTime && (
+          {aLivraison && dTime && (
             <div className="mt-1 text-[11px] text-ink-mute">
-              Client : livraison <b>entre {heureLisible(dTime)} et {heureLisible(finCreneau(dTime))}</b> · prête pour <b>{heurePreparation(dTime)}</b>
+              Client : livraison <b>entre {heureLisible(dTime)} et {heureLisible(finCreneau(dTime))}</b> · prête pour <b>{heureLisible(heurePreparation(dTime))}</b>
+              {!estLivree && <span className="text-bordeaux"> — à confirmer en enregistrant</span>}
             </div>
           )}
           {/* Planning cake design du jour (guide la répartition) — si la commande a un CD-. */}

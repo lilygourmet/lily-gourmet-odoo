@@ -177,3 +177,34 @@ describe('la commande contient une livraison', () => {
     expect(texte).not.toContain('\n')
   })
 })
+
+describe('le créneau se voit TOUT DE SUITE', () => {
+  // « Quand je clique livraison, ça me donne pas quel créneau horaire ? »
+  // (Layla, 2026-09-16). L'écran n'affichait le créneau que si la commande
+  // en avait DÉJÀ un — donc jamais au moment où on ajoute la livraison.
+  const ligneLivraison = { id: 7, name: '\n  Livraison (Souissi)',
+    rawName: '\n  Livraison (Souissi)', qty: 1, price: 50, discount: 0 }
+  const gateau = { id: 8, name: 'Royal Chocolat 20 cm',
+    rawName: 'Royal Chocolat 20 cm', qty: 1, price: 400, discount: 0 }
+
+  it('dès qu’il y a une ligne Livraison, le créneau s’affiche', async () => {
+    lignes.push(ligneLivraison)
+    await ouvrir()
+    expect(screen.getByText(/entre 15h et 17h/)).toBeTruthy()
+    expect(screen.getByText(/14h30/)).toBeTruthy()
+    expect(screen.getByText('Livraison — début du créneau')).toBeTruthy()
+  })
+
+  it('il est annoncé comme « à confirmer » tant que ce n’est pas enregistré', async () => {
+    lignes.push(ligneLivraison)
+    await ouvrir()
+    expect(screen.getByText(/à confirmer en enregistrant/)).toBeTruthy()
+  })
+
+  it('⚠️ sans ligne Livraison, pas de créneau : c’est un retrait', async () => {
+    lignes.push(gateau)
+    await ouvrir()
+    expect(screen.queryByText(/entre 15h et 17h/)).toBeNull()
+    expect(screen.getByText('Date / heure de retrait-livraison')).toBeTruthy()
+  })
+})
