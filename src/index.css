@@ -179,6 +179,26 @@ html, body {
    ============================================================ */
 
 @media print {
+  /* ------------------------------------------------------------
+     ⚠️ LA RACINE NE DOIT RIEN COUPER (Layla, 2026-09-17 : « les impressions
+     des cascades sur téléphones sortent que la première page »).
+
+     Plus haut, `html, body { overflow-x: clip }` empêche la page de glisser
+     sur les côtés au doigt. Sur ORDINATEUR le moteur l'ignore à l'impression ;
+     sur TÉLÉPHONE (Safari iOS, Chrome Android) un `overflow` autre que
+     `visible` sur la racine coupe le document à la PREMIÈRE PAGE — les
+     feuilles suivantes existent, elles ne sortent simplement jamais.
+
+     Sur du papier on ne glisse pas au doigt : on rend la racine libre. Et la
+     réserve du bas (`padding-bottom`, la place de la barre de navigation du
+     téléphone) n'a plus lieu d'être non plus — elle ajoutait une page blanche.
+     ------------------------------------------------------------ */
+  html, body {
+    overflow: visible !important;
+    height: auto !important;
+    padding-bottom: 0 !important;
+  }
+
   /* ⚠️ Ces trois règles ne valent PAS quand on imprime des feuilles de
      fournée : elles rendent le reste « invisible » sans lui retirer sa place,
      d'où la position absolue — et un bloc en position absolue ne se PAGINE
