@@ -188,8 +188,8 @@ function BanqueSection({ user }) {
     // Libellé au format « date · libellé » d'abord : c'est comme ça que le rapprochement
     // auto retrouve la ligne prise au ré-import (le 🔗 lui dit que la ligne vaut 2 caisses).
     const note = line
-      ? `${line.ligne_date} · ${line.label} · 🔗 2 virements = 1 ligne (total ${fmtMoney(total)} dh)`.slice(0, 300)
-      : `🔗 Lié manuellement · 2 virements = 1 ligne (total ${fmtMoney(total)} dh)`
+      ? `${line.ligne_date} · ${line.label} · 🔗 2 virements = 1 ligne (total ${fmtMoney(total)})`.slice(0, 300)
+      : `🔗 Lié manuellement · 2 virements = 1 ligne (total ${fmtMoney(total)})`
     const commun = { status: 'trouve', libelle: note, candidates: null,
       proofDate: line?.ligne_date || undefined, proofUrl: line?.releve_url || undefined }
     await setEnveloppeReleve(a.id, commun)
@@ -491,7 +491,7 @@ function BanqueSection({ user }) {
             )}
             {(env.payment_method === 'virement') && env.releve_status !== 'trouve' && !env.releve_ignore && (
               <button onClick={() => setLinkFrom(env)} style={{ ...btnNormal, fontSize: 11, padding: '5px 10px', color: '#5b2a86', border: '1px solid #D6C3EA' }}>
-                🔗 Lier 2
+                🔗 Grouper 2 caisses
               </button>
             )}
             {env.releve_status !== 'trouve' && !env.releve_ignore && (
@@ -1190,22 +1190,22 @@ function LinkTwoModal({ from, list, onClose, onLink }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
       <div style={{ background: 'white', borderRadius: 16, padding: 16, width: '100%', maxWidth: 460, maxHeight: '85dvh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>🔗 Lier 2 virements = 1 ligne</div>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>🔗 Grouper 2 caisses payées en 1 seul virement</div>
         <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
-          Virement 1 : <b>{fmtMoney(from.amount_cash)} dh</b>{from.virement_client ? ` · ${from.virement_client}` : ''}
+          Caisse 1 : <b>{fmtMoney(from.amount_cash)}</b>{from.virement_client ? ` · ${from.virement_client}` : ''}
         </div>
         {!autre ? (
           <>
-            <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>Choisis le 2ᵉ virement (la banque les a reçus en un seul virement) :</div>
+            <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 12 }}>Choisis la 2ᵉ caisse (la banque a reçu les deux en un seul virement) :</div>
             {candidates.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucun autre virement à lier.</div>
+              <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucune autre caisse à grouper.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 {candidates.map(e => (
                   <button key={e.id} onClick={() => choisir(e)}
                     style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
-                    <b>{fmtMoney(e.amount_cash)} dh</b>{e.virement_client ? ` · ${e.virement_client}` : ''} · {fmtDateCourte(e.session_date)}
-                    <span style={{ color: '#5b2a86' }}> → total {fmtMoney(Number(from.amount_cash) + Number(e.amount_cash))} dh</span>
+                    <b>{fmtMoney(e.amount_cash)}</b>{e.virement_client ? ` · ${e.virement_client}` : ''} · {fmtDateCourte(e.session_date)}
+                    <span style={{ color: '#5b2a86' }}> → total {fmtMoney(Number(from.amount_cash) + Number(e.amount_cash))}</span>
                   </button>
                 ))}
               </div>
@@ -1214,7 +1214,7 @@ function LinkTwoModal({ from, list, onClose, onLink }) {
         ) : (
           <>
             <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
-              Virement 2 : <b>{fmtMoney(autre.amount_cash)} dh</b>{autre.virement_client ? ` · ${autre.virement_client}` : ''}
+              Caisse 2 : <b>{fmtMoney(autre.amount_cash)}</b>{autre.virement_client ? ` · ${autre.virement_client}` : ''}
             </div>
             <div style={{ fontSize: 12, color: '#8a7a70', marginBottom: 10 }}>
               Quelle ligne de <b>{fmtMoney(total)}</b> dans le relevé ? Sans elle, la ligne restera dans « Reçus banque non liés ».
@@ -1236,7 +1236,7 @@ function LinkTwoModal({ from, list, onClose, onLink }) {
             <button onClick={() => onLink(from, autre, null)} style={{ ...btnNormal, width: '100%', marginBottom: 8, fontSize: 12 }}>
               Je ne trouve pas la ligne — lier quand même
             </button>
-            <button onClick={() => setAutre(null)} style={{ ...btnNormal, width: '100%', marginBottom: 8, fontSize: 12 }}>← Changer de virement</button>
+            <button onClick={() => setAutre(null)} style={{ ...btnNormal, width: '100%', marginBottom: 8, fontSize: 12 }}>← Changer de caisse</button>
           </>
         )}
         <button onClick={onClose} style={{ ...btnNormal, width: '100%' }}>Annuler</button>
