@@ -291,12 +291,29 @@ html, body {
     font-size: 11pt;
     line-height: 1.4;
     color: #000;
-    /* La hauteur minimale pousse le cadre en bas de page : toutes les feuilles
-       se ressemblent, la main va toujours au même endroit. Prudente (23 cm
-       pour 26,7 disponibles) — une recette longue déborderait sinon. */
-    min-height: 23cm;
-    display: flex;
-    flex-direction: column;
+    /* ⚠️ UNE FEUILLE ORDINAIRE, NI FLEXIBLE NI HAUTE DE 23 cm (Layla,
+       2026-09-18 : « ça sort que la première page », téléphone, alors que
+       l'app en demandait cinq).
+
+       C'était une boîte flexible d'au moins 23 cm : la hauteur collait le
+       cadre à remplir en bas de page, `margin-top: auto` faisant le reste.
+       Sur ordinateur, parfait. Mais un iPhone ou un iPad met en page à la
+       largeur de l'écran (~390 px) puis AGRANDIT le tout à la largeur du
+       papier : nos 23 cm deviennent plus hauts qu'une A4. Il faut alors
+       couper la feuille en deux — et WebKit, le moteur de tous les iPhone,
+       NE SAIT PAS COUPER UNE BOÎTE FLEXIBLE entre deux pages. Il s'arrête à
+       la première et abandonne le reste de la liasse.
+
+       Le cadre suit donc maintenant la recette au lieu d'être collé en bas.
+       Des feuilles qui sortent valent mieux que des feuilles bien alignées
+       qui restent dans le téléphone. */
+    display: block;
+    /* Et on le dit franchement : une recette ne se coupe pas en deux. Une
+       feuille commence toujours en haut d'une page (`break-after` ci-dessus),
+       donc cette consigne ne peut rien décaler — au pire elle est ignorée si
+       une recette dépasse vraiment. */
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .feuille-impr:last-child {
     page-break-after: auto;
@@ -444,7 +461,7 @@ html, body {
   .feuille-economat .fe-sign {
     display: flex;
     justify-content: flex-end;
-    margin-top: auto;
+    margin-top: 12mm;
     padding-top: 6mm;
     page-break-inside: avoid;
     break-inside: avoid;
@@ -567,8 +584,9 @@ html, body {
      « Juste des chiffres à remplir, un tableau plus simple » (Layla,
      2026-09-15) : quatre colonnes, une ligne haute où écrire, rien d'autre. */
   .feuille-impr .fi-table {
-    /* `auto` le pousse en bas : la main va toujours au même endroit. */
-    margin-top: auto;
+    /* Un écart franc, plus `auto` : voir `.feuille-impr`, la feuille n'est
+       plus une boîte flexible — `auto` ne pousserait donc plus rien. */
+    margin-top: 12mm;
     width: 100%;
     border-collapse: collapse;
     page-break-inside: avoid;
