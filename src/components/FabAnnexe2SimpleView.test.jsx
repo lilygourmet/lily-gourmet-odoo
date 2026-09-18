@@ -238,6 +238,74 @@ describe('la feuille de sortie de stock', () => {
   })
 })
 
+// ============================================================
+// « LA PAGE EST BLANCHE » (Layla, 2026-09-18, sur téléphone).
+//
+// Demander les feuilles ne les pose pas tout de suite : l'écran se redessine au
+// tour suivant. Le code attendait 60 ms au hasard avant d'imprimer — assez sur
+// un ordinateur, pas sur un téléphone. L'impression partait sur un document où
+// le CSS avait déjà tout caché et où les feuilles n'étaient pas encore
+// arrivées : DES PAGES BLANCHES.
+//
+// Ce test regarde l'INSTANT de l'impression, pas ce qu'il y a après.
+// ============================================================
+describe('rien ne part avant que la liasse soit posée', () => {
+  // On SIMULE LE TÉLÉPHONE : sur un appareil lent, la page n'est pas encore
+  // peinte quand l'ancien code lançait son impression. Ici c'est le chargement
+  // des polices qu'on fait traîner — le même retard, mais qu'un test maîtrise.
+  const policesLentes = () => {
+    let pretes
+    const attente = new Promise(r => { pretes = r })
+    Object.defineProperty(document, 'fonts', {
+      configurable: true, value: { ready: attente },
+    })
+    return pretes
+  }
+  const souffler = () => new Promise(r => setTimeout(r, 120))
+
+  afterEach(() => { delete document.fonts })
+
+  it('n’imprime pas tant que la page n’est pas prête', async () => {
+    const pretes = policesLentes()
+    let vuALImpression = null
+    window.print = vi.fn(() => {
+      vuALImpression = {
+        feuilles: document.querySelectorAll('.feuille-impr').length,
+        cache: document.body.classList.contains('impr-feuilles'),
+      }
+    })
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+
+    // ⚠️ LE CŒUR DU TEST. L'ancien code attendait 60 ms puis imprimait, quoi
+    // qu'il arrive : ici il aurait déjà envoyé sa page blanche.
+    await souffler()
+    expect(window.print).not.toHaveBeenCalled()
+
+    // La page devient prête → et SEULEMENT là, l'impression part.
+    pretes()
+    await waitFor(() => expect(window.print).toHaveBeenCalled())
+    expect(vuALImpression.cache).toBe(true)
+    expect(vuALImpression.feuilles).toBeGreaterThan(0)
+  })
+
+  it('la feuille de sortie non plus ne part pas à vide', async () => {
+    const pretes = policesLentes()
+    let feuillesVues = -1
+    window.print = vi.fn(() => {
+      feuillesVues = document.querySelectorAll('.feuille-sortie').length
+    })
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    fireEvent.click(await screen.findByLabelText('Feuille de sortie de stock'))
+    await souffler()
+    expect(window.print).not.toHaveBeenCalled()
+    pretes()
+    await waitFor(() => expect(window.print).toHaveBeenCalled())
+    expect(feuillesVues).toBe(1)
+  })
+})
+
 // « quand j'imprime juste cette fiche ça doit sortir de la même manière que la
 // cascade » (Layla, 2026-09-16) : plus d'écran recopié tel quel, la même
 // feuille que les autres — avec son tableau à remplir.

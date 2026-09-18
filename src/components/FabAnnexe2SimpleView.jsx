@@ -96,9 +96,23 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * Et on range à `afterprint`, pas après `print()` : sur iPad, `print()` rend
    * la main tout de suite, avant que la feuille soit partie — tout remettre en
    * place là, c'est imprimer du vide.
+   *
+   * ⚠️ ON N'IMPRIME QU'UNE FOIS LA LIASSE VRAIMENT POSÉE (Layla, 2026-09-18 :
+   * « la page est blanche », sur téléphone). Demander les feuilles ne les pose
+   * pas tout de suite : l'écran se redessine au tour suivant. L'ancien code
+   * attendait 60 ms au hasard — assez sur un ordinateur, pas sur un téléphone,
+   * plus lent et avec toute une cascade à poser. L'impression partait alors sur
+   * un document où le reste était déjà caché et où les feuilles n'étaient pas
+   * encore arrivées : DES PAGES BLANCHES.
+   *
+   * On attend donc deux vraies images d'affilée — la seconde n'arrive qu'une
+   * fois la liasse peinte — et les polices avec, sinon le téléphone imprime des
+   * lignes vides. Jamais de durée devinée.
    */
-  const imprimerLePortail = () => {
+  useEffect(() => {
+    if (!feuillesPretes && !sortiePrete) return undefined
     document.body.classList.add('impr-feuilles')
+    let vivant = true
     const ranger = () => {
       window.removeEventListener('afterprint', ranger)
       document.body.classList.remove('impr-feuilles')
@@ -106,11 +120,23 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       setSortiePrete(false)
     }
     window.addEventListener('afterprint', ranger)
-    setTimeout(() => window.print(), 60)
-  }
+    const partir = () => { if (vivant) window.print() }
+    const apresLaPeinture = () =>
+      requestAnimationFrame(() => requestAnimationFrame(partir))
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(apresLaPeinture, apresLaPeinture)
+    } else {
+      apresLaPeinture()
+    }
+    return () => {
+      vivant = false
+      window.removeEventListener('afterprint', ranger)
+      document.body.classList.remove('impr-feuilles')
+    }
+  }, [feuillesPretes, sortiePrete])
 
   /** La feuille de sortie de stock, vierge — on l'imprime par paquets. */
-  const imprimerSortie = () => { setSortiePrete(true); imprimerLePortail() }
+  const imprimerSortie = () => setSortiePrete(true)
 
   const ouvert = chemin[0] || null
   const nav = { user, onLogout, onNavigate, activeView }
@@ -435,7 +461,6 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               onImprimer={() => {
                 setImprAssemble(null)
                 setFeuillesPretes(aImprimerAssemble)
-                imprimerLePortail()
               }}
               onFermer={() => setImprAssemble(null)} />
           )}
@@ -567,8 +592,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
 
   /**
    * On ferme le panneau AVANT d'imprimer : il est en position fixe, il
-   * couvrirait la feuille. Le navigateur a besoin d'un tour de boucle pour
-   * repeindre, d'où le `setTimeout` — sans lui, Safari imprime le panneau.
+   * couvrirait la feuille. Rien à temporiser ici : l'impression part d'elle-même
+   * une fois la liasse peinte, panneau refermé compris (voir plus haut).
    */
   const lancerImpression = () => {
     // ⚠️ LES DEUX FAÇONS SORTENT LA MÊME FEUILLE. « quand j'imprime juste cette
@@ -580,7 +605,6 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     const quoi = impr?.mode === 'seule' ? feuilles.slice(-1) : aImprimer
     setImpr(null)
     setFeuillesPretes(quoi)
-    imprimerLePortail()
   }
   const decoupe = decoupeDe(noeud)
   // L'étape de mise en forme qu'on confirmera en validant — la base de flan.
