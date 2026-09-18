@@ -232,9 +232,26 @@ export function cocheesParDefaut(feuilles) {
   const out = {}
   // ⚠️ Sur ce qui MANQUE, pas sur ce qu'on propose d'en faire — voir `manque`.
   for (const f of feuilles || []) out[f.produit] = assezEnStock(f) === false
-  const tete = (feuilles || [])[feuilles.length - 1]
-  if (tete) out[tete.produit] = true
+  const t = teteDe(feuilles)
+  if (t) out[t.produit] = true
   return out
+}
+
+/**
+ * LA TÊTE DE LA LIASSE — ce qu'on est venu faire, le gâteau.
+ *
+ * ⚠️ C'EST LA PREMIÈRE FEUILLE, PLUS LA DERNIÈRE. Jusqu'au 16/09 la liasse
+ * allait du plus profond au parent, et la tête était donc au bout ; « le parent
+ * en premier » (Layla) a retourné cet ordre, mais quatre endroits ont continué
+ * de prendre la dernière — c'est-à-dire l'ingrédient le plus enfoui. « Juste
+ * cette fiche » imprimait alors la mauvaise recette, et la demande à l'économat
+ * s'annonçait pour le mauvais gâteau.
+ *
+ * La règle vit ICI et nulle part ailleurs : c'est sa recopie à quatre endroits
+ * qui a laissé passer l'erreur.
+ */
+export function teteDe(feuilles) {
+  return (feuilles || [])[0]
 }
 
 /** Y en a-t-il déjà assez ? C'est ce qui décide du vert et du décochage. */

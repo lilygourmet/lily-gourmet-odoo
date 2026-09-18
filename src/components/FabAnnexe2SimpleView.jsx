@@ -30,7 +30,7 @@ import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
-import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock } from '../lib/feuillesAImprimer'
+import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock, teteDe } from '../lib/feuillesAImprimer'
 
 /**
  * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
@@ -123,13 +123,23 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     const partir = () => { if (vivant) window.print() }
     const apresLaPeinture = () =>
       requestAnimationFrame(() => requestAnimationFrame(partir))
+    // ⚠️ L'ATTENTE DES POLICES EST BORNÉE (Layla, 2026-09-18 : « ça tarde à
+    // sortir »). `document.fonts.ready` peut traîner longtemps sur un téléphone,
+    // voire ne jamais se décider ; sans limite, le bouton semble mort. Une
+    // demi-seconde suffit largement, et passé ce délai on imprime quand même :
+    // une feuille dans une autre police vaut mieux qu'une feuille qui ne sort
+    // pas. Un seul départ, quoi qu'il arrive.
+    let parti = false
+    const uneSeuleFois = () => { if (!parti) { parti = true; apresLaPeinture() } }
+    const limite = setTimeout(uneSeuleFois, 500)
     if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(apresLaPeinture, apresLaPeinture)
+      document.fonts.ready.then(uneSeuleFois, uneSeuleFois)
     } else {
-      apresLaPeinture()
+      uneSeuleFois()
     }
     return () => {
       vivant = false
+      clearTimeout(limite)
       window.removeEventListener('afterprint', ranger)
       document.body.classList.remove('impr-feuilles')
     }
@@ -601,8 +611,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // 2026-09-16). « Juste cette fiche » n'imprime donc plus l'écran tel quel :
     // elle imprime la feuille de la cascade, celle de l'article qu'on regarde
     // — avec sa demande à l'économat et son tableau à remplir, comme les autres.
-    // La tête est la DERNIÈRE de la liste, c'est elle qu'on a sous les yeux.
-    const quoi = impr?.mode === 'seule' ? feuilles.slice(-1) : aImprimer
+    // La tête est la PREMIÈRE de la liste, c'est elle qu'on a sous les yeux —
+    // elle l'était en dernier avant que le parent passe devant (voir `teteDe`).
+    const quoi = impr?.mode === 'seule' ? [teteDe(feuilles)].filter(Boolean) : aImprimer
     setImpr(null)
     setFeuillesPretes(quoi)
   }

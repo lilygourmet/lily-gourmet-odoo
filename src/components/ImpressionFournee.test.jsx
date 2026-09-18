@@ -12,13 +12,24 @@ import { ChoixImpression } from './ImpressionFournee'
 
 afterEach(cleanup)
 
-// Deux composants et la tête, comme les rend `feuillesAImprimer`.
+// La tête et ses deux composants, DANS L'ORDRE OÙ `feuillesAImprimer` les rend.
+//
+// ⚠️ LE GÂTEAU EST EN PREMIER. Ce fixture le mettait en dernier — l'ordre
+// d'avant le 16/09, « le plus profond d'abord ». La règle a changé ce jour-là
+// (« le parent en premier », Layla) mais pas ce fixture, et il a alors couvert
+// un vrai bug : « juste cette fiche » imprimait la DERNIÈRE feuille, c'est-à-
+// dire l'ingrédient le plus enfoui au lieu du gâteau qu'on a sous les yeux.
+// `src/lib/feuillesAImprimer.test.js` dit l'ordre vrai : `f[0]` est le parent.
 //
 // ⚠️ `qty` (ce qu'on propose de faire) et `manque` (ce qui fait vraiment
 // défaut) ne disent PAS la même chose : le sirop, il en reste 11,51 kg pour
 // 8,12 de besoin — il n'en manque rien — mais l'app propose quand même une
 // fournée de 11,1, pour en faire d'avance. C'est `manque` qui décide du vert.
 const feuilles = [
+  { produit: 'SM- 20 cm Vitrine (Citron)', libelle: 'Vitrine citron · 20 cm',
+    unite: 'u', stock: 0, besoin: 29, manque: 29, qty: 29,
+    chemin: ['SM- 20 cm Vitrine (Citron)'],
+    pour: [], ingredients: [] },
   { produit: 'SM. Creme Citron Production', libelle: 'Creme Citron Production',
     unite: 'g', stock: 0, besoin: 7270, manque: 7270, qty: 7270,
     chemin: ['SM- 20 cm Vitrine (Citron)', 'SM. Creme Citron Production'],
@@ -27,10 +38,6 @@ const feuilles = [
   { produit: 'SM. Sirop Imbibage Production KG', libelle: 'Sirop Imbibage Production KG',
     unite: 'kg', stock: 11.51, besoin: 8.12, manque: 0, qty: 11.1,
     chemin: ['SM- 20 cm Vitrine (Citron)', 'SM. Sirop Imbibage Production KG'],
-    pour: [], ingredients: [] },
-  { produit: 'SM- 20 cm Vitrine (Citron)', libelle: 'Vitrine citron · 20 cm',
-    unite: 'u', stock: 0, besoin: 29, manque: 29, qty: 29,
-    chemin: ['SM- 20 cm Vitrine (Citron)'],
     pour: [], ingredients: [] },
 ]
 
@@ -77,11 +84,14 @@ describe('le panneau « Tu imprimes quoi ? »', () => {
     expect(screen.getByText('Imprimer 2 feuilles')).toBeTruthy()
   })
 
-  it('« juste cette fiche » n’en garde qu’une, sans case à cocher', () => {
+  // ⚠️ LA GARDE DU BUG DU 16/09 : « juste cette fiche » doit sortir LE GÂTEAU,
+  // celui qu'on a sous les yeux — pas l'ingrédient du fond de la cascade.
+  it('« juste cette fiche » garde LE GÂTEAU, et lui seul', () => {
     poser({ mode: 'seule' })
     expect(screen.getByText('Imprimer 1 feuille')).toBeTruthy()
-    expect(screen.queryByLabelText('Creme Citron Production')).toBeNull()
     expect(screen.getByLabelText('Vitrine citron · 20 cm').disabled).toBe(true)
+    expect(screen.queryByLabelText('Creme Citron Production')).toBeNull()
+    expect(screen.queryByLabelText('Sirop Imbibage Production KG')).toBeNull()
   })
 
   it('le ↺ ne se montre que sur un chiffre tapé à la main', () => {

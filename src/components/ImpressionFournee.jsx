@@ -13,7 +13,7 @@
 import { Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { qte, propre, nb, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
-import { assezEnStock, aDemander, aBesoinDeLEconomat } from '../lib/feuillesAImprimer'
+import { assezEnStock, aDemander, aBesoinDeLEconomat, teteDe } from '../lib/feuillesAImprimer'
 
 /**
  * Le panneau « Tu imprimes quoi ? ».
@@ -28,7 +28,8 @@ export function ChoixImpression({
   onImprimer, onFermer, sous,
 }) {
   const seule = mode === 'seule'
-  const visibles = seule ? feuilles.slice(-1) : feuilles
+  // ⚠️ La fiche qu'on regarde est la PREMIÈRE de la liasse (voir `teteDe`).
+  const visibles = seule ? [teteDe(feuilles)].filter(Boolean) : feuilles
   const combien = seule ? 1 : feuilles.filter(f => coches[f.produit]).length
   // La tête est la DERNIÈRE feuille : c'est elle qui donne la profondeur.
   const profondeurDe = f => Math.max(0, f.chemin.length - 1)
@@ -152,8 +153,9 @@ export function FeuillesImpression({ feuilles, sortie }) {
   // Dans l'ancienne façon, la zone imprimée était en position ABSOLUE — et un
   // bloc en position absolue ne se pagine pas : tout s'entassait sur une page.
   // La tête donne son nom et son nombre aux demandes d'économat : « pour
-  // Cheesecake Exotique indiv · 80 pièces ».
-  const tete = (feuilles || [])[(feuilles || []).length - 1]
+  // Cheesecake Exotique indiv · 80 pièces ». C'est la PREMIÈRE feuille depuis
+  // que le parent passe en premier — voir `teteDe`.
+  const tete = teteDe(feuilles)
   return createPortal(
     <div className="print-feuilles">
       {(feuilles || []).map(f => (
