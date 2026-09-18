@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation, changerQtyOrdre, validerDansOdoo } from '../lib/fabrication'
+import { annulerDoublons, loadFabrication, loadFaits, setFait, dernierEcran, garderEcran, reserverOrdres , creerOfPrepa, annulerOfPrepa, loadBasesChoisies, reapproCD, loadNoms, loadManques, noterConsommation, changerQtyOrdre, validerDansOdoo, partagerRendement } from '../lib/fabrication'
+// Le clavier-calculette de Fabrication Annexe : « comme dans fabrication annexe »
+// (Layla, 2026-09-18) — même geste, même écriture, un seul code.
+import { Clavier } from './FabAnnexe2Simple'
 import { buildZplInfo, estMontageCD, estPrepaEtiquetee } from '../lib/etiquettes'
 // Le verrou, sorti de l'écran pour être testable (src/lib/verrouCD.test.js).
 import { bloqueSur } from '../lib/verrouCD'
@@ -821,6 +824,16 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const combien = Math.max(1, Number(n) || 1)
     const qty = combien * ((t && t.q) || 0)
     if (!(qty > 0)) return
+    // « Combien ça t'a sorti ? » — le sirop et la crème au beurre nature passent
+    // par ici. Ce qui est tapé entre en stock ; la tournée reste demandée à
+    // `qty`, donc les ingrédients ne bougent pas. (Layla, 2026-09-18)
+    const uBase = b.unite || (t && t.u) || uniteDe(b.produit)
+    let sorti = null
+    if (demandeRendement(b.produit)) {
+      const tape = await demanderRendu(b.produit, qty, uBase)
+      if (tape === null) return                       // clavier refermé : on ne déclare rien
+      sorti = depuisClavier(tape, uBase)
+    }
     setLots(l => { const s2 = { ...l }; delete s2[b.produit]; return s2 })
     // « Genoise Vanille KG CD » n'est qu'un changement d'étiquette : sa recette
     // est UNE tournée de « Genoise Vanille KG commun ». À l'atelier c'est un
@@ -836,12 +849,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const desGateaux = new Set(((data && data.ofs) || []).map(o => o.name))
     const libre = ((data && data.ordres) || []).find(o => o.produit === b.produit
       && o.etat !== 'done' && !faits[o.name] && !pourUnGateau(o.origine, desGateaux))
-    if (libre) return marquerOrdre(libre.name, b.produit, qty)
+    if (libre) return marquerOrdre(libre.name, b.produit, sorti ?? qty, uBase)
+    // L'ordre reste PLANIFIÉ à `qty` : c'est lui qui fixe les ingrédients.
     const cree = await creerOfPrepa(b.produit, qty, user?.id, [])
     if (cree && cree.name && !cree.error && !cree.test) {
       toast.success(`Ordre ${cree.name} créé dans Odoo`)
       setData(d => (d ? { ...d, ordres: [...(d.ordres || []), { name: cree.name, produit: b.produit, qty, unite: 'kg', etat: 'confirmed', origine: 'LG-APP' }] } : d))
-      return marquerOrdre(cree.name, b.produit, qty)
+      return marquerOrdre(cree.name, b.produit, sorti ?? qty, uBase)
     }
     if (cree && cree.test) toast.success('Mode test : aucun ordre créé dans Odoo')
     else if (cree && cree.error) toast.error('Odoo : ' + cree.error)
@@ -1374,20 +1388,81 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // crème au beurre vanille sont partis en 18 secondes.
   const enCours = useRef(new Set())
 
-  const marquer = async (cleDemandee, produit, qty) => {
+  // ====== « Combien ça t'a sorti ? » (Layla, 2026-09-18) ======
+  //
+  // Une fournée ne rend jamais exactement ce qui était prévu : 5,43 kg
+  // programmés peuvent donner 5,10 kg. Tant que personne ne le disait, la
+  // différence partait en silence et le stock dérivait — la crème au beurre
+  // nature était à −680 g le 2026-09-16.
+  //
+  // ⚠️ CE CHIFFRE NE CHANGE QUE CE QUI ENTRE EN STOCK. Les ingrédients
+  // consommés restent ceux de la quantité DEMANDÉE : on a bien sorti le beurre
+  // du frigo pour 5,43 kg. C'est déjà ce que fait le serveur (`validerOrdre`
+  // écrit `quantity_done` = la quantité PRÉVUE de chaque composant) ; on lui
+  // donne seulement, enfin, la quantité produite.
+  const [rendu, setRendu] = useState(null)       // { produit, unite, propose, repondre }
+
+  // Ce qui se pèse ou se compte à la sortie du four. Jamais la génoise ni l'eau
+  // du robinet (`toujoursLa`) : elles ne se déclarent pas ici.
+  const demandeRendement = n => estPrepa(n) && !toujoursLa(n)
+
+  // L'unité de l'article. Même déduction que les étiquettes : la recette
+  // d'abord, le stock ensuite — `stocks` porte l'unité réelle d'Odoo.
+  const uniteDe = p => (recettes[p] || {}).unite || (stocks[p] || {}).unite || 'kg'
+
+  // Le clavier parle GRAMMES pour ce qui se pèse, PIÈCES pour ce qui se compte
+  // (les bases de cupcakes sont en unités) — comme tout le reste de l'écran.
+  const versClavier = (q, u) => (norm(u) === 'kg' ? Math.round(q * 1000) : Math.round(q))
+  const depuisClavier = (n, u) => (norm(u) === 'kg' ? n / 1000 : n)
+
+  /**
+   * Ouvre le clavier et attend la réponse. `null` = la personne a refermé.
+   *
+   * ⚠️ UN SEUL À LA FOIS. Deux déclarations lancées coup sur coup ouvraient deux
+   * claviers : le second écrasait le premier, dont la promesse n'était plus
+   * jamais tenue — son verrou `enCours` ne se libérait pas et le bouton restait
+   * mort jusqu'au rechargement. On refuse le second au lieu de perdre le premier.
+   */
+  const clavierOuvert = useRef(false)
+  const demanderRendu = (produit, qty, unite) => new Promise(repondre => {
+    if (clavierOuvert.current) return repondre(null)
+    clavierOuvert.current = true
+    const u = unite || uniteDe(produit)
+    setRendu({ produit, unite: u, propose: versClavier(Number(qty) || 0, u), repondre })
+  })
+  const refermerClavier = (f, v) => { clavierOuvert.current = false; setRendu(null); f(v) }
+
+  /** Va-t-on DÉCLARER (et non retirer) ? On ne pose la question que dans ce sens. */
+  const vaDeclarer = (cle, produit) => {
+    if (!cle.startsWith('PREP:')) return !faits[cle]
+    const vises = ordresDe(cle, produit)
+    if (vises.length) return !vises.every(n => faits[n])
+    return !faits[cle]
+  }
+
+  const marquer = async (cleDemandee, produit, qty, unite = null) => {
     const verrou = `${cleDemandee}|${produit}`
     if (enCours.current.has(verrou)) return
     enCours.current.add(verrou)
     try {
-      return await marquerVraiment(cleDemandee, produit, qty)
+      let sorti = null
+      if (demandeRendement(produit) && vaDeclarer(cleDemandee, produit)) {
+        const u = unite || uniteDe(produit)
+        const tape = await demanderRendu(produit, qty, u)
+        if (tape === null) return                     // clavier refermé : on ne déclare rien
+        sorti = depuisClavier(tape, u)
+      }
+      return await marquerVraiment(cleDemandee, produit, qty, sorti)
     } finally {
       enCours.current.delete(verrou)
     }
   }
 
-  const marquerVraiment = async (cleDemandee, produit, qty) => {
+  // `sorti` = ce que l'atelier dit avoir vraiment obtenu, ou `null` si on n'a
+  // pas posé la question (retrait d'une coche, gâteau, génoise…).
+  const marquerVraiment = async (cleDemandee, produit, qty, sorti = null) => {
     const prepa = cleDemandee.startsWith('PREP:')
-    if (!prepa) return marquerOrdre(cleDemandee, produit, qty)
+    if (!prepa) return marquerOrdre(cleDemandee, produit, sorti ?? qty)
 
     const vises = ordresDe(cleDemandee, produit)
     const dejaLa = vises.filter(n => faits[n])
@@ -1401,12 +1476,18 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     if (vises.length) {
       // une base se fait par tournée entière, une crème à la quantité manquante
       const part = estBase(produit) ? qty : (Math.max(0, qty - stockDeProduit(produit)) || qty)
-      for (const n of vises.filter(n => !faits[n])) await marquerOrdre(n, produit, part)
+      const manquants = vises.filter(n => !faits[n])
+      // ⚠️ La quantité sortie vaut pour TOUTE la fournée, pas pour chaque ordre :
+      // la donner à chacun ferait entrer trois fois la même crème en stock.
+      // `partagerRendement` la répartit (src/lib/partagerRendement.test.js).
+      const parts = sorti === null ? null
+        : partagerRendement(manquants.map(n => ({ name: n, qty: part })), sorti)
+      for (const n of manquants) await marquerOrdre(n, produit, parts ? (parts[n] ?? part) : part)
       return
     }
 
     // aucun ordre : l'app en crée un, rattaché aux gâteaux de la recette
-    if (faits[cleDemandee]) return marquerOrdre(cleDemandee, produit, qty)
+    if (faits[cleDemandee]) return marquerOrdre(cleDemandee, produit, sorti ?? qty)
     const part = estBase(produit) ? qty : (Math.max(0, qty - stockDeProduit(produit)) || qty)
     const cree = await creerOfPrepa(produit, part, user?.id, choisis.map(o => o.name))
     if (cree && cree.name && !cree.error && !cree.test) {
@@ -1421,12 +1502,12 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           origine: [...choisis.map(o => o.name), 'LG-APP'].join(','),
         }],
       } : d))
-      return marquerOrdre(cree.name, produit, part)
+      return marquerOrdre(cree.name, produit, sorti ?? part)
     }
     if (cree && cree.test) toast.success('Mode test : aucun ordre créé dans Odoo')
     else if (cree && cree.error) toast.error('Odoo : ' + cree.error)
     // rien créé : on garde tout de même la trace, par son nom
-    return marquerOrdre(cleDemandee, produit, part)
+    return marquerOrdre(cleDemandee, produit, sorti ?? part)
   }
 
   /**
@@ -1481,6 +1562,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const marquerOrdre = async (cle, produit, qty, uniteQty = null) => {
     const on = !faits[cle]
     const avant = faits[cle]
+    // ⚠️ DANS QUELLE UNITÉ `qty` est-elle écrite ? Sans elle, « À valider » ne
+    // peut pas la rendre à Odoo : 5,43 kg envoyés à un ordre compté en grammes,
+    // c'est mille fois trop peu. On la range avec la quantité. (2026-09-18)
+    const uniteFaite = uniteQty || uniteDe(produit)
     if (on) imprimerEtiquettesFab(produit, qty, uniteQty)
     const ordres = /^WH.*\/MO\//i.test(cle) ? [cle] : ((avant && avant.ordres) || [])
     setFaits(f => { const n = { ...f }; if (on) n[cle] = { fait_le: new Date().toISOString(), produit, qty, ordres }; else delete n[cle]; return n })
@@ -1498,7 +1583,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     // On remet la coche TELLE QU'ELLE ÉTAIT, pas un talon vide : un
     // `{ fait_le: '' }` faisait perdre le produit, la quantité et les ordres —
     // la tournée ne comptait plus, et « retirer » repartait sans rien savoir.
-    setFait({ name: cle, produit, qty, ordres, quand: new Date().toISOString() }, on, user?.id)
+    setFait({ name: cle, produit, qty, unite: uniteFaite, ordres, quand: new Date().toISOString() }, on, user?.id)
       .catch(e => {
         setFaits(f => {
           const n = { ...f }
@@ -1975,6 +2060,18 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           className="lg:hidden lg-bottom-bar z-40 bg-bordeaux text-cream py-4 text-[16px] font-bold shadow-lg">
           Voir ma recette ({choisis.length} gâteau{choisis.length > 1 ? 'x' : ''})
         </button>
+      )}
+
+      {/* « Combien ça t'a sorti ? » — la fournée ne rend jamais pile ce qui
+          était prévu, et c'est ce chiffre-là qui entre en stock. Refermer sans
+          répondre n'enregistre rien : on ne déclare pas à moitié. */}
+      {rendu && (
+        <Clavier
+          titre={`${propre(rendu.produit)} — combien ça t'a sorti ?`}
+          valeur={rendu.propose}
+          unite={rendu.unite === 'kg' ? 'g' : rendu.unite}
+          onValider={v => refermerClavier(rendu.repondre, v)}
+          onFermer={() => refermerClavier(rendu.repondre, null)} />
       )}
     </div>
   )

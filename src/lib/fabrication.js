@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { estModeTest } from './modeTest'
+import { versUnite } from './unites'
 
 // Odoo répond en 1 à 2 secondes : on réaffiche d'abord ce qu'on avait la
 // dernière fois, puis on remplace dès que la vraie réponse arrive. L'écran
@@ -175,7 +176,7 @@ export async function saveBasesChoisies(liste) {
  */
 export async function loadFaits() {
   const { data, error } = await supabase.from('prod_of_faits')
-    .select('mo_name, produit, qty, ordres, fait_par, fait_le')
+    .select('mo_name, produit, qty, qty_unite, ordres, fait_par, fait_le')
     .order('fait_le', { ascending: false })
     .limit(5000)
   if (error) throw error
@@ -196,6 +197,9 @@ export async function setFait(of, on, userId) {
     mo_id: of.id,
     produit: of.produit,
     qty: of.qty,
+    // L'unité dans laquelle `qty` est écrite. « À valider » en a besoin pour
+    // rendre la quantité à Odoo sans se tromper de mille (2026-09-18).
+    qty_unite: of.unite || null,
     jour: (of.quand || '').slice(0, 10) || null,
     ordres: of.ordres || null,               // les ordres Odoo que cette coche couvre
     fait_par: userId || null,
@@ -391,4 +395,68 @@ export async function lancerPrepa(quoi, tournees, colorants, actorId) {
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || `erreur ${r.status}`)
   return data
+}
+
+/**
+ * CE QUI EST VRAIMENT SORTI, réparti sur les ordres que la coche couvre.
+ *
+ * Une déclaration peut porter sur PLUSIEURS ordres Odoo (la crème praliné du
+ * 45 cm et celle du Cœur 10p, cochées d'un coup). On ne peut pas donner la
+ * quantité sortie à chacun : 5 kg déclarés sur 3 ordres feraient entrer 15 kg
+ * en stock. On la partage donc AU PRORATA de ce que chaque ordre demandait.
+ *
+ * `plans` = [{ name, qty }] — ce que chaque ordre prévoyait.
+ * `rendu` = ce que l'atelier dit avoir sorti, pour l'ensemble.
+ * → { nom de l'ordre : sa part }
+ *
+ * Le dernier ordre ramasse l'arrondi, pour que la somme des parts fasse
+ * EXACTEMENT `rendu` — sinon il manquerait un gramme à chaque fournée.
+ */
+export function partagerRendement(plans, rendu) {
+  const liste = (plans || []).filter(p => p && p.name)
+  const total = Number(rendu)
+  if (!liste.length || !(total > 0)) return {}
+  if (liste.length === 1) return { [liste[0].name]: total }
+  const somme = liste.reduce((s, p) => s + (Number(p.qty) || 0), 0)
+  const out = {}
+  // Aucun plan chiffré : on ne peut que partager en parts égales.
+  if (!(somme > 0)) {
+    const part = Math.round((total / liste.length) * 1000) / 1000
+    liste.forEach((p, i) => { out[p.name] = i === liste.length - 1
+      ? Math.round((total - part * (liste.length - 1)) * 1000) / 1000 : part })
+    return out
+  }
+  let place = 0
+  liste.forEach((p, i) => {
+    if (i === liste.length - 1) { out[p.name] = Math.round((total - place) * 1000) / 1000; return }
+    const part = Math.round((total * (Number(p.qty) || 0) / somme) * 1000) / 1000
+    out[p.name] = part
+    place += part
+  })
+  return out
+}
+
+/**
+ * CE QU'ON REND À ODOO comme quantité produite, ou `null` si on préfère se taire.
+ *
+ * Fabrication CD note la fournée dans SON unité (souvent le kg) ; l'ordre Odoo,
+ * lui, compte parfois en grammes. Rendre 5,43 à un ordre en grammes, c'est
+ * mille fois trop peu — et personne ne le verrait.
+ *
+ * On ne rend donc un chiffre que si on est SÛR :
+ *  · une quantité déclarée, positive ;
+ *  · son unité connue (les coches d'avant le 2026-09-18 ne l'ont pas : on les
+ *    laisse tranquilles, Odoo gardera la quantité prévue) ;
+ *  · un résultat qui reste dans un rapport raisonnable avec le prévu. Layla
+ *    peut déclarer plusieurs tournées d'avance, donc on est large (×20) — mais
+ *    un facteur mille, lui, ne passe pas.
+ */
+export function rendementPourOdoo({ declare, uniteDeclaree, prevu, uniteOdoo }) {
+  const q = Number(declare)
+  if (!(q > 0) || !uniteDeclaree) return null
+  const rendu = versUnite(q, uniteDeclaree, uniteOdoo)
+  if (!(rendu > 0)) return null
+  const p = Number(prevu)
+  if (p > 0 && (rendu > p * 20 || rendu < p / 20)) return null
+  return Math.round(rendu * 1000) / 1000
 }

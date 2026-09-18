@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
-import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies, loadStocksNegatifs, setFait } from '../lib/fabrication'
+import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies, loadStocksNegatifs, setFait, rendementPourOdoo } from '../lib/fabrication'
 import { todayISO, jourLocal } from '../lib/dates'
 
 // Une date d'Odoo (« 2026-09-09 11:33:00 », sans fuseau, donc UTC) ramenée au
@@ -36,6 +36,11 @@ const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 const qte = (q, u) => (norm(u) === 'kg'
   ? `${nb(Math.round(q * 1000))} g`
   : `${nb(Math.round(q))} ${norm(u) === 'g' ? 'g' : u}`)
+// Une préparation se pèse à la sortie du four ; un gâteau monté, non.
+const estPrepa = n => /^SM\b/i.test(String(n || ''))
+// Le champ « sorti » parle GRAMMES pour ce qui se pèse, PIÈCES pour le reste.
+const versSaisie = (q, u) => (norm(u) === 'kg' ? Math.round(q * 1000) : Math.round(q))
+const depuisSaisie = (n, u) => (norm(u) === 'kg' ? n / 1000 : n)
 const propre = n => String(n || '')
   .replace(/^SM\.?\s*/i, '').replace(/^CD\*\s*/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
   .replace(/\s*\bCD\*?\b\s*$/i, '').replace(/\s*\baccs\b/i, '').trim()
@@ -116,6 +121,10 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
   const [negatifs, setNegatifs] = useState([])
   // { 'WHLVP/MO/202295': '2026-09-08T15:39:51Z' } — le jour où c'est FAIT
   const [datesFaites, setDatesFaites] = useState({})
+  // Ce que l'atelier a dit avoir VRAIMENT sorti, dans l'unité de l'ordre Odoo.
+  // Rempli depuis la coche posée dans Fabrication CD, corrigeable ici avant
+  // l'envoi — « les deux » (Layla, 2026-09-18).
+  const [sortis, setSortis] = useState({})
 
   useEffect(() => {
     let vivant = true
@@ -165,6 +174,16 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
         // validé ou annulé dans Odoo entre-temps : ça n'attend plus rien
         const ouverts = m.filter(x => x.etat !== 'done' && x.etat !== 'cancel')
         setLignes(ouverts)
+        const rendus = {}
+        for (const l of ouverts) {
+          const info = f[l.name]
+          const r = rendementPourOdoo({
+            declare: info && info.qty, uniteDeclaree: info && info.qty_unite,
+            prevu: l.qty, uniteOdoo: l.unite,
+          })
+          if (r !== null) rendus[l.name] = r
+        }
+        setSortis(rendus)
         // Cocher d'avance seulement ce qui est dû : un ordre prévu dans quinze
         // jours ne correspond pas à la tournée qu'on vient de faire.
         // Date LOCALE : en UTC, entre minuit et 1 h au Maroc, on est encore la
@@ -384,7 +403,13 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
       // on la valide. Odoo enregistre donc la date de la déclaration.
       const quand = {}
       for (const n of cibles) if (datesFaites[n]) quand[n] = datesFaites[n]
-      const res = await validerDansOdoo(cibles, forcer, user?.id, aEnvoyer, enPlus, null, quand)
+      // Ce qui est vraiment sorti de la fournée. Odoo garde les ingrédients de
+      // la quantité PRÉVUE : `validerOrdre` écrit `quantity_done` = la quantité
+      // prévue de chaque composant, pas une quantité recalculée.
+      const produits = {}
+      for (const n of cibles) if (sortis[n] > 0) produits[n] = sortis[n]
+      const res = await validerDansOdoo(cibles, forcer, user?.id, aEnvoyer, enPlus,
+        Object.keys(produits).length ? produits : null, quand)
       setResultats(res)
       // Ce qui est validé n'a plus rien à faire dans la liste. Ce qui a échoué
       // y reste, avec son message : c'est encore à traiter.
@@ -460,6 +485,36 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                   onChange={e => setSel(v => (e.target.checked ? [...v, l.name] : v.filter(x => x !== l.name)))} />
                 <div className="flex-1 min-w-0">
                   <div className="text-[16px] font-bold">{propre(l.produit)} — {qte(l.qty, l.unite)}</div>
+                  {/* Ce qui est VRAIMENT sorti. Pré-rempli avec ce qui a été
+                      déclaré au labo, corrigeable ici — « les deux » (Layla,
+                      2026-09-18). Vide = on garde la quantité prévue.
+                      ⚠️ On tape des GRAMMES quand l'ordre est en kilos, comme
+                      partout ailleurs ; la conversion ne vit qu'ici. */}
+                  {estPrepa(l.produit) && (
+                    <label className="flex items-center gap-1.5 text-[12px] text-ink-mute mt-0.5">
+                      sorti
+                      <input type="text" inputMode="decimal"
+                        aria-label={`Quantité vraiment sortie de ${propre(l.produit)}`}
+                        value={sortis[l.name] === undefined ? '' : versSaisie(sortis[l.name], l.unite)}
+                        onChange={e => {
+                          const t = String(e.target.value).replace(/[^\d.,]/g, '').replace(',', '.')
+                          const v3 = Number(t)
+                          setSortis(v2 => {
+                            const c = { ...v2 }
+                            // Vide, ou pas encore un nombre (« 5, ») : on oublie la
+                            // ligne plutôt que d'y ranger un NaN.
+                            if (t === '' || !Number.isFinite(v3)) delete c[l.name]
+                            else c[l.name] = depuisSaisie(v3, l.unite)
+                            return c
+                          })
+                        }}
+                        onClick={e => e.stopPropagation()}
+                        placeholder={String(versSaisie(l.qty, l.unite))}
+                        className="w-[74px] text-right tabular-nums rounded-lg px-1.5 py-0.5
+                                   border border-cream-deep bg-cream-warm text-[12.5px] font-bold" />
+                      {norm(l.unite) === 'kg' ? 'g' : norm(l.unite)}
+                    </label>
+                  )}
                   <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.lieu ? ' · ' + l.lieu : ''}</div>
                   {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > todayISO() ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
                     prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}

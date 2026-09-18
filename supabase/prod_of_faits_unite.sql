@@ -1,0 +1,13 @@
+-- « Combien ça t'a sorti ? » (Layla, 2026-09-18).
+--
+-- Fabrication CD demande désormais la quantité VRAIMENT sortie d'une fournée.
+-- Elle est rangée dans `prod_of_faits.qty`, mais cette colonne seule ne dit pas
+-- dans QUELLE unité — l'écran compte en kg, Odoo compte parfois en grammes.
+-- Rendre 5,43 à un ordre compté en grammes, c'est mille fois trop peu.
+--
+-- On range donc l'unité avec la quantité. Les lignes déjà écrites restent à
+-- NULL : « À valider » ne convertit alors rien et garde la quantité prévue,
+-- exactement comme avant.
+--
+-- À lancer AVANT de déployer.
+ALTER TABLE prod_of_faits ADD COLUMN IF NOT EXISTS qty_unite text;
