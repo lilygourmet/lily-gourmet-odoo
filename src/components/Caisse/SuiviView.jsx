@@ -1195,12 +1195,39 @@ function AnalyseVirementsModal({ a, onClose }) {
 function LinkTwoModal({ from, list, onClose, onLink }) {
   const [autre, setAutre] = useState(null)   // 2e virement choisi
   const [lines, setLines] = useState(null)   // lignes du relevé du montant TOTAL
-  const candidates = list.filter(e => e.id !== from.id && (e.payment_method || 'cash') === 'virement' && e.releve_status !== 'trouve')
+  const [horsPeriode, setHorsPeriode] = useState(0)  // lignes du bon montant, mais d'une autre période
+  // L'app a DÉJÀ trouvé la paire au rapprochement (« 🔗 2 virements = 1 ligne ») : les deux
+  // caisses portent alors le même libellé mémorisé. On ne le disait nulle part — Layla
+  // devait deviner la 2e caisse et tombait sur la mauvaise. On la met donc en tête.
+  const sienne = (from.note_proof || '').includes('🔗') ? from.note_proof : null
+  const appariee = e => !!sienne && e.note_proof === sienne
+  const candidates = list
+    .filter(e => e.id !== from.id && (e.payment_method || 'cash') === 'virement' && e.releve_status !== 'trouve')
+    .sort((x, y) => (appariee(y) ? 1 : 0) - (appariee(x) ? 1 : 0))
   const total = autre ? Number(from.amount_cash) + Number(autre.amount_cash) : 0
   // 2e virement choisi -> on cherche les lignes du relevé du montant TOTAL des deux.
+  // Le montant ne suffit pas : proposer TOUTES les lignes de ce montant mettait un virement
+  // du 31 mai dans le choix de deux caisses du 12 août — un piège à faux rapprochement.
+  // On garde la fenêtre de dates du rapprochement automatique, autour de l'une OU l'autre
+  // caisse, et on compte ce qu'on écarte pour le dire.
   async function choisir(e) {
-    setAutre(e); setLines(null)
-    try { setLines(await loadFreeReleveLines(Number(from.amount_cash) + Number(e.amount_cash), 'virement')) }
+    setAutre(e); setLines(null); setHorsPeriode(0)
+    try {
+      const toutes = await loadFreeReleveLines(Number(from.amount_cash) + Number(e.amount_cash), 'virement')
+      const w = windowFor('virement')
+      const dansFenetre = l => [from, e].some(c => {
+        const j = (new Date(l.ligne_date) - new Date(c.session_date)) / 86400000
+        return j >= w.min && j <= w.max
+      })
+      const gardees = toutes.filter(dansFenetre)
+      setHorsPeriode(toutes.length - gardees.length)
+      // Le nom des caisses dans le libellé : signalé, jamais bloquant (la banque écrit
+      // souvent le nom du mari ou de la société qui paie).
+      setLines(gardees.map(l => ({
+        ...l,
+        nomOk: nomDansLibelle(from.virement_client, l.label) || nomDansLibelle(e.virement_client, l.label),
+      })))
+    }
     catch { setLines([]) }
   }
   return (
@@ -1222,6 +1249,7 @@ function LinkTwoModal({ from, list, onClose, onLink }) {
                     style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
                     <b>{fmtMoney(e.amount_cash)}</b>{e.virement_client ? ` · ${e.virement_client}` : ''} · {fmtDateCourte(e.session_date)}
                     <span style={{ color: '#5b2a86' }}> → total {fmtMoney(Number(from.amount_cash) + Number(e.amount_cash))}</span>
+                    {appariee(e) && <div style={{ fontSize: 11, color: '#0a7d3d', marginTop: 2 }}>✓ celle trouvée par l'app — même ligne du relevé</div>}
                   </button>
                 ))}
               </div>
@@ -1238,13 +1266,17 @@ function LinkTwoModal({ from, list, onClose, onLink }) {
             {lines === null ? (
               <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Chargement…</div>
             ) : lines.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Aucune ligne libre de {fmtMoney(total)} dans les relevés importés.</div>
+              <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>
+                Aucune ligne libre de {fmtMoney(total)} à une date compatible.
+                {horsPeriode > 0 && <> {horsPeriode} ligne(s) de ce montant existent dans les relevés, mais à une <b>autre période</b> — ce n'est pas ce virement.</>}
+              </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 {lines.map(l => (
                   <button key={l.key} onClick={() => onLink(from, autre, l)}
                     style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid #e5d8c3', background: '#F9F6F1', cursor: 'pointer', fontSize: 13 }}>
                     <b>{l.ligne_date}</b> · {l.label}
+                    {!l.nomOk && <div style={{ fontSize: 11, color: '#a9620a', marginTop: 2 }}>⚠️ le nom des caisses n'apparaît pas dans ce libellé</div>}
                   </button>
                 ))}
               </div>
