@@ -132,25 +132,48 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // sous ses pieds, et il ne restait que la première page, déjà fabriquée.
     //
     // Les feuilles restent donc en place ; elles ne coûtent rien, le CSS les
-    // cache à l'écran. La prochaine impression les remplace. On ne remet ici
-    // que ce qui concerne l'ÉCRAN : la classe qui masque le reste de l'app.
-    const ranger = () => {
-      window.removeEventListener('afterprint', ranger)
+    // cache à l'écran. La prochaine impression les remplace.
+    //
+    // ⚠️ ET LA CLASSE NE PART PAS NON PLUS SUR `afterprint` (Layla,
+    // 2026-09-18 : « je vois que des pages blanches »). Juste au-dessus d'elle,
+    // dans `index.css`, dort une vieille règle : `body:not(.impr-feuilles) *
+    // { visibility: hidden }`. Elle sert à l'autre façon d'imprimer de l'app
+    // (celle qui montre une `.print-area`). Retirer la classe pendant que
+    // l'iPhone fabrique encore son aperçu, c'est donc rendre TOUT invisible —
+    // sans retirer la place : le bon nombre de pages, toutes vides. Exactement
+    // ce qu'elle a vu.
+    //
+    // La classe ne gêne rien à l'écran (les deux règles vivent sous
+    // `@media print`). On la garde donc jusqu'à ce que Layla soit VRAIMENT
+    // revenue dans l'app — revenue sur l'onglet, ou un doigt posé dessus. On
+    // n'écoute qu'après le départ de l'impression, pour qu'un focus d'avant ne
+    // compte pas.
+    const rendreLEcran = () => {
+      for (const [cible, ev] of ecoutes) cible.removeEventListener(ev, rendreLEcran)
       document.body.classList.remove('impr-feuilles')
     }
-    window.addEventListener('afterprint', ranger)
-    const partir = () => { if (vivant) window.print() }
+    const ecoutes = [[window, 'focus'], [window, 'pointerdown'],
+      [document, 'visibilitychange']]
+    const ecouterLeRetour = () => {
+      for (const [cible, ev] of ecoutes) cible.addEventListener(ev, rendreLEcran)
+    }
+    const partir = () => {
+      if (!vivant) return
+      window.print()
+      ecouterLeRetour()
+    }
     const apresLaPeinture = () =>
       requestAnimationFrame(() => requestAnimationFrame(partir))
-    // ⚠️ L'ATTENTE DES POLICES EST BORNÉE (Layla, 2026-09-18 : « ça tarde à
-    // sortir »). `document.fonts.ready` peut traîner longtemps sur un téléphone,
-    // voire ne jamais se décider ; sans limite, le bouton semble mort. Une
-    // demi-seconde suffit largement, et passé ce délai on imprime quand même :
-    // une feuille dans une autre police vaut mieux qu'une feuille qui ne sort
-    // pas. Un seul départ, quoi qu'il arrive.
+    // ⚠️ L'ATTENTE DES POLICES EST COURTE ET BORNÉE (Layla, 2026-09-18 : « les
+    // options d'impression tardent à apparaître »). `document.fonts.ready`
+    // attend TOUTES les polices de l'app — la quinzaine de polices décoratives
+    // du Studio photos comprise, alors que les feuilles n'en utilisent aucune.
+    // Sur un téléphone en 3G, c'est long pour rien, et le bouton semble mort.
+    // Un quart de seconde, puis on imprime quoi qu'il arrive : une feuille dans
+    // une autre police vaut mieux qu'une feuille qui ne sort pas.
     let parti = false
     const uneSeuleFois = () => { if (!parti) { parti = true; apresLaPeinture() } }
-    const limite = setTimeout(uneSeuleFois, 500)
+    const limite = setTimeout(uneSeuleFois, 250)
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(uneSeuleFois, uneSeuleFois)
     } else {
@@ -159,8 +182,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     return () => {
       vivant = false
       clearTimeout(limite)
-      window.removeEventListener('afterprint', ranger)
-      document.body.classList.remove('impr-feuilles')
+      rendreLEcran()
     }
   }, [tirage])
 

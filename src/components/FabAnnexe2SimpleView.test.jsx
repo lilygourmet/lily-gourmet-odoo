@@ -261,6 +261,7 @@ describe('rien ne part avant que la liasse soit posée', () => {
     })
     return pretes
   }
+  // Plus court que le quart de seconde au bout duquel on imprime de toute façon.
   const souffler = () => new Promise(r => setTimeout(r, 120))
 
   afterEach(() => { delete document.fonts })
@@ -294,7 +295,7 @@ describe('rien ne part avant que la liasse soit posée', () => {
   // pas dire « c'est imprimé » : sur iPhone il arrive quand le système PREND le
   // document, pendant qu'il fabrique encore les pages suivantes. On vidait la
   // liasse à cet instant — elle disparaissait sous ses pieds.
-  it('les feuilles RESTENT en place après la fin de l’impression', async () => {
+  it('« j’ai pris » ne défait RIEN : ni la liasse, ni ce qui la montre', async () => {
     const pretes = policesLentes()
     window.print = vi.fn()
     await ouvrirLaFiche()
@@ -303,11 +304,31 @@ describe('rien ne part avant que la liasse soit posée', () => {
     pretes()
     await waitFor(() => expect(window.print).toHaveBeenCalled())
 
-    // Le système dit « j'ai pris » — il n'a pas fini pour autant.
+    // Le système dit « j'ai pris » — il n'a pas fini pour autant : l'iPhone
+    // fabrique encore ses pages. Tout doit rester exactement en l'état.
     fireEvent(window, new Event('afterprint'))
+    await souffler()
+    expect(document.querySelectorAll('.feuille-impr').length).toBeGreaterThan(0)
+    // ⚠️ Et SURTOUT la classe : sans elle, `body:not(.impr-feuilles) *
+    // { visibility: hidden }` rend toute la page invisible — des pages blanches.
+    expect(document.body.classList.contains('impr-feuilles')).toBe(true)
+  })
+
+  it('l’écran n’est rendu que quand Layla revient dans l’app', async () => {
+    const pretes = policesLentes()
+    window.print = vi.fn()
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+    pretes()
+    await waitFor(() => expect(window.print).toHaveBeenCalled())
+    expect(document.body.classList.contains('impr-feuilles')).toBe(true)
+
+    // Elle repose le doigt sur l'app : là, et seulement là, on range.
+    fireEvent(window, new Event('focus'))
     await waitFor(() =>
       expect(document.body.classList.contains('impr-feuilles')).toBe(false))
-    // L'écran est rendu à Layla… mais la liasse est toujours là.
+    // La liasse, elle, reste : la prochaine impression la remplacera.
     expect(document.querySelectorAll('.feuille-impr').length).toBeGreaterThan(0)
   })
 
