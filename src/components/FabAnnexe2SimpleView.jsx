@@ -88,6 +88,16 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // La feuille de sortie de stock à remplir à la main : vrai le temps de
   // l'impression. Elle n'appartient à aucun article — voir `imprimerSortie`.
   const [sortiePrete, setSortiePrete] = useState(false)
+  // Le compteur d'impressions. C'est LUI qui déclenche le départ, et non le
+  // contenu : celui-ci reste en place d'une fois sur l'autre (voir plus bas),
+  // donc réimprimer la même chose ne changerait rien et rien ne partirait.
+  const [tirage, setTirage] = useState(0)
+  /** Poser la liasse, puis lancer l'impression. Les deux dans le même geste. */
+  const lancer = (quoi, sortie = false) => {
+    setFeuillesPretes(quoi)
+    setSortiePrete(sortie)
+    setTirage(t => t + 1)
+  }
 
   /**
    * Imprimer ce que le portail contient, et ranger APRÈS.
@@ -110,14 +120,23 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * lignes vides. Jamais de durée devinée.
    */
   useEffect(() => {
-    if (!feuillesPretes && !sortiePrete) return undefined
+    if (!tirage) return undefined
     document.body.classList.add('impr-feuilles')
     let vivant = true
+    // ⚠️ ON NE RETIRE PLUS LES FEUILLES DE LA PAGE (Layla, 2026-09-18 : « c'est
+    // que la première page », alors que le bouton annonçait cinq feuilles).
+    //
+    // `afterprint` ne veut pas dire « c'est imprimé ». Sur iPhone, il arrive
+    // quand le système PREND le document — pendant qu'il fabrique encore les
+    // pages suivantes. On vidait la liasse à cet instant : elle disparaissait
+    // sous ses pieds, et il ne restait que la première page, déjà fabriquée.
+    //
+    // Les feuilles restent donc en place ; elles ne coûtent rien, le CSS les
+    // cache à l'écran. La prochaine impression les remplace. On ne remet ici
+    // que ce qui concerne l'ÉCRAN : la classe qui masque le reste de l'app.
     const ranger = () => {
       window.removeEventListener('afterprint', ranger)
       document.body.classList.remove('impr-feuilles')
-      setFeuillesPretes(null)
-      setSortiePrete(false)
     }
     window.addEventListener('afterprint', ranger)
     const partir = () => { if (vivant) window.print() }
@@ -143,10 +162,10 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       window.removeEventListener('afterprint', ranger)
       document.body.classList.remove('impr-feuilles')
     }
-  }, [feuillesPretes, sortiePrete])
+  }, [tirage])
 
   /** La feuille de sortie de stock, vierge — on l'imprime par paquets. */
-  const imprimerSortie = () => setSortiePrete(true)
+  const imprimerSortie = () => lancer(null, true)
 
   const ouvert = chemin[0] || null
   const nav = { user, onLogout, onNavigate, activeView }
@@ -470,7 +489,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               onRendre={p => setQuantites(x => { const n = { ...x }; delete n[p]; return n })}
               onImprimer={() => {
                 setImprAssemble(null)
-                setFeuillesPretes(aImprimerAssemble)
+                lancer(aImprimerAssemble)
               }}
               onFermer={() => setImprAssemble(null)} />
           )}
@@ -615,7 +634,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // elle l'était en dernier avant que le parent passe devant (voir `teteDe`).
     const quoi = impr?.mode === 'seule' ? [teteDe(feuilles)].filter(Boolean) : aImprimer
     setImpr(null)
-    setFeuillesPretes(quoi)
+    lancer(quoi)
   }
   const decoupe = decoupeDe(noeud)
   // L'étape de mise en forme qu'on confirmera en validant — la base de flan.

@@ -290,6 +290,44 @@ describe('rien ne part avant que la liasse soit posée', () => {
     expect(vuALImpression.feuilles).toBeGreaterThan(0)
   })
 
+  // ⚠️ LA GARDE DU « QUE LA PREMIÈRE PAGE » (2026-09-18). `afterprint` ne veut
+  // pas dire « c'est imprimé » : sur iPhone il arrive quand le système PREND le
+  // document, pendant qu'il fabrique encore les pages suivantes. On vidait la
+  // liasse à cet instant — elle disparaissait sous ses pieds.
+  it('les feuilles RESTENT en place après la fin de l’impression', async () => {
+    const pretes = policesLentes()
+    window.print = vi.fn()
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+    pretes()
+    await waitFor(() => expect(window.print).toHaveBeenCalled())
+
+    // Le système dit « j'ai pris » — il n'a pas fini pour autant.
+    fireEvent(window, new Event('afterprint'))
+    await waitFor(() =>
+      expect(document.body.classList.contains('impr-feuilles')).toBe(false))
+    // L'écran est rendu à Layla… mais la liasse est toujours là.
+    expect(document.querySelectorAll('.feuille-impr').length).toBeGreaterThan(0)
+  })
+
+  it('et on peut réimprimer la même chose juste après', async () => {
+    const pretes = policesLentes()
+    window.print = vi.fn()
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+    pretes()
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1))
+    fireEvent(window, new Event('afterprint'))
+
+    // Même liasse, même choix : le contenu ne change pas, donc seul un
+    // compteur peut relancer le départ.
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(2))
+  })
+
   it('la feuille de sortie non plus ne part pas à vide', async () => {
     const pretes = policesLentes()
     let feuillesVues = -1
