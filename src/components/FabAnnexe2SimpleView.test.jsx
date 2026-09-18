@@ -250,24 +250,26 @@ describe('la feuille de sortie de stock', () => {
 // Ce test regarde l'INSTANT de l'impression, pas ce qu'il y a après.
 // ============================================================
 describe('rien ne part avant que la liasse soit posée', () => {
-  // On SIMULE LE TÉLÉPHONE : sur un appareil lent, la page n'est pas encore
-  // peinte quand l'ancien code lançait son impression. Ici c'est le chargement
-  // des polices qu'on fait traîner — le même retard, mais qu'un test maîtrise.
-  const policesLentes = () => {
-    let pretes
-    const attente = new Promise(r => { pretes = r })
-    Object.defineProperty(document, 'fonts', {
-      configurable: true, value: { ready: attente },
-    })
-    return pretes
+  // ⚠️ ON PREND LA MAIN SUR LE RENDU. Le jsdom des tests est trop rapide pour
+  // reproduire un téléphone : React y pose la liasse avant qu'un `setTimeout`
+  // de 60 ms n'expire, et un test « les feuilles sont là au moment d'imprimer »
+  // passerait donc même avec le code fautif — vérifié.
+  //
+  // On retient donc les images à la main : tant qu'on ne les rend pas, rien ne
+  // doit partir. Un code qui imprime au bout d'une durée devinée, lui, part
+  // quand même — c'est ce qui sépare les deux.
+  const renduALaMain = () => {
+    const files = []
+    vi.spyOn(window, 'requestAnimationFrame')
+      .mockImplementation(cb => { files.push(cb); return files.length })
+    return () => { while (files.length) files.shift()(0) }
   }
-  // Plus court que le quart de seconde au bout duquel on imprime de toute façon.
   const souffler = () => new Promise(r => setTimeout(r, 120))
 
-  afterEach(() => { delete document.fonts })
+  afterEach(() => { vi.restoreAllMocks() })
 
-  it('n’imprime pas tant que la page n’est pas prête', async () => {
-    const pretes = policesLentes()
+  it('n’imprime pas tant que la page n’est pas peinte', async () => {
+    const peindre = renduALaMain()
     let vuALImpression = null
     window.print = vi.fn(() => {
       vuALImpression = {
@@ -279,33 +281,30 @@ describe('rien ne part avant que la liasse soit posée', () => {
     fireEvent.click(screen.getByText('🖨 Imprimer'))
     fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
 
-    // ⚠️ LE CŒUR DU TEST. L'ancien code attendait 60 ms puis imprimait, quoi
-    // qu'il arrive : ici il aurait déjà envoyé sa page blanche.
+    // ⚠️ LE CŒUR DU TEST : la page n'est pas peinte, donc rien ne part.
     await souffler()
     expect(window.print).not.toHaveBeenCalled()
 
-    // La page devient prête → et SEULEMENT là, l'impression part.
-    pretes()
-    await waitFor(() => expect(window.print).toHaveBeenCalled())
+    peindre()
+    expect(window.print).toHaveBeenCalled()
+    // Le reste du document est caché… ET la feuille est là. C'est ce « et »
+    // qui manquait : sans lui, l'imprimante reçoit une page blanche.
     expect(vuALImpression.cache).toBe(true)
     expect(vuALImpression.feuilles).toBeGreaterThan(0)
   })
 
   // ⚠️ LA GARDE DU « QUE LA PREMIÈRE PAGE » (2026-09-18). `afterprint` ne veut
   // pas dire « c'est imprimé » : sur iPhone il arrive quand le système PREND le
-  // document, pendant qu'il fabrique encore les pages suivantes. On vidait la
-  // liasse à cet instant — elle disparaissait sous ses pieds.
+  // document, pendant qu'il fabrique encore les pages suivantes.
   it('« j’ai pris » ne défait RIEN : ni la liasse, ni ce qui la montre', async () => {
-    const pretes = policesLentes()
+    const peindre = renduALaMain()
     window.print = vi.fn()
     await ouvrirLaFiche()
     fireEvent.click(screen.getByText('🖨 Imprimer'))
     fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
-    pretes()
-    await waitFor(() => expect(window.print).toHaveBeenCalled())
+    peindre()
+    expect(window.print).toHaveBeenCalled()
 
-    // Le système dit « j'ai pris » — il n'a pas fini pour autant : l'iPhone
-    // fabrique encore ses pages. Tout doit rester exactement en l'état.
     fireEvent(window, new Event('afterprint'))
     await souffler()
     expect(document.querySelectorAll('.feuille-impr').length).toBeGreaterThan(0)
@@ -315,13 +314,12 @@ describe('rien ne part avant que la liasse soit posée', () => {
   })
 
   it('l’écran n’est rendu que quand Layla revient dans l’app', async () => {
-    const pretes = policesLentes()
+    const peindre = renduALaMain()
     window.print = vi.fn()
     await ouvrirLaFiche()
     fireEvent.click(screen.getByText('🖨 Imprimer'))
     fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
-    pretes()
-    await waitFor(() => expect(window.print).toHaveBeenCalled())
+    peindre()
     expect(document.body.classList.contains('impr-feuilles')).toBe(true)
 
     // Elle repose le doigt sur l'app : là, et seulement là, on range.
@@ -333,24 +331,25 @@ describe('rien ne part avant que la liasse soit posée', () => {
   })
 
   it('et on peut réimprimer la même chose juste après', async () => {
-    const pretes = policesLentes()
+    const peindre = renduALaMain()
     window.print = vi.fn()
     await ouvrirLaFiche()
     fireEvent.click(screen.getByText('🖨 Imprimer'))
     fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
-    pretes()
-    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1))
+    peindre()
+    expect(window.print).toHaveBeenCalledTimes(1)
     fireEvent(window, new Event('afterprint'))
 
     // Même liasse, même choix : le contenu ne change pas, donc seul un
     // compteur peut relancer le départ.
     fireEvent.click(screen.getByText('🖨 Imprimer'))
     fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
-    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(2))
+    peindre()
+    expect(window.print).toHaveBeenCalledTimes(2)
   })
 
   it('la feuille de sortie non plus ne part pas à vide', async () => {
-    const pretes = policesLentes()
+    const peindre = renduALaMain()
     let feuillesVues = -1
     window.print = vi.fn(() => {
       feuillesVues = document.querySelectorAll('.feuille-sortie').length
@@ -359,8 +358,7 @@ describe('rien ne part avant que la liasse soit posée', () => {
     fireEvent.click(await screen.findByLabelText('Feuille de sortie de stock'))
     await souffler()
     expect(window.print).not.toHaveBeenCalled()
-    pretes()
-    await waitFor(() => expect(window.print).toHaveBeenCalled())
+    peindre()
     expect(feuillesVues).toBe(1)
   })
 })

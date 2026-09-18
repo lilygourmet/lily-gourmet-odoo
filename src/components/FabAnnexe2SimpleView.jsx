@@ -92,8 +92,21 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // contenu : celui-ci reste en place d'une fois sur l'autre (voir plus bas),
   // donc réimprimer la même chose ne changerait rien et rien ne partirait.
   const [tirage, setTirage] = useState(0)
-  /** Poser la liasse, puis lancer l'impression. Les deux dans le même geste. */
+  /**
+   * Poser la liasse, puis lancer l'impression. Les deux dans le même geste.
+   *
+   * ⚠️ ET ON RÉPOND AU DOIGT (règle de Layla, 2026-09-08 : « je ne sens pas que
+   * j'ai cliqué, du coup j'appuie plusieurs fois »). Préparer l'aperçu d'une
+   * cascade prend un moment — le navigateur doit mettre en page toutes les
+   * feuilles — et pendant ce temps rien ne bouge à l'écran. On le dit donc tout
+   * de suite, avant de rendre la main au navigateur.
+   */
   const lancer = (quoi, sortie = false) => {
+    navigator.vibrate?.(15)
+    const combien = sortie ? 1 : (quoi || []).length
+    toast(combien > 1
+      ? `🖨 Préparation de ${combien} feuilles…`
+      : '🖨 Préparation de la feuille…')
     setFeuillesPretes(quoi)
     setSortiePrete(sortie)
     setTirage(t => t + 1)
@@ -164,24 +177,17 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     }
     const apresLaPeinture = () =>
       requestAnimationFrame(() => requestAnimationFrame(partir))
-    // ⚠️ L'ATTENTE DES POLICES EST COURTE ET BORNÉE (Layla, 2026-09-18 : « les
-    // options d'impression tardent à apparaître »). `document.fonts.ready`
-    // attend TOUTES les polices de l'app — la quinzaine de polices décoratives
-    // du Studio photos comprise, alors que les feuilles n'en utilisent aucune.
-    // Sur un téléphone en 3G, c'est long pour rien, et le bouton semble mort.
-    // Un quart de seconde, puis on imprime quoi qu'il arrive : une feuille dans
-    // une autre police vaut mieux qu'une feuille qui ne sort pas.
-    let parti = false
-    const uneSeuleFois = () => { if (!parti) { parti = true; apresLaPeinture() } }
-    const limite = setTimeout(uneSeuleFois, 250)
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(uneSeuleFois, uneSeuleFois)
-    } else {
-      uneSeuleFois()
-    }
+    // ⚠️ ON N'ATTEND PLUS LES POLICES (Layla, 2026-09-18 : « ça tarde à
+    // apparaître, même sur ordi »). `document.fonts.ready` attend TOUTES celles
+    // de l'app — les quinze polices décoratives du Studio photos comprises —
+    // alors que ces feuilles n'en utilisent aucune : elles sont écrites avec la
+    // police du système. C'était une demi-seconde d'attente pour rien.
+    //
+    // Les deux images d'affilée suffisent : la seconde n'arrive qu'une fois la
+    // liasse peinte, et c'est la seule chose qu'il fallait vraiment attendre.
+    apresLaPeinture()
     return () => {
       vivant = false
-      clearTimeout(limite)
       rendreLEcran()
     }
   }, [tirage])
