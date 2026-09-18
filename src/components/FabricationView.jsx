@@ -830,7 +830,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     const uBase = b.unite || (t && t.u) || uniteDe(b.produit)
     let sorti = null
     if (demandeRendement(b.produit)) {
-      const tape = await demanderRendu(b.produit, qty, uBase)
+      const tape = await demanderRendu(b.produit, uBase)
       if (tape === null) return                       // clavier refermé : on ne déclare rien
       sorti = depuisClavier(tape, uBase)
     }
@@ -1400,7 +1400,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // du frigo pour 5,43 kg. C'est déjà ce que fait le serveur (`validerOrdre`
   // écrit `quantity_done` = la quantité PRÉVUE de chaque composant) ; on lui
   // donne seulement, enfin, la quantité produite.
-  const [rendu, setRendu] = useState(null)       // { produit, unite, propose, repondre }
+  const [rendu, setRendu] = useState(null)       // { produit, unite, repondre }
 
   // Ce qui se pèse ou se compte à la sortie du four. Jamais la génoise ni l'eau
   // du robinet (`toujoursLa`) : elles ne se déclarent pas ici.
@@ -1410,9 +1410,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   // d'abord, le stock ensuite — `stocks` porte l'unité réelle d'Odoo.
   const uniteDe = p => (recettes[p] || {}).unite || (stocks[p] || {}).unite || 'kg'
 
-  // Le clavier parle GRAMMES pour ce qui se pèse, PIÈCES pour ce qui se compte
-  // (les bases de cupcakes sont en unités) — comme tout le reste de l'écran.
-  const versClavier = (q, u) => (norm(u) === 'kg' ? Math.round(q * 1000) : Math.round(q))
+  // Ce qui est tapé est en GRAMMES pour ce qui se pèse, en PIÈCES pour ce qui
+  // se compte (les bases de cupcakes) — comme tout le reste de l'écran.
   const depuisClavier = (n, u) => (norm(u) === 'kg' ? n / 1000 : n)
 
   /**
@@ -1424,11 +1423,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
    * mort jusqu'au rechargement. On refuse le second au lieu de perdre le premier.
    */
   const clavierOuvert = useRef(false)
-  const demanderRendu = (produit, qty, unite) => new Promise(repondre => {
+  const demanderRendu = (produit, unite) => new Promise(repondre => {
     if (clavierOuvert.current) return repondre(null)
     clavierOuvert.current = true
     const u = unite || uniteDe(produit)
-    setRendu({ produit, unite: u, propose: versClavier(Number(qty) || 0, u), repondre })
+    setRendu({ produit, unite: u, repondre })
   })
   const refermerClavier = (f, v) => { clavierOuvert.current = false; setRendu(null); f(v) }
 
@@ -1448,7 +1447,7 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       let sorti = null
       if (demandeRendement(produit) && vaDeclarer(cleDemandee, produit)) {
         const u = unite || uniteDe(produit)
-        const tape = await demanderRendu(produit, qty, u)
+        const tape = await demanderRendu(produit, u)
         if (tape === null) return                     // clavier refermé : on ne déclare rien
         sorti = depuisClavier(tape, u)
       }
@@ -2070,10 +2069,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           // ⚠️ LE CLAVIER S'OUVRE VIDE, et la coche ✓ reste éteinte tant que
           // rien n'est tapé. Pré-remplir avec la quantité demandée invitait à
           // valider d'un doigt sans peser : « ça oblige à ne pas cliquer vite
-          // que c'est ça » (Layla, 2026-09-18). Le repère reste dans le titre.
+          // que c'est ça » (Layla, 2026-09-18).
+          // La quantité demandée n'est PAS rappelée non plus — « enlève
+          // (demandé 10 860 g) » : le chiffre sous les yeux est déjà une
+          // réponse toute faite. On demande ce qui est sorti, rien d'autre.
           // (Fabrication Annexe, elle, garde son pré-remplissage : on ne touche
           // pas au composant, seulement à ce qu'on lui passe.)
-          titre={`${propre(rendu.produit)} — combien ça t'a sorti ? (demandé ${nb(rendu.propose)} ${rendu.unite === 'kg' ? 'g' : rendu.unite})`}
+          titre={`${propre(rendu.produit)} — combien ça t'a sorti ?`}
           valeur=""
           unite={rendu.unite === 'kg' ? 'g' : rendu.unite}
           onValider={v => refermerClavier(rendu.repondre, v)}
