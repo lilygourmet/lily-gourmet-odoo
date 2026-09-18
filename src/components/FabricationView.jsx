@@ -2067,8 +2067,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           répondre n'enregistre rien : on ne déclare pas à moitié. */}
       {rendu && (
         <Clavier
-          titre={`${propre(rendu.produit)} — combien ça t'a sorti ?`}
-          valeur={rendu.propose}
+          // ⚠️ LE CLAVIER S'OUVRE VIDE, et la coche ✓ reste éteinte tant que
+          // rien n'est tapé. Pré-remplir avec la quantité demandée invitait à
+          // valider d'un doigt sans peser : « ça oblige à ne pas cliquer vite
+          // que c'est ça » (Layla, 2026-09-18). Le repère reste dans le titre.
+          // (Fabrication Annexe, elle, garde son pré-remplissage : on ne touche
+          // pas au composant, seulement à ce qu'on lui passe.)
+          titre={`${propre(rendu.produit)} — combien ça t'a sorti ? (demandé ${nb(rendu.propose)} ${rendu.unite === 'kg' ? 'g' : rendu.unite})`}
+          valeur=""
           unite={rendu.unite === 'kg' ? 'g' : rendu.unite}
           onValider={v => refermerClavier(rendu.repondre, v)}
           onFermer={() => refermerClavier(rendu.repondre, null)} />
