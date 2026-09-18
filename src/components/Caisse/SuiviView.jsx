@@ -67,7 +67,7 @@ function BanqueSection({ user }) {
   const [year, setYear]   = useState(currentYear())
   const [month, setMonth] = useState(currentMonth())
   const [statusFilter, setStatusFilter] = useState('pending')
-  const [methodFilter, setMethodFilter] = useState('all') // 'all' | 'cash' | 'cheque' | 'virement'
+  const [methodFilter, setMethodFilter] = useState('all') // 'all' | 'cash' | 'cheque' | 'virement' | 'a_confirmer' | 'ecart' | 'ecart_valide'
   const [list, setList] = useState([])
   const [uploadEnv, setUploadEnv] = useState(null)
   const [editDate, setEditDate] = useState({})
@@ -120,6 +120,7 @@ function BanqueSection({ user }) {
   const filteredList = useMemo(() => {
     let l = methodFilter === 'ecart' ? ecartList
       : methodFilter === 'ecart_valide' ? ecartValidesList
+      : methodFilter === 'a_confirmer' ? list.filter(e => e.releve_status === 'a_confirmer')
       : methodFilter === 'all' ? list
       : list.filter(e => (e.payment_method || 'cash') === methodFilter)
     const q = query.trim().toLowerCase()
@@ -130,7 +131,7 @@ function BanqueSection({ user }) {
         (e.source || '').toLowerCase().includes(q) ||
         (e.note_proof || '').toLowerCase().includes(q))
     }
-    if (hideNoSugg && methodFilter !== 'ecart' && methodFilter !== 'ecart_valide') l = l.filter(e => e.releve_status || e.proof_url || hasSuggestion(e))
+    if (hideNoSugg && !['ecart', 'ecart_valide', 'a_confirmer'].includes(methodFilter)) l = l.filter(e => e.releve_status || e.proof_url || hasSuggestion(e))
     return l
   }, [list, ecartList, ecartValidesList, methodFilter, query, hideNoSugg, availByMethod])
 
@@ -145,6 +146,8 @@ function BanqueSection({ user }) {
   const countCash = useMemo(() => list.filter(e => (e.payment_method || 'cash') === 'cash').length, [list])
   const countCheque = useMemo(() => list.filter(e => e.payment_method === 'cheque').length, [list])
   const countVirement = useMemo(() => list.filter(e => e.payment_method === 'virement').length, [list])
+  // Caisses dont l'app hésite entre plusieurs lignes du relevé : elles attendent un clic.
+  const countAConfirmer = useMemo(() => list.filter(e => e.releve_status === 'a_confirmer').length, [list])
 
   async function handleSaveDate(envId, newDate) {
     await updateEnveloppeDate(envId, newDate)
@@ -309,7 +312,7 @@ function BanqueSection({ user }) {
       </div>
 
       {/* Filtre méthode de paiement */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
         <button onClick={() => setMethodFilter('all')} style={methodFilterBtn(methodFilter === 'all')}>
           Tout ({list.length})
         </button>
@@ -321,6 +324,9 @@ function BanqueSection({ user }) {
         </button>
         <button onClick={() => setMethodFilter('virement')} style={methodFilterBtn(methodFilter === 'virement', 'virement')}>
           <ArrowLeftRight size={14} /> Virements ({countVirement})
+        </button>
+        <button onClick={() => setMethodFilter('a_confirmer')} style={methodFilterBtn(methodFilter === 'a_confirmer')}>
+          ⏳ À confirmer ({countAConfirmer})
         </button>
         <button onClick={() => setMethodFilter('ecart')} style={methodFilterBtn(methodFilter === 'ecart')}>
           ⚠️ Écart ({ecartList.length})
