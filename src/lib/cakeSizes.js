@@ -59,3 +59,27 @@ export function computeSizesForCake(pers, etages) {
 
   return allSolutions[0]
 }
+
+// ============================================================
+// Formes carrée et rectangulaire — UN SEUL étage, jamais empilées.
+// Tailles lues dans la nomenclature Odoo « CD- Gateau Forme » (#2776) :
+// c'est le moule réellement utilisé pour chaque nombre de personnes.
+// ============================================================
+
+export const CARRE_TABLE = [
+  { pers: 5, cote: 13 },
+  { pers: 10, cote: 18 },
+  { pers: 15, cote: 23 },
+  { pers: 20, cote: 27 },
+  { pers: 30, cote: 33 },
+  { pers: 40, cote: 35 },
+  { pers: 50, cote: 40 },
+]
+
+export const RECTANGLE_TABLE = [
+  { pers: 10, larg: 16, long: 21 },
+  { pers: 15, larg: 20, long: 27 },
+  { pers: 20, larg: 24, long: 31 },
+  { pers: 30, larg: 28, long: 34 },
+  { pers: 40, larg: 32, long: 39 },
+]

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import AppHeader from './AppHeader'
-import { computeSizesForCake, SIZE_TABLE } from '../lib/cakeSizes'
+import { computeSizesForCake, SIZE_TABLE, CARRE_TABLE, RECTANGLE_TABLE } from '../lib/cakeSizes'
 
 // Onglet « Simulation gâteaux » : pour un nombre de personnes, montre toutes les
 // configurations réalisables (1, 2, 3… étages) avec les vraies tailles Lily Gourmet.
 // Le rebord d'un étage passe en orange quand la descente n'est pas homogène.
+// Carré et rectangle : un seul étage, tailles lues dans la recette Odoo.
 
 const ECHELLE = 3      // pixels par cm
 const H_MAX = 236      // hauteur px dispo pour l'empilement
@@ -13,6 +14,12 @@ const CREME = '#f3e9d6'
 const CREME2 = '#e8d9bd'
 const OR = '#c9a24b'
 const BORDEAUX = '#993556'
+
+const CARTE_STYLE = {
+  background: '#fff', border: '1px solid #efe7d7', borderRadius: 20, padding: '22px 18px',
+  textAlign: 'center', boxShadow: '0 6px 22px rgba(122,31,43,.05)',
+  display: 'flex', flexDirection: 'column', alignItems: 'center',
+}
 
 const persParCm = cm => (SIZE_TABLE.find(s => s.cm === cm) || {}).pers
 
@@ -53,15 +60,31 @@ function CakeSvg({ cms }) {
   return <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}>{els}</svg>
 }
 
+// Plaque vue de dessus : largeur × profondeur en cm
+function PlaqueSvg({ larg, prof }) {
+  const svgW = 300, svgH = 250
+  const ech = Math.min(210 / larg, 180 / prof)
+  const w = larg * ech, h = prof * ech
+  const x = (svgW - w) / 2, y = (svgH - h) / 2
+  return (
+    <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}>
+      <rect x={x + 5} y={y + 7} width={w} height={h} rx={10} fill="#efe4cf" />
+      <rect x={x} y={y} width={w} height={h} rx={10} fill={CREME} stroke={OR} strokeWidth={2} />
+      <rect x={x + 8} y={y + 8} width={w - 16} height={h - 16} rx={6} fill="#fff8ec" stroke={OR} strokeWidth={1} />
+      <text x={svgW / 2} y={svgH / 2} textAnchor="middle" dominantBaseline="central"
+        fontSize={15} fill={BORDEAUX} fontFamily="Georgia, serif">{larg} × {prof} cm</text>
+      <text x={svgW / 2} y={y - 10} textAnchor="middle" fontSize={11} fill="#8a7d78">{larg} cm</text>
+      <text x={x - 10} y={svgH / 2} textAnchor="middle" dominantBaseline="central" fontSize={11} fill="#8a7d78"
+        transform={`rotate(-90 ${x - 10} ${svgH / 2})`}>{prof} cm</text>
+    </svg>
+  )
+}
+
 function Carte({ nb, cms, n }) {
   const cmsDesc = cms.slice().sort((a, b) => b - a)
   const gap = aUnGap(cmsDesc)
   return (
-    <div style={{
-      background: '#fff', border: '1px solid #efe7d7', borderRadius: 20, padding: '22px 18px',
-      textAlign: 'center', boxShadow: '0 6px 22px rgba(122,31,43,.05)',
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-    }}>
+    <div style={CARTE_STYLE}>
       <h2 className="font-fraunces" style={{ color: BORDEAUX, fontSize: 20, fontWeight: 600, margin: '0 0 2px' }}>
         {nb} étage{nb > 1 ? 's' : ''}
       </h2>
@@ -89,14 +112,61 @@ function Carte({ nb, cms, n }) {
   )
 }
 
+function CartePlaque({ titre, larg, prof, n }) {
+  return (
+    <div style={{ ...CARTE_STYLE, maxWidth: 360, margin: '0 auto' }}>
+      <h2 className="font-fraunces" style={{ color: BORDEAUX, fontSize: 20, fontWeight: 600, margin: '0 0 2px' }}>
+        {titre}
+      </h2>
+      <div style={{ fontSize: 13, color: '#8a7d78', marginBottom: 14 }}>1 étage · {n} parts</div>
+      <div style={{ height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <PlaqueSvg larg={larg} prof={prof} />
+      </div>
+      <div style={{ marginTop: 16, width: '100%', borderTop: '1px dashed #eadfca', paddingTop: 12, fontSize: 13.5 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 4px' }}>
+          <span>Gâteau</span>
+          <span style={{ color: BORDEAUX, fontWeight: 600 }}>{larg} × {prof} cm · {n} pers</span>
+        </div>
+      </div>
+      <div style={{ marginTop: 10, fontSize: 14, color: '#8a7d78' }}>Pour <b style={{ color: BORDEAUX }}>{n}</b> personnes</div>
+    </div>
+  )
+}
+
+// Message quand aucun moule ne correspond : on propose les tailles qui existent
+function PlaqueImpossible({ titre, n, dispo, onChoisir }) {
+  return (
+    <div style={{
+      background: '#fff', border: '1px solid #efe7d7', borderRadius: 20, padding: 40,
+      textAlign: 'center', color: '#8a7d78',
+    }}>
+      Pas de {titre.toLowerCase()} pour {n} personnes.
+      <div style={{ marginTop: 16, fontSize: 13 }}>Tailles possibles en {titre.toLowerCase()} :</div>
+      <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+        {dispo.map(v => (
+          <button key={v} onClick={() => onChoisir(v)} style={{
+            border: `1px solid ${CREME2}`, background: '#fff', color: BORDEAUX,
+            padding: '6px 14px', borderRadius: 999, fontSize: 14, cursor: 'pointer',
+          }}>{v} pers</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function SimulationGateauxView({ user, activeView, onNavigate, onLogout }) {
   const [n, setN] = useState(30)
+  const [forme, setForme] = useState('rond')
 
   const configs = []
-  for (let nb = 1; nb <= 9; nb++) {
-    const sizes = computeSizesForCake(n, nb)
-    if (sizes) configs.push({ nb, cms: sizes })
+  if (forme === 'rond') {
+    for (let nb = 1; nb <= 9; nb++) {
+      const sizes = computeSizesForCake(n, nb)
+      if (sizes) configs.push({ nb, cms: sizes })
+    }
   }
+  const carre = CARRE_TABLE.find(s => s.pers === n)
+  const rect = RECTANGLE_TABLE.find(s => s.pers === n)
 
   return (
     <div className="min-h-screen bg-cream">
@@ -131,10 +201,28 @@ export default function SimulationGateauxView({ user, activeView, onNavigate, on
               }}>{v}</button>
             ))}
           </div>
+          <div style={{ marginTop: 18, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {[['rond', 'Rond'], ['carre', 'Carré'], ['rect', 'Rectangle']].map(([k, lib]) => (
+              <button key={k} onClick={() => setForme(k)} style={{
+                border: `1px solid ${forme === k ? BORDEAUX : CREME2}`,
+                background: forme === k ? BORDEAUX : '#fff',
+                color: forme === k ? '#fff' : BORDEAUX,
+                padding: '8px 20px', borderRadius: 999, fontSize: 15, cursor: 'pointer', fontWeight: 600,
+              }}>{lib}</button>
+            ))}
+          </div>
         </div>
 
         {/* Cartes */}
-        {configs.length === 0 ? (
+        {forme === 'carre' ? (
+          carre
+            ? <CartePlaque titre="Carré" larg={carre.cote} prof={carre.cote} n={n} />
+            : <PlaqueImpossible titre="Carré" n={n} dispo={CARRE_TABLE.map(s => s.pers)} onChoisir={setN} />
+        ) : forme === 'rect' ? (
+          rect
+            ? <CartePlaque titre="Rectangle" larg={rect.long} prof={rect.larg} n={n} />
+            : <PlaqueImpossible titre="Rectangle" n={n} dispo={RECTANGLE_TABLE.map(s => s.pers)} onChoisir={setN} />
+        ) : configs.length === 0 ? (
           <div style={{
             background: '#fff', border: '1px solid #efe7d7', borderRadius: 20, padding: 40,
             textAlign: 'center', color: '#8a7d78',
@@ -149,8 +237,11 @@ export default function SimulationGateauxView({ user, activeView, onNavigate, on
         )}
 
         <p style={{ maxWidth: 600, margin: '30px auto 0', textAlign: 'center', fontSize: 13, color: '#8a7d78', lineHeight: 1.5 }}>
-          Chaque étage doit être d'une taille différente : plus il y a d'étages, plus il faut de personnes.
-          Le rebord orange signale une descente irrégulière (une marche plus grande que les autres).
+          {forme === 'rond'
+            ? <>Chaque étage doit être d'une taille différente : plus il y a d'étages, plus il faut de personnes.
+              Le rebord orange signale une descente irrégulière (une marche plus grande que les autres).</>
+            : <>Le carré et le rectangle se font toujours en <b>un seul étage</b>. Les tailles viennent
+              directement des moules utilisés en labo (recette Odoo « CD- Gateau Forme »).</>}
         </p>
       </div>
     </div>
