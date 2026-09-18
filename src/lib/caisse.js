@@ -316,9 +316,13 @@ export async function loadEnveloppesForSuivi({ type, month, year, statusFilter =
   if (error) throw error
   const list = (data || []).filter(e => e.destinataire?.type === type)
   // « En attente » : on cache les versements marqués « ignorés » (ils restent visibles dans « Toutes »).
+  // Une caisse « à confirmer » RESTE en attente : l'import lui a attaché le PDF du relevé
+  // comme preuve, mais elle attend toujours que Layla désigne la bonne ligne. Sans ça elle
+  // passait pour « versée » et disparaissait de la liste — du travail invisible.
+  const aConfirmer = e => e.releve_status === 'a_confirmer'
   if (statusFilter === 'ignored')   return list.filter(e =>  e.releve_ignore)
-  if (statusFilter === 'pending')   return list.filter(e => !e.proof_url && !e.releve_ignore)
-  if (statusFilter === 'done')      return list.filter(e =>  e.proof_url)
+  if (statusFilter === 'pending')   return list.filter(e => (!e.proof_url || aConfirmer(e)) && !e.releve_ignore)
+  if (statusFilter === 'done')      return list.filter(e =>  e.proof_url && !aConfirmer(e))
   return list
 }
 
