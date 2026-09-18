@@ -634,16 +634,34 @@ export async function attachReleveLines(env, lines) {
 // Confirme une enveloppe « à confirmer » sur la ligne choisie. On rattache la VRAIE ligne
 // du relevé quand on la retrouve : sinon l'enveloppe passait verte mais la ligne restait
 // dans « Reçus banque non liés » pour toujours.
+// Lignes parmi lesquelles CONFIRMER une caisse « à confirmer » : celles du relevé encore
+// libres au bon montant, plus celles que cette caisse retient déjà.
+//
+// Une ligne déjà marquée prise par CETTE caisse lui reste évidemment disponible. Sans ça,
+// une caisse repassée « à confirmer » sans que sa ligne soit libérée (« tout recalculer »)
+// ne pouvait plus jamais être confirmée : la ligne était invisible dans « non liées » ET
+// introuvable à la confirmation. Caisse et ligne bloquées toutes deux.
+//
+// Une caisse marquée « ⚠️ moyen différent » (virement saisi en espèces, ou l'inverse) a sa
+// ligne dans l'AUTRE catégorie : ne chercher que dans la sienne revenait à ne jamais la
+// retrouver, et l'app affirmait à tort qu'une autre caisse l'avait prise.
+const AUTRE_MOYEN = { virement: 'cash', cash: 'virement' }
+export async function lignesPourConfirmer(env) {
+  const methode = env.payment_method || 'cash'
+  const autre = (env.note_proof || '').includes('moyen différent') ? AUTRE_MOYEN[methode] : null
+  const pools = await Promise.all([
+    loadFreeReleveLines(env.amount_cash, methode),
+    autre ? loadFreeReleveLines(env.amount_cash, autre) : Promise.resolve([]),
+  ])
+  const libres = pools.flat()
+  const miennes = (await loadEnvReleveLines(env.id))
+    .filter(m => Math.abs(Number(m.amount) - Number(env.amount_cash)) < ECART_MINI)
+  return [...libres, ...miennes.filter(m => !libres.some(l => l.key === m.key))]
+}
+
 export async function confirmReleveLine(env, choice) {
   if (choice) {
-    const libres = await loadFreeReleveLines(env.amount_cash, env.payment_method)
-    // Une ligne déjà marquée prise par CETTE caisse lui reste évidemment disponible. Sans
-    // ça, une caisse repassée « à confirmer » sans que sa ligne soit libérée (« tout
-    // recalculer ») ne pouvait plus jamais être confirmée : la ligne était invisible dans
-    // « non liées » ET introuvable à la confirmation. Caisse et ligne bloquées toutes deux.
-    const miennes = (await loadEnvReleveLines(env.id))
-      .filter(m => Math.abs(Number(m.amount) - Number(env.amount_cash)) < ECART_MINI)
-    const pool = [...libres, ...miennes.filter(m => !libres.some(l => l.key === m.key))]
+    const pool = await lignesPourConfirmer(env)
     const memeJour = pool.filter(l => l.ligne_date === choice.d)
     // Plusieurs remises du même montant le même jour : le libellé (n° de remise) départage.
     const ligne = memeJour.find(l => (l.label || '').startsWith(choice.l)

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, analyserVirements, ECART_MINI } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, lignesPourConfirmer, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, analyserVirements, ECART_MINI } from '../../lib/caisse'
 import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
@@ -567,7 +567,8 @@ function BanqueSection({ user }) {
       )}
 
       {confirmEnv && (
-        <ConfirmChoiceModal env={confirmEnv} onClose={() => setConfirmEnv(null)} onPick={handlePickLine} />
+        <ConfirmChoiceModal env={confirmEnv} onClose={() => setConfirmEnv(null)} onPick={handlePickLine}
+          onGrouper={e => { setConfirmEnv(null); setLinkFrom(e) }} />
       )}
 
       {suggestEnv && (
@@ -1069,23 +1070,21 @@ function SuggestModal({ env, onClose, onAttach }) {
 // périmé faisait légitimement craindre un doublon.
 // Désormais on interroge les lignes libres : une ligne prise par n'importe quelle caisse
 // en disparaît, quel que soit son libellé.
-function ConfirmChoiceModal({ env, onClose, onPick }) {
+function ConfirmChoiceModal({ env, onClose, onPick, onGrouper }) {
   const [libres, setLibres] = useState(null)
+  // « 🔗 2 virements = 1 ligne » : la ligne du relevé vaut la SOMME de deux caisses, elle
+  // ne fait donc pas le montant de celle-ci. « Confirmer » ne pouvait pas la retrouver et
+  // annonçait à tort qu'une autre caisse l'avait prise — une impasse. Le bon geste est
+  // « Grouper 2 caisses », qui cherche bien une ligne au montant des deux.
+  const combine = (env.note_proof || '').includes('🔗')
   useEffect(() => {
     let vivant = true
     ;(async () => {
-      try {
-        const [l, miennes] = await Promise.all([
-          loadFreeReleveLines(env.amount_cash, env.payment_method),
-          loadEnvReleveLines(env.id),
-        ])
-        // Une ligne déjà marquée prise par CETTE caisse lui reste disponible (voir
-        // confirmReleveLine) : sans ça une caisse bloquée ne pourrait plus se débloquer.
-        if (vivant) setLibres([...l, ...miennes.filter(m => !l.some(x => x.key === m.key))])
-      } catch { if (vivant) setLibres([]) }
+      try { const l = await lignesPourConfirmer(env); if (vivant) setLibres(l) }
+      catch { if (vivant) setLibres([]) }
     })()
     return () => { vivant = false }
-  }, [env.id, env.amount_cash, env.payment_method])
+  }, [env])
 
   const normLine = s => (s || '').replace(/\s+/g, ' ').trim().toUpperCase()
   let candidates = []
@@ -1108,10 +1107,16 @@ function ConfirmChoiceModal({ env, onClose, onPick }) {
         </div>
         {libres === null ? (
           <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>Vérification des lignes encore libres…</div>
+        ) : combine ? (
+          <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 12 }}>
+            La banque a reçu <b>deux caisses de ce client en un seul virement</b> : la ligne
+            du relevé fait la somme des deux, pas {fmtMoney(env.amount_cash)}.
+            « Confirmer » ne peut pas la rattacher seul — passe par « Grouper 2 caisses ».
+          </div>
         ) : candidates.length === 0 ? (
           <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>
             {nbMemorisees
-              ? `Les ${nbMemorisees} ligne(s) proposées ont été prises par d'autres caisses entre-temps. Utilise « Lier » pour en choisir une autre.`
+              ? `Aucune des ${nbMemorisees} ligne(s) proposées n'est encore disponible (déjà prise par une autre caisse, ou disparue du relevé). Utilise « Lier » pour en choisir une autre.`
               : 'Aucune ligne mémorisée. Tu peux confirmer sans choisir.'}
           </div>
         ) : (
@@ -1128,6 +1133,11 @@ function ConfirmChoiceModal({ env, onClose, onPick }) {
           <div style={{ fontSize: 11, color: '#8a7a70', marginBottom: 10 }}>
             {perimees} ligne(s) retirée(s) : déjà prise(s) par une autre caisse.
           </div>
+        )}
+        {combine && (
+          <button onClick={() => onGrouper(env)} style={{ ...btnNormal, width: '100%', marginBottom: 8, color: '#5b2a86', border: '1px solid #D6C3EA' }}>
+            🔗 Grouper 2 caisses
+          </button>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => onPick(env, null)} style={{ ...btnNormal, flex: 1 }}>Confirmer sans choisir</button>
