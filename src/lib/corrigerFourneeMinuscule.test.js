@@ -62,6 +62,20 @@ describe('corrigerFourneeMinuscule — ce qu’il ne doit PAS toucher', () => {
     expect(corrigerFourneeMinuscule(0.0000004, 1, 'Units').corrige).toBe(0)
   })
 
+  // ⚠️ LE PIÈGE OÙ JE SUIS TOMBÉ EN VÉRIFIANT (2026-09-19).
+  // « SM. Mousse Meringue Citron (kg) » est compté en KILOS par Odoo, et sa
+  // recette sort 800 g. Un ordre de 0,8 y est donc JUSTE. J'avais rejoué le
+  // garde-fou en lui passant 0,8 (l'unité de l'article) au lieu de 800
+  // (l'unité de la recette, la seule qu'il reçoit vraiment) et conclu à tort
+  // que 41 ordres étaient faux. Le vrai code convertit AVANT d'appeler ici.
+  it('la fournée de mousse meringue citron (0,8 kg = 800 g) est JUSTE', () => {
+    expect(corrigerFourneeMinuscule(800, 800, 'g').corrige).toBe(0)
+    // 1,8 fournée : toujours juste.
+    expect(corrigerFourneeMinuscule(1440, 800, 'g').corrige).toBe(0)
+    // Celle-là, en revanche, est bien fausse : 0,8 g pour une recette de 800 g.
+    expect(corrigerFourneeMinuscule(0.8, 800, 'g').qty).toBeCloseTo(800, 6)
+  })
+
   it('sans quantité ou sans recette, on ne touche à rien', () => {
     expect(corrigerFourneeMinuscule(0, 5425, 'g').corrige).toBe(0)
     expect(corrigerFourneeMinuscule(-5, 5425, 'g').corrige).toBe(0)
