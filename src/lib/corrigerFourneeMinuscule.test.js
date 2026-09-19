@@ -76,6 +76,26 @@ describe('corrigerFourneeMinuscule — ce qu’il ne doit PAS toucher', () => {
     expect(corrigerFourneeMinuscule(0.8, 800, 'g').qty).toBeCloseTo(800, 6)
   })
 
+  // ⚠️ « ATTENTION À CE QUI EST DÉCLARÉ EN KILO. CE N'EST PAS EN GR. ÇA DOIT
+  // ÊTRE CONVERTI » (Layla, 2026-09-19).
+  // C'est le RAPPORT À LA RECETTE qui décide, jamais le chiffre brut — et les
+  // deux sont dans la même unité, parce que `creerOfPreparation` a converti
+  // avant (`quantiteOrdre`). Un même nombre peut donc être juste ou faux selon
+  // ce que sort la recette : 1 g de ganache est une recette entière, 0,8 g de
+  // mousse est le millième de la sienne.
+  it('1 g de ganache est une fournée ENTIÈRE : on n’y touche pas', () => {
+    // La ganache cakedesign sort 1 g : des dizaines d'ordres à 1 g depuis juillet.
+    expect(corrigerFourneeMinuscule(1, 1, 'g').corrige).toBe(0)
+    expect(corrigerFourneeMinuscule(8, 1, 'g').corrige).toBe(0)
+  })
+
+  it('un article compté en KILOS se juge sur sa recette, pas sur le nombre', () => {
+    // 1,68 kg d'une recette qui sort 9,43 kg : une petite fournée, légitime.
+    expect(corrigerFourneeMinuscule(1.68, 9.43, 'kg').corrige).toBe(0)
+    // 0,00168 kg de la même : le millième, faux.
+    expect(corrigerFourneeMinuscule(0.00168, 9.43, 'kg').qty).toBeCloseTo(1.68, 6)
+  })
+
   it('sans quantité ou sans recette, on ne touche à rien', () => {
     expect(corrigerFourneeMinuscule(0, 5425, 'g').corrige).toBe(0)
     expect(corrigerFourneeMinuscule(-5, 5425, 'g').corrige).toBe(0)
