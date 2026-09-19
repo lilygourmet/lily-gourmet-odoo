@@ -499,15 +499,42 @@ export async function unmarkPaymentProof(messageId) {
   return data
 }
 
-/** Charge les preuves de paiement (les plus récentes d'abord) avec infos client. */
+/**
+ * Lit TOUTES les lignes d'une requête, page par page.
+ *
+ * ⚠️ SUPABASE S'ARRÊTE À 1000 LIGNES, ET NE PRÉVIENT PAS. Ce n'est pas un
+ * réglage du navigateur : le serveur lui-même refuse d'en rendre davantage.
+ * Vérifié le 2026-09-19 — en demander 2000 en rend 1000. **Écrire une limite
+ * plus grande ne sert donc à rien** ; seule la lecture par pages en sort.
+ *
+ * Le même piège avait fait disparaître des journées entières de Pointage
+ * (2026-09-01), où il est traité de la même façon.
+ */
+async function lireTout(construireRequete) {
+  const PAGE = 1000
+  let tout = []
+  for (let debut = 0; ; debut += PAGE) {
+    const { data, error } = await construireRequete().range(debut, debut + PAGE - 1)
+    if (error) throw error
+    tout = tout.concat(data || [])
+    if (!data || data.length < PAGE) return tout
+  }
+}
+
+/**
+ * Charge les preuves de paiement (les plus récentes d'abord) avec infos client.
+ *
+ * ⚠️ PAGE PAR PAGE : elles étaient 571 le 2026-09-19 et ne font qu'augmenter.
+ * Passé 1000, les plus anciennes auraient disparu de l'onglet « Traités » sans
+ * le moindre message — et un paiement qu'on ne retrouve plus, c'est un client
+ * qu'on rappelle pour rien.
+ */
 export async function loadPaymentsToValidate() {
-  const { data, error } = await supabase
+  return lireTout(() => supabase
     .from('messages')
     .select(PAYMENT_SEL)
     .eq('is_payment_proof', true)
-    .order('sent_at', { ascending: false })
-  if (error) throw error
-  return data || []
+    .order('sent_at', { ascending: false }))
 }
 
 /** Marque un paiement comme validé (efface un éventuel refus). */
@@ -1159,23 +1186,25 @@ async function enregistrerPayeurs(map) {
  */
 export async function lirePreuvesPaiement({ limite = 0, mois = null, onProgress } = {}) {
   const deja = await chargerPayeurs()
-  let q = supabase
+  // ⚠️ `.limit(3000)` était un leurre : le serveur n'en rend jamais plus de
+  // 1000 (voir `lireTout`). Au-delà, la lecture des pièces jointes aurait sauté
+  // les plus anciennes en silence, et annoncé « rien à relire » à tort.
+  let q = () => supabase
     .from('messages')
     .select('id, media_url, media_type, payment_client_name, conversation:conversations!messages_conversation_id_fkey(client_name)')
     .eq('is_payment_proof', true)
     .not('media_url', 'is', null)
     .order('sent_at', { ascending: false })
-    .limit(3000)
   // `mois` au format AAAA-MM. Sans lui, la lecture part des preuves les plus RÉCENTES :
   // viser juin voulait dire lire septembre et août d'abord, et payer pour rien.
   if (mois) {
     const [a, m] = mois.split('-').map(Number)
     const debut = `${mois}-01`
     const fin = m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, '0')}-01`
-    q = q.gte('sent_at', debut).lt('sent_at', fin)
+    const base = q
+    q = () => base().gte('sent_at', debut).lt('sent_at', fin)
   }
-  const { data, error } = await q
-  if (error) throw error
+  const data = await lireTout(q)
 
   // limite 0 = tout lire d'une traite. L'enregistrement régulier plus bas rend la chose
   // sans risque : fermer l'onglet en cours de route ne perd rien et ne se repaie pas.
