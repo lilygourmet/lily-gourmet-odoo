@@ -7,6 +7,9 @@ import './lib/autoUpdate'   // recharge l'app toute seule quand une nouvelle ver
 const App = lazy(() => import('./App.jsx'))
 const ClientOrderView = lazy(() => import('./components/ClientOrder/ClientOrderView.jsx'))
 const OcpOrderView = lazy(() => import('./components/ClientOrder/OcpOrderView.jsx'))
+// La page du QR d'une feuille de fournée : elle s'ouvre SANS connexion, au
+// plan de travail, les mains farineuses (Layla, 2026-09-19).
+const FeuilleScanView = lazy(() => import('./components/FeuilleScanView.jsx'))
 
 // Page CLIENT publique (sans login).
 // - Sur l'adresse « commande… » (commande-lily-gourmet.vercel.app, commande.lily-gourmet.com),
@@ -16,6 +19,7 @@ const params = new URLSearchParams(window.location.search)
 const isClientSite = window.location.hostname.includes('commande')
 const isPublicOrder = isClientSite || params.has('commande') || window.location.pathname.startsWith('/commander')
 const isOcp = params.get('client') === 'ocp'   // lien dédié OCP
+const isFeuille = params.has('feuille')       // QR d'une feuille de fournée
 
 // Filet : affiche l'erreur au lieu d'une page blanche (pour diagnostiquer le lien OCP).
 class ErrBoundary extends Component {
@@ -38,7 +42,9 @@ const Loading = () => <div style={{ minHeight: '100vh', display: 'flex', alignIt
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Suspense fallback={<Loading />}>
-      {isOcp ? <ErrBoundary><OcpOrderView /></ErrBoundary> : isPublicOrder ? <ClientOrderView /> : <App />}
+      {isFeuille ? <ErrBoundary><FeuilleScanView /></ErrBoundary>
+        : isOcp ? <ErrBoundary><OcpOrderView /></ErrBoundary>
+          : isPublicOrder ? <ClientOrderView /> : <App />}
     </Suspense>
   </StrictMode>,
 )

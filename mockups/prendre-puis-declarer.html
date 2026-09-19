@@ -1,0 +1,362 @@
+<title>Prendre, puis déclarer</title>
+<style>
+  :root {
+    --ink:#1a0f0a; --ink-soft:#4a3a30; --ink-mute:#8a7a70;
+    --cream:#fcfbf8; --cream-warm:#fff; --cream-deep:#f1eadd;
+    --bordeaux:#993556; --bordeaux-deep:#7a2a44;
+    --gold:#b8893c; --gold-pale:#f0deb8;
+    --ok:#2f6b2f; --ok-bg:#eaf3de;
+    --danger:#a32d2d; --danger-bg:#fcebeb;
+    --line:#e5d8c3; --page:#f6f1e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink:#f6efe6; --ink-soft:#d8cabc; --ink-mute:#9d8e80;
+      --cream:#241a15; --cream-warm:#2e221b; --cream-deep:#3a2b22;
+      --bordeaux:#d4718d; --bordeaux-deep:#b8536f;
+      --gold:#d9a959; --gold-pale:#4a3720;
+      --ok:#8ec47a; --ok-bg:#26331f;
+      --danger:#e88e8e; --danger-bg:#3a1f1f;
+      --line:#4a382c; --page:#1b1310; color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink:#f6efe6; --ink-soft:#d8cabc; --ink-mute:#9d8e80;
+    --cream:#241a15; --cream-warm:#2e221b; --cream-deep:#3a2b22;
+    --bordeaux:#d4718d; --bordeaux-deep:#b8536f;
+    --gold:#d9a959; --gold-pale:#4a3720;
+    --ok:#8ec47a; --ok-bg:#26331f;
+    --danger:#e88e8e; --danger-bg:#3a1f1f;
+    --line:#4a382c; --page:#1b1310; color-scheme:dark;
+  }
+
+  body { background:var(--page); color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif; line-height:1.55; }
+  .wrap { max-width:900px; margin:0 auto; padding:28px 18px 60px; }
+  h1 { font-family:Georgia,serif; font-style:italic; font-size:clamp(27px,6vw,36px);
+    margin:0 0 6px; text-wrap:balance; }
+  .chapeau { color:var(--ink-soft); font-size:15px; margin:0 0 8px; max-width:62ch; }
+
+  h2 { font-family:Georgia,serif; font-style:italic; font-size:21px; margin:44px 0 4px;
+    display:flex; align-items:baseline; gap:10px; }
+  h2 .num { font-family:inherit; font-style:normal; font-size:11px; font-weight:800;
+    letter-spacing:.12em; color:var(--bordeaux); border:1.5px solid var(--bordeaux);
+    border-radius:999px; padding:2px 9px; flex:0 0 auto;
+    font-family:ui-sans-serif,system-ui,sans-serif; }
+  h2 + p { color:var(--ink-soft); font-size:14px; margin:0 0 16px; max-width:64ch; }
+
+  /* la boucle */
+  .boucle { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:8px; margin:22px 0 6px; }
+  .etape { background:var(--cream); border:1px solid var(--line); border-radius:14px;
+    padding:11px 12px; position:relative; }
+  .etape b { display:block; font-size:12.5px; }
+  .etape span { font-size:11.5px; color:var(--ink-mute); }
+  .etape .n { font-size:9.5px; font-weight:800; letter-spacing:.1em; color:var(--bordeaux); }
+  .etape.cle { border-color:var(--bordeaux); border-width:2px; background:var(--cream-warm); }
+
+  .tel { background:var(--cream); border:1px solid var(--line); border-radius:22px;
+    padding:14px 12px; max-width:400px; box-shadow:0 10px 28px rgba(70,30,25,.10); }
+  .tel-titre { font-family:Georgia,serif; font-style:italic; font-size:17px; margin:0 0 2px; }
+  .tel-sous { font-size:11px; color:var(--ink-mute); margin:0 0 12px; }
+
+  .ligne { background:var(--cream-warm); border:1px solid var(--line); border-left-width:4px;
+    border-radius:13px; padding:10px 11px; margin-bottom:8px; }
+  .ligne.att { border-left-color:var(--gold); }
+  .ligne.ok  { border-left-color:var(--ok); opacity:.75; }
+  .ligne.mort{ border-left-color:var(--ink-mute); opacity:.6; }
+  .ligne.urg { border-left-color:var(--danger); }
+  .nom { font-size:14px; font-weight:700; }
+  .det { font-size:11.5px; color:var(--ink-mute); }
+  .mp { font-size:12px; color:var(--ink-soft); margin-top:5px; line-height:1.45; }
+  .mp b { font-variant-numeric:tabular-nums; }
+
+  .tag { display:inline-block; font-size:9.5px; font-weight:800; letter-spacing:.06em;
+    padding:2px 8px; border-radius:999px; border:1px solid; margin-bottom:4px; }
+  .t-att { background:var(--gold-pale); color:var(--gold); border-color:var(--gold); }
+  .t-ok  { background:var(--ok-bg); color:var(--ok); border-color:var(--ok); }
+  .t-urg { background:var(--danger-bg); color:var(--danger); border-color:var(--danger); }
+  .t-gris{ background:var(--cream-deep); color:var(--ink-mute); border-color:var(--ink-mute);
+    border-style:dashed; }
+
+  .b { display:inline-block; border-radius:999px; padding:6px 14px; font-size:12.5px;
+    font-weight:700; border:1px solid var(--line); color:var(--ink-soft); }
+  .b.plein { background:var(--bordeaux); color:#fff; border-color:var(--bordeaux); }
+  .b.vert { background:var(--ok); color:#fff; border-color:var(--ok); }
+  .actions { display:flex; gap:7px; margin-top:9px; flex-wrap:wrap; }
+
+  .qr { width:74px; height:74px; border-radius:10px; background:
+    repeating-conic-gradient(var(--ink) 0 25%, transparent 0 50%) 0 0/16px 16px;
+    border:5px solid var(--cream-warm); outline:1px solid var(--line); flex:0 0 auto; }
+
+  .champ { background:var(--cream-warm); border:2px solid var(--bordeaux); border-radius:11px;
+    padding:9px 11px; font-size:22px; font-weight:800; font-variant-numeric:tabular-nums;
+    text-align:right; }
+  .lab { font-size:10.5px; font-weight:700; color:var(--ink-soft); margin-bottom:4px; }
+
+  .avert { border:1px solid var(--line); border-left:4px solid var(--gold);
+    background:var(--gold-pale); border-radius:0 12px 12px 0; padding:13px 15px;
+    margin:16px 0; font-size:14px; }
+  .avert.rouge { border-left-color:var(--danger); background:var(--danger-bg); }
+  .avert.reco { border-left-color:var(--bordeaux); background:transparent; }
+  .avert b { display:block; margin-bottom:3px; }
+
+  .duo { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:16px; }
+  .pour-contre { display:grid; gap:4px; margin-top:12px; font-size:13.5px; }
+  .pour-contre div { display:flex; gap:7px; }
+  .oui { color:var(--ok); } .non { color:var(--bordeaux); }
+  h3 { font-size:14.5px; margin:0 0 4px; }
+  .note { font-size:12.5px; color:var(--ink-mute); margin-top:8px; }
+</style>
+
+<div class="wrap">
+
+<h1>Prendre, puis déclarer</h1>
+<p class="chapeau">
+  Imprimer n'engage à rien — on peut imprimer et ne jamais aller chercher la marchandise.
+  <b>C'est le moment où l'économe sert qui engage.</b> À partir de là, la déclaration est
+  due, et l'app ne l'oublie plus.
+</p>
+
+<div class="boucle">
+  <div class="etape"><span class="n">1</span><b>Le pâtissier imprime</b><span>trace gardée, rien n'est dû encore</span></div>
+  <div class="etape cle"><span class="n">2</span><b>L'économe scanne et donne</b><span>👈 c'est ici que l'engagement naît</span></div>
+  <div class="etape"><span class="n">3</span><b>« À déclarer »</b><span>la dette apparaît, avec son âge</span></div>
+  <div class="etape"><span class="n">4</span><b>Il scanne, il déclare</b><span>10 secondes, au plan de travail</span></div>
+</div>
+<p class="note">Et si personne ne vient chercher : la feuille s'éteint toute seule le soir — rien n'est dû.</p>
+
+<!-- ============ 1 ============ -->
+<h2><span class="num">1</span> Chez l'économe — il scanne, il donne</h2>
+<p>
+  Le pâtissier lui tend la <b>demande à l'économat</b>, déjà imprimée. Elle porte son QR :
+  l'économe le scanne et le bon article s'ouvre — il ne cherche rien dans une liste.
+</p>
+
+<div class="duo">
+  <div class="tel">
+    <p class="tel-titre">Ce qui s'ouvre quand il scanne</p>
+    <p class="tel-sous">Le papier qu'il a dans la main, à l'écran</p>
+
+    <div class="ligne att" style="display:flex; gap:11px; align-items:flex-start">
+      <div class="qr"></div>
+      <div style="flex:1; min-width:0">
+        <div class="nom">Crémeux Pistache · 10 pers</div>
+        <div class="det">demandé par <b>Karim</b> · 11 h 08 · pour 8 pièces</div>
+      </div>
+    </div>
+
+    <div class="mp" style="margin-top:10px">
+      MP- Crème whipping <b>1 680 g</b><br>
+      MP- Pâte de Pistache <b>480 g</b><br>
+      MP- Chocolat Valrhona Ivoire <b>888 g</b>
+    </div>
+
+    <div class="actions" style="margin-top:12px">
+      <span class="b vert" style="font-size:15px; padding:11px 26px">✓ Donné</span>
+    </div>
+    <p class="note">Un seul bouton. Il donne, il valide, le suivant.</p>
+  </div>
+
+  <div>
+    <h3>Pourquoi c'est lui le déclencheur</h3>
+    <div class="pour-contre">
+      <div><b class="oui">✔</b><span>La marchandise est sortie : la recette <b>va</b> être faite. C'est le seul moment où c'est sûr.</span></div>
+      <div><b class="oui">✔</b><span>Il sait <b>à qui</b> il a donné — l'app n'a donc pas besoin de le demander au pâtissier ensuite.</span></div>
+      <div><b class="oui">✔</b><span>Le scan remplace la recherche : <b>le bon article, du premier coup</b>, même quand il y a dix feuilles.</span></div>
+      <div><b class="non">✘</b><span>S'il oublie de valider, rien n'est dû — il faut que ce soit son geste au comptoir.</span></div>
+    </div>
+
+    <div class="avert" style="margin-top:14px">
+      <b>Et la liste, alors ?</b>
+      Elle reste, mais en second : elle sert à voir ce qui a été imprimé et <b>jamais
+      venu chercher</b> — celles-là s'effacent le soir, et rien n'est dû.
+    </div>
+  </div>
+</div>
+
+<div class="tel" style="margin-top:16px">
+  <p class="tel-titre">La liste, en second</p>
+  <p class="tel-sous">Pour ce qui traîne, pas pour servir</p>
+  <div class="ligne mort">
+    <span class="tag t-gris">JAMAIS VENU CHERCHER</span>
+    <div class="nom">Craquant Royal</div>
+    <div class="det">imprimé à 8 h 14 · s'efface ce soir, rien ne sera dû</div>
+  </div>
+</div>
+
+<!-- ============ 2 ============ -->
+<h2><span class="num">2</span> L'onglet « À déclarer »</h2>
+<p>La dette, visible par tout le monde. Ils n'ont plus rien à se rappeler : c'est l'app qui se souvient et qui réclame.</p>
+
+<div class="duo">
+  <div class="tel">
+    <p class="tel-titre">À déclarer</p>
+    <p class="tel-sous">Servi par l'économe, pas encore déclaré</p>
+
+    <div class="ligne urg">
+      <span class="tag t-urg">SERVI IL Y A 5 H</span>
+      <div class="nom">Génoise Chocolat KG CD</div>
+      <div class="det">Fatima · servi à 6 h 40 · attendu 24 000 g</div>
+      <div class="actions"><span class="b plein">Déclarer</span><span class="b">Pas faite</span></div>
+    </div>
+
+    <div class="ligne att">
+      <span class="tag t-att">SERVI IL Y A 40 MIN</span>
+      <div class="nom">Crémeux Pistache · 10 pers</div>
+      <div class="det">Karim · servi à 11 h 08 · attendu 8 u</div>
+      <div class="actions"><span class="b plein">Déclarer</span><span class="b">Pas faite</span></div>
+    </div>
+
+    <p class="note" style="margin-top:12px">
+      Ce qui est déclaré <b>disparaît</b> de la liste : elle ne montre que ce qui reste à faire.
+      Quand elle est vide, il n'y a rien à faire — et rien à cliquer.
+    </p>
+  </div>
+
+  <div>
+    <h3>Ce que ça change</h3>
+    <div class="pour-contre">
+      <div><b class="oui">✔</b><span>Tu vois le retard <b>en direct</b>, sans attendre le soir.</span></div>
+      <div><b class="oui">✔</b><span>La ligne <b>rougit avec le temps</b> : 40 min, c'est normal. 5 h, ça se voit de loin.</span></div>
+      <div><b class="oui">✔</b><span>« Pas faite » est <b>toujours possible</b> — sinon ils contourneront.</span></div>
+    </div>
+    <div class="avert rouge" style="margin-top:14px">
+      <b>⚠️ Le piège à éviter</b>
+      Si « Pas faite » n'existe pas, ils arrêteront de passer par l'économe —
+      et tu perdras la trace que tu cherchais à construire. Une contrainte sans
+      porte de sortie se contourne toujours.
+    </div>
+  </div>
+</div>
+
+<!-- ============ 3 ============ -->
+<h2><span class="num">3</span> Le QR — et ta question sur le mot de passe</h2>
+<p>Chaque feuille imprimée porte son QR. Ils l'ont déjà en main : ils scannent, ils tapent ce qui est sorti, c'est fini.</p>
+
+<div class="duo">
+  <div class="tel">
+    <p class="tel-titre">Ce qui s'ouvre au scan</p>
+    <p class="tel-sous">Aucun mot de passe · aucune recherche</p>
+
+    <div class="ligne att" style="display:flex; gap:11px; align-items:flex-start">
+      <div class="qr"></div>
+      <div style="flex:1; min-width:0">
+        <div class="nom">Crémeux Pistache · 10 pers</div>
+        <div class="det">servi à <b>Karim</b> · 11 h 08</div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <div class="lab">COMBIEN ÇA T'A SORTI ?</div>
+      <div class="champ">8 &nbsp;u</div>
+      <div class="note">Le chiffre attendu est déjà écrit — il ne le corrige que si c'est différent.</div>
+      <div class="actions" style="margin-top:11px">
+        <span class="b plein">C'est fait</span>
+        <span class="b">Pas faite</span>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <h3>Non, pas de mot de passe — et c'est voulu</h3>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin:0 0 10px">
+      Le QR porte un jeton qui identifie <b>la feuille</b>, pas la personne.
+      Et l'app sait déjà qui c'est : <b>l'économe a servi Karim</b>.
+      L'identité vient du comptoir, pas d'un écran de connexion.
+    </p>
+    <div class="pour-contre">
+      <div><b class="oui">✔</b><span>Scan → chiffre → validé. <b>Une dizaine de secondes</b>, debout, les mains farineuses.</span></div>
+      <div><b class="oui">✔</b><span>Rien à retenir, rien à taper, même sur un téléphone qui n'est pas le leur.</span></div>
+      <div><b class="non">✘</b><span>Celui qui tient la feuille peut déclarer à la place d'un autre. En labo fermé, c'est acceptable — mais c'est à toi de le dire.</span></div>
+    </div>
+    <div class="avert reco" style="margin-top:12px">
+      <b>Si tu veux être certaine de qui déclare</b>
+      On ajoute un écran « qui es-tu ? » avec les <b>photos</b> des pâtissiers — un doigt,
+      pas de mot de passe. Ça coûte une seconde de plus, et le nom devient sûr.
+    </div>
+  </div>
+</div>
+
+<!-- ============ 4 ============ -->
+<h2><span class="num">4</span> Quand ça bloque, dire pourquoi</h2>
+<p>Aujourd'hui l'app refuse sans expliquer — ça ressemble à une panne, et on vient te chercher.</p>
+
+<div class="duo">
+  <div>
+    <div class="tel">
+      <p class="tel-sous" style="color:var(--danger);font-weight:700">AUJOURD'HUI</p>
+      <div class="ligne urg">
+        <div class="nom">Impossible</div>
+        <div class="mp">Pas assez de <b>SM. Masse Gélatine</b> en stock.</div>
+      </div>
+      <p class="note">→ « l'app bugue » → on t'appelle.</p>
+    </div>
+  </div>
+  <div>
+    <div class="tel">
+      <p class="tel-sous" style="color:var(--ok);font-weight:700">DEMAIN</p>
+      <div class="ligne urg">
+        <div class="nom">Il manque 1,4 kg de masse gélatine</div>
+        <div class="mp">
+          <b>2 fournées servies n'ont pas été déclarées :</b><br>
+          Masse Gélatine · servi à Karim · 9 h 20<br>
+          Masse Gélatine · servi à Fatima · 10 h 05
+        </div>
+        <div class="actions"><span class="b plein">Les déclarer maintenant</span></div>
+      </div>
+      <p class="note">→ la cause est nommée, et se répare sur place.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ décisions ============ -->
+<h2><span class="num">5</span> Ce qu'il me faut de toi avant de coder</h2>
+
+<div class="avert reco">
+  <b>1. Avec quoi scanne-t-on ?</b>
+  L'économe et les pâtissiers ont-ils un téléphone en main au poste ? C'est ce qui
+  décide si le QR est la bonne réponse — ou s'il faut une tablette fixe au comptoir.
+</div>
+<div class="avert reco">
+  <b>2. Le nom sûr ou la vitesse ?</b>
+  Scan direct (une dizaine de secondes, le nom vient de l'économe) — ou un écran
+  « qui es-tu ? » avec les photos (une seconde de plus, le nom est certain).
+</div>
+<div class="avert reco">
+  <b>3. Que fait-on d'une feuille donnée et jamais déclarée le soir ?</b>
+  On la laisse rouge jusqu'à ce que quelqu'un réponde — ou un rappel WhatsApp part
+  au responsable à la fermeture ?
+</div>
+
+<h2><span class="num">6</span> On essaie avant de le donner à tout le monde</h2>
+<p>
+  Personne ne découvre ça un matin de coup de feu. On le met d'abord sur une
+  <b>adresse d'essai</b>, séparée du site : la vraie app continue de tourner comme
+  aujourd'hui, sans rien changer pour l'équipe.
+</p>
+
+<div class="duo">
+  <div>
+    <h3>Comment ça se passe</h3>
+    <div class="pour-contre">
+      <div><b class="oui">1</b><span>Je te donne <b>un lien d'essai</b> — la même app, mais à part.</span></div>
+      <div><b class="oui">2</b><span>Tu fais <b>une seule vraie fournée</b> du début à la fin : imprimer, l'économe scanne et donne, tu scannes et tu déclares.</span></div>
+      <div><b class="oui">3</b><span>Tu me dis ce qui coince — c'est là qu'on voit les vrais détails (le téléphone qui ne lit pas le QR, le nom qui ne va pas, le bouton trop petit).</span></div>
+      <div><b class="oui">4</b><span>On corrige, et <b>seulement ensuite</b> ça passe sur le vrai site.</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="avert rouge">
+      <b>⚠️ Une chose ne peut pas être « d'essai » : la base</b>
+      L'essai écrit dans la <b>même</b> base que le vrai site. Une fournée déclarée
+      pendant le test sera une vraie déclaration, et un ordre parti chez Odoo sera
+      un vrai ordre.
+      <br><br>
+      Donc : on essaie sur une fournée que tu fais <b>pour de vrai</b> ce jour-là —
+      pas sur un gâteau inventé.
+    </div>
+  </div>
+</div>
+
+</div>

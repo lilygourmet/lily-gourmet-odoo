@@ -312,6 +312,31 @@ html, body {
     break-after: auto;
   }
 
+  /* LE QR DU PAPIER — petit, en haut à droite, hors du chemin de lecture.
+     Un carré de 22 mm : assez grand pour un téléphone à bout de bras, assez
+     discret pour ne pas voler la place de la quantité à faire. */
+  .feuille-impr .fi-qr {
+    float: right;
+    margin: 0 0 3mm 4mm;
+    text-align: center;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .feuille-impr .fi-qr img {
+    display: block;
+    width: 22mm;
+    height: 22mm;
+    image-rendering: pixelated;   /* des carrés nets, jamais floutés */
+  }
+  .feuille-impr .fi-qr span {
+    display: block;
+    font-size: 6.5pt;
+    color: #555;
+    margin-top: 0.8mm;
+    max-width: 24mm;
+    line-height: 1.15;
+  }
+
   /* 1. d'où vient la feuille */
   .feuille-impr .fi-tete {
     border-bottom: 0.4mm solid #000;

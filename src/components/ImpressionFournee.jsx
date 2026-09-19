@@ -14,6 +14,7 @@ import { Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { qte, propre, nb, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
 import { assezEnStock, aDemander, aBesoinDeLEconomat, teteDe } from '../lib/feuillesAImprimer'
+import { imageQr } from '../lib/feuilles'
 
 /**
  * Le panneau « Tu imprimes quoi ? ».
@@ -175,6 +176,27 @@ export function FeuillesImpression({ feuilles, sortie }) {
 }
 
 /**
+ * LE QR DU PAPIER.
+ *
+ * Deux papiers, deux gestes — et ils ne se mélangent pas parce qu'ils ne
+ * restent pas au même endroit : la demande reste chez l'économe (« ✓ Donné »),
+ * la recette part avec le pâtissier (« déclarer »). Même feuille, même jeton :
+ * c'est l'adresse qui dit lequel des deux.
+ *
+ * Rien ne s'affiche tant que la feuille n'a pas de jeton — une impression
+ * lancée hors ligne sort alors comme avant, sans QR. Le papier passe avant.
+ */
+function Qr({ id, don, quoi }) {
+  if (!id) return null
+  return (
+    <div className="fi-qr">
+      <img src={imageQr(id, don)} alt="" />
+      <span>{quoi}</span>
+    </div>
+  )
+}
+
+/**
  * LA DEMANDE À L'ÉCONOMAT — le papier qu'on tend à l'économe.
  *
  * Rien que ce que l'annexe ne fabrique pas elle-même, avec une colonne vide où
@@ -190,6 +212,9 @@ function FeuilleEconomat({ f, tete }) {
       <p className="fe-lab">Demande à l'économat</p>
       <h2 className="fe-titre">{propre(f.libelle)}</h2>
       <p className="fe-qty">pour {qte(f.qty, f.unite)}</p>
+      {/* ⚠️ L'ÉCONOME SCANNE CE CARRÉ, il ne cherche pas dans une liste : il a
+          dix feuilles devant lui et le bon article s'ouvre du premier coup. */}
+      <Qr id={f.feuilleId} don quoi="L'économe scanne · ✓ Donné" />
       {tete && tete.produit !== f.produit && (
         <p className="fe-pour">{propre(tete.libelle)} · {qte(tete.qty, tete.unite)}</p>
       )}
@@ -278,6 +303,9 @@ function Feuille({ f }) {
           <div className="fi-chemin">{f.chemin.slice(0, -1).map(propre).join(' › ')}</div>
         )}
         <h2 className="fi-titre">{propre(f.libelle)}</h2>
+        {/* Le pâtissier garde cette feuille : son carré à lui déclare ce qui
+            est sorti, debout, sans mot de passe. */}
+        <Qr id={f.feuilleId} quoi="Scanne pour déclarer" />
       </header>
 
       {/* 2. LA QUANTITÉ, seule au milieu de sa bande. C'est le chiffre qu'on

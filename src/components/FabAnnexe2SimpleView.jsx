@@ -28,6 +28,7 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistorique
   toutConsomme, relireRecettes } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
+import { nouvelId, poserFeuilles } from '../lib/feuilles'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
 import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock, teteDe } from '../lib/feuillesAImprimer'
@@ -107,7 +108,14 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     toast(combien > 1
       ? `🖨 Préparation de ${combien} feuilles…`
       : '🖨 Préparation de la feuille…')
-    setFeuillesPretes(quoi)
+    // ⚠️ CHAQUE FEUILLE REÇOIT SON JETON ICI, avant de partir à l'imprimante :
+    // c'est lui qui devient le QR du papier, et il ne doit rien attendre du
+    // serveur — l'aperçu d'impression est déjà assez long comme ça. On pose
+    // les feuilles côté serveur DERRIÈRE, sans bloquer. Réseau coupé : on perd
+    // le suivi, jamais l'impression.
+    const avecJeton = (quoi || []).map(f => ({ ...f, feuilleId: nouvelId() }))
+    if (avecJeton.length) poserFeuilles(avecJeton, user?.id)
+    setFeuillesPretes(sortie ? quoi : avecJeton)
     setSortiePrete(sortie)
     setTirage(t => t + 1)
   }
