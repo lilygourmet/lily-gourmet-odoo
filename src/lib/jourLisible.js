@@ -15,3 +15,24 @@ export function fmtDayLabel(dateStr, today) {
   else if (diff === 1) label += ' · Demain'
   return label
 }
+
+/**
+ * QUAND ÇA A ÉTÉ MARQUÉ FAIT : « 19/09 à 14h02 ».
+ *
+ * « quand ça marque comme fait dans fabrication annexe/CD et dans à valider,
+ * noter le jour et l'heure » (Layla, 2026-09-19). L'heure seule ne suffisait
+ * pas : un gâteau monté lundi se valide parfois mercredi, et « 14h02 » ne
+ * disait pas lequel des deux jours.
+ *
+ * ⚠️ HEURE DU MAROC. `fait_le` est enregistré en UTC ; sans le fuseau, une
+ * déclaration de 23h30 s'affichait le lendemain.
+ */
+export function quandFait(t) {
+  if (!t) return ''
+  const d = new Date(t)
+  if (isNaN(d.getTime())) return ''
+  const CASA = { timeZone: 'Africa/Casablanca' }
+  const jour = d.toLocaleDateString('fr-FR', { ...CASA, day: '2-digit', month: '2-digit' })
+  const heure = d.toLocaleTimeString('fr-FR', { ...CASA, hour: '2-digit', minute: '2-digit' })
+  return `${jour} à ${heure.replace(':', 'h')}`
+}

@@ -4,6 +4,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres } from '../lib/fabricationProd'
+import { quandFait } from '../lib/jourLisible'
 import { loadOrdresAnnexe } from '../lib/fabricationAnnexe'
 import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs, setFait } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
@@ -86,6 +87,9 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   }, [tour])
   const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
   const [faites, setFaites] = useState({})        // ordre -> quantité vraiment produite
+  // Quand chaque ordre a été marqué fait à l'atelier : jour ET heure
+  // (Layla, 2026-09-19). On valide parfois deux jours après la fournée.
+  const [quandFaits, setQuandFaits] = useState({})
   const [notes, setNotes] = useState({})          // { ordre: { idLigne: quantité } }
   const [ajouts, setAjouts] = useState({})        // { ordre: [ingrédients ajoutés à la main] }
 
@@ -204,7 +208,12 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         }
         const out = [...base.map(b => ({ ...b, ...(parNom.get(b.name) || { manques: [], lignes: [] }) })), ...orphelins]
         setLignes(out)
-        setSel(out.filter(x => !x.sansOrdre).map(x => x.name))
+        // ⚠️ RIEN N'EST COCHÉ D'AVANCE — même règle qu'« À valider CD- » :
+        // « tout est décoché. et je coche comme je veux » (Layla, 2026-09-19).
+        setSel([])
+        // Les dates de déclaration, pour les afficher (la validation les relit
+        // de son côté : deux lectures, mais c'est le même carnet et c'est peu).
+        datesDesOrdres(out.map(x => x.name)).then(d => { if (vivant) setQuandFaits(d || {}) }).catch(() => { })
         // On garde ce qui a déjà été tapé (plafonné à la demande, qui a pu
         // baisser dans Odoo) et on ne remplit par la recette que le reste.
         const vivants = new Set(out.map(x => x.name))
@@ -486,6 +495,11 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                   <div className="text-[16px] font-bold">{propre(l.article)} — {qte(l.demande, l.unite)}</div>
                   <PourQui pour={l.pour} />
                   <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.lieu ? ' · ' + l.lieu : ''}</div>
+                  {/* Quand l'atelier l'a marqué fait — jour ET heure. À ne pas
+                      confondre avec « prévu le », qui vient d'Odoo. */}
+                  {quandFaits[l.name] && (
+                    <div className="text-[11.5px] text-ok">fait le {quandFait(quandFaits[l.name])}</div>
+                  )}
                   {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > new Date().toISOString().slice(0, 10) ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
                     prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
                   </div>}

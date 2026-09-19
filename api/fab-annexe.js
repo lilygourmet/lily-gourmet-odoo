@@ -512,10 +512,15 @@ export function partagerDeclarations(faits, clos = new Set()) {
   const total = {}
   const libre = {}
   const pour = {}
+  // Quand la DERNIÈRE fournée de cet article a été déclarée. « noter le jour et
+  // l'heure » (Layla, 2026-09-19) : l'écran dit « 240 g aujourd'hui », il peut
+  // dire quand.
+  const quand = {}
   for (const f of faits || []) {
     if (f.ordre && clos.has(f.ordre)) continue
     const q = Number(f.qty) || 0
     total[f.article] = (total[f.article] || 0) + q
+    if (f.fait_le && (!quand[f.article] || f.fait_le > quand[f.article])) quand[f.article] = f.fait_le
     if (f.pour) {
       const par = pour[f.pour] || (pour[f.pour] = {})
       par[f.article] = (par[f.article] || 0) + q
@@ -523,7 +528,7 @@ export function partagerDeclarations(faits, clos = new Set()) {
       libre[f.article] = (libre[f.article] || 0) + q
     }
   }
-  return { total, libre, pour }
+  return { total, libre, pour, quand }
 }
 
 /** Ce dont dispose UN gâteau : le libre, plus ce qui lui est réservé. */
@@ -1183,7 +1188,8 @@ export default async function handler(req, res) {
           produit: a.produit, libelle: a.libelle || a.produit,
           photo: a.photo || gateauDe(a.produit),
           unite: uniteDe(p), stock, mini: a.mini, maxi: a.maxi, tournee: a.tournee,
-          dejaFait, reste, urgence: urgence(a, stock, dejaFait),
+          dejaFait, dejaFaitLe: declare.quand?.[a.produit] || null,
+          reste, urgence: urgence(a, stock, dejaFait),
           etat: stock <= 0 ? 'rupture' : 'refaire',
         })
         continue

@@ -4,12 +4,8 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { loadOrdres, loadFaits, loadManques, validerDansOdoo, annulerOrdre, chercherArticles, dernierEcran, garderEcran, loadSaisies, saveSaisies, loadStocksNegatifs, setFait, rendementPourOdoo } from '../lib/fabrication'
-import { todayISO, jourLocal } from '../lib/dates'
-
-// Une date d'Odoo (« 2026-09-09 11:33:00 », sans fuseau, donc UTC) ramenée au
-// jour LOCAL. Sans le « Z », JavaScript la lirait comme une heure marocaine et
-// se tromperait d'un jour aux mêmes heures qu'on cherche justement à corriger.
-const jourOdooLocal = q => jourLocal(String(q || '').replace(' ', 'T') + 'Z')
+import { todayISO } from '../lib/dates'
+import { quandFait } from '../lib/jourLisible'
 
 // ====== « À valider » : la page dédiée ======
 // Tout ce que l'équipe a marqué « fait » (montages, préparations, tournées de
@@ -184,18 +180,10 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
           if (r !== null) rendus[l.name] = r
         }
         setSortis(rendus)
-        // Cocher d'avance seulement ce qui est dû : un ordre prévu dans quinze
-        // jours ne correspond pas à la tournée qu'on vient de faire.
-        // Date LOCALE : en UTC, entre minuit et 1 h au Maroc, on est encore la
-        // veille — les ordres prévus pour aujourd'hui n'étaient plus cochés
-        // d'avance et l'équipe de nuit devait tout recocher à la main.
-        const jour = todayISO()
-        // ⚠️ `quand` vient d'Odoo, donc en UTC : le découper brut compare une
-        // date UTC à une date marocaine. Un ordre prévu demain à 00h30 est
-        // stocké aujourd'hui 23h30 UTC — il se retrouvait coché d'avance, et la
-        // carte affichait « prévu le 10 septembre » en orange avec sa case déjà
-        // cochée. On repasse donc la date en heure locale avant de comparer.
-        setSel(ouverts.filter(x => !x.quand || jourOdooLocal(x.quand) <= jour).map(x => x.name))
+        // ⚠️ RIEN N'EST COCHÉ D'AVANCE. « à valider tout est décoché. et je
+        // coche comme je veux » (Layla, 2026-09-19). Valider envoie dans Odoo
+        // et ne se défait pas : le choix appartient à la personne, pas à l'app.
+        setSel([])
         garderEcran('valider', ouverts)
         // Ce qui avait été corrigé ailleurs, sans écraser ce qu'on tape ici.
         const vivants = new Set(ouverts.map(x => x.name))
@@ -516,6 +504,11 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                     </label>
                   )}
                   <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.lieu ? ' · ' + l.lieu : ''}</div>
+                  {/* Quand ça a été marqué fait à l'atelier — jour ET heure
+                      (Layla, 2026-09-19) : on valide parfois deux jours après. */}
+                  {datesFaites[l.name] && (
+                    <div className="text-[11.5px] text-ok">fait le {quandFait(datesFaites[l.name])}</div>
+                  )}
                   {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > todayISO() ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
                     prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
                   </div>}

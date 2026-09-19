@@ -20,6 +20,7 @@ import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant, estPressageS
   presqueLa,
   decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe,
   quantitePourDose } from '../lib/fabAnnexe'
+import { quandFait } from '../lib/jourLisible'
 import { nb, qte, dose, propre, nomAtelier, facteurAtelier, melangeDe,
   enGrammes, enUnite, uniteAffichee } from '../lib/ecranSimple'
 
@@ -113,7 +114,14 @@ export function CasesAFaire({ articles, onOuvrir, choisis, cochables, onCocher }
                 ${Math.max(0, a.stock || 0) > 0 ? 'text-ok' : 'text-danger'}`}>
                 {qte(Math.max(0, a.stock || 0), a.unite)}
                 {a.dejaFait > 0 && (
-                  <span className="text-ok"> · {qte(a.dejaFait, a.unite)} aujourd'hui</span>
+                  <span className="text-ok">
+                    {' · '}{qte(a.dejaFait, a.unite)} aujourd'hui
+                    {/* Le jour ET l'heure de la dernière fournée déclarée
+                        (Layla, 2026-09-19). */}
+                    {a.dejaFaitLe && (
+                      <span className="font-normal text-ink-mute"> ({quandFait(a.dejaFaitLe)})</span>
+                    )}
+                  </span>
                 )}
               </div>
             )}
@@ -466,7 +474,8 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
         dejaFaits={dejaFaits} onOuvrir={onOuvrir}
         onQuantite={decoupe ? onCuites : onQuantite} />
 
-      <QuantiteFigee noeud={aPeser} quantite={quantitePesee} />
+      <QuantiteFigee noeud={aPeser} quantite={quantitePesee}
+        onQuantite={decoupe ? onCuites : onQuantite} />
 
       {!decoupe && <PourUn noeud={noeud} quantite={quantite} />}
 
@@ -715,9 +724,11 @@ const nombreDe = txt => Number(String(txt).replace(/[^\d,.-]/g, '').replace(',',
  * bouge pas avec la sortie réelle — d'où son bloc à part, sous son nom
  * (« La mousse », « La crème citron »).
  */
-export function QuantiteFigee({ noeud, quantite }) {
+export function QuantiteFigee({ noeud, quantite, onQuantite }) {
+  const [dose, setDose] = useState(null)
   const figes = ingredientsPour(noeud, quantite).filter(c => c.fige && !c.fabrique)
   if (!figes.length) return null
+  const enPieces = /^u$/i.test(String(noeud?.unite || '').trim())
   return (
     <div className="mt-6 rounded-2xl border-2 border-cream-deep overflow-hidden
                     print:mt-3 print:break-inside-avoid">
@@ -727,15 +738,41 @@ export function QuantiteFigee({ noeud, quantite }) {
           Pour la fournée entière — ne bouge pas avec ce qui sort vraiment
         </div>
       </div>
-      {figes.map((c, i) => (
-        <div key={c.produit + i}
-          className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40 print:py-0.5">
-          <span className="flex-1 min-w-0 text-[16px] print:text-[10pt]">{nomAtelier(c.produit)}</span>
-          <span className="shrink-0 text-[19px] font-extrabold tabular-nums print:text-[11pt]">
-            {qte(c.besoin * facteurAtelier(c.produit), c.unite)}
-          </span>
-        </div>
-      ))}
+      {figes.map((c, i) => {
+        const nom = nomAtelier(c.produit)
+        const combien = qte(c.besoin * facteurAtelier(c.produit), c.unite)
+        return (
+          <div key={c.produit + i}
+            className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40 print:py-0.5">
+            <span className="flex-1 min-w-0 text-[16px] print:text-[10pt]">{nom}</span>
+            {/* ⚠️ LA CUVE SE RETAPE ELLE AUSSI (Layla, 2026-09-19 : « je dois
+                pouvoir modifier les quantités dans la mousse aussi »). Elle
+                s'affichait en texte mort, seule de tout l'écran.
+                Retaper met TOUTE la fournée à l'échelle — « toute la mousse à
+                l'échelle », dit Layla — donc exactement le même geste et le même
+                calcul que les autres ingrédients (`quantitePourDose`, son
+                « choix A » du 2026-09-07). Une cuve plus grande, c'est une
+                fournée plus grande. */}
+            <button onClick={() => onQuantite && setDose({ ...c, nom, combien })}
+              className="shrink-0 text-[19px] font-extrabold tabular-nums rounded-xl px-3 py-1.5
+                         print:text-[11pt] print:px-0 print:py-0">
+              {combien}
+            </button>
+          </div>
+        )
+      })}
+      {dose && (
+        <Clavier titre={dose.nom} unite={/^kg$/i.test(String(dose.unite || '').trim()) ? 'g' : dose.unite}
+          valeur={Math.round(nombreDe(dose.combien))}
+          onFermer={() => setDose(null)}
+          onValider={v => {
+            onQuantite(quantitePourDose({
+              quantite, besoin: dose.besoin, saisi: v, unite: dose.unite,
+              facteur: facteurAtelier(dose.produit), enPieces,
+            }))
+            setDose(null)
+          }} />
+      )}
     </div>
   )
 }

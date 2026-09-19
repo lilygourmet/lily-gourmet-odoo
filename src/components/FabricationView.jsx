@@ -11,6 +11,7 @@ import { bloqueSur } from '../lib/verrouCD'
 import { sendEtiquettes } from '../lib/printTicket'
 import { canValiderOf } from '../lib/auth'
 import { ganachesParJour, ditLeGateau, ditLePoids } from '../lib/ganaches'
+import { quandFait } from '../lib/jourLisible'
 import { toast } from '../lib/toast'
 import { supabase } from '../lib/supabase'
 
@@ -995,11 +996,13 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const declarePar = ordre => {
     const info = faits[ordre]
     if (!info || !info.fait_le) return ''
+    // ⚠️ LE JOUR AVEC L'HEURE (Layla, 2026-09-19) : un gâteau monté lundi se
+    // valide parfois mercredi, et « 14h02 » ne disait pas lequel des deux.
     // `fait_le` porte déjà son fuseau (…+00:00) : surtout pas `dt`, qui lui
     // ajoute un « Z » et rend la date invalide.
-    const heure = new Date(info.fait_le).toLocaleTimeString('fr-FR', { ...CASA, hour: '2-digit', minute: '2-digit' })
+    const quand = quandFait(info.fait_le)
     const qui = noms[info.fait_par] || ''
-    return qui ? `par ${qui} · ${heure}` : heure
+    return qui ? `par ${qui} · ${quand}` : quand
   }
 
   // Retirer un ordre de la liste : soit il a sa propre coche, soit il vient

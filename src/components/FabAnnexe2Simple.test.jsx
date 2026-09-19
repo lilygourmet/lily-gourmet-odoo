@@ -681,6 +681,21 @@ describe('la quantité figée', () => {
     ],
   }
 
+  // « je dois pouvoir modifier les quantités dans la mousse aussi », « toute la
+  // mousse à l'échelle » (Layla, 2026-09-19). La cuve s'affichait en texte mort,
+  // seule de tout l'écran : on ne pouvait pas corriger une pesée.
+  it('LA CUVE SE RETAPE, et met toute la fournée à l’échelle', () => {
+    const vus = []
+    render(<Fiche noeud={royal} quantite={13} onQuantite={q => vus.push(q)}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    // 4 470 g de crème whipping : on tape 8 940, soit deux fois plus.
+    fireEvent.click(screen.getByText(/4.470 g/))
+    for (const c of '8940') fireEvent.click(screen.getByText(c))
+    fireEvent.click(screen.getByLabelText('Valider le nombre'))
+    // Deux fois la cuve = deux fois la fournée : 13 → 26.
+    expect(vus).toEqual([26])
+  })
+
   it('a son bloc à part, sous son nom, et dit qu’elle ne bouge pas', () => {
     render(<Fiche noeud={royal} quantite={13} onQuantite={() => {}}
       faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
