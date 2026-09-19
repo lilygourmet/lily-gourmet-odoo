@@ -98,7 +98,8 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
             <span className={`inline-block text-[9.5px] font-extrabold tracking-wide px-2 py-0.5
               rounded-full border mb-1
               ${enRetard(f) ? 'bg-danger-bg text-danger border-danger' : 'bg-gold-pale text-gold border-gold'}`}>
-              DONNÉ IL Y A {depuis(f.donne_le).toUpperCase()}
+              {f.donne_par ? `DONNÉ IL Y A ${depuis(f.donne_le).toUpperCase()}`
+                : `RIEN À DEMANDER · IMPRIMÉ IL Y A ${depuis(f.imprime_le).toUpperCase()}`}
             </span>
             <div className="text-[15px] font-bold text-ink">{propre(f.libelle || f.produit)}</div>
             <div className="text-[12px] text-ink-mute">

@@ -42,6 +42,9 @@ export default function FeuilleScanView() {
   const [erreur, setErreur] = useState('')
   const [envoi, setEnvoi] = useState(false)
   const [fini, setFini] = useState('')
+  // Ce qui attend encore l'économe pour CE gâteau. On ne coche rien à sa
+  // place — on lui dit juste de ne pas refermer le tiroir trop vite.
+  const [reste, setReste] = useState(0)
 
   useEffect(() => {
     lireFeuille(id)
@@ -54,7 +57,10 @@ export default function FeuilleScanView() {
     navigator.vibrate?.(15)
     setEnvoi(true)
     try {
-      if (quoi === 'donner') { const r = await donner(id, null); setF(r.feuille); setFini('donne') }
+      if (quoi === 'donner') {
+        const r = await donner(id, null)
+        setF(r.feuille); setReste(r.reste || 0); setFini('donne')
+      }
       else { const r = await pasFaite(id); setF(r.feuille); setFini('pas-faite') }
     } catch (e) { setErreur(e.message || String(e)) }
     finally { setEnvoi(false) }
@@ -80,6 +86,11 @@ export default function FeuilleScanView() {
         <div className="bg-cream-warm border-2 border-line rounded-3xl p-7 text-center">
           <p className={`text-[26px] font-extrabold text-${dit.c}`}>{dit.t}</p>
           <p className="text-[14px] text-ink-soft mt-2">{dit.s}</p>
+          {fini === 'donne' && reste > 0 && (
+            <p className="text-[15px] font-bold text-gold mt-4">
+              ⚠️ Encore {reste} demande{reste > 1 ? 's' : ''} pour ce gâteau — scanne-les aussi.
+            </p>
+          )}
           <p className="text-[12px] text-ink-mute mt-6">Tu peux fermer cette page.</p>
         </div>
       </Cadre>

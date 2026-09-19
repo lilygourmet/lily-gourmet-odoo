@@ -58,10 +58,10 @@ export function imageQr(id, don = false) {
 export function poserFeuilles(feuilles, userId) {
   const utiles = (feuilles || []).filter(f => f.feuilleId)
   if (!utiles.length) return
-  // ⚠️ TOUTES LES FEUILLES D'UNE MÊME IMPRESSION PORTENT LE MÊME NUMÉRO. Une
-  // cascade s'imprime d'un bloc, pour UN gâteau : servir une seule de ses
-  // demandes engage la cascade entière, et l'économe ne scanne qu'une fois
-  // (Layla, 2026-09-19).
+  // ⚠️ TOUTES LES FEUILLES D'UNE MÊME IMPRESSION PORTENT LE MÊME NUMÉRO. Il
+  // n'engage RIEN : l'économe scanne feuille par feuille, sinon on écrirait
+  // qu'il a donné une matière qu'il n'a pas sortie (Layla, 2026-09-19). Ce
+  // numéro sert seulement à lui dire ce qui l'attend encore pour ce gâteau.
   const liasse = nouvelId()
   const corps = JSON.stringify({
     userId: userId || null,

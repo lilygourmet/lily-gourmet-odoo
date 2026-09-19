@@ -1078,21 +1078,28 @@ export default async function handler(req, res) {
       // L'ÉCONOME DONNE. Le geste qui rend la déclaration due.
       if (req.query.mode === 'donner') {
         if (feuille.donne_le) return res.status(200).json({ feuille, deja: true })
-        const quand = { donne_le: new Date().toISOString(), donne_par: body.userId || null }
-        // ⚠️ UN SEUL SCAN ENGAGE TOUTE LA CASCADE (Layla, 2026-09-19) : « une
-        // fois que l'économe scanne UNE de ses feuilles, celle du pâtissier
-        // monte dans À déclarer ». On ne va pas chercher le praliné de la
-        // crème si on ne fait pas la tarte. Les feuilles déjà déclarées ou
-        // déjà dites « pas faite », elles, ne se rouvrent pas.
+        // ⚠️ UNE FEUILLE À LA FOIS, ET SEULEMENT CELLE-LÀ (Layla, 2026-09-19 :
+        // « l'économe doit scanner feuille par feuille, sinon ça dit qu'il a
+        // donné toute la matière »). J'avais fait l'inverse une heure plus tôt,
+        // pour lui épargner des gestes : c'était écrire qu'il avait sorti des
+        // matières premières qu'il n'avait pas sorties. Un registre qui ment
+        // sur la marchandise ne vaut rien.
+        const { data, error } = await sb.from('annexe_feuilles')
+          .update({ donne_le: new Date().toISOString(), donne_par: body.userId || null })
+          .eq('id', id).select(F).single()
+        if (error) return res.status(200).json({ error: error.message })
+
+        // En revanche, on lui dit ce qui l'attend encore pour CE gâteau — sans
+        // rien cocher à sa place. C'est tout ce à quoi sert la liasse.
+        let reste = 0
         if (feuille.liasse) {
-          await sb.from('annexe_feuilles').update(quand)
+          const { count } = await sb.from('annexe_feuilles')
+            .select('id', { count: 'exact', head: true })
             .eq('liasse', feuille.liasse)
             .is('donne_le', null).is('declare_le', null).is('pas_faite_le', null)
+          reste = count || 0
         }
-        const { data, error } = await sb.from('annexe_feuilles')
-          .update(quand).eq('id', id).select(F).single()
-        if (error) return res.status(200).json({ error: error.message })
-        return res.status(200).json({ feuille: data })
+        return res.status(200).json({ feuille: data, reste })
       }
 
       // « PAS FAITE » — une réponse valable, et il en faut une : sans porte de

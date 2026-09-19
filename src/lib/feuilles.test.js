@@ -47,6 +47,26 @@ describe('ce qui rend une déclaration due', () => {
   })
 })
 
+// « Si une cascade est imprimée et qu'elle n'a pas de MP, elle doit aller
+// directement dans À déclarer » (Layla, 2026-09-19).
+describe('une fournée qui n’a rien à demander', () => {
+  // Le serveur lui pose `donne_le` dès l'impression, et laisse `donne_par` vide :
+  // personne n'a rien donné, il n'y avait rien à donner.
+  const rienADemander = { id: 'e', imprime_le: '2026-09-19T08:00:00Z',
+    donne_le: '2026-09-19T08:00:00Z', donne_par: null }
+
+  it('est due tout de suite, sans attendre l’économe', () => {
+    expect(etatFeuille(rienADemander)).toBe('a-declarer')
+    expect(aDeclarer([rienADemander]).map(f => f.id)).toEqual(['e'])
+  })
+
+  it('ne reste PAS coincée chez l’économe', () => {
+    // ⚠️ Sans ça, elle attendait un « donné » qui ne serait jamais venu —
+    // elle n'aurait jamais été réclamée à personne.
+    expect(aDonner([rienADemander])).toEqual([])
+  })
+})
+
 describe('les deux papiers, les deux QR', () => {
   it('celui de l’économe et celui du pâtissier ne mènent pas au même écran', () => {
     const econome = lienFeuille('xyz', true)

@@ -81,21 +81,20 @@ CREATE POLICY annexe_feuilles_lecture ON annexe_feuilles
 -- ============================================================
 -- LA LIASSE : toutes les feuilles d'une même impression.
 --
--- « La recette fait 3 pages, 2 pour l'économe et 1 qui ne concerne que le
--- pâtissier. Une fois que l'économe scanne UNE de ses feuilles, celle du
--- pâtissier monte dans À déclarer » (Layla, 2026-09-19).
+-- Toutes les feuilles sorties d'une même impression portent le même numéro.
 --
--- Une cascade s'imprime d'un bloc, pour UN gâteau. On ne va pas chercher le
--- praliné de la crème si on ne fait pas la tarte : servir une seule de ses
--- demandes engage donc la cascade entière. L'économe scanne UNE fois, quel que
--- soit le nombre de feuilles — c'est trois gestes de moins au comptoir.
+-- ⚠️ CE NUMÉRO N'ENGAGE RIEN. J'avais d'abord fait qu'un seul scan de l'économe
+-- rende toute la cascade due, pour lui épargner des gestes. Layla a tranché :
+-- « l'économe doit scanner feuille par feuille, sinon ça dit qu'il a donné
+-- toute la matière ». Elle a raison — c'était écrire qu'il avait sorti des
+-- matières premières qu'il n'avait pas sorties, et un registre qui ment sur la
+-- marchandise ne vaut rien.
+--
+-- La liasse ne sert donc qu'à L'INFORMER : après avoir servi une demande, on
+-- lui dit combien il en reste pour ce gâteau. On ne coche rien à sa place.
 --
 -- ⚠️ Il fallait une colonne : regrouper « par heure » se serait cassé dès deux
--- impressions rapprochées, et aurait engagé la cascade du voisin.
---
--- ⚠️ Contrepartie assumée : une crème faite aujourd'hui et montée demain rendra
--- la tarte rouge dès ce soir. Ça reste moins grave que l'inverse — une ligne
--- qu'on oublie de réclamer.
+-- impressions rapprochées, et aurait mélangé la cascade du voisin.
 --
 -- Relançable sans risque.
 -- ============================================================
