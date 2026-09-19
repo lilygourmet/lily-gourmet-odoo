@@ -9,9 +9,13 @@
 -- La commerciale le dit au moment où elle attache la preuve, dans Conversations,
 -- et elle ne peut plus transférer aux paiements sans l'avoir dit.
 --
--- ⚠️ RIEN N'EST REMPLI D'AVANCE. Les 571 preuves d'avant restent à NULL —
--- « non précisé ». Elles sont toutes traitées sauf une ; inventer leur moyen de
--- paiement aurait été inventer une information qu'on n'a pas.
+-- ⚠️ LES 570 PREUVES D'AVANT ONT ÉTÉ PASSÉES EN « VIREMENT » le 2026-09-19,
+-- sur décision de Layla : avant cette date, la boutique n'encaissait pas de
+-- carte en ligne — c'étaient donc tous des virements. Le tri est en bas.
+-- (Liste des lignes concernées : scripts/paiements-sans-moyen-avant.json.)
+--
+-- Tant qu'il reste des preuves sans moyen, l'écran leur garde une famille
+-- « Non précisé » — qui disparaît d'elle-même une fois qu'il n'y en a plus.
 --
 -- À exécuter dans Supabase. Relançable sans risque.
 -- ============================================================
@@ -33,3 +37,20 @@ COMMENT ON COLUMN messages.payment_method IS
 CREATE INDEX IF NOT EXISTS messages_payment_method_idx
   ON messages (payment_method)
   WHERE is_payment_proof = true;
+
+
+-- ============================================================
+-- LE RATTRAPAGE DU 2026-09-19 (déjà appliqué — gardé ici pour la mémoire).
+--
+-- « Non précisé (0) … ceux-là rentrent dans virements » (Layla). Avant le
+-- 19/09, la boutique n'encaissait pas de carte en ligne : ces 570 preuves sont
+-- donc toutes des virements. Une fois vides, la famille « Non précisé »
+-- disparaît toute seule de l'écran — aucun code à changer.
+--
+-- Relançable : après le premier passage, il ne reste plus rien à mettre à jour.
+-- ============================================================
+
+UPDATE messages
+   SET payment_method = 'virement'
+ WHERE is_payment_proof = true
+   AND payment_method IS NULL;
