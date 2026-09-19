@@ -976,6 +976,47 @@ function refuseSiPasLeCompte(nom, demande, uniteDemande, qty, uniteBom) {
     + ' préviens Layla, c\'est une unité qui ne tombe pas juste.')
 }
 
+/**
+ * L'AUTRE BOUT DU MÊME PROBLÈME : UNE FOURNÉE MILLE FOIS TROP PETITE.
+ *
+ * `corrigerFacteurMille` ne sait juger que si l'atelier a imposé des
+ * quantités d'ingrédients — sans elles, il ne regarde rien. C'est par ce trou
+ * que sont passés 21 ordres entre le 01/08 et le 17/09/2026 : créés au
+ * millième (0,029 pièce pour 29, 5,371 g pour 5 371), puis clôturés à la bonne
+ * quantité. Odoo avait calculé les composants pour la version minuscule — ils
+ * y sont restés, et la matière est restée en stock alors qu'elle était bien
+ * partie. `WHPDX/MO/21563` a ainsi laissé 9 271 g de crème au beurre citron
+ * fantôme (Layla, 2026-09-19 : « pourquoi il me reste encore… »).
+ *
+ * LES SEUILS VIENNENT DES VRAIES DONNÉES (12 813 ordres depuis le 01/07/2026) :
+ *  · PIÈCES — pas UN SEUL ordre n'a jamais demandé moins d'une pièce, sur
+ *    9 021. En dessous de 1, c'est une unité qui s'est perdue.
+ *  · POIDS — le 1er centile des fournées réelles est à 0,8 % de ce que sort la
+ *    recette, et tout ce qui est sous 0,3 % est un accident déjà identifié
+ *    (dont les 14,33 g de crème citron gingembre du 11/09). Le seuil à 0,5 %
+ *    passe entre les deux.
+ *
+ * ⚠️ ON NE CORRIGE QUE SI ×1000 RAMÈNE DANS LE NORMAL. Sinon on laisse passer
+ * tel quel : mieux vaut ne rien faire que bloquer une vraie fournée sur une
+ * hypothèse qui ne tient pas. Le trop-GRAND, lui, est refusé (`refuseSiAberrant`).
+ */
+export function corrigerFourneeMinuscule(qty, sortieRecette, uniteBom) {
+  const q = Number(qty)
+  if (!(q > 0)) return { qty, corrige: 0 }
+  // `enGrammes` rend null quand l'unité ne pèse pas : ce sont des pièces.
+  if (enGrammes(1, uniteBom) === null) {
+    if (q >= 1) return { qty, corrige: 0 }
+    const mille = q * 1000
+    return (mille >= 1 && mille <= 5000) ? { qty: mille, corrige: 1000 } : { qty, corrige: 0 }
+  }
+  const sortie = Number(sortieRecette)
+  if (!(sortie > 0)) return { qty, corrige: 0 }
+  const part = q / sortie
+  if (part >= 0.005) return { qty, corrige: 0 }
+  const apres = part * 1000
+  return (apres >= 0.05 && apres <= 20) ? { qty: q * 1000, corrige: 1000 } : { qty, corrige: 0 }
+}
+
 function refuseSiAberrant(nom, qty, unite) {
   if (!poidsAberrant(qty, unite)) return
   const kg = Math.round(enGrammes(qty, unite) / 1000)
@@ -1040,6 +1081,17 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
       ['product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
       { limit: 50 }))
   const garde = corrigerFacteurMille(qty, bom.product_qty, lignesBom, ajustements)
+  if (!garde.corrige) {
+    // Personne n'a imposé de quantités : le garde-fou ci-dessus n'a rien vu.
+    // On juge alors la fournée à sa seule taille.
+    const petit = corrigerFourneeMinuscule(qty, bom.product_qty, uniteBom)
+    if (petit.corrige) {
+      console.warn(`[creer-of] ${nomProduit} : ${qty} ${uniteBom} pour une recette qui`
+        + ` en sort ${bom.product_qty} — fournée mille fois trop petite, corrigée à ${petit.qty}`)
+      qty = Math.round(petit.qty * 1000) / 1000
+      refuseSiAberrant(prod.display_name, qty, uniteBom)
+    }
+  }
   if (garde.corrige) {
     console.warn(`[creer-of] ${nomProduit} : sortie ${qty} ${uniteBom} pour des ingrédients`
       + ` valant ${garde.qty} — facteur mille corrigé`)
