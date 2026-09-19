@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { MOYENS } from '../../lib/paiementMoyen'
 import { loadConversation, loadMessages, assignConversation, sendMessage, uploadConversationMedia, getMediaSignedUrl, closeConversation, reopenConversation, loadQuickReplies, suggestReplies, correctText, deleteMessage, markPaymentProof, unmarkPaymentProof, updateConversationClientName, setConversationNameFromOdoo, setConversationUnread, searchOrders, CONV_LABELS, loadConvLabels, setConversationLabels, reorderQuickReplies, recordDevisTraitement, confirmDevis, cancelDevis, loadClosedBy } from '../../lib/conversations'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
@@ -164,6 +165,10 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
   const [orderRefInput, setOrderRefInput] = useState('')
   const [clientNameInput, setClientNameInput] = useState('')
   const [amountInput, setAmountInput] = useState('')
+  // Comment le client a payé. VIDE AU DÉPART, toujours : c'est la commerciale
+  // qui le sait, pas nous. Rien n'est proposé d'avance — un choix pré-coché se
+  // valide sans être lu (Layla, 2026-09-19).
+  const [methodInput, setMethodInput] = useState('')
   const [markBusy, setMarkBusy] = useState(false)
   // Édition du nom du client
   const [nameEditing, setNameEditing] = useState(false)
@@ -938,6 +943,7 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     setOrderRefInput(m.payment_order_ref || autoRef || '')
     setClientNameInput(m.payment_client_name || autoName || '')
     setAmountInput(m.payment_amount != null ? String(m.payment_amount) : '')
+    setMethodInput(m.payment_method || '')
   }
 
   async function confirmMarkPayment() {
@@ -945,9 +951,9 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
     setMarkBusy(true)
     try {
       const amount = amountInput.trim() ? Number(amountInput.replace(',', '.')) : null
-      const updated = await markPaymentProof(paymentMsg.id, orderRefInput, clientNameInput, Number.isFinite(amount) ? amount : null)
+      const updated = await markPaymentProof(paymentMsg.id, orderRefInput, clientNameInput, Number.isFinite(amount) ? amount : null, methodInput)
       setMessages(prev => prev.map(x => x.id === updated.id ? { ...x, ...updated } : x))
-      setPaymentMsg(null); setOrderRefInput(''); setClientNameInput(''); setAmountInput('')
+      setPaymentMsg(null); setOrderRefInput(''); setClientNameInput(''); setAmountInput(''); setMethodInput('')
     } catch (e) { toast.error('Erreur : ' + e.message) }
     finally { setMarkBusy(false) }
   }
@@ -1552,6 +1558,28 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
           <div className="bg-cream rounded-2xl w-full max-w-xs shadow-2xl border border-line p-5" onClick={e => e.stopPropagation()}>
             <h3 className="font-fraunces italic text-[18px] text-ink mb-1">Preuve de paiement</h3>
             <p className="text-[12px] text-ink-mute mb-3">Le nom et le numéro du client sont récupérés tout seuls. Ajoute le n° de commande (optionnel).</p>
+
+            {/* ⚠️ LE SEUL RENSEIGNEMENT OBLIGATOIRE, et rien n'est coché d'avance :
+                un virement se retrouve sur le relevé de la banque, une CB est déjà
+                encaissée — deux travaux différents, que Layla ne veut pas mélanger.
+                Le bouton du bas reste éteint tant qu'on n'a pas répondu. */}
+            <label className="block text-[11px] font-medium text-ink-soft mb-1">Comment a-t-il payé ?</label>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {MOYENS.map(mo => (
+                <button
+                  key={mo.cle}
+                  type="button"
+                  onClick={() => setMethodInput(mo.cle)}
+                  aria-pressed={methodInput === mo.cle}
+                  className={`rounded-xl border-2 py-2.5 px-2 text-center active:scale-95 transition
+                    ${methodInput === mo.cle ? mo.pastille : 'border-line bg-cream-warm text-ink-soft'}`}>
+                  <span className="block text-[20px] leading-tight">{mo.emoji}</span>
+                  <span className="block text-[12.5px] font-bold">{mo.label}</span>
+                  <span className="block text-[10px] opacity-80">{mo.sous}</span>
+                </button>
+              ))}
+            </div>
+
             <label className="block text-[11px] font-medium text-ink-soft mb-1">N° de commande</label>
             <input
               type="text"
@@ -1580,7 +1608,18 @@ export default function ConversationDetail({ conversationId, user, onBack, relan
             />
             <div className="flex gap-2 justify-end">
               <button onClick={() => setPaymentMsg(null)} disabled={markBusy} className="px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-cream-warm disabled:opacity-50">Annuler</button>
-              <button onClick={confirmMarkPayment} disabled={markBusy} className="px-4 py-1.5 text-[12px] font-medium bg-bordeaux text-cream rounded-lg hover:bg-bordeaux-deep disabled:opacity-50">{markBusy ? '…' : 'Transférer aux paiements'}</button>
+              {/* ⚠️ Éteint tant que le moyen n'est pas dit — et il dit POURQUOI au
+                  doigt : sur un téléphone, l'infobulle `title` n'existe pas. */}
+              <button
+                onClick={() => methodInput
+                  ? confirmMarkPayment()
+                  : toast('Dis d\'abord comment il a payé : virement ou CB.')}
+                disabled={markBusy}
+                aria-disabled={!methodInput}
+                className={`px-4 py-1.5 text-[12px] font-medium rounded-lg disabled:opacity-50
+                  ${methodInput ? 'bg-bordeaux text-cream hover:bg-bordeaux-deep' : 'bg-cream-deep text-ink-mute'}`}>
+                {markBusy ? '…' : 'Transférer aux paiements'}
+              </button>
             </div>
           </div>
         </div>

@@ -462,8 +462,15 @@ const PAYMENT_SEL = `
   rejector:profiles!messages_payment_rejected_by_fkey(id, username, full_name)
 `
 
-/** Marque un message comme preuve de paiement (n° commande + nom + montant optionnels). */
-export async function markPaymentProof(messageId, orderRef, clientName, amount) {
+/**
+ * Marque un message comme preuve de paiement.
+ *
+ * `method` — « virement » ou « cb » — est le SEUL renseignement obligatoire :
+ * le n° de commande, le nom et le montant restent facultatifs, mais l'écran
+ * refuse de transférer tant qu'on n'a pas dit comment le client a payé
+ * (Layla, 2026-09-19). Voir `src/lib/paiementMoyen.js`.
+ */
+export async function markPaymentProof(messageId, orderRef, clientName, amount, method) {
   const { data, error } = await supabase
     .from('messages')
     .update({
@@ -471,6 +478,7 @@ export async function markPaymentProof(messageId, orderRef, clientName, amount) 
       payment_order_ref: orderRef?.trim() || null,
       payment_client_name: clientName?.trim() || null,
       payment_amount: amount ?? null,
+      payment_method: method || null,
     })
     .eq('id', messageId)
     .select('*, sender:profiles!messages_sender_user_id_fkey(id, username, full_name)')
@@ -483,7 +491,7 @@ export async function markPaymentProof(messageId, orderRef, clientName, amount) 
 export async function unmarkPaymentProof(messageId) {
   const { data, error } = await supabase
     .from('messages')
-    .update({ is_payment_proof: false, payment_order_ref: null, payment_client_name: null, payment_amount: null, payment_validated_at: null, payment_validated_by: null, payment_rejected_at: null, payment_rejected_by: null, payment_rejection_reason: null })
+    .update({ is_payment_proof: false, payment_order_ref: null, payment_client_name: null, payment_amount: null, payment_method: null, payment_validated_at: null, payment_validated_by: null, payment_rejected_at: null, payment_rejected_by: null, payment_rejection_reason: null })
     .eq('id', messageId)
     .select('*, sender:profiles!messages_sender_user_id_fkey(id, username, full_name)')
     .single()
