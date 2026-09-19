@@ -25,10 +25,10 @@ import { ChoixImpression, FeuillesImpression } from './ImpressionFournee'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
   decoupeDe, noeudDuChemin, defautDe, aCuireParDefaut, parGateauMere, peseesDe,
   declarer, envoyerAValider, repartirCuve, sansRendement, pressageDe,
-  toutConsomme, relireRecettes } from '../lib/fabAnnexe'
+  toutConsomme, relireRecettes, restesTheoriques } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
-import { nouvelId, poserFeuilles } from '../lib/feuilles'
+import { nouvelId, poserFeuilles, eteindreFeuille } from '../lib/feuilles'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
 import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock, teteDe } from '../lib/feuillesAImprimer'
@@ -48,7 +48,19 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [articles, setArticles] = useState(() => dernierEcran('fab_annexe2'))
   const [details, setDetails] = useState(() =>
     Object.fromEntries((dernierEcran('fab_annexe2') || []).map(a => [a.produit, a])))
-  const [chemin, setChemin] = useState([])
+  // ⚠️ LE QR OUVRE DIRECTEMENT LE BON ARTICLE (`?article=…`). C'est tout ce
+  // qu'il fait : il n'y a plus qu'UNE façon de déclarer, celle-ci — avec ses
+  // cuves, son verrou et le reste de la crème. Le scan n'est qu'un raccourci.
+  const [chemin, setChemin] = useState(() => {
+    try {
+      const a = new URLSearchParams(window.location.search).get('article')
+      if (a) {
+        window.history.replaceState({}, '', '?view=fabrication-annexe-2')
+        return [a]
+      }
+    } catch { /* pas d'URL lisible */ }
+    return []
+  })
   // Ce qu'on a décidé de faire. On part travailler, on revient — même le
   // lendemain — le chiffre est toujours là. Il ne part qu'avec
   // « réinitialiser », ou quand l'article est déclaré. (Layla, 2026-09-11.)
@@ -93,6 +105,10 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // contenu : celui-ci reste en place d'une fois sur l'autre (voir plus bas),
   // donc réimprimer la même chose ne changerait rien et rien ne partirait.
   const [tirage, setTirage] = useState(0)
+  // ⚠️ CE QU'IL RESTE DE LA CRÈME (Layla, 2026-09-19). Vide = 0 partout, et
+  // c'est voulu : « si 0, le reste de la crème théorique doit rentrer dans le
+  // produit ». On racle la cuve, c'est le cas le plus fréquent.
+  const [restes, setRestes] = useState({})
   /**
    * Poser la liasse, puis lancer l'impression. Les deux dans le même geste.
    *
@@ -336,11 +352,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * au prorata du poids obtenu, et un sirop qui rend moins aurait consommé
    * moins de café que ce qu'on a mis dedans.
    */
-  const envoyerUn = (noeud, tete, qty, prevu = 0) => {
+  const envoyerUn = (noeud, tete, qty, prevu = 0, restesDits = {}) => {
     const racine = noeud.produit === tete.produit
     // `prevu` : ce qu'on a VOULU faire. Les ingrédients le suivent, lui, et pas
     // le poids obtenu — voir `peseesPrevues`.
-    if (racine) return envoyerAValider(tete, qty, user?.id, prevu)
+    if (racine) return envoyerAValider(tete, qty, user?.id, prevu, restesDits)
     const fois = noeud.tourneeTaille > 0 ? qty / noeud.tourneeTaille : 1
     return declarer({
       produit: noeud.produit, unite: noeud.unite, fois, qty,
@@ -356,7 +372,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   /** Ce qu'on cuit : le chiffre réglé à la main, sinon ce qui manque. */
   const aCuire = (noeud, decoupe) => cuites[noeud.produit] ?? aCuireParDefaut(decoupe.enfant)
 
-  const envoyer = async (noeud, tete, qty, cuitesReelles = null, pressees = 0, prevu = 0) => {
+  const envoyer = async (noeud, tete, qty, cuitesReelles = null, pressees = 0, prevu = 0,
+    restesDits = {}) => {
     if (!(qty > 0) || envoi) return
     // ⚠️ Le jeton de connexion dure 12 h. Sur une tablette allumée toute la
     // journée il expire en plein travail : l'écran a l'air normal, mais plus
@@ -405,16 +422,21 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         }
         r = r || { erreur: null }
       } else {
-        r = await envoyerUn(noeud, tete, qty, prevu)
+        r = await envoyerUn(noeud, tete, qty, prevu, restesDits)
       }
       if (r.erreur) toast(`Enregistré, mais Odoo a refusé : ${r.erreur}`)
       else {
+        // ⚠️ ET LA LIGNE ROUGE S'ÉTEINT. Déclarer ici et scanner le QR, c'est
+        // le MÊME travail : sans ce raccord, la fournée restait « à déclarer »
+        // et la redéclarer la comptait deux fois — deux ordres Odoo.
+        eteindreFeuille(noeud.produit, qty)
         // Plein écran, vert, une seconde et demie : ça ne se rate pas.
         setConfirme({ quoi: propre(noeud.libelle || noeud.produit), combien: qte(qty, noeud.unite) })
         setTimeout(() => setConfirme(null), 1500)
       }
       setSortie(null)
       setParTaille({})
+      setRestes({})
       setChemin(chemin.slice(0, -1))
       // ⚠️ On n'oublie QUE le prévu de ce qu'on vient de déclarer. Avant,
       // c'était toujours celui du gâteau : déclarer la crème légère faisait
@@ -740,6 +762,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                 nomCuve={brut.figesNom}
                 prevu={finale ? q : 0}
                 parTaille={parTaille}
+                // La question du reste ne se pose qu'à la TOUTE FIN, sur
+                // l'article qu'on est venu faire — jamais en plein milieu.
+                restes={finale ? restesTheoriques(cible) : []}
+                restesValeurs={restes}
+                onReste={finale ? (p, v) => setRestes(x => ({ ...x, [p]: v })) : undefined}
                 onTaille={finale && (brut.tailles || []).length
                   ? (p, n) => setParTaille(x => ({ ...x, [p]: n })) : undefined}
                 onValider={() => (surEnfant
@@ -748,7 +775,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                     ? envoyer(noeud, tete, q, null, sortie.valeur)
                     // ⚠️ `q` voyage à côté de ce qui est sorti : c'est lui
                     // qui décide des ingrédients (Layla, 2026-09-14).
-                    : envoyer(noeud, tete, sortie.valeur, null, 0, q))} />
+                    // ⚠️ Et le reste de la crème part avec : c'est la seule
+                    // chose que le pâtissier a VUE et DITE.
+                    : envoyer(noeud, tete, sortie.valeur, null, 0, q, restes))} />
             )
           })()
           : (

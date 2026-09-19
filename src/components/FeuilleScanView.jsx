@@ -3,21 +3,24 @@
 //
 // Deux papiers, deux gestes, une seule page — c'est l'adresse qui tranche :
 //   • `?feuille=…&don=1` → la demande à l'économat, qu'il a dans la main :
-//     un seul bouton, « ✓ Donné ». C'est ce geste qui rend la déclaration due.
-//   • `?feuille=…`       → la feuille de recette du pâtissier : « combien ça
-//     t'a sorti ? », le chiffre attendu déjà écrit.
+//     un seul bouton, « ✓ Donné », SANS connexion. C'est ce geste qui rend la
+//     déclaration due, et il est assez simple pour tenir sur cette page.
+//   • `?feuille=…`       → la feuille du pâtissier : elle ne déclare PAS, elle
+//     l'emmène à l'écran qui sait tout faire (cuves, verrou, reste de la
+//     crème). Une deuxième façon de déclarer, c'était une deuxième
+//     comptabilité — et le même travail compté deux fois.
 //
-// ⚠️ AUCUNE CONNEXION. Les mains sont farineuses, on ne tape pas un mot de
-// passe au plan de travail. Le QR porte un jeton qui identifie LA FEUILLE, et
-// l'app sait déjà qui c'est : c'est elle qui a imprimé, et l'économe a donné.
-// L'identité vient du comptoir, pas d'un écran de connexion.
+// ⚠️ Cette page ne demande aucun mot de passe : les mains sont farineuses. Le
+// QR porte un jeton qui identifie LA FEUILLE, pas la personne — l'économe sait
+// à qui il a donné, l'identité vient du comptoir. Le pâtissier, lui, devra être
+// connecté à l'écran d'après : une fois le matin, ça tient 12 h.
 //
 // ⚠️ Cette page ne parle JAMAIS à Supabase en direct : tout passe par
 // /api/fab-annexe, qui tient la clé de service et vérifie le jeton.
 // ============================================================
 
 import { useState, useEffect } from 'react'
-import { lireFeuille, donner, declarer, pasFaite, etatFeuille, depuis } from '../lib/feuilles'
+import { lireFeuille, donner, pasFaite, etatFeuille, depuis } from '../lib/feuilles'
 import { propre, qte } from '../lib/ecranSimple'
 
 const Cadre = ({ children }) => (
@@ -38,16 +41,11 @@ export default function FeuilleScanView() {
   const [f, setF] = useState(null)
   const [erreur, setErreur] = useState('')
   const [envoi, setEnvoi] = useState(false)
-  const [sortie, setSortie] = useState('')
   const [fini, setFini] = useState('')
 
   useEffect(() => {
     lireFeuille(id)
-      .then(x => {
-        setF(x)
-        // Le chiffre attendu est déjà écrit : il ne le corrige que s'il diffère.
-        setSortie(x?.qty_prevue != null ? String(x.qty_prevue) : '')
-      })
+      .then(setF)
       .catch(e => setErreur(e.message || String(e)))
   }, [id])
 
@@ -57,13 +55,7 @@ export default function FeuilleScanView() {
     setEnvoi(true)
     try {
       if (quoi === 'donner') { const r = await donner(id, null); setF(r.feuille); setFini('donne') }
-      else if (quoi === 'pas-faite') { const r = await pasFaite(id); setF(r.feuille); setFini('pas-faite') }
-      else {
-        const q = Number(String(sortie).replace(',', '.'))
-        if (!(q > 0)) { setErreur('Écris d’abord combien ça t’a sorti.'); setEnvoi(false); return }
-        const r = await declarer(id, q)
-        setF(r.feuille); setFini('declare')
-      }
+      else { const r = await pasFaite(id); setF(r.feuille); setFini('pas-faite') }
     } catch (e) { setErreur(e.message || String(e)) }
     finally { setEnvoi(false) }
   }
@@ -122,49 +114,49 @@ export default function FeuilleScanView() {
     )
   }
 
-  // ---- le pâtissier : combien ça t'a sorti ? ----
+  // ---- le pâtissier : on l'emmène à l'écran qui sait tout faire ----
+  //
+  // ⚠️ LE SCAN N'EST PLUS UNE DEUXIÈME FAÇON DE DÉCLARER (Layla, 2026-09-19 :
+  // « j'aimerai simplifier pour tout le monde »). L'écran « c'est fait » gère
+  // les cuves, les plaques cuites, le pressage, les ajustements, le verrou des
+  // composants et le reste de la crème — des mois de règles. Une page de scan
+  // qui déclare toute seule, c'était une deuxième comptabilité, plus pauvre, et
+  // la garantie de compter deux fois le même travail.
+  //
+  // Le QR devient donc un RACCOURCI : il ouvre le bon article, dans le bon
+  // écran. Le prix, et je l'ai dit à Layla : le pâtissier doit être connecté —
+  // une fois le matin, ça tient 12 h. L'économe, lui, garde son geste sans mot
+  // de passe, parce que le sien est simple : donné, ou pas donné.
   const pasEncoreDonne = etat === 'imprimee'
+  const ouvrirLEcran = () => {
+    navigator.vibrate?.(15)
+    window.location.href = `/?view=fabrication-annexe-2&article=${encodeURIComponent(f.produit)}`
+  }
   return (
     <Cadre>
       <div className="bg-cream-warm border border-line rounded-3xl p-6">
         <h1 className="font-fraunces italic text-[25px] text-ink leading-tight">{nom}</h1>
         {f.donne_le
           ? <p className="text-[12.5px] text-ink-mute mt-1">donné il y a {depuis(f.donne_le)}</p>
-          : <p className="text-[12.5px] text-gold mt-1">l’économe n’a pas encore validé — tu peux quand même déclarer</p>}
-
-        <p className="text-[11px] font-extrabold tracking-widest text-ink-soft uppercase mt-6">
-          Combien ça t’a sorti ?
-        </p>
-        <div className="flex items-center gap-2 mt-2">
-          <input
-            type="text" inputMode="decimal"
-            value={sortie}
-            onChange={e => setSortie(e.target.value.replace(/[^\d.,]/g, ''))}
-            aria-label="Quantité sortie"
-            className="flex-1 min-w-0 text-right text-[30px] font-extrabold tabular-nums
-                       rounded-2xl px-4 py-3 border-2 border-bordeaux bg-cream" />
-          <span className="text-[19px] font-bold text-ink-soft">{f.unite || ''}</span>
-        </div>
-        <p className="text-[12px] text-ink-mute mt-2">
-          Prévu : {attendu}. Corrige seulement si c’est différent.
-        </p>
+          : <p className="text-[12.5px] text-gold mt-1">l’économe n’a pas encore validé</p>}
+        <p className="text-[14px] text-ink-soft mt-4">Prévu : <b>{attendu}</b></p>
 
         <button
-          onClick={() => faire('declarer')}
-          disabled={envoi}
+          onClick={ouvrirLEcran}
           className="w-full mt-6 rounded-2xl bg-bordeaux text-cream py-5 text-[19px] font-extrabold
-                     active:scale-95 transition disabled:opacity-50">
-          {envoi ? '…' : 'C’est fait'}
+                     active:scale-95 transition">
+          Déclarer cette fournée
         </button>
 
-        {/* ⚠️ LA PORTE DE SORTIE. Sans elle, ils cesseraient de passer par
-            l'économe — et on perdrait la trace qu'on cherche à construire. */}
+        {/* ⚠️ LA PORTE DE SORTIE, elle, reste ici : « pas faite » ne demande
+            aucune des règles de l'écran, et sans elle ils cesseraient de passer
+            par l'économe — on perdrait la trace qu'on cherche à construire. */}
         <button
           onClick={() => faire('pas-faite')}
           disabled={envoi}
           className="w-full mt-2 rounded-2xl border border-line text-ink-soft py-3 text-[14px]
                      font-bold active:scale-95 transition disabled:opacity-50">
-          Pas faite
+          {envoi ? '…' : 'Pas faite'}
         </button>
 
         {pasEncoreDonne && (

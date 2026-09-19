@@ -1008,12 +1008,36 @@ export default async function handler(req, res) {
       // Toutes les feuilles du jour : « à donner » chez l'économe, « à
       // déclarer » chez les pâtissiers. Les deux écrans lisent la même liste.
       if (req.query.feuilles === 'jour') {
-        const jour = String(req.query.jour || '').slice(0, 10)
-          || new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
+        // ⚠️ PAS SEULEMENT AUJOURD'HUI. Une dette qui s'efface à minuit, c'est
+        // l'inverse du but : elle doit être réclamée, pas oubliée. Et une
+        // fournée commencée le soir se finit le lendemain — la règle de Layla
+        // (11/09) vaut ici aussi. On remonte donc une semaine.
+        const bord = new Date(Date.now() - 7 * 86400000).toLocaleDateString('sv-SE')
         const { data, error } = await sb.from('annexe_feuilles').select(F)
-          .eq('jour', jour).order('imprime_le', { ascending: false }).limit(500)
+          .gte('jour', bord).order('imprime_le', { ascending: false }).limit(1000)
         if (error) return res.status(200).json({ error: error.message })
         return res.status(200).json({ feuilles: data || [] })
+      }
+
+      // ⚠️ LA MÊME FOURNÉE NE SE DÉCLARE PAS DEUX FOIS. L'écran « c'est fait »
+      // existait avant le QR, et les pâtissiers le connaissent : sans ce
+      // raccord, une fournée déclarée à l'écran restait rouge dans « À
+      // déclarer », et la redéclarer comptait le travail DEUX FOIS — deux
+      // ordres Odoo, deux fois le stock. C'est l'écran qui éteint la ligne.
+      if (req.method === 'POST' && req.query.feuilles === 'eteindre') {
+        const bord = new Date(Date.now() - 7 * 86400000).toLocaleDateString('sv-SE')
+        const { data: due } = await sb.from('annexe_feuilles').select('id')
+          .eq('produit', String(body.produit || '')).gte('jour', bord)
+          .is('declare_le', null).is('pas_faite_le', null)
+          .order('imprime_le', { ascending: true }).limit(1)
+        if (!due || !due.length) return res.status(200).json({ ok: true, eteintes: 0 })
+        const { error } = await sb.from('annexe_feuilles').update({
+          declare_le: new Date().toISOString(),
+          declare_qty: Number(body.qty) || null,
+          fabrication_id: body.fabricationId || null,
+        }).eq('id', due[0].id)
+        if (error) return res.status(200).json({ error: error.message })
+        return res.status(200).json({ ok: true, eteintes: 1 })
       }
 
       // On vient d'imprimer : on pose les feuilles. Rien n'est dû encore.

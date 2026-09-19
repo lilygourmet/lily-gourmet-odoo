@@ -73,6 +73,22 @@ export function poserFeuilles(feuilles, userId) {
   }).catch(() => { /* le suivi peut manquer ; l'impression, non */ })
 }
 
+/**
+ * Éteindre la ligne rouge quand la déclaration est passée par l'ÉCRAN.
+ *
+ * ⚠️ L'écran « c'est fait » existait avant le QR, et les pâtissiers le
+ * connaissent. Sans ce raccord, la fournée restait rouge dans « À déclarer »,
+ * et la redéclarer comptait le travail DEUX FOIS — deux ordres Odoo, deux fois
+ * le stock. On ne fait jamais attendre pour ça : la déclaration est déjà
+ * enregistrée, cette ligne-ci n'est que du ménage.
+ */
+export function eteindreFeuille(produit, qty, fabricationId = null) {
+  fetch('/api/fab-annexe?feuilles=eteindre', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ produit, qty, fabricationId }),
+  }).catch(() => { /* le ménage peut attendre ; la déclaration est faite */ })
+}
+
 /** Les feuilles du jour — l'écran de l'économe et celui des pâtissiers. */
 export async function feuillesDuJour() {
   const r = await fetch('/api/fab-annexe?feuilles=jour&cb=' + Date.now())

@@ -449,6 +449,60 @@ export function toutConsomme(noeud) {
 }
 
 /**
+ * CE QU'IL RESTE DE LA CRÈME — et où va le reste (Layla, 2026-09-19).
+ *
+ * « Quand une crème est faite, ou une mousse, ou une pâte, ça doit me dire
+ * combien il m'en reste non utilisé. Si 0, le reste de la crème théorique doit
+ * rentrer dans le produit. »
+ *
+ * L'exemple : je fais 12 500 g de crème, je monte 18 tartes, la recette en
+ * consomme 11 844. Il devrait rester 656 g.
+ *   • « il m'en reste 656 »  → Odoo garde 656 g au frigo ;
+ *   • « il ne m'en reste rien » → ces 656 g sont DANS les tartes, et Odoo doit
+ *     en consommer 12 500. Sinon il garde au frigo une crème qui n'existe pas.
+ *
+ * ⚠️ C'est LA confusion qui revient depuis des semaines : « Odoo croyait qu'il
+ * restait de la crème alors qu'elle avait tout mis ». On cesse de deviner : on
+ * le montre, et on demande. La réponse est 0 par défaut, parce que c'est le cas
+ * de loin le plus fréquent — on racle la cuve.
+ *
+ * Ne rend QUE ce qui a un reste à expliquer : pas de reste, pas de question.
+ */
+export function restesTheoriques(noeud) {
+  return enfantsDe(noeud)
+    .filter(c => c.fabrique && (Number(c.dejaFait) || 0) > 0)
+    .map(c => {
+      const fait = Number(c.dejaFait) || 0
+      const besoin = Number(c.besoin) || 0
+      return {
+        produit: c.produit,
+        libelle: c.libelle || c.produit,
+        unite: c.unite,
+        fait,
+        besoin,
+        reste: fait - besoin,
+      }
+    })
+    // Un reste négatif veut dire qu'on a pris sur le stock d'avant : il n'y a
+    // rien à rendre au frigo, donc rien à demander.
+    .filter(x => x.reste > 0.001)
+}
+
+/**
+ * Ce que le produit consomme vraiment de chaque préparation, une fois le reste
+ * dit. « Il ne m'en reste rien » (0) fait passer TOUT ce qui a été fait dans le
+ * produit — c'est la règle de Layla, et c'est le cas par défaut.
+ */
+export function consommeApresRestes(noeud, restesSaisis = {}) {
+  const out = {}
+  for (const r of restesTheoriques(noeud)) {
+    const garde = Math.max(0, Math.min(r.fait, Number(restesSaisis[r.produit]) || 0))
+    out[r.produit] = r.fait - garde
+  }
+  return out
+}
+
+/**
  * Ce qui empêche de dire « c'est fait » : un composant qu'on FABRIQUE et dont
  * il n'y a pas assez. Le pâtissier se débloque en le fabriquant à son tour.
  *
@@ -973,14 +1027,18 @@ export function cuveDeclaree(article) {
  * le sirop et l'amaretti à 128 via la recette. Seuls les ingrédients figés
  * sont imposés, à la tournée entière — c'est le rôle de `article.ajustements`.
  */
-export function envoyerAValider(article, sortie, userId, prevu = 0) {
+export function envoyerAValider(article, sortie, userId, prevu = 0, restes = {}) {
   return declarer({
     produit: article.produit, qty: sortie, unite: article.unite,
     // ⚠️ CE QU'ON A PESÉ D'ABORD — voir `peseesPrevues`. Ce qui suit l'écrase :
     // un figé, un presque-là, une cuve déclarée en savent plus.
+    //
+    // ⚠️ ET LE RESTE DE LA CRÈME EN DERNIER, parce que c'est la seule chose que
+    // le pâtissier a VUE de ses yeux et DITE (voir `restesTheoriques`). Tout ce
+    // qui précède n'est qu'un calcul ; ça, c'est le fond de la cuve.
     ajustements: { ...peseesPrevues(article, prevu),
       ...(article.ajustements || {}), ...toutConsomme(article),
-      ...cuveDeclaree(article) },
+      ...cuveDeclaree(article), ...consommeApresRestes(article, restes) },
   }, userId)
 }
 

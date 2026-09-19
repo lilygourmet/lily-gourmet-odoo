@@ -935,7 +935,48 @@ function Partage({ noeud, decoupe, cuites, coupes }) {
  * fait — la recette a servi sur l'écran d'avant. Ce qui sort du stock continue
  * d'être calculé et imposé à l'ordre Odoo, mais sans encombrer l'écran.
  */
-export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nomCuve, parTaille, onTaille, prevu, question }) {
+/**
+ * « COMBIEN IL M'EN RESTE ? » (Layla, 2026-09-19)
+ *
+ * Une seule question, et seulement quand il y a un reste à expliquer : j'ai
+ * fait 12 500 g de crème, les 18 tartes en consomment 11 844 — où sont les
+ * 656 restants ? **Zéro par défaut**, parce que c'est le cas de loin le plus
+ * fréquent : on racle la cuve, tout part dans le gâteau.
+ *
+ * Répondre 0 ne « perd » rien : au contraire, ça dit à Odoo de consommer les
+ * 12 500, au lieu de garder au frigo une crème qui n'existe plus.
+ */
+function Restes({ restes, valeurs, onChange }) {
+  if (!restes.length) return null
+  return (
+    <div className="mt-8 border-t border-cream-deep pt-5">
+      <div className="text-center text-[17px] font-extrabold">Il t’en reste ?</div>
+      <div className="text-center text-[13px] text-ink-mute mt-0.5 mb-3">
+        Laisse 0 si tu as tout mis dedans.
+      </div>
+      {restes.map(r => (
+        <div key={r.produit} className="flex items-center gap-3 py-2 border-t border-cream-deep first:border-0">
+          <div className="flex-1 min-w-0">
+            <div className="text-[15px] font-bold leading-tight">{propre(r.libelle)}</div>
+            <div className="text-[12px] text-ink-mute">
+              fait {qte(r.fait, r.unite)} · utilisé {qte(r.besoin, r.unite)}
+            </div>
+          </div>
+          <input
+            type="text" inputMode="decimal"
+            aria-label={`Ce qu'il reste de ${propre(r.libelle)}`}
+            value={valeurs[r.produit] ?? 0}
+            onChange={e => onChange(r.produit, e.target.value.replace(/[^\d.,]/g, ''))}
+            className="w-[92px] text-right text-[19px] font-extrabold tabular-nums
+                       rounded-xl px-3 py-2 border-2 border-cream-deep bg-cream-warm" />
+          <span className="text-[13px] font-bold text-ink-mute w-6">{uniteAffichee(r.unite)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nomCuve, parTaille, onTaille, prevu, question, restes = [], restesValeurs = {}, onReste }) {
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -972,6 +1013,8 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nom
         <AutresTailles tailles={tailles} nomCuve={nomCuve}
           valeurs={parTaille} onChange={onTaille} />
       )}
+
+      {onReste && <Restes restes={restes} valeurs={restesValeurs} onChange={onReste} />}
 
       <button onClick={onValider} disabled={!(valeur > 0) || envoi}
         className={`w-full mt-8 rounded-2xl py-5 text-[20px] font-extrabold
