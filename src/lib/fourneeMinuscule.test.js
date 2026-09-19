@@ -16,7 +16,7 @@
 // ⚠️ C'EST LE RAPPORT À LA RECETTE QUI DÉCIDE, JAMAIS LE CHIFFRE BRUT :
 // « attention à ce qui est déclaré en kilo. ce n'est pas en gr » (Layla).
 import { describe, it, expect } from 'vitest'
-import { fourneeMinuscule } from '../../api/freezer-list.js'
+import { fourneeMinuscule, fourneeRelue } from '../../api/freezer-list.js'
 
 describe('fourneeMinuscule — les cas vécus, refusés', () => {
   it('WHPDX/MO/21563 : 0,029 pièce au lieu de 29', () => {
@@ -91,5 +91,37 @@ describe('fourneeMinuscule — ce qui doit PASSER', () => {
   it('sait lire une unité qui porte son poids : « Tournée (3 kg) »', () => {
     expect(fourneeMinuscule(6, 1, 'Tournée (3 kg)')).toBe(false)
     expect(fourneeMinuscule(0.004, 1, 'Tournée (3 kg)')).toBe(true)
+  })
+})
+
+// « POURQUOI ÇA NE CONVERTIT PAS LE BON ? » (Layla, 2026-09-19).
+//
+// Elle a raison quand Odoo peut TRANCHER : si l'unité annoncée n'est pas celle
+// dans laquelle Odoo compte l'article, le nombre tapé était bon et seule son
+// étiquette était fausse. Ce n'est plus une supposition, c'est une donnée.
+describe('fourneeRelue — quand Odoo peut trancher, on convertit', () => {
+  it('« 14,33 g » de crème citron gingembre, article compté en kg → 2 fournées pile', () => {
+    // 14 328 g était bien la vraie quantité (incident du 11/09).
+    expect(fourneeRelue(14.33, 'kg', 'g', 7164)).toBeCloseTo(14330, 3)
+  })
+
+  it('« 0,8 g » de mousse meringue, article compté en kg → une fournée pile', () => {
+    expect(fourneeRelue(0.8, 'kg', 'g', 800)).toBeCloseTo(800, 6)
+  })
+
+  it('« 1,68 g » de crème au beurre citron, article en kg → 0,18 fournée', () => {
+    expect(fourneeRelue(1.68, 'kg', 'kg', 9.43)).toBeCloseTo(1.68, 6)
+  })
+
+  it('SE TAIT quand l’article est bien compté en grammes : aucune preuve', () => {
+    // 3,92 g de caramel beurre salé pour une recette de 3 920 g : l'article EST
+    // en grammes, relire n'explique rien. L'ordre sera refusé.
+    expect(fourneeRelue(3.92, 'g', 'g', 3920)).toBeNull()
+    expect(fourneeRelue(0.62, 'g', 'g', 2150)).toBeNull()
+  })
+
+  it('SE TAIT si la relecture ne tombe pas sur une vraie fournée', () => {
+    expect(fourneeRelue(0.0000004, 'kg', 'g', 800)).toBeNull()
+    expect(fourneeRelue(9999, 'kg', 'g', 800)).toBeNull()
   })
 })

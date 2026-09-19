@@ -1018,6 +1018,37 @@ export function fourneeMinuscule(qty, sortieRecette, uniteBom) {
   return q / sortie < 0.005
 }
 
+/**
+ * LA RELECTURE : et si seule l'ÉTIQUETTE d'unité était fausse ?
+ *
+ * « pourquoi ça ne convertit pas le bon ? » (Layla, 2026-09-19). Elle a raison
+ * quand Odoo peut TRANCHER, et il le peut dans un cas précis : quand l'unité
+ * annoncée n'est pas celle dans laquelle Odoo compte l'ARTICLE. Ce n'est alors
+ * plus une supposition, c'est une donnée.
+ *
+ * Vérifié sur les cas vécus : « 14,33 g » de crème citron gingembre relu en kg
+ * (son unité réelle) donne 14 330 g, soit EXACTEMENT 2 fournées — et 14 328 g
+ * était bien la vraie quantité. « 0,8 g » de mousse meringue donne 800 g, soit
+ * une fournée pile.
+ *
+ * ⚠️ ON NE RELIT QUE CE QUI EST DÉJÀ JUGÉ MINUSCULE. L'annexe envoie
+ * DÉLIBÉRÉMENT des grammes pour un article compté en kilos (`declarer()`,
+ * « une seule convention vers Odoo ») : relire tout le monde dans l'unité de
+ * l'article multiplierait chaque fournée par mille. La relecture n'a le droit
+ * de parler qu'une fois l'anomalie constatée.
+ *
+ * Et elle ne vaut que si elle TOMBE JUSTE : entre 0,05 et 20 fournées. Sinon
+ * elle se tait et l'ordre est refusé — on ne remplace pas une supposition par
+ * une autre.
+ */
+export function fourneeRelue(brut, uniteArticle, uniteBom, sortieRecette) {
+  const relu = versUnite(Number(brut) || 0, uniteArticle, uniteBom)
+  const sortie = Number(sortieRecette)
+  if (!(relu > 0) || !(sortie > 0)) return null
+  const fois = relu / sortie
+  return (fois >= 0.05 && fois <= 20) ? relu : null
+}
+
 function refuseSiFourneeMinuscule(nom, qty, sortieRecette, uniteBom) {
   if (!fourneeMinuscule(qty, sortieRecette, uniteBom)) return
   throw new Error(`${qty} ${uniteBom} de ${nom}, pour une recette qui en sort`
@@ -1090,8 +1121,18 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
       { limit: 50 }))
   const garde = corrigerFacteurMille(qty, bom.product_qty, lignesBom, ajustements)
   // Personne n'a imposé de quantités : `corrigerFacteurMille` n'a rien pu voir.
-  // On juge alors la fournée à sa seule taille — et on REFUSE, sans réparer.
-  if (!garde.corrige) refuseSiFourneeMinuscule(prod.display_name, qty, bom.product_qty, uniteBom)
+  // On juge alors la fournée à sa seule taille.
+  if (!garde.corrige && fourneeMinuscule(qty, bom.product_qty, uniteBom)) {
+    // Odoo peut-il trancher ? Si le nombre relu dans l'unité RÉELLE de
+    // l'article tombe sur une vraie fournée, l'étiquette était fausse, pas le
+    // nombre : on convertit. Sinon, on refuse plutôt que de deviner.
+    const relu = fourneeRelue(qtyKg, prod.uom_id?.[1], uniteBom, bom.product_qty)
+    if (relu === null) refuseSiFourneeMinuscule(prod.display_name, qty, bom.product_qty, uniteBom)
+    console.warn(`[creer-of] ${nomProduit} : ${qtyKg} annoncé en « ${unite || 'kg'} » mais`
+      + ` l'article se compte en « ${prod.uom_id?.[1]} » — relu ${relu} ${uniteBom}`)
+    qty = Math.round(relu * 1000) / 1000
+    refuseSiAberrant(prod.display_name, qty, uniteBom)
+  }
   if (garde.corrige) {
     console.warn(`[creer-of] ${nomProduit} : sortie ${qty} ${uniteBom} pour des ingrédients`
       + ` valant ${garde.qty} — facteur mille corrigé`)
