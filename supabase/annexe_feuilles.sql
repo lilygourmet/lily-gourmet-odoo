@@ -76,3 +76,34 @@ ALTER TABLE annexe_feuilles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS annexe_feuilles_lecture ON annexe_feuilles;
 CREATE POLICY annexe_feuilles_lecture ON annexe_feuilles
   FOR SELECT TO authenticated USING (true);
+
+
+-- ============================================================
+-- LA LIASSE : toutes les feuilles d'une même impression.
+--
+-- « La recette fait 3 pages, 2 pour l'économe et 1 qui ne concerne que le
+-- pâtissier. Une fois que l'économe scanne UNE de ses feuilles, celle du
+-- pâtissier monte dans À déclarer » (Layla, 2026-09-19).
+--
+-- Une cascade s'imprime d'un bloc, pour UN gâteau. On ne va pas chercher le
+-- praliné de la crème si on ne fait pas la tarte : servir une seule de ses
+-- demandes engage donc la cascade entière. L'économe scanne UNE fois, quel que
+-- soit le nombre de feuilles — c'est trois gestes de moins au comptoir.
+--
+-- ⚠️ Il fallait une colonne : regrouper « par heure » se serait cassé dès deux
+-- impressions rapprochées, et aurait engagé la cascade du voisin.
+--
+-- ⚠️ Contrepartie assumée : une crème faite aujourd'hui et montée demain rendra
+-- la tarte rouge dès ce soir. Ça reste moins grave que l'inverse — une ligne
+-- qu'on oublie de réclamer.
+--
+-- Relançable sans risque.
+-- ============================================================
+
+ALTER TABLE annexe_feuilles
+  ADD COLUMN IF NOT EXISTS liasse UUID;
+
+COMMENT ON COLUMN annexe_feuilles.liasse IS
+  'Toutes les feuilles sorties d''une même impression. Servir une seule demande engage la liasse entière.';
+
+CREATE INDEX IF NOT EXISTS annexe_feuilles_liasse_idx ON annexe_feuilles (liasse);

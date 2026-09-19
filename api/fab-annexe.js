@@ -1001,8 +1001,8 @@ export default async function handler(req, res) {
     // Supabase en direct : le jeton est vérifié ici, et nulle part ailleurs.
     // ============================================================
     if (req.query.feuille || req.query.feuilles) {
-      const F = 'id, jour, produit, libelle, unite, qty_prevue, pour, imprime_par, imprime_le,'
-        + ' donne_par, donne_le, declare_le, declare_qty, pas_faite_le, motif'
+      const F = 'id, jour, produit, libelle, unite, qty_prevue, pour, liasse, imprime_par,'
+        + ' imprime_le, donne_par, donne_le, declare_le, declare_qty, pas_faite_le, motif'
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
 
       // Toutes les feuilles du jour : « à donner » chez l'économe, « à
@@ -1053,6 +1053,12 @@ export default async function handler(req, res) {
           qty_prevue: Number(f.qty) || null,
           pour: f.pour || null,
           imprime_par: body.userId || null,
+          // ⚠️ Rien à demander à l'économe → la déclaration est due TOUT DE
+          // SUITE. `donne_par` reste vide : personne n'a rien donné, il n'y
+          // avait rien à donner. C'est ce vide qui distingue les deux cas à
+          // l'écran.
+          donne_le: f.sansEconomat ? new Date().toISOString() : null,
+          liasse: body.liasse || null,
         }))
         if (!lignes.length) return res.status(200).json({ ok: true, posees: 0 })
         const { error } = await sb.from('annexe_feuilles').insert(lignes)
@@ -1072,9 +1078,19 @@ export default async function handler(req, res) {
       // L'ÉCONOME DONNE. Le geste qui rend la déclaration due.
       if (req.query.mode === 'donner') {
         if (feuille.donne_le) return res.status(200).json({ feuille, deja: true })
+        const quand = { donne_le: new Date().toISOString(), donne_par: body.userId || null }
+        // ⚠️ UN SEUL SCAN ENGAGE TOUTE LA CASCADE (Layla, 2026-09-19) : « une
+        // fois que l'économe scanne UNE de ses feuilles, celle du pâtissier
+        // monte dans À déclarer ». On ne va pas chercher le praliné de la
+        // crème si on ne fait pas la tarte. Les feuilles déjà déclarées ou
+        // déjà dites « pas faite », elles, ne se rouvrent pas.
+        if (feuille.liasse) {
+          await sb.from('annexe_feuilles').update(quand)
+            .eq('liasse', feuille.liasse)
+            .is('donne_le', null).is('declare_le', null).is('pas_faite_le', null)
+        }
         const { data, error } = await sb.from('annexe_feuilles')
-          .update({ donne_le: new Date().toISOString(), donne_par: body.userId || null })
-          .eq('id', id).select(F).single()
+          .update(quand).eq('id', id).select(F).single()
         if (error) return res.status(200).json({ error: error.message })
         return res.status(200).json({ feuille: data })
       }

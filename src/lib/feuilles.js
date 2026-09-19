@@ -16,6 +16,7 @@
 // ============================================================
 
 import qr from 'qrcode-generator'
+import { aBesoinDeLEconomat } from './feuillesAImprimer'
 
 /** Un jeton par feuille, fabriqué ICI. */
 export function nouvelId() {
@@ -57,8 +58,14 @@ export function imageQr(id, don = false) {
 export function poserFeuilles(feuilles, userId) {
   const utiles = (feuilles || []).filter(f => f.feuilleId)
   if (!utiles.length) return
+  // ⚠️ TOUTES LES FEUILLES D'UNE MÊME IMPRESSION PORTENT LE MÊME NUMÉRO. Une
+  // cascade s'imprime d'un bloc, pour UN gâteau : servir une seule de ses
+  // demandes engage la cascade entière, et l'économe ne scanne qu'une fois
+  // (Layla, 2026-09-19).
+  const liasse = nouvelId()
   const corps = JSON.stringify({
     userId: userId || null,
+    liasse,
     feuilles: utiles.map(f => ({
       id: f.feuilleId,
       produit: f.produit,
@@ -66,6 +73,13 @@ export function poserFeuilles(feuilles, userId) {
       unite: f.unite || null,
       qty: f.qty,
       pour: (f.chemin || [])[0] || null,
+      // ⚠️ RIEN À ALLER CHERCHER = RIEN À ATTENDRE (Layla, 2026-09-19 : « si
+      // une cascade est imprimée et qu'elle n'a pas de MP, elle doit aller
+      // directement dans À déclarer »). Une fournée dont tous les composants
+      // sont déjà au frigo ne passe pas par l'économe — sans ça, elle serait
+      // restée coincée à « pas encore donné » POUR TOUJOURS, et n'aurait
+      // jamais été réclamée.
+      sansEconomat: !aBesoinDeLEconomat(f),
     })),
   })
   fetch('/api/fab-annexe?feuilles=imprimees', {
