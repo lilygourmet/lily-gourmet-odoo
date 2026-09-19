@@ -459,21 +459,53 @@ export function toutConsomme(noeud) {
  * valider un enfant tant que SES enfants manquent.
  */
 export function bloquants(noeud, dejaFaits) {
-  const faits = dejaFaits instanceof Set ? dejaFaits : new Set(dejaFaits || [])
-  // ⚠️ L'appelant ne doit passer QUE des composants réellement déclarés : une
-  // quantité retapée sans « c'est fait » est un brouillon, pas une fabrication.
-  // Voir `declares()`.
+  // Ce qui vient d'être déclaré PENDANT cette séance, avec sa quantité. Le
+  // stock d'Odoo ne monte qu'à la validation : sans ça, une base faite il y a
+  // dix secondes compterait pour rien et l'écran dresserait un mur.
+  const enPlus = quantitesDeclarees(dejaFaits)
   return enfantsDe(noeud)
-    // ⚠️ Ce qui a DÉJÀ été déclaré aujourd'hui ne bloque plus — même si la
-    // quantité déclarée ne couvre pas tout. L'écran l'affiche en vert
-    // (« 2 u fait · en attente de validation ») et le verrou, lui, le comptait
-    // encore comme manquant : « ça doit me laisser valider vu que j'ai marqué
-    // comme fait la base » (Layla, 2026-09-10).
+    // ⚠️ IL EN FAUT ASSEZ, pas seulement « en avoir déclaré ».
+    // « elle doit être égale. ou plus. si ça manque malgré ma déclaration ça
+    // laisse pas passer » (Layla, 2026-09-19).
+    // Avant, la moindre déclaration levait le verrou pour de bon : 6 biscuits
+    // déclarés débloquaient 15 gâteaux qui en demandent 15. On compare donc
+    // maintenant les QUANTITÉS — stock + ce qui est déjà déclaré aujourd'hui
+    // + ce qui vient de l'être — au besoin réel.
     // Un PRESSAGE ne bloque pas : on le confirme en validant le gâteau.
     // Un PRESQUE-LÀ non plus : on prendra tout ce qui reste.
-    .filter(c => !c.ok && c.fabrique && !(c.dejaFait > 0) && !faits.has(c.produit)
-      && !estPressageServi(c) && !presqueLa(c))
+    .filter(c => {
+      if (!c.fabrique || estPressageServi(c) || presqueLa(c)) return false
+      const besoin = Number(c.besoin) || 0
+      // Pas de besoin chiffré (un nœud abrégé) : on s'en remet au verdict du
+      // serveur plutôt que de laisser passer faute de savoir.
+      if (!(besoin > 0)) return !c.ok
+      const dispo = Math.max(0, Number(c.stock) || 0) + (Number(c.dejaFait) || 0)
+        + (Number(enPlus[c.produit]) || 0)
+      return dispo < besoin - 1e-9
+    })
     .map(c => c.produit)
+}
+
+/**
+ * Les quantités déclarées pendant la séance, par article.
+ *
+ * L'appelant passe soit la table des coches (`{ produit: { qty } }`), soit une
+ * simple liste de noms — d'avant, quand « déclaré » suffisait à débloquer. Une
+ * liste de noms n'apporte aucune quantité : elle ne débloque donc plus rien
+ * toute seule, c'est le stock qui décide.
+ *
+ * ⚠️ Un BROUILLON n'est pas une fabrication : une quantité retapée sans
+ * « c'est fait » ne compte pas (voir `declares()`).
+ */
+export function quantitesDeclarees(faits) {
+  if (!faits || Array.isArray(faits) || faits instanceof Set) return {}
+  const out = {}
+  for (const [nom, v] of Object.entries(faits)) {
+    if (!v || v.brouillon) continue
+    const q = Number(v.qty) || 0
+    if (q > 0) out[nom] = (out[nom] || 0) + q
+  }
+  return out
 }
 
 /** Les composants vraiment déclarés — les brouillons n'en sont pas. */

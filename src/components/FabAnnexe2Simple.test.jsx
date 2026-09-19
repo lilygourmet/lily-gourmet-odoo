@@ -152,7 +152,12 @@ describe('la fiche', () => {
   })
 
   it('… et s’allume quand tout est là', () => {
-    const complet = { ...tiramisu, enfants: tiramisu.enfants.map(c => ({ ...c, ok: true })) }
+    // ⚠️ « Tout est là » veut dire qu'il Y EN A ASSEZ, pas qu'une étiquette dit
+    // « ok » : depuis le 2026-09-19 le verrou compare les QUANTITÉS, parce que
+    // le `ok` du serveur est calculé pour la fournée qu'il propose, pas pour
+    // celle qu'on tape. D'où le stock, ici, en plus du drapeau.
+    const complet = { ...tiramisu,
+      enfants: tiramisu.enfants.map(c => ({ ...c, ok: true, stock: (c.besoin || 0) + 1 })) }
     const { onFait } = poser(complet)
     fireEvent.click(screen.getByText("C'est fait"))
     expect(onFait).toHaveBeenCalled()

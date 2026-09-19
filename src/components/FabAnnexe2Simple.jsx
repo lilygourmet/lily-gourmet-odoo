@@ -432,7 +432,9 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
   const misALEchelle = { ...noeud, composants: ingredientsPour(noeud, quantite), enfants: undefined }
   const bloque = decoupe
     ? (partage && partage.manque > 0.001 ? [decoupe.enfant.produit] : [])
-    : bloquants(misALEchelle, dejaFaits)
+    // ⚠️ La TABLE des coches, pas la liste des noms : le verrou a besoin des
+    // QUANTITÉS déclarées pour juger « assez ou pas assez ».
+    : bloquants(misALEchelle, faits)
   const aPeser = decoupe ? decoupe.enfant : noeud
   const quantitePesee = decoupe ? cuites : quantite
 

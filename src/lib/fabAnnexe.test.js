@@ -28,8 +28,31 @@ describe('bloquants', () => {
     expect(bloquants(tiramisu, [])).toEqual(['SM. Biscuit a la cuillere Indiv'])
   })
 
-  it('ne bloque plus sur ce que le pâtissier vient de déclarer', () => {
-    expect(bloquants(tiramisu, ['SM. Biscuit a la cuillere Indiv'])).toEqual([])
+  // ⚠️ RÈGLE CHANGÉE LE 2026-09-19. Déclarer ne suffit plus : « elle doit être
+  // égale. ou plus. si ça manque malgré ma déclaration ça laisse pas passer »
+  // (Layla). Une simple liste de noms n'apporte aucune quantité — elle ne
+  // débloque donc plus rien.
+  it('déclarer SANS quantité ne débloque plus', () => {
+    expect(bloquants(tiramisu, ['SM. Biscuit a la cuillere Indiv']))
+      .toEqual(['SM. Biscuit a la cuillere Indiv'])
+  })
+
+  it('ce qu’on vient de déclarer compte — mais seulement s’il y en a ASSEZ', () => {
+    const royal = {
+      produit: 'SM- Royal Chocolat 20 cm',
+      composants: [{ produit: 'SM. Biscuit Brownie 10 pers', fabrique: true,
+        besoin: 15, stock: 0, dejaFait: 0, ok: false }],
+    }
+    // 6 déclarés sur 15 : ça manque encore, ça bloque.
+    expect(bloquants(royal, { 'SM. Biscuit Brownie 10 pers': { qty: 6 } }))
+      .toEqual(['SM. Biscuit Brownie 10 pers'])
+    // 15 déclarés : c'est bon.
+    expect(bloquants(royal, { 'SM. Biscuit Brownie 10 pers': { qty: 15 } })).toEqual([])
+    // Plus que le besoin : bon aussi.
+    expect(bloquants(royal, { 'SM. Biscuit Brownie 10 pers': { qty: 20 } })).toEqual([])
+    // Un BROUILLON n'est pas une fabrication.
+    expect(bloquants(royal, { 'SM. Biscuit Brownie 10 pers': { qty: 15, brouillon: true } }))
+      .toEqual(['SM. Biscuit Brownie 10 pers'])
   })
 
   it('vaut aussi au fond de la recette : la plaque bloque le biscuit', () => {

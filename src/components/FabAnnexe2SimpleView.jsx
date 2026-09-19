@@ -417,8 +417,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         // L'article de tête est parti : la séance est finie, on repart propre.
         setFaits({}); setQuantites({}); setCuites({})
       } else {
-        // Une préparation : elle compte comme faite pour débloquer le dessus.
-        setFaits(f => ({ ...f, [noeud.produit]: { fois: 1 } }))
+        // Une préparation : ce qu'on vient d'en faire compte pour le dessus.
+        // ⚠️ LA QUANTITÉ, pas juste la coche : « elle doit être égale. ou plus »
+        // (Layla, 2026-09-19). Le stock d'Odoo ne monte qu'à la validation —
+        // sans ce chiffre, une base faite il y a dix secondes compte pour rien.
+        setFaits(f => ({ ...f, [noeud.produit]: { fois: 1, qty } }))
       }
       recharger()
     } catch (e) {
