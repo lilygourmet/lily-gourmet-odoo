@@ -421,9 +421,18 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
   const partage = decoupe ? partageDecoupe({
     cuites, coupes: quantite, parPiece: decoupe.parPiece, stock: decoupe.enfant.stock,
   }) : null
+  // ⚠️ LE VERROU JUGE LA QUANTITÉ DEMANDÉE, pas celle que le serveur avait
+  // proposée. Il recevait le nœud BRUT : ses composants portaient le `ok`
+  // calculé pour la fournée par défaut. Le 2026-09-18, Hanae a déclaré 15 Royal
+  // Chocolat avec 14 biscuits brownie en stock — assez pour la fournée de 6
+  // proposée, pas pour les 15 tapés. L'écran écrivait bien le manque en rouge,
+  // et le bouton restait vert. Le stock est passé à −1.
+  // Même faute que la découpe juste au-dessus : « une plaque se coupe,
+  // rappelle-toi » (Layla). On met donc les composants à l'échelle d'abord.
+  const misALEchelle = { ...noeud, composants: ingredientsPour(noeud, quantite), enfants: undefined }
   const bloque = decoupe
     ? (partage && partage.manque > 0.001 ? [decoupe.enfant.produit] : [])
-    : bloquants(noeud, dejaFaits)
+    : bloquants(misALEchelle, dejaFaits)
   const aPeser = decoupe ? decoupe.enfant : noeud
   const quantitePesee = decoupe ? cuites : quantite
 

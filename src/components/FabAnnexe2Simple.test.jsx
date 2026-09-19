@@ -670,6 +670,34 @@ describe('retaper une dose', () => {
   })
 })
 
+// ====== LE VERROU JUGE LA QUANTITÉ TAPÉE ======
+// Le 2026-09-18, Hanae a pu marquer 15 Royal Chocolat comme faits avec 14
+// biscuits brownie en stock : assez pour la fournée de 6 que l'app proposait,
+// pas pour les 15 qu'elle a tapés. Le stock est passé à −1.
+// L'écran écrivait bien le manque en rouge — le bouton, lui, restait vert.
+describe('le verrou suit la quantité demandée', () => {
+  const royal = {
+    produit: 'SM- Royal Chocolat 20 cm', libelle: 'Royal Chocolat 20 cm', unite: 'u',
+    tourneeTaille: 6, pourQuantite: 6, recette: [],
+    enfants: [
+      { produit: 'SM. Biscuit Brownie 10 pers', unite: 'u', besoin: 6, stock: 14,
+        dejaFait: 0, fabrique: true, ok: true },
+    ],
+  }
+
+  it('6 demandés, 14 en stock : on peut valider', () => {
+    render(<Fiche noeud={royal} quantite={6} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByRole('button', { name: /c.est fait/i }).disabled).toBe(false)
+  })
+
+  it('LE CAS VÉCU : 15 demandés, 14 en stock → le bouton s’éteint', () => {
+    render(<Fiche noeud={royal} quantite={15} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
+    expect(screen.getByRole('button', { name: /c.est fait/i }).disabled).toBe(true)
+  })
+})
+
 describe('la quantité figée', () => {
   const royal = {
     produit: 'SM- Royal Chocolat 15 cm', libelle: 'Royal Chocolat 15 cm', unite: 'u',
