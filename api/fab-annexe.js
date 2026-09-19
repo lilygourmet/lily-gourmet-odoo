@@ -1001,8 +1001,9 @@ export default async function handler(req, res) {
     // Supabase en direct : le jeton est vérifié ici, et nulle part ailleurs.
     // ============================================================
     if (req.query.feuille || req.query.feuilles) {
-      const F = 'id, jour, produit, libelle, unite, qty_prevue, pour, liasse, imprime_par,'
-        + ' imprime_le, donne_par, donne_le, declare_le, declare_qty, pas_faite_le, motif'
+      const F = 'id, jour, produit, libelle, unite, qty_prevue, pour, liasse, sans_economat,'
+        + ' imprime_par, imprime_le, donne_par, donne_le, declare_le, declare_qty,'
+        + ' pas_faite_le, motif'
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
 
       // Toutes les feuilles du jour : « à donner » chez l'économe, « à
@@ -1053,11 +1054,12 @@ export default async function handler(req, res) {
           qty_prevue: Number(f.qty) || null,
           pour: f.pour || null,
           imprime_par: body.userId || null,
-          // ⚠️ Rien à demander à l'économe → la déclaration est due TOUT DE
-          // SUITE. `donne_par` reste vide : personne n'a rien donné, il n'y
-          // avait rien à donner. C'est ce vide qui distingue les deux cas à
-          // l'écran.
-          donne_le: f.sansEconomat ? new Date().toISOString() : null,
+          // ⚠️ RIEN À DEMANDER NE VEUT PAS DIRE DUE TOUT DE SUITE (Layla,
+          // 2026-09-19). La tarte ne demande rien elle-même, mais on ne la
+          // monte pas tant que sa crème n'a pas été servie. On note seulement
+          // la question ; c'est `aDeclarer` qui décide, en regardant la
+          // cascade entière.
+          sans_economat: !!f.sansEconomat,
           liasse: body.liasse || null,
         }))
         if (!lignes.length) return res.status(200).json({ ok: true, posees: 0 })

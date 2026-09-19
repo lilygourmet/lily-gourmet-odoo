@@ -141,6 +141,17 @@ export const declarer = (id, qty) => agir(id, 'declarer', { qty })
  */
 export const pasFaite = (id, motif = '') => agir(id, 'pas-faite', { motif })
 
+/** Fini, d'une façon ou d'une autre : plus rien à en attendre. */
+const clos = f => !!(f?.declare_le || f?.pas_faite_le)
+
+/**
+ * Cette feuille attend-elle encore l'économe ?
+ *
+ * Seules celles qui DEMANDENT quelque chose l'attendent. Les autres n'ont rien
+ * à lui réclamer — elles attendent leurs sœurs (voir `aDeclarer`).
+ */
+const attendLEconome = f => !clos(f) && !f.sans_economat && !f.donne_le
+
 /** L'état d'une feuille, en un mot. */
 export function etatFeuille(f) {
   if (f?.declare_le) return 'declaree'
@@ -160,14 +171,36 @@ export function depuis(quand) {
 }
 
 /**
- * Ce qui est DÛ : donné par l'économe, et toujours pas déclaré.
+ * CE QUI EST DÛ.
  *
- * ⚠️ Ce qui est déclaré n'y est plus. « Que ce qui reste à déclarer » (Layla) :
- * une liste vide veut dire qu'il n'y a rien à faire — et rien à cliquer.
+ * Deux façons pour une feuille de le devenir, et elles viennent toutes deux de
+ * Layla (2026-09-19) :
+ *
+ *   • elle DEMANDAIT de la matière → elle est due quand l'économe l'a scannée,
+ *     elle et pas une autre : « sinon ça dit qu'il a donné toute la matière » ;
+ *
+ *   • elle ne demandait RIEN → elle est due quand plus aucune demande de sa
+ *     cascade n'attend. La tarte ne réclame rien elle-même, mais on ne la monte
+ *     pas tant que sa crème n'a pas été servie : « si les autres MP ne sont pas
+ *     scannés, ça part pas ». Et si la cascade entière ne demande rien — tout
+ *     était déjà au frigo — alors rien n'attend, et elle est due dès
+ *     l'impression : « pas de MP → direct dans À déclarer ».
+ *
+ * ⚠️ Ce qui est déclaré n'y est plus. « Que ce qui reste à déclarer » : une
+ * liste vide veut dire qu'il n'y a rien à faire — et rien à cliquer.
  */
-export const aDeclarer = feuilles =>
-  (feuilles || []).filter(f => etatFeuille(f) === 'a-declarer')
+export function aDeclarer(feuilles) {
+  const liassesQuiAttendent = new Set(
+    (feuilles || []).filter(attendLEconome).map(f => f.liasse))
+  return (feuilles || []).filter(f => {
+    if (clos(f)) return false
+    if (f.donne_le) return true              // l'économe a donné : c'est dû
+    if (!f.sans_economat) return false       // elle attend encore son « donné »
+    // Rien à demander : elle attend que sa cascade soit servie en entier.
+    // Sans liasse (une vieille ligne), on ne fait attendre personne.
+    return !f.liasse || !liassesQuiAttendent.has(f.liasse)
+  })
+}
 
-/** Ce que l'économe n'a pas encore donné. */
-export const aDonner = feuilles =>
-  (feuilles || []).filter(f => etatFeuille(f) === 'imprimee')
+/** Ce que l'économe n'a pas encore donné — et lui seul peut le débloquer. */
+export const aDonner = feuilles => (feuilles || []).filter(attendLEconome)

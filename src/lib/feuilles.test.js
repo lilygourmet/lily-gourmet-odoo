@@ -47,23 +47,61 @@ describe('ce qui rend une déclaration due', () => {
   })
 })
 
-// « Si une cascade est imprimée et qu'elle n'a pas de MP, elle doit aller
-// directement dans À déclarer » (Layla, 2026-09-19).
-describe('une fournée qui n’a rien à demander', () => {
-  // Le serveur lui pose `donne_le` dès l'impression, et laisse `donne_par` vide :
-  // personne n'a rien donné, il n'y avait rien à donner.
-  const rienADemander = { id: 'e', imprime_le: '2026-09-19T08:00:00Z',
-    donne_le: '2026-09-19T08:00:00Z', donne_par: null }
+// ============================================================
+// LA CASCADE DE LA TARTE CITRON GINGEMBRE — le cas réel de Layla.
+//
+// « J'ai pas donné la MP et c'est parti déjà dans déclarer. Ça ne doit partir
+// que si l'économe a scanné. Si les autres MP ne sont pas scannés, ça part
+// pas » (2026-09-19).
+//
+// Quatre feuilles, une seule impression :
+//   • la crème et la pâte du fond DEMANDENT de la matière ;
+//   • le fond 23 cm et la tarte ne demandent rien — ils se font AVEC les deux
+//     premières. Les rendre dues tout de suite, c'était réclamer un travail
+//     qui ne pouvait pas avoir commencé.
+// ============================================================
+describe('la cascade de la tarte', () => {
+  const L = 'liasse-tarte'
+  const creme = { id: 'creme', liasse: L, sans_economat: false }
+  const pate = { id: 'pate', liasse: L, sans_economat: false }
+  const fond = { id: 'fond', liasse: L, sans_economat: true }
+  const tarte = { id: 'tarte', liasse: L, sans_economat: true }
+  const donne = f => ({ ...f, donne_le: '2026-09-19T09:00:00Z', donne_par: 'eco' })
+  const ids = l => aDeclarer(l).map(f => f.id).sort()
 
-  it('est due tout de suite, sans attendre l’économe', () => {
-    expect(etatFeuille(rienADemander)).toBe('a-declarer')
-    expect(aDeclarer([rienADemander]).map(f => f.id)).toEqual(['e'])
+  it('juste après l’impression, RIEN n’est dû', () => {
+    // ⚠️ Pas même la tarte : sa crème n'a pas encore été servie.
+    expect(aDeclarer([creme, pate, fond, tarte])).toEqual([])
   })
 
-  it('ne reste PAS coincée chez l’économe', () => {
-    // ⚠️ Sans ça, elle attendait un « donné » qui ne serait jamais venu —
-    // elle n'aurait jamais été réclamée à personne.
-    expect(aDonner([rienADemander])).toEqual([])
+  it('l’économe sert la crème : elle seule devient due', () => {
+    expect(ids([donne(creme), pate, fond, tarte])).toEqual(['creme'])
+  })
+
+  it('il sert la dernière demande : le fond et la tarte suivent', () => {
+    expect(ids([donne(creme), donne(pate), fond, tarte]))
+      .toEqual(['creme', 'fond', 'pate', 'tarte'])
+  })
+
+  it('« pas faite » sur une demande ne bloque plus les autres', () => {
+    // La pâte ne se fera pas : elle n'attend plus rien de l'économe, donc elle
+    // ne doit pas retenir le reste de la cascade en otage.
+    const pateAbandonnee = { ...pate, pas_faite_le: '2026-09-19T09:30:00Z' }
+    expect(ids([donne(creme), pateAbandonnee, fond, tarte]))
+      .toEqual(['creme', 'fond', 'tarte'])
+  })
+
+  it('une cascade qui ne demande RIEN est due dès l’impression', () => {
+    // Tout était déjà au frigo : personne n'a rien à servir.
+    // « Si une cascade est imprimée et qu'elle n'a pas de MP, elle doit aller
+    // directement dans À déclarer » (Layla).
+    expect(ids([fond, tarte])).toEqual(['fond', 'tarte'])
+  })
+
+  it('l’économe ne voit QUE ce qu’il doit servir', () => {
+    // Le fond et la tarte ne lui demandent rien : ils n'ont rien à faire dans
+    // sa liste, il ne pourrait rien en faire.
+    expect(aDonner([creme, pate, fond, tarte]).map(f => f.id)).toEqual(['creme', 'pate'])
   })
 })
 

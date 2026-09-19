@@ -106,3 +106,37 @@ COMMENT ON COLUMN annexe_feuilles.liasse IS
   'Toutes les feuilles sorties d''une même impression. Servir une seule demande engage la liasse entière.';
 
 CREATE INDEX IF NOT EXISTS annexe_feuilles_liasse_idx ON annexe_feuilles (liasse);
+
+
+-- ============================================================
+-- QUI ATTEND L'ÉCONOME, ET QUI ATTEND SES SŒURS.
+--
+-- « J'ai pas donné la MP et c'est parti déjà dans déclarer. Ça ne doit partir
+-- que si l'économe a scanné. Si les autres MP ne sont pas scannés, ça part
+-- pas » (Layla, 2026-09-19).
+--
+-- Ma version d'avant rendait une feuille « sans rien à demander » due dès
+-- l'impression. Faux : la TARTE ne demande rien elle-même — ses composants
+-- sont la crème et le fond — mais on ne peut pas la monter tant que la crème
+-- n'a même pas été servie. Elle réclamait un travail qui ne pouvait pas avoir
+-- commencé.
+--
+-- La règle juste, et elle tient les deux phrases de Layla :
+--   • une feuille QUI DEMANDE de la matière → due quand l'économe la scanne,
+--     elle et pas une autre ;
+--   • une feuille QUI NE DEMANDE RIEN → due quand plus aucune demande de sa
+--     cascade n'attend. Si la cascade entière ne demande rien (tout est déjà
+--     au frigo), elle est due tout de suite : c'est bien « pas de MP → direct
+--     dans À déclarer ».
+--
+-- On garde donc la question posée à l'impression — cette feuille demandait-
+-- elle quelque chose ? — au lieu de la deviner plus tard.
+--
+-- Relançable sans risque.
+-- ============================================================
+
+ALTER TABLE annexe_feuilles
+  ADD COLUMN IF NOT EXISTS sans_economat BOOLEAN NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN annexe_feuilles.sans_economat IS
+  'true = cette feuille n''avait rien à demander à l''économat. Elle devient due quand plus aucune demande de sa liasse n''attend.';

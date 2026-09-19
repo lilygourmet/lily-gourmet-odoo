@@ -21,8 +21,12 @@ import { propre, qte } from '../lib/ecranSimple'
 import { feuillesDuJour, aDeclarer, aDonner, donner, declarer, pasFaite, depuis, lienFeuille }
   from '../lib/feuilles'
 
-/** Rouge au-delà de deux heures : 40 min c'est normal, 5 h se voit de loin. */
-const enRetard = f => Date.now() - Date.parse(f.donne_le || 0) > 2 * 3600 * 1000
+/**
+ * Rouge au-delà de deux heures : 40 min c'est normal, 5 h se voit de loin.
+ * On compte depuis le moment où la ligne est devenue DUE — le « donné » de
+ * l'économe, ou l'impression pour celles qui n'avaient rien à demander.
+ */
+const enRetard = f => Date.now() - Date.parse(f.donne_le || f.imprime_le || 0) > 2 * 3600 * 1000
 
 function Ligne({ children, ton }) {
   return (
@@ -98,7 +102,7 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
             <span className={`inline-block text-[9.5px] font-extrabold tracking-wide px-2 py-0.5
               rounded-full border mb-1
               ${enRetard(f) ? 'bg-danger-bg text-danger border-danger' : 'bg-gold-pale text-gold border-gold'}`}>
-              {f.donne_par ? `DONNÉ IL Y A ${depuis(f.donne_le).toUpperCase()}`
+              {f.donne_le ? `DONNÉ IL Y A ${depuis(f.donne_le).toUpperCase()}`
                 : `RIEN À DEMANDER · IMPRIMÉ IL Y A ${depuis(f.imprime_le).toUpperCase()}`}
             </span>
             <div className="text-[15px] font-bold text-ink">{propre(f.libelle || f.produit)}</div>
