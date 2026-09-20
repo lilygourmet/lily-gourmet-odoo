@@ -51,15 +51,14 @@ const dernierGeste = f => {
 }
 
 function Ligne({ f, bord, couleur, quoi, busy, onAgir }) {
-  return (
-    <div className={`flex items-stretch bg-cream-warm border border-line border-l-4 ${bord}
-                     rounded-xl overflow-hidden mb-1.5`}>
-      <div className="flex-1 min-w-0 flex items-center gap-2.5 p-2">
+  const dedans = (
+    <>
+      <span className="flex-1 min-w-0 flex items-center gap-2.5 p-2">
         <PhotoFeuille f={f} className="w-12 h-12 rounded-lg flex-none" />
-        <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-bold leading-tight text-ink truncate">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-bold leading-tight text-ink truncate">
             {propre(f.libelle || f.produit)}
-          </div>
+          </span>
           <GrosseQuantite f={f} compact />
           {/* « Quand on donne, on écrit en dessous la date » (Layla,
               2026-09-20) : la liste remonte une semaine, l'heure seule ne
@@ -68,27 +67,43 @@ function Ligne({ f, bord, couleur, quoi, busy, onAgir }) {
               l'historique daterait tout du moment où la marchandise est
               sortie. */}
           <Quand {...dernierGeste(f)} />
-        </div>
-      </div>
-      {onAgir && (
-        <button
-          onClick={() => onAgir(f, quoi)} disabled={busy === f.id}
-          aria-label={`${quoi === 'donner' ? 'Donné' : 'Repris'} : ${propre(f.libelle || f.produit)}`}
-          className={`flex-none w-16 ${couleur} text-cream text-[22px] font-extrabold
-                      active:brightness-90 transition disabled:opacity-50`}>
+        </span>
+      </span>
+      {!!onAgir && (
+        <span className={`flex-none w-16 ${couleur} text-cream text-[22px] font-extrabold
+                          grid place-items-center`}>
           {busy === f.id ? '…' : '✓'}
-        </button>
+        </span>
       )}
-    </div>
+    </>
+  )
+
+  const habit = `flex items-stretch w-full text-left bg-cream-warm border border-line
+                 border-l-4 ${bord} rounded-xl overflow-hidden mb-1.5`
+
+  // Rien à faire dessus (le déjà-donné, l'historique) : pas un bouton.
+  if (!onAgir) return <div className={habit}>{dedans}</div>
+
+  // ⚠️ TOUTE LA LIGNE SERT (Layla, 2026-09-20 : « je n'arrive pas à cocher un
+  // article, il fait que bouger »). Seule la bande verte de 64 px répondait :
+  // toucher la photo ou le nom ne faisait rien, et l'écran se contentait de
+  // glisser sous le doigt. Le ✓ reste, mais comme repère, pas comme cible.
+  return (
+    <button
+      type="button" onClick={() => onAgir(f, quoi)} disabled={busy === f.id}
+      aria-label={`${quoi === 'donner' ? 'Donné' : 'Repris'} : ${propre(f.libelle || f.produit)}`}
+      className={`${habit} active:brightness-95 transition disabled:opacity-50`}>
+      {dedans}
+    </button>
   )
 }
 
 /** Une pile de fournées, rangée par cascade. */
 function Cascades({ feuilles, ...reste }) {
   return (
-    <div className="sm:columns-2 sm:gap-4">
+    <div className="grid sm:grid-cols-2 sm:gap-x-4">
       {parCascade(feuilles).map(g => (
-        <div key={g.tete} className="sm:break-inside-avoid">
+        <div key={g.tete}>
           <TeteCascade g={g} />
           {g.feuilles.map(f => <Ligne key={f.id} f={f} {...reste} />)}
         </div>

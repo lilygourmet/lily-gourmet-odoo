@@ -183,6 +183,16 @@ describe('« Donné », l’écran de l’économe', () => {
     await waitFor(() => expect(retourRecu).toHaveBeenCalledWith('f4'))
   })
 
+  // ⚠️ « Je n'arrive pas à cocher un article, il fait que bouger » (Layla,
+  // 2026-09-20) : seule la bande verte de 64 px répondait. Toucher la photo ou
+  // le nom ne faisait rien — l'écran glissait sous le doigt, c'est tout.
+  it('toucher l’article suffit à le donner, pas seulement le ✓', async () => {
+    lues = [attendue]
+    render(<DonneView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    fireEvent.click(await screen.findByText('Ganache gold'))
+    await waitFor(() => expect(donner).toHaveBeenCalledWith('f3', 'u1'))
+  })
+
   it('ce qui est déjà donné n’offre AUCUN bouton : rien à faire ici', async () => {
     lues = [donnee]
     render(<DonneView user={{ id: 'u1' }} onNavigate={() => {}} />)

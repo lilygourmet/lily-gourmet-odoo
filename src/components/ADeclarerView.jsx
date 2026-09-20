@@ -200,9 +200,12 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
           <div key={gj.jour}>
             <Bande emoji="📅" titre={nomDuJour(gj.jour)} n={gj.feuilles.length}
               ton="bg-cream-deep text-ink-soft" />
-            <div className="sm:columns-2 sm:gap-4">
+            {/* ⚠️ UNE SEULE COLONNE (Layla, 2026-09-20 : « aussi à déclarer à
+                la verticale »). Les deux colonnes coupaient la lecture : une
+                dette se descend du haut vers le bas, une ligne après l'autre. */}
+            <div>
               {parCascade(gj.feuilles).map(g => (
-                <div key={g.tete} className="sm:break-inside-avoid">
+                <div key={g.tete}>
                   <TeteCascade g={g} />
                   {g.feuilles.map(f => (
                     <Ligne key={f.id} f={f} rend={rend}
