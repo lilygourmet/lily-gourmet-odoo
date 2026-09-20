@@ -1160,9 +1160,34 @@ export default async function handler(req, res) {
         if (feuille.declare_le) {
           return res.status(200).json({ feuille, refus: 'Cette fournée a déjà été déclarée.' })
         }
+        const quand = { retour_le: new Date().toISOString(), retour_par: body.userId || null }
+
+        // ⚠️ LA CASCADE TOMBE AVEC (Layla, 2026-09-20 : « qu'allons-nous faire
+        // avec les articles mère ? »). Elle a été imprimée pour UN gâteau :
+        // sans sa crème, ni la génoise ni le cadre n'ont de sens aujourd'hui.
+        // Sans ça, le pâtissier gardait dans « À déclarer » un gâteau que le
+        // verrou l'empêchait de déclarer — une ligne qui réclame sans qu'on
+        // puisse rien en faire.
+        //
+        // Deux sorts, selon ce qui a vraiment quitté la réserve :
+        //   • ce que l'économe A DONNÉ part EN RETOUR : il doit le récupérer ;
+        //   • ce qu'il n'a jamais donné se ferme tout court — il n'a rien à
+        //     recevoir, et lui montrer un retour fantôme serait un mensonge.
+        // Ce qui est DÉJÀ DÉCLARÉ ne bouge pas : c'est du travail fait.
+        if (body.toute && feuille.liasse) {
+          await sb.from('annexe_feuilles').update(quand)
+            .eq('liasse', feuille.liasse).neq('id', id)
+            .is('declare_le', null).is('pas_faite_le', null).is('retour_le', null)
+            .not('donne_le', 'is', null)
+          await sb.from('annexe_feuilles')
+            .update({ pas_faite_le: new Date().toISOString(), motif: 'cascade-rendue' })
+            .eq('liasse', feuille.liasse).neq('id', id)
+            .is('declare_le', null).is('pas_faite_le', null).is('retour_le', null)
+            .is('donne_le', null)
+        }
+
         const { data, error } = await sb.from('annexe_feuilles')
-          .update({ retour_le: new Date().toISOString(), retour_par: body.userId || null })
-          .eq('id', id).select(F).single()
+          .update(quand).eq('id', id).select(F).single()
         if (error) return res.status(200).json({ error: error.message })
         return res.status(200).json({ feuille: data })
       }

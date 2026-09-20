@@ -143,7 +143,19 @@ export const donner = (id, userId) => agir(id, 'donner', { userId })
  * 2026-09-20). Il est le seul à savoir qu'il ne fera pas cette fournée. La
  * ligne quitte alors « À déclarer » et va attendre chez l'économe.
  */
-export const demanderRetour = (id, userId) => agir(id, 'rendre', { userId })
+export const demanderRetour = (id, userId, toute = false) =>
+  agir(id, 'rendre', { userId, toute })
+
+/**
+ * Le reste de la cascade qu'un retour emporterait.
+ *
+ * La liasse a été imprimée pour UN gâteau : sans sa crème, ni la génoise ni le
+ * cadre n'ont de sens aujourd'hui. On ne touche jamais à ce qui est déjà
+ * déclaré — c'est du travail fait.
+ */
+export const resteDeLaCascade = (feuilles, f) => (feuilles || []).filter(x =>
+  x.liasse && x.liasse === f?.liasse && x.id !== f.id
+  && !x.declare_le && !x.pas_faite_le && !x.retour_le)
 
 /**
  * L'ÉCONOME CONFIRME L'AVOIR RÉCUPÉRÉE — « jusqu'à ce qu'il clique retourné ».

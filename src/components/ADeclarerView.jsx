@@ -21,7 +21,7 @@ import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDeclarer, depuis, cheminDe, demanderRetour } from '../lib/feuilles'
+import { feuillesDuJour, aDeclarer, depuis, cheminDe, demanderRetour, resteDeLaCascade } from '../lib/feuilles'
 import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
 import { poserLeScan } from '../lib/scanEntrant'
@@ -45,6 +45,8 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
   const [feuilles, setFeuilles] = useState(null)
   const [erreur, setErreur] = useState('')
   const [rend, setRend] = useState(null)
+  // La question « et le reste de la cascade ? », quand il y a un reste.
+  const [aRendre, setARendre] = useState(null)
 
   const relire = useCallback(() => {
     feuillesDuJour().then(setFeuilles).catch(e => setErreur(e.message || String(e)))
@@ -58,17 +60,33 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
     return () => clearInterval(t)
   }, [relire])
 
-  /** Rendre la marchandise : elle part attendre chez l'économe. */
+  /**
+   * Rendre la marchandise : elle part attendre chez l'économe.
+   *
+   * ⚠️ ET LA CASCADE AVEC (Layla, 2026-09-20 : « qu'allons-nous faire avec les
+   * articles mère ? »). La liasse a été imprimée pour UN gâteau : sans sa
+   * crème, ni la génoise ni le cadre n'ont de sens aujourd'hui. Sans ça, le
+   * pâtissier gardait un gâteau que le verrou l'empêchait de déclarer.
+   * On le lui demande — jamais en silence, et seulement quand il y a
+   * vraiment autre chose derrière.
+   */
   const rendre = async f => {
     if (rend) return
     navigator.vibrate?.(15)
+    const reste = resteDeLaCascade(feuilles, f)
+    if (reste.length) { setARendre({ f, reste }); return }
     if (!await confirmDialog(
       `Tu rends la marchandise de « ${propre(f.libelle || f.produit)} » à l'économe ?`,
       { confirmLabel: 'Oui, je rends' })) return
+    lancerRetour(f, false)
+  }
+
+  const lancerRetour = async (f, toute) => {
+    setARendre(null)
     setRend(f.id)
     try {
-      await demanderRetour(f.id, user?.id)
-      toast('C’est noté — l’économe la verra dans son onglet.')
+      await demanderRetour(f.id, user?.id, toute)
+      toast('C’est noté — l’économe le verra dans son onglet.')
       relire()
     } catch (e) { toast('Erreur : ' + (e.message || e)) }
     finally { setRend(null) }
@@ -152,6 +170,43 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
           </Ligne>
         ))}
 
+
+        {/* ⚠️ UNE SEULE QUESTION, ET SEULEMENT QUAND ELLE SE POSE. */}
+        {aRendre && (
+          <div className="fixed inset-0 z-[70] bg-ink/40 flex items-end justify-center p-3"
+            onPointerDown={e => { if (e.target === e.currentTarget) setARendre(null) }}>
+            <div className="bg-cream rounded-3xl w-full max-w-[480px] p-5 shadow-2xl">
+              <p className="text-[16px] font-extrabold">
+                Tu rends « {propre(aRendre.f.libelle || aRendre.f.produit)} »
+              </p>
+              <p className="text-[13.5px] text-ink-soft mt-2">
+                Le reste de cette cascade n’a plus lieu d’être :
+              </p>
+              <ul className="text-[13.5px] text-ink mt-1 mb-4 list-disc pl-5">
+                {aRendre.reste.map(x => (
+                  <li key={x.id}>{propre(x.libelle || x.produit)}</li>
+                ))}
+              </ul>
+              <button
+                onClick={() => lancerRetour(aRendre.f, true)}
+                className="w-full rounded-2xl bg-bordeaux text-cream py-4 text-[16px] font-extrabold
+                           active:scale-95 transition">
+                Rendre toute la cascade
+              </button>
+              <button
+                onClick={() => lancerRetour(aRendre.f, false)}
+                className="w-full mt-2 rounded-2xl border border-line text-ink-soft py-3 text-[14px]
+                           font-bold active:scale-95 transition">
+                Juste celle-là
+              </button>
+              <button
+                onClick={() => setARendre(null)}
+                className="w-full mt-2 text-[13px] text-ink-mute py-2">
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

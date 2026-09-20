@@ -10,7 +10,7 @@
 // ============================================================
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe } from './feuilles'
+import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe, resteDeLaCascade } from './feuilles'
 
 const imprimee = { id: 'a', imprime_le: '2026-09-19T08:00:00Z' }
 const donnee = { ...imprimee, id: 'b', donne_le: '2026-09-19T09:00:00Z' }
@@ -208,5 +208,41 @@ describe('rendre de la marchandise', () => {
     expect(enRetour([recuperee])).toEqual([])
     expect(aDeclarer([recuperee])).toEqual([])
     expect(etatFeuille(recuperee)).toBe('pas-faite')
+  })
+})
+
+
+// ⚠️ « Qu'allons-nous faire avec les articles mère ? » (Layla, 2026-09-20).
+// Rendre la crème laissait le GÂTEAU dans « À déclarer » — une ligne que le
+// verrou empêchait de déclarer, qui réclamait sans qu'on puisse rien en faire.
+describe('ce qu’un retour emporte avec lui', () => {
+  const L = 'liasse'
+  const creme = { id: 'creme', liasse: L, donne_le: 'hier' }
+  const genoise = { id: 'genoise', liasse: L, donne_le: 'hier' }
+  const gateau = { id: 'gateau', liasse: L, sans_economat: true }
+  const faite = { id: 'faite', liasse: L, donne_le: 'hier', declare_le: 'ce matin' }
+  const ailleurs = { id: 'ailleurs', liasse: 'autre', donne_le: 'hier' }
+  const tout = [creme, genoise, gateau, faite, ailleurs]
+
+  it('emporte le gâteau et les autres composants de SA cascade', () => {
+    expect(resteDeLaCascade(tout, creme).map(f => f.id).sort()).toEqual(['gateau', 'genoise'])
+  })
+
+  it('ne touche JAMAIS à ce qui est déjà déclaré', () => {
+    // C'est du travail fait : il reste fait.
+    expect(resteDeLaCascade(tout, creme).map(f => f.id)).not.toContain('faite')
+  })
+
+  it('ne déborde pas sur une autre cascade', () => {
+    expect(resteDeLaCascade(tout, creme).map(f => f.id)).not.toContain('ailleurs')
+  })
+
+  it('ne propose rien quand la feuille est seule', () => {
+    expect(resteDeLaCascade([creme], creme)).toEqual([])
+  })
+
+  it('ne repropose pas ce qui est déjà en retour', () => {
+    const dejaRendue = { ...genoise, retour_le: 'tout à l’heure' }
+    expect(resteDeLaCascade([creme, dejaRendue, gateau], creme).map(f => f.id)).toEqual(['gateau'])
   })
 })
