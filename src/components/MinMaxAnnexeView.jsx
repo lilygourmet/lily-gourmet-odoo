@@ -205,8 +205,25 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
     }))
   }, [tout, lignes, filtre])
 
+  /**
+   * ⚠️ SEULEMENT CE QUI SERT À UN GÂTEAU VENDABLE (Layla, 2026-09-20 :
+   * « montrer que les composants des articles mère vendable »).
+   *
+   * « Le reste » rassemble ce qui ne remonte à aucun article vendu : des
+   * recettes orphelines, des essais, des articles morts chez Odoo. Les régler
+   * ne sert à rien — et ils noyaient les vrais.
+   *
+   * ⚠️ Cachés, pas supprimés : la RECHERCHE, elle, fouille partout. Taper un
+   * nom les fait réapparaître, sinon un article égaré deviendrait introuvable.
+   */
+  const orphelins = useMemo(
+    () => (groupes.find(g => g.nom === 'Le reste')?.articles.length || 0), [groupes])
+  const visibles = useMemo(
+    () => (filtre.trim() ? groupes : groupes.filter(g => g.nom !== 'Le reste')),
+    [groupes, filtre])
+
   const combien = useMemo(
-    () => new Set(groupes.flatMap(g => g.articles.map(a => a.produit))).size, [groupes])
+    () => new Set(visibles.flatMap(g => g.articles.map(a => a.produit))).size, [visibles])
 
   // On tape sans rien envoyer : l'enregistrement se fait en quittant la case.
   // Un article encore hors catalogue y entre à la première frappe.
@@ -277,11 +294,14 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
                          text-[15px] outline-none focus:border-bordeaux mb-3" />
 
             <div className="text-[12px] text-ink-mute mb-2">
-              {combien} article{combien > 1 ? 's' : ''} · {groupes.length} gâteau{groupes.length > 1 ? 'x' : ''}
+              {combien} article{combien > 1 ? 's' : ''} · {visibles.length} gâteau{visibles.length > 1 ? 'x' : ''}
+              {!filtre.trim() && orphelins > 0 && (
+                <> · <span className="text-ink-mute">{orphelins} sans gâteau, tape un nom pour les voir</span></>
+              )}
               {!tout && ' — lecture d’Odoo en cours…'}
             </div>
 
-            {groupes.map(g => {
+            {visibles.map(g => {
               // Une recherche ouvre tout : sinon on cherche et on ne voit rien.
               const ouvert = !!filtre.trim() || ouverts.has(g.nom)
               const aRefaire = g.articles.filter(
@@ -313,30 +333,48 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
                       className={'border rounded-xl px-3 py-2.5 mb-1.5 ' +
                         (l.suivi ? 'bg-cream-warm ' : 'bg-cream ') +
                         (l.suivi && sousLeMini ? 'border-l-4 border-l-bordeaux border-cream-deep' : 'border-cream-deep')}>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <div className="basis-full sm:basis-auto sm:flex-1 min-w-0">
-                          <div className="text-[14px] font-bold">
-                            {propre(l.libelle || l.produit)}
-                            {!l.suivi && <span className="ml-2 text-[10.5px] font-bold text-ink-mute">pas suivi</span>}
-                          </div>
-                          <div className="text-[11.5px] text-ink-mute">
-                            {l.stock !== undefined
-                              ? <>il en reste <b>{qte(l.stock, unite)}</b>{l.suivi && sousLeMini ? ' — à refaire' : ''}</>
-                              : 'plus dans Odoo'}
-                          </div>
-                        </div>
+                      {/* ⚠️ TROIS ÉTAGES FIXES, PLUS DE SAUTS DE LIGNE (Layla,
+                          2026-09-20 : « visuel vraiment pas sympa, des sauts de
+                          ligne »). Tout tenait sur une seule rangée qui se
+                          repliait où elle pouvait : selon la largeur du nom, les
+                          cases passaient à la ligne, les pastilles se
+                          déchiraient, et deux lignes voisines n'avaient plus la
+                          même forme. Le nom, puis les chiffres, puis les
+                          réglages : chacun sa place, toujours la même. */}
+                      <div className="text-[14px] font-bold">
+                        {propre(l.libelle || l.produit)}
+                        {!l.suivi && (
+                          <span className="ml-2 text-[10.5px] font-bold text-ink-mute">jamais réglé</span>
+                        )}
+                      </div>
+                      <div className="text-[11.5px] text-ink-mute">
+                        {l.stock !== undefined
+                          ? <>il en reste <b>{qte(l.stock, unite)}</b>{l.suivi && sousLeMini ? ' — à refaire' : ''}</>
+                          : 'plus dans Odoo'}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 mt-2.5">
                         {[['mini', 'mini'], ['maxi', 'maxi'], ['tournee', 'tournée']].map(([champ, titre]) => (
-                          <label key={champ} className="text-[11.5px] text-ink-mute">
-                            {titre}<br />
+                          <label key={champ} className="block">
+                            <span className="block text-[11px] text-ink-mute mb-0.5">
+                              {/* ⚠️ L'UNITÉ BRUTE D'ODOO, jamais convertie : ces
+                                  trois cases se tapent en KILOS quand l'article
+                                  est en kilos. Écrire « g » au-dessus d'un
+                                  champ qui attend des kilos, c'est le facteur
+                                  mille servi sur un plateau. */}
+                              {titre}{unite ? ` (${unite})` : ''}
+                            </span>
                             <input type="number" min="0" step="any" inputMode="decimal"
                               value={l[champ] ?? ''} aria-label={`${titre} de ${propre(l.libelle || l.produit)}`}
                               onChange={e => changer(l, champ, e.target.value)}
                               onBlur={() => enregistrer(l)}
-                              className="w-[76px] text-right text-[14px] font-bold border border-cream-deep
-                                         rounded-lg px-2 py-1.5 bg-cream" />
+                              className="w-full text-right text-[15px] font-bold border border-cream-deep
+                                         rounded-lg px-2 py-2 bg-cream tabular-nums" />
                           </label>
                         ))}
-                        <span className="text-[12px] text-ink-mute w-[26px]">{unite}</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
                         {/* ⚠️ UN INTERRUPTEUR, PAS UN MOT (Layla, 2026-09-20 :
                             « compliqué, le truc de suivi, pause »). « Suivi »
                             ne disait pas ce qu'il faisait, et se confondait
@@ -405,7 +443,7 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
               )
             })}
 
-            {!groupes.length && (
+            {!visibles.length && (
               <p className="py-8 text-center text-ink-mute text-[14px]">Aucun article de ce nom.</p>
             )}
 
