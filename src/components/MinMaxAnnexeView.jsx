@@ -4,6 +4,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { canSeeMinMaxAnnexe } from '../lib/auth'
 import { loadMiseEnForme, setMiseEnForme } from '../lib/miseEnForme'
+import { Interrupteur, Pastille } from './Interrupteur'
 import {
   loadCatalogueAnnexe, saveCatalogueAnnexe, retirerDuCatalogue, loadToutFabAnnexe,
   saveFigesAnnexe, loadArticleFabAnnexe, parGateauMere,
@@ -336,22 +337,30 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
                           </label>
                         ))}
                         <span className="text-[12px] text-ink-mute w-[26px]">{unite}</span>
-                        <button
+                        {/* ⚠️ UN INTERRUPTEUR, PAS UN MOT (Layla, 2026-09-20 :
+                            « compliqué, le truc de suivi, pause »). « Suivi »
+                            ne disait pas ce qu'il faisait, et se confondait
+                            avec « pas suivi », « en pause » et « retirer » —
+                            quatre boutons gris pour quatre sens. */}
+                        <Interrupteur
+                          on={l.actif !== false}
                           onClick={() => {
                             const actif = !(l.actif !== false)
                             changer(l, 'actif', actif)
                             enregistrer({ ...l, actif })
                           }}
-                          title={l.actif !== false ? 'Ne plus le proposer tout seul' : 'Le proposer quand il passe sous son mini'}
-                          className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
-                            (l.actif !== false ? 'bg-success/10 text-success border-success/30' : 'bg-cream text-ink-mute border-cream-deep')}>
-                          {l.actif !== false ? 'suivi' : 'en pause'}
-                        </button>
+                          titre={l.actif !== false
+                            ? 'L’app le réclame quand il passe sous son mini'
+                            : 'L’app se tait — les chiffres, eux, restent'}>
+                          Me le proposer
+                        </Interrupteur>
+
                         {/* ⚠️ « À FINIR » : ce qui sort de la cuve et doit
-                            encore être coulé, pipé, découpé. C'est ce bouton
-                            qui remplit l'onglet 🍮 — coché, l'article y
-                            revient tant qu'il en reste en stock. */}
-                        <button
+                            encore être coulé, pipé, découpé. C'est cette
+                            pastille qui remplit l'onglet 🍮 — cochée,
+                            l'article y revient tant qu'il en reste en stock. */}
+                        <Pastille
+                          on={enForme.has(l.produit)} ton="bordeaux"
                           onClick={async () => {
                             const veut = !enForme.has(l.produit)
                             setEnForme(s0 => {
@@ -363,27 +372,28 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
                               toast('Pas enregistré : ' + (e.message || e))
                             }
                           }}
-                          title={enForme.has(l.produit)
-                            ? 'Il revient dans « À finir » tant qu\'il en reste'
-                            : 'Le faire revenir dans « À finir » pour être coulé, pipé, découpé'}
-                          className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
-                            (enForme.has(l.produit)
-                              ? 'bg-bordeaux/10 text-bordeaux border-bordeaux/40'
-                              : 'bg-cream text-ink-mute border-cream-deep')}>
-                          🍮
-                        </button>
-                        <button onClick={() => setFiges(l)}
-                          title="Choisir les ingrédients dont la quantité ne bouge pas"
-                          className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
-                            ((l.figes || []).length
-                              ? 'bg-gold/10 text-gold border-gold/40'
-                              : 'bg-cream text-ink-mute border-cream-deep')}>
-                          ❄️{(l.figes || []).length ? ` ${l.figes.length}` : ''}
-                        </button>
+                          titre={enForme.has(l.produit)
+                            ? 'Il revient dans « À finir » tant qu’il en reste'
+                            : 'Le faire revenir dans « À finir » pour être coulé, pipé, découpé'}>
+                          🍮 À finir
+                        </Pastille>
+
+                        <Pastille
+                          on={(l.figes || []).length > 0} ton="or"
+                          onClick={() => setFiges(l)}
+                          titre="Les ingrédients dont la quantité ne bouge pas">
+                          ❄️ {(l.figes || []).length
+      ? `${l.figes.length} figé${l.figes.length > 1 ? 's' : ''}`
+      : 'figer'}
+                        </Pastille>
+
+                        {/* Rare, et irréversible : une croix discrète, au bout,
+                            pour ne pas se toucher par erreur. */}
                         {l.suivi && (
                           <button onClick={() => retirer(l)} title="Ne plus suivre du tout cet article"
-                            className="rounded-lg px-2 py-1.5 text-[11.5px] text-ink-mute border border-cream-deep">
-                            retirer
+                            aria-label={`Ne plus suivre ${propre(l.libelle || l.produit)}`}
+                            className="ml-auto text-[15px] text-ink-mute px-2 py-1 active:opacity-60">
+                            ✕
                           </button>
                         )}
                         {enCours === l.produit && <span className="text-[11.5px] text-bordeaux">enregistrement…</span>}

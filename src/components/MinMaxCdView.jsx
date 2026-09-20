@@ -4,6 +4,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadMinMax, saveMinMax, loadStockMinMax } from '../lib/fabrication'
 import { canSeeMinMaxCd } from '../lib/auth'
+import { Interrupteur } from './Interrupteur'
 
 // ====== « Mini / maxi CD » : les seuils que l'APP tient, plus Odoo ======
 // Le 2026-09-08, les 55 règles de réapprovisionnement CD* d'Odoo ont été
@@ -176,12 +177,22 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
                         className="w-[82px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
                     </label>
                     <span className="text-[12px] text-ink-mute w-[28px]">{l.unite}</span>
-                    <button onClick={() => { changer(l.produit, 'actif', !(l.actif !== false)); enregistrer({ ...l, actif: !(l.actif !== false) }) }}
-                      title={l.actif !== false ? 'Ne plus relancer cet article tout seul' : 'Relancer cet article quand il passe sous son mini'}
-                      className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
-                        (l.actif !== false ? 'bg-[#EAF3DE] text-ok border-[#cfe0b8]' : 'bg-cream-warm text-ink-mute border-line')}>
-                      {l.actif !== false ? 'suivi' : 'en pause'}
-                    </button>
+                    {/* ⚠️ UN INTERRUPTEUR, PAS UN MOT (Layla, 2026-09-20 :
+                        « compliqué, le truc de suivi, pause »). Le même que
+                        dans Mini / maxi Annexe : c'est le même geste, ça doit
+                        se ressembler. */}
+                    <Interrupteur
+                      on={l.actif !== false}
+                      onClick={() => {
+                        const actif = !(l.actif !== false)
+                        changer(l.produit, 'actif', actif)
+                        enregistrer({ ...l, actif })
+                      }}
+                      titre={l.actif !== false
+                        ? 'L’app le relance quand il passe sous son mini'
+                        : 'L’app se tait — les chiffres, eux, restent'}>
+                      Me le proposer
+                    </Interrupteur>
                     {enCours === l.produit && <span className="text-[11.5px] text-bordeaux">enregistrement…</span>}
                   </div>
                 </div>
