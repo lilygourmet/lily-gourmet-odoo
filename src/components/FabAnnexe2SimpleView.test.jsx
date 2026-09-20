@@ -30,6 +30,15 @@ const sirop = {
     dejaFait: 0, fabrique: false, ok: true }],
 }
 
+// Un gâteau dont la CRÈME se fabrique et manque : le verrou doit tenir.
+const gateauBloque = {
+  produit: 'SM- Cadre Citron', libelle: 'Cadre citron', unite: 'u',
+  tournee: 92, stock: 0, dejaFait: 0, reste: 92, mini: 0, maxi: 0,
+  figes: [], figesNom: '', ajustements: {}, tailles: [], photo: '', etat: 'rupture',
+  composants: [{ produit: 'SM. Creme Citron', libelle: 'Crème citron', unite: 'g',
+    besoin: 2589, stock: 0, dejaFait: 0, fabrique: true, ok: false }],
+}
+
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
@@ -83,6 +92,41 @@ describe('arriver par le scan', () => {
 
   // ⚠️ Un chemin dont une marche ne colle plus ne doit PAS renvoyer à
   // l'accueil : on remonte d'un cran, jusqu'au gâteau s'il le faut.
+  // ⚠️ LE VERROU TIENT AUSSI QUAND ON ARRIVE PAR LE QR (Layla, 2026-09-20 :
+  // « je scanne d'abord le cadre citron, il me laisse le déclarer alors que
+  // rien de la branche n'est validé »). Je déclenchais le geste depuis l'écran
+  // du dessus, sans consulter le verrou — qui vit dans la fiche.
+  //
+  // ⚠️ Un GÂTEAU ne passe pas par « il en est sorti combien » : il part
+  // directement. C'est donc la DÉCLARATION qu'on surveille, pas l'écran.
+  const avecCreme = dispo => async () => [{ ...gateauBloque,
+    composants: [{ ...gateauBloque.composants[0], stock: dispo ? 99999 : 0, ok: !!dispo }] }]
+
+  const scannerLeGateau = async (dispo) => {
+    const fab = await import('../lib/fabAnnexe')
+    const vrai = fab.loadArticlesFabAnnexe
+    fab.loadArticlesFabAnnexe = avecCreme(dispo)
+    const { poserLeScan } = await import('../lib/scanEntrant')
+    poserLeScan({ chemin: ['SM- Cadre Citron'], declarer: true })
+    try {
+      render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+      await waitFor(() => expect(screen.getByText('Cadre citron')).toBeTruthy())
+      await new Promise(r => setTimeout(r, 150))
+    } finally { fab.loadArticlesFabAnnexe = vrai }
+  }
+
+  // (un gâteau est un article RACINE : c'est `envoyerAValider` qui part)
+  it('ne déclare PAS tout seul un gâteau dont la branche manque', async () => {
+    await scannerLeGateau(false)
+    expect(envoyerAValider).not.toHaveBeenCalled()
+    expect(declarer).not.toHaveBeenCalled()
+  })
+
+  it('CONTRÔLE : le même gâteau, crème disponible, part bien tout seul', async () => {
+    await scannerLeGateau(true)
+    expect(envoyerAValider).toHaveBeenCalled()
+  })
+
   it('un chemin abîmé retombe sur le gâteau, pas sur la liste', async () => {
     const { poserLeScan } = await import('../lib/scanEntrant')
     poserLeScan({ chemin: ['SM. sirop Imbibage production KG', 'SM- Composant disparu'] })

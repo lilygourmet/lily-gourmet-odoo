@@ -15,7 +15,7 @@
 // Ce qui reste : le STOCK — « on peut voir si erreur » — et sous chaque gros
 // chiffre, ce qu'il veut dire en vrai : « 4 plaques · 2 800 g en tout ».
 // ============================================================
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { enClair, declares, enfantsDe, bloquants, aFaireMaintenant, estPressageServi,
   presqueLa,
   decoupeDe, partageDecoupe, ingredientsPour, nomCourt, photoFabAnnexe,
@@ -403,7 +403,14 @@ export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose, verro
  * sur le même écran — ce qu'on cuit, ce qu'on coupe — parce que ce sont deux
  * décisions, et qu'aller-retour entre deux écrans pour ça n'a aucun sens.
  */
-export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait, envoi,
+/** Appuie sur un bouton à la place du doigt, une seule fois. */
+function AppuieUneFois({ faire }) {
+  const fait = useRef(false)
+  useEffect(() => { if (!fait.current) { fait.current = true; faire() } })
+  return null
+}
+
+export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait, envoi, autoFait, onAutoFait,
   verrouille, onLiberer }) {
   const decoupe = onCuites ? decoupeDe(noeud) : null
   const dejaFaits = declares(faits)
@@ -440,6 +447,19 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
 
   return (
     <div>
+      {/* ⚠️ ARRIVÉE PAR LE QR : C'EST LA FICHE QUI APPUIE SUR SON BOUTON.
+          « Je scanne d'abord le cadre citron, il me laisse le déclarer alors
+          que rien de la branche n'est validé » (Layla, 2026-09-20) — et elle a
+          raison : je déclenchais le geste depuis l'écran du dessus, sans
+          consulter le verrou, qui vit ICI avec toutes ses subtilités (la
+          découpe, le partage, les quantités déclarées).
+          Recopier ce calcul ailleurs, c'était se condamner à le désynchroniser.
+          Le déclencheur est donc posé au seul endroit qui connaît `bloque` —
+          et si ça bloque, il ne se passe RIEN : la fiche reste ouverte, avec
+          ses composants manquants écrits en rouge. */}
+      {autoFait && !bloque.length && quantite > 0 && !envoi && (
+        <AppuieUneFois faire={() => { onAutoFait?.(); onFait() }} />
+      )}
       <div className="flex items-center gap-3">
         <img src={photoDe(noeud.photo || noeud.produit)} alt="" loading="lazy"
           className="w-16 h-16 rounded-2xl object-cover bg-cream-deep shrink-0

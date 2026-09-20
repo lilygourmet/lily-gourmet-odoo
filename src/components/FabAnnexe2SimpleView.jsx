@@ -13,7 +13,7 @@
 // Les composants d'affichage vivent dans `FabAnnexe2Simple.jsx` ; ici, on
 // charge, on navigue, on déclare.
 // ============================================================
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
@@ -44,25 +44,6 @@ import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec
  * d'articles, donc bien plus de coups dans le cache du navigateur.
  */
 const photoGateau = a => (a.pour && a.pour[0]) || a.photo || a.produit
-
-/**
- * REJOUER LE GESTE « C'EST FAIT », UNE SEULE FOIS.
- *
- * « Scanne pour déclarer doit t'emmener direct vers la page de c'est fait de
- * cet article » (Layla, 2026-09-20).
- *
- * ⚠️ On rejoue le geste, on ne le court-circuite pas : « c'est fait » décide
- * s'il faut demander la découpe, le pressage, ou rien du tout. Sauter par-
- * dessus pour ouvrir l'écran de sortie à la main, c'était perdre ces règles-là
- * pour tous ceux qui arrivent par le QR.
- */
-function CommeSiOnAvaitAppuye({ appuyer }) {
-  const fait = useRef(false)
-  useEffect(() => {
-    if (!fait.current) { fait.current = true; appuyer() }
-  })
-  return null
-}
 
 export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activeView }) {
   const [articles, setArticles] = useState(() => dernierEcran('fab_annexe2'))
@@ -877,15 +858,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                   setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
                 } : undefined}
               onOuvrir={p => { figer(q); setChemin([...chemin, p]) }}
-              onFait={gesteFait} />
-              {/* Arrivé par le QR : on appuie sur « c'est fait » à sa place,
-                  une seule fois, et par le même chemin que son doigt. */}
-              {droitALaDeclaration && !sortie && (
-                <CommeSiOnAvaitAppuye appuyer={() => {
-                  setDroitALaDeclaration(false)
-                  gesteFait()
-                }} />
-              )}
+              onFait={gesteFait}
+              // ⚠️ ARRIVÉ PAR LE QR : c'est la FICHE qui appuie, parce qu'elle
+              // seule connaît son verrou — « il me laisse le déclarer alors que
+              // rien de la branche n'est validé » (Layla, 2026-09-20). Si un
+              // composant manque, il ne se passe rien et l'écran le montre.
+              autoFait={droitALaDeclaration && !sortie}
+              onAutoFait={() => setDroitALaDeclaration(false)} />
             </div>
           )}
       </div>
