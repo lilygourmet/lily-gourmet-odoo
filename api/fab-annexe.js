@@ -1113,7 +1113,13 @@ export default async function handler(req, res) {
             refus: 'Cette feuille a été remplacée par une impression plus récente — prends le dernier papier.',
           })
         }
-        if (feuille.donne_le && !feuille.pas_faite_le) {
+        // ⚠️ « Déjà donné » ne vaut QUE si rien n'est en cours de retour (Layla,
+        // 2026-09-20 : « j'ai scanné les trois articles donnés, mais la cascade
+        // ne s'affiche pas »). Une feuille rendue par le pâtissier et pas
+        // encore récupérée est TOUJOURS marquée donnée : elle tombait donc
+        // ici, l'économe s'entendait répondre « c'est déjà donné », et rien ne
+        // repartait — ni le retour annulé, ni la cascade relevée.
+        if (feuille.donne_le && !feuille.pas_faite_le && !feuille.retour_le) {
           return res.status(200).json({ feuille, deja: true })
         }
         // ⚠️ LA BOUCLE SE RELANCE AVEC LE MÊME QR (Layla, 2026-09-20 : « le
