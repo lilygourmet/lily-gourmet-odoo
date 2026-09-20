@@ -30,7 +30,7 @@ import { PhotoFeuille, GrosseQuantite, Bande, Rien, TeteCascade, Quand } from '.
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { propre } from '../lib/ecranSimple'
-import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu, parCascade } from '../lib/feuilles'
+import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu, parCascade, donneEtSolde } from '../lib/feuilles'
 
 /**
  * Une fournée, EN UNE LIGNE : photo, nom, chiffre — et le geste à droite.
@@ -42,6 +42,14 @@ import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu, parC
  * ⚠️ Hors du composant, sans quoi React la prend pour un autre composant à
  * chaque relecture (toutes les 30 s) et recharge toutes les photos.
  */
+/** Le dernier geste posé sur cette fournée, et quand. */
+const dernierGeste = f => {
+  if (f.declare_le) return { iso: f.declare_le, quoi: '✓ déclaré' }
+  if (f.pas_faite_le) return { iso: f.pas_faite_le, quoi: '↩ repris' }
+  if (f.retour_le) return { iso: f.retour_le, quoi: 'rendu' }
+  return { iso: f.donne_le, quoi: 'donné' }
+}
+
 function Ligne({ f, bord, couleur, quoi, busy, onAgir }) {
   return (
     <div className={`flex items-stretch bg-cream-warm border border-line border-l-4 ${bord}
@@ -55,8 +63,11 @@ function Ligne({ f, bord, couleur, quoi, busy, onAgir }) {
           <GrosseQuantite f={f} compact />
           {/* « Quand on donne, on écrit en dessous la date » (Layla,
               2026-09-20) : la liste remonte une semaine, l'heure seule ne
-              suffirait pas à savoir de quel jour on parle. */}
-          <Quand iso={f.retour_le || f.donne_le} quoi={f.retour_le ? 'rendu' : 'donné'} />
+              suffirait pas à savoir de quel jour on parle. Et c'est le DERNIER
+              geste qui s'écrit — donné, rendu, déclaré, repris — sans quoi
+              l'historique daterait tout du moment où la marchandise est
+              sortie. */}
+          <Quand {...dernierGeste(f)} />
         </div>
       </div>
       {onAgir && (
@@ -90,6 +101,9 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
   const [feuilles, setFeuilles] = useState(null)
   const [erreur, setErreur] = useState('')
   const [busy, setBusy] = useState(null)
+  // ⚠️ REPLIÉ PAR DÉFAUT (Layla, 2026-09-20 : « le point 3, comme un
+  // historique »). La trace existe, elle n'encombre pas le travail en cours.
+  const [histoOuvert, setHistoOuvert] = useState(false)
 
   const relire = useCallback(() => {
     feuillesDuJour().then(setFeuilles).catch(e => setErreur(e.message || String(e)))
@@ -134,7 +148,8 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
   const attente = feuilles ? aDonner(feuilles) : []
   const sortis = feuilles ? aReprendre(feuilles) : []
   const retours = feuilles ? enRetour(feuilles) : []
-  const rienDuTout = feuilles && !attente.length && !sortis.length && !retours.length
+  const histo = feuilles ? donneEtSolde(feuilles) : []
+  const rienDuTout = feuilles && !attente.length && !sortis.length && !retours.length && !histo.length
 
   return (
     <div className="min-h-screen bg-cream">
@@ -174,6 +189,24 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
           <>
             <Bande emoji="✅" titre="Déjà donné" n={sortis.length} ton="bg-success-bg text-success" />
             <Cascades feuilles={sortis} bord="border-l-ok" />
+          </>
+        )}
+
+        {/* ---- l'historique du jour : soldé, donc replié ---- */}
+        {!!histo.length && (
+          <>
+            <button
+              type="button" onClick={() => setHistoOuvert(o => !o)}
+              aria-expanded={histoOuvert}
+              className="w-full text-left active:opacity-70 transition">
+              <Bande emoji="🗂" titre={`Historique ${histoOuvert ? '▾' : '▸'}`}
+                n={histo.length} ton="bg-cream-deep text-ink-mute" />
+            </button>
+            {histoOuvert && (
+              <div className="opacity-70">
+                <Cascades feuilles={histo} bord="border-l-line" />
+              </div>
+            )}
           </>
         )}
       </div>

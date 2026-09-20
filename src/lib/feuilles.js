@@ -409,3 +409,19 @@ export function nomDuJour(jour) {
     weekday: 'short', day: '2-digit', month: '2-digit',
   })
 }
+
+/**
+ * L'HISTORIQUE DE L'ÉCONOME : ce qu'il a donné, et qui est soldé.
+ *
+ * « Le point 3, comme un historique » (Layla, 2026-09-20). Une fournée déclarée
+ * quittait son écran sans laisser de trace — il ne pouvait plus dire ce qui
+ * était sorti de sa réserve dans la journée. Elle descend maintenant en bas,
+ * repliée : la trace existe, sans encombrer le travail en cours.
+ *
+ * Soldé veut dire déclaré PAR LE PÂTISSIER, ou repris en réserve (un retour
+ * confirmé porte `pas_faite_le`). Le plus récent d'abord.
+ */
+export const donneEtSolde = feuilles => (feuilles || [])
+  .filter(f => f.donne_le && (f.declare_le || f.pas_faite_le))
+  .sort((a, b) => String(b.declare_le || b.pas_faite_le)
+    .localeCompare(String(a.declare_le || a.pas_faite_le)))

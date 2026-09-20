@@ -55,6 +55,13 @@ const rendue = {
   qty_prevue: 3100, liasse: 'l4', retour_le: ilYA(10),
 }
 
+/** Donnée PUIS déclarée : soldée — elle n'est plus dehors, elle est dans l'histoire. */
+const soldee = {
+  ...donnee, id: 'f6', produit: 'SM. Crunchy Gianduja', libelle: 'Crunchy gianduja',
+  qty_prevue: 2400, liasse: 'l6', chemin: ['SM- Gianduja 10 pers', 'SM. Crunchy Gianduja'],
+  declare_le: ilYA(5),
+}
+
 let lues = []
 const donner = vi.fn(async () => ({ reste: 0 }))
 const retourRecu = vi.fn(async () => ({}))
@@ -187,6 +194,25 @@ describe('« Donné », l’écran de l’économe', () => {
     // on écrit en dessous la date »). Jour ET heure : la liste remonte une
     // semaine.
     expect(screen.getByText(/^donné \d{2}\/\d{2} · \d{2}:\d{2}$/)).toBeTruthy()
+  })
+
+  // ⚠️ « Le point 3, comme un historique » (Layla, 2026-09-20). Une fournée
+  // déclarée quittait l'écran sans laisser de trace : l'économe ne pouvait
+  // plus dire ce qui était sorti de sa réserve dans la journée.
+  it('ce qui est déclaré descend dans l’historique, replié', async () => {
+    lues = [soldee]
+    render(<DonneView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText(/Historique/)
+
+    // Replié : le travail en cours n'est pas encombré…
+    expect(screen.queryByText('Crunchy gianduja')).toBeNull()
+    // …et ce n'est plus « dehors », puisque c'est déclaré.
+    expect(screen.queryByText('Déjà donné')).toBeNull()
+
+    fireEvent.click(screen.getByText(/Historique/))
+    expect(await screen.findByText('Crunchy gianduja')).toBeTruthy()
+    // La trace dit QUOI et QUAND — le dernier geste, pas le moment du don.
+    expect(screen.getByText(/^✓ déclaré \d{2}\/\d{2} · \d{2}:\d{2}$/)).toBeTruthy()
   })
 
   it('rien dehors se dit en deux mots', async () => {
