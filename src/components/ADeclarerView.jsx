@@ -28,6 +28,9 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { propre } from '../lib/ecranSimple'
 import { PhotoFeuille, GrosseQuantite, Rien, TeteCascade, Bande } from './FeuilleVisuel'
+import { loadToutFabAnnexe, photoFabAnnexe } from '../lib/fabAnnexe'
+import { loadMiseEnForme, aMettreEnForme } from '../lib/miseEnForme'
+import { qte } from '../lib/ecranSimple'
 import { feuillesDuJour, aDeclarer, cheminDe, demanderRetour, resteDeLaCascade, parCascade, parJour, nomDuJour } from '../lib/feuilles'
 import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
@@ -93,15 +96,61 @@ function Ligne({ f, rend, onDeclarer, onRendre }) {
   )
 }
 
+/**
+ * UN VRAC QUI ATTEND SA MISE EN FORME.
+ *
+ * « Quand une mousse reste en stock, elle revient dans À déclarer parce
+ * qu'elle doit être finie » (Layla, 2026-09-20). La chantilly se pipe, le
+ * crémeux se coule dans les moules, le voile se découpe : sortir de la cuve
+ * n'est pas être fini.
+ */
+function LigneVrac({ a, onOuvrir }) {
+  return (
+    <button
+      onClick={() => onOuvrir(a)}
+      className="flex items-center gap-2.5 w-full text-left p-2 mb-1.5 bg-cream-warm border
+                 border-line border-l-4 border-l-bordeaux rounded-xl active:bg-cream-deep transition">
+      <img src={photoFabAnnexe(a.photo || a.produit)} alt="" loading="lazy"
+        onError={e => { e.currentTarget.style.visibility = 'hidden' }}
+        className="w-12 h-12 rounded-lg object-cover bg-cream-deep flex-none" />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14px] font-bold leading-tight text-ink truncate">
+          {propre(a.libelle || a.produit)}
+        </span>
+        <span className="block text-[18px] font-extrabold tabular-nums leading-none text-ink">
+          {qte(a.stock, a.unite)}
+        </span>
+        {a.note && (
+          <span className="block text-[11.5px] text-ink-mute truncate">{a.note}</span>
+        )}
+      </span>
+      <span aria-hidden="true" className="flex-none text-[19px] pr-0.5">✍️</span>
+    </button>
+  )
+}
+
 export default function ADeclarerView({ user, onLogout, onNavigate, activeView }) {
   const [feuilles, setFeuilles] = useState(null)
   const [erreur, setErreur] = useState('')
   const [rend, setRend] = useState(null)
+  const [aFinir, setAFinir] = useState([])
   // La question « et le reste de la cascade ? », quand il y a un reste.
   const [aRendre, setARendre] = useState(null)
 
   const relire = useCallback(() => {
     feuillesDuJour().then(setFeuilles).catch(e => setErreur(e.message || String(e)))
+  }, [])
+
+  // ⚠️ À CÔTÉ, ET SANS FAIRE ATTENDRE LE RESTE. Les stocks viennent d'Odoo
+  // (une seconde ou deux) ; les feuilles, elles, viennent de notre base et
+  // s'affichent tout de suite. Odoo lent ou coupé : l'écran garde son travail
+  // principal, il manque juste les vracs à finir.
+  useEffect(() => {
+    let vivant = true
+    Promise.all([loadToutFabAnnexe(), loadMiseEnForme()])
+      .then(([arts, liste]) => { if (vivant) setAFinir(aMettreEnForme(arts, liste)) })
+      .catch(() => {})
+    return () => { vivant = false }
   }, [])
 
   useEffect(() => {
@@ -168,6 +217,13 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
     onNavigate?.('fabrication-annexe-2')
   }
 
+  /** Ouvre le vrac dans l'écran de fabrication, sur sa fiche. */
+  const ouvrirVrac = a => {
+    navigator.vibrate?.(15)
+    poserLeScan({ chemin: [a.produit], declarer: false, retour: 'a-declarer' })
+    onNavigate?.('fabrication-annexe-2')
+  }
+
   const nav = { user, onLogout, onNavigate, activeView }
   const dues = feuilles ? aDeclarer(feuilles) : []
 
@@ -184,7 +240,15 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
         )}
         {!feuilles && !erreur && <Skeleton />}
 
-        {feuilles && !dues.length && <Rien emoji="✅" mot="Tout est déclaré" />}
+        {/* ⚠️ TOUT EN HAUT : une mousse qui attend n'attend pas longtemps. */}
+        {!!aFinir.length && (
+          <>
+            <Bande emoji="🥣" titre="À finir" n={aFinir.length} ton="bg-bordeaux/10 text-bordeaux" />
+            {aFinir.map(a => <LigneVrac key={a.produit} a={a} onOuvrir={ouvrirVrac} />)}
+          </>
+        )}
+
+        {feuilles && !dues.length && !aFinir.length && <Rien emoji="✅" mot="Tout est déclaré" />}
 
         {/* ⚠️ RANGÉ PAR CASCADE (Layla, 2026-09-20 : « crée des groupes de
             cascade, pour ne pas se perdre quand il y a plusieurs articles »).
