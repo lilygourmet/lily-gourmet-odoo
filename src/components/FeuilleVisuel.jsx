@@ -15,7 +15,7 @@
 import { useState } from 'react'
 import { photoFabAnnexe } from '../lib/fabAnnexe'
 import { cheminDe } from '../lib/feuilles'
-import { qte } from '../lib/ecranSimple'
+import { qte, propre } from '../lib/ecranSimple'
 
 /**
  * La photo d'une fournée.
@@ -53,15 +53,15 @@ export function GrosseQuantite({ f, compact }) {
   const t = qte(f.qty_prevue, f.unite)
   const i = t.lastIndexOf(' ')
   return (
-    <div className={`${compact ? 'text-[21px]' : 'text-[29px]'} font-extrabold tabular-nums
-                     leading-none text-ink`}>
+    <span className={`${compact ? 'text-[18px]' : 'text-[24px]'} font-extrabold tabular-nums
+                      leading-none text-ink`}>
       {i < 0 ? t : t.slice(0, i)}
       {i > 0 && (
-        <span className={`${compact ? 'text-[12.5px]' : 'text-[15px]'} font-semibold text-ink-mute ml-1`}>
+        <span className={`${compact ? 'text-[11.5px]' : 'text-[13px]'} font-semibold text-ink-mute ml-1`}>
           {t.slice(i + 1)}
         </span>
       )}
-    </div>
+    </span>
   )
 }
 
@@ -87,5 +87,44 @@ export function Rien({ emoji, mot }) {
       <span className="text-[42px] leading-none" aria-hidden="true">{emoji}</span>
       <span className="text-[17px] font-extrabold text-ink-soft">{mot}</span>
     </div>
+  )
+}
+
+/**
+ * Le titre d'une cascade : la photo du gâteau, son nom, combien de lignes.
+ *
+ * « Crée des groupes de cascade, pour ne pas se perdre quand il y a plusieurs
+ * articles » (Layla, 2026-09-20). Le rangement, lui, est dans `parCascade`.
+ */
+export function TeteCascade({ g }) {
+  return (
+    <div className="flex items-center gap-2 mt-4 mb-1.5 first:mt-1">
+      <PhotoFeuille f={g.feuilles[0]} className="w-9 h-9 rounded-lg flex-none" />
+      <span className="text-[15px] font-extrabold text-ink truncate">{propre(g.tete)}</span>
+      <span className="ml-auto flex-none min-w-[26px] h-[26px] px-2 rounded-full bg-cream-deep
+                       text-ink-soft grid place-items-center text-[13px] font-extrabold tabular-nums">
+        {g.feuilles.length}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * QUAND ÇA A ÉTÉ DONNÉ — « quand on donne, on écrit en dessous la date »
+ * (Layla, 2026-09-20).
+ *
+ * Le jour ET l'heure : la liste remonte une semaine, et « 14:32 » tout seul
+ * ne dit pas de quel jour il s'agit.
+ */
+export function Quand({ iso, quoi }) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d)) return null
+  // Composé en deux morceaux : le séparateur d'un `toLocaleString` change
+  // d'une machine à l'autre (parfois une virgule, parfois rien).
+  const jour = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })
+  const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  return (
+    <div className="text-[11px] text-ink-mute tabular-nums">{quoi} {jour} · {heure}</div>
   )
 }

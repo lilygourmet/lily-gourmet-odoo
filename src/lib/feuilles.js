@@ -344,3 +344,27 @@ export function quantitesImposees(feuilles) {
 
 /** Ce que l'économe n'a pas encore donné — et lui seul peut le débloquer. */
 export const aDonner = feuilles => (feuilles || []).filter(attendLEconome)
+
+/**
+ * LES FOURNÉES RANGÉES PAR CASCADE.
+ *
+ * « Crée des groupes de cascade, pour ne pas se perdre quand il y a plusieurs
+ * articles » (Layla, 2026-09-20). Une liasse, c'est UN gâteau et tout ce qu'il
+ * faut faire dessous : le montrer à plat, c'est douze lignes sans rapport
+ * apparent ; rangé, on voit trois gâteaux.
+ *
+ * ⚠️ On groupe par TÊTE DE CASCADE, pas par liasse : un gâteau imprimé deux
+ * fois dans la journée reste le même gâteau à faire, et deux cadres « Citron
+ * meringué » l'un sous l'autre, c'est exactement ce qu'elle veut éviter.
+ * L'ordre d'arrivée est gardé — le serveur trie déjà par heure.
+ */
+export function parCascade(feuilles) {
+  const m = new Map()
+  for (const f of feuilles || []) {
+    const tete = cheminDe(f)[0]
+    const g = m.get(tete) || { tete, feuilles: [] }
+    g.feuilles.push(f)
+    m.set(tete, g)
+  }
+  return [...m.values()]
+}

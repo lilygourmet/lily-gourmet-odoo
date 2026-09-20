@@ -79,14 +79,19 @@ describe('« À déclarer », pour des mains farineuses', () => {
     render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
     await screen.findByText('Crème citron')
 
-    // Une photo par fournée — celle du GÂTEAU, pas celle de la crème.
+    // Une photo par fournée + celle du titre de cascade — et toujours celle du
+    // GÂTEAU, jamais celle de la crème.
     const photos = document.querySelectorAll('img')
-    expect(photos.length).toBe(2)
+    expect(photos.length).toBe(3)
     expect(decodeURIComponent(photos[0].getAttribute('src')))
       .toContain('SM- Cadre Citron Meringuée')
 
     // Le chiffre, en clair (espace fine ou insécable selon le navigateur).
     expect(screen.getByText(/^11[\u202f\u00a0 ]844$/)).toBeTruthy()
+
+    // ⚠️ RANGÉ PAR CASCADE : les deux lignes appartiennent au même gâteau,
+    // elles tiennent donc sous UN seul titre.
+    expect(screen.getAllByText('Cadre Citron Meringuée').length).toBe(1)
 
     // ⚠️ CE QUI NE DOIT PAS REVENIR : les phrases d'explication.
     expect(screen.queryByText(/Donné par l’économe, pas encore déclaré/)).toBeNull()
@@ -97,7 +102,8 @@ describe('« À déclarer », pour des mains farineuses', () => {
     lues = [donnee]
     const onNavigate = vi.fn()
     render(<ADeclarerView user={{ id: 'u1' }} onNavigate={onNavigate} />)
-    fireEvent.click(await screen.findByText('✍️ Déclarer'))
+    // Toute la ligne déclare : on touche le nom, pas un bouton à part.
+    fireEvent.click(await screen.findByText('Crème citron'))
 
     // Le chemin entier : une crème ne s'ouvre qu'en descendant de son gâteau.
     expect(poserLeScan).toHaveBeenCalledWith({
@@ -112,9 +118,9 @@ describe('« À déclarer », pour des mains farineuses', () => {
     render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
     await screen.findByText('Crème citron')
     // Deux fournées dues, une seule vient de l'économat.
-    expect(screen.getAllByText('↩ Je rends').length).toBe(1)
+    expect(screen.getAllByLabelText(/^Rendre /).length).toBe(1)
 
-    fireEvent.click(screen.getByText('↩ Je rends'))
+    fireEvent.click(screen.getByLabelText(/^Rendre /))
     await waitFor(() => expect(demanderRetour).toHaveBeenCalledWith('f1', 'u1', false))
   })
 
@@ -142,10 +148,10 @@ describe('« Donné », l’écran de l’économe', () => {
   it('« Donné » sert la fournée, « Repris » la récupère', async () => {
     lues = [attendue, rendue]
     render(<DonneView user={{ id: 'u1' }} onNavigate={() => {}} />)
-    fireEvent.click(await screen.findByText('✓ Donné'))
+    fireEvent.click(await screen.findByLabelText(/^Donné : /))
     await waitFor(() => expect(donner).toHaveBeenCalledWith('f3', 'u1'))
 
-    fireEvent.click(screen.getByText('✓ Repris'))
+    fireEvent.click(screen.getByLabelText(/^Repris : /))
     await waitFor(() => expect(retourRecu).toHaveBeenCalledWith('f4'))
   })
 
@@ -153,8 +159,13 @@ describe('« Donné », l’écran de l’économe', () => {
     lues = [donnee]
     render(<DonneView user={{ id: 'u1' }} onNavigate={() => {}} />)
     await screen.findByText('Déjà donné')
-    expect(screen.queryByText('✓ Donné')).toBeNull()
-    expect(screen.queryByText('✓ Repris')).toBeNull()
+    expect(screen.queryByLabelText(/^Donné : /)).toBeNull()
+    expect(screen.queryByLabelText(/^Repris : /)).toBeNull()
+
+    // ⚠️ MAIS LA DATE, ELLE, EST ÉCRITE (Layla, 2026-09-20 : « quand on donne,
+    // on écrit en dessous la date »). Jour ET heure : la liste remonte une
+    // semaine.
+    expect(screen.getByText(/^donné \d{2}\/\d{2} · \d{2}:\d{2}$/)).toBeTruthy()
   })
 
   it('rien dehors se dit en deux mots', async () => {

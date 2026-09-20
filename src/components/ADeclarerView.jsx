@@ -27,8 +27,8 @@ import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { propre } from '../lib/ecranSimple'
-import { PhotoFeuille, GrosseQuantite, Rien } from './FeuilleVisuel'
-import { feuillesDuJour, aDeclarer, depuis, cheminDe, demanderRetour, resteDeLaCascade } from '../lib/feuilles'
+import { PhotoFeuille, GrosseQuantite, Rien, TeteCascade } from './FeuilleVisuel'
+import { feuillesDuJour, aDeclarer, depuis, cheminDe, demanderRetour, resteDeLaCascade, parCascade } from '../lib/feuilles'
 import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
 import { poserLeScan } from '../lib/scanEntrant'
@@ -41,42 +41,39 @@ import { poserLeScan } from '../lib/scanEntrant'
 const enRetard = f => Date.now() - Date.parse(f.donne_le || f.imprime_le || 0) > 2 * 3600 * 1000
 
 /**
- * Une fournée due : photo, gros chiffre, et le bouton qui ouvre la déclaration.
+ * Une fournée due, EN UNE LIGNE : photo, nom, chiffre, et le temps qui passe.
+ *
+ * ⚠️ TOUTE LA LIGNE DÉCLARE (Layla, 2026-09-20 : « diminue la taille »). Le
+ * gros bouton bordeaux prenait la moitié de la fiche, et il y a douze fournées
+ * à solder certains jours. La ligne entière fait le même geste ; le ✍️ à
+ * droite dit lequel.
  *
  * ⚠️ Hors du composant, sans quoi React la prend pour un autre composant à
- * chaque relecture (toutes les minutes) et recharge toutes les photos.
+ * chaque relecture et recharge toutes les photos.
  */
-function Fiche({ f, rend, onDeclarer, onRendre }) {
+function Ligne({ f, rend, onDeclarer, onRendre }) {
   const tard = enRetard(f)
   return (
-    <div className={`bg-cream-warm border border-line border-l-[5px] rounded-2xl overflow-hidden
-                     shadow-sm ${tard ? 'border-l-danger' : 'border-l-gold'}`}>
-      <div className="flex gap-2.5 p-2.5">
-        <PhotoFeuille f={f} className="w-[62px] h-[62px] rounded-xl flex-none" />
-        <div className="min-w-0 flex flex-col justify-center gap-0.5">
-          <span className={`self-start rounded-full px-2 py-0.5 text-[11px] font-extrabold
-                            tabular-nums ${tard ? 'bg-danger-bg text-danger' : 'bg-gold-pale text-gold'}`}>
-            ⏰ {depuis(f.donne_le || f.imprime_le)}
-          </span>
-          <div className="text-[15px] font-extrabold leading-tight text-ink">
-            {propre(f.libelle || f.produit)}
-          </div>
-          <GrosseQuantite f={f} compact />
-          {f.pour && (
-            <div className="text-[11.5px] text-ink-mute truncate">→ {propre(f.pour)}</div>
-          )}
-        </div>
-      </div>
-
-      {/* ⚠️ ON NE DÉCLARE PAS ICI. Cet onglet avait sa propre petite saisie :
-          c'était une déclaration appauvrie, à côté de l'écran qui connaît les
-          cuves, le pressage, le verrou des composants et le reste de la crème.
-          Toucher la ligne ouvre donc le vrai écran, exactement comme le QR. */}
+    <div className={`flex items-stretch bg-cream-warm border border-line border-l-4 rounded-xl
+                     overflow-hidden mb-1.5 ${tard ? 'border-l-danger' : 'border-l-gold'}`}>
       <button
         onClick={() => onDeclarer(f)}
-        className="w-full bg-bordeaux text-cream py-2.5 text-[16px] font-extrabold
-                   active:brightness-90 transition">
-        ✍️ Déclarer
+        className="flex-1 min-w-0 flex items-center gap-2.5 p-2 text-left
+                   active:bg-cream-deep transition">
+        <PhotoFeuille f={f} className="w-12 h-12 rounded-lg flex-none" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-bold leading-tight text-ink truncate">
+            {propre(f.libelle || f.produit)}
+          </span>
+          <span className="flex items-baseline gap-2">
+            <GrosseQuantite f={f} compact />
+            <span className={`text-[11px] font-extrabold tabular-nums
+                              ${tard ? 'text-danger' : 'text-ink-mute'}`}>
+              ⏰ {depuis(f.donne_le || f.imprime_le)}
+            </span>
+          </span>
+        </span>
+        <span aria-hidden="true" className="flex-none text-[19px] pr-0.5">✍️</span>
       </button>
       {/* ⚠️ LE RETOUR SE DÉCIDE ICI (Layla, 2026-09-20 : « c'est le pâtissier
           qui décide »). Lui seul sait qu'il ne fera pas cette fournée.
@@ -86,9 +83,10 @@ function Fiche({ f, rend, onDeclarer, onRendre }) {
       {f.donne_le && (
         <button
           onClick={() => onRendre(f)} disabled={rend === f.id}
-          className="w-full border-t border-line text-ink-mute py-2 text-[13px] font-bold
+          aria-label={`Rendre ${propre(f.libelle || f.produit)}`}
+          className="flex-none w-11 border-l border-line text-ink-mute text-[16px]
                      active:bg-cream-deep transition disabled:opacity-50">
-          {rend === f.id ? '…' : '↩ Je rends'}
+          {rend === f.id ? '…' : '↩'}
         </button>
       )}
     </div>
@@ -188,10 +186,20 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
 
         {feuilles && !dues.length && <Rien emoji="✅" mot="Tout est déclaré" />}
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          {dues.map(f => (
-            <Fiche key={f.id} f={f} rend={rend}
-              onDeclarer={ouvrirPourDeclarer} onRendre={rendre} />
+        {/* ⚠️ RANGÉ PAR CASCADE (Layla, 2026-09-20 : « crée des groupes de
+            cascade, pour ne pas se perdre quand il y a plusieurs articles »).
+            Douze lignes à plat n'ont aucun rapport apparent ; rangées, ce sont
+            trois gâteaux. Deux colonnes dès qu'il y a de la place — un groupe
+            n'est jamais coupé en deux. */}
+        <div className="sm:columns-2 sm:gap-4">
+          {parCascade(dues).map(g => (
+            <div key={g.tete} className="sm:break-inside-avoid">
+              <TeteCascade g={g} />
+              {g.feuilles.map(f => (
+                <Ligne key={f.id} f={f} rend={rend}
+                  onDeclarer={ouvrirPourDeclarer} onRendre={rendre} />
+              ))}
+            </div>
           ))}
         </div>
 

@@ -26,41 +26,62 @@
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { PhotoFeuille, GrosseQuantite, Bande, Rien } from './FeuilleVisuel'
+import { PhotoFeuille, GrosseQuantite, Bande, Rien, TeteCascade, Quand } from './FeuilleVisuel'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
-import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu } from '../lib/feuilles'
+import { propre } from '../lib/ecranSimple'
+import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu, parCascade } from '../lib/feuilles'
 
 /**
- * Une fournée qui attend un geste : photo, gros chiffre, UN bouton.
+ * Une fournée, EN UNE LIGNE : photo, nom, chiffre — et le geste à droite.
  *
- * ⚠️ Hors du composant — redéfinie à chaque rendu, React la prenait pour un
- * autre composant et rechargeait les photos à chaque relecture (toutes les
- * minutes).
+ * ⚠️ PLUS PETIT (Layla, 2026-09-20 : « diminue la taille »). La fiche haute
+ * avec sa photo de 86 px et son bouton pleine largeur ne montrait que deux
+ * fournées à l'écran ; il en arrive douze certains matins.
+ *
+ * ⚠️ Hors du composant, sans quoi React la prend pour un autre composant à
+ * chaque relecture (toutes les 30 s) et recharge toutes les photos.
  */
-function Fiche({ f, bord, couleur, mot, quoi, busy, onAgir }) {
+function Ligne({ f, bord, couleur, quoi, busy, onAgir }) {
   return (
-    <div className={`bg-cream-warm border border-line border-l-[6px] ${bord} rounded-3xl
-                     overflow-hidden shadow-sm mb-3`}>
-      <div className="flex gap-3 p-3">
-        <PhotoFeuille f={f} className="w-[86px] h-[86px] rounded-2xl flex-none" />
-        <div className="min-w-0 flex flex-col justify-center gap-1">
-          <div className="text-[18px] font-extrabold leading-tight text-ink">
+    <div className={`flex items-stretch bg-cream-warm border border-line border-l-4 ${bord}
+                     rounded-xl overflow-hidden mb-1.5`}>
+      <div className="flex-1 min-w-0 flex items-center gap-2.5 p-2">
+        <PhotoFeuille f={f} className="w-12 h-12 rounded-lg flex-none" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[14px] font-bold leading-tight text-ink truncate">
             {propre(f.libelle || f.produit)}
           </div>
-          <GrosseQuantite f={f} />
-          {f.pour && (
-            <div className="text-[12.5px] text-ink-mute truncate">→ {propre(f.pour)}</div>
-          )}
+          <GrosseQuantite f={f} compact />
+          {/* « Quand on donne, on écrit en dessous la date » (Layla,
+              2026-09-20) : la liste remonte une semaine, l'heure seule ne
+              suffirait pas à savoir de quel jour on parle. */}
+          <Quand iso={f.retour_le || f.donne_le} quoi={f.retour_le ? 'rendu' : 'donné'} />
         </div>
       </div>
-      <button
-        onClick={() => onAgir(f, quoi)} disabled={busy === f.id}
-        className={`w-full ${couleur} text-cream py-4 text-[19px] font-extrabold
-                    active:brightness-90 transition disabled:opacity-50`}>
-        {busy === f.id ? '…' : mot}
-      </button>
+      {onAgir && (
+        <button
+          onClick={() => onAgir(f, quoi)} disabled={busy === f.id}
+          aria-label={`${quoi === 'donner' ? 'Donné' : 'Repris'} : ${propre(f.libelle || f.produit)}`}
+          className={`flex-none w-16 ${couleur} text-cream text-[22px] font-extrabold
+                      active:brightness-90 transition disabled:opacity-50`}>
+          {busy === f.id ? '…' : '✓'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Une pile de fournées, rangée par cascade. */
+function Cascades({ feuilles, ...reste }) {
+  return (
+    <div className="sm:columns-2 sm:gap-4">
+      {parCascade(feuilles).map(g => (
+        <div key={g.tete} className="sm:break-inside-avoid">
+          <TeteCascade g={g} />
+          {g.feuilles.map(f => <Ligne key={f.id} f={f} {...reste} />)}
+        </div>
+      ))}
     </div>
   )
 }
@@ -134,10 +155,8 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
         {!!attente.length && (
           <>
             <Bande emoji="🤲" titre="À donner" n={attente.length} ton="bg-gold-pale text-gold" />
-            {attente.map(f => (
-              <Fiche key={f.id} f={f} bord="border-l-gold" couleur="bg-ok" mot="✓ Donné"
-                quoi="donner" busy={busy} onAgir={agir} />
-            ))}
+            <Cascades feuilles={attente} bord="border-l-gold" couleur="bg-ok"
+              quoi="donner" busy={busy} onAgir={agir} />
           </>
         )}
 
@@ -145,10 +164,8 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
         {!!retours.length && (
           <>
             <Bande emoji="↩️" titre="On te rend" n={retours.length} ton="bg-bordeaux/10 text-bordeaux" />
-            {retours.map(f => (
-              <Fiche key={f.id} f={f} bord="border-l-bordeaux" couleur="bg-bordeaux" mot="✓ Repris"
-                quoi="retour" busy={busy} onAgir={agir} />
-            ))}
+            <Cascades feuilles={retours} bord="border-l-bordeaux" couleur="bg-bordeaux"
+              quoi="retour" busy={busy} onAgir={agir} />
           </>
         )}
 
@@ -156,21 +173,7 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
         {!!sortis.length && (
           <>
             <Bande emoji="✅" titre="Déjà donné" n={sortis.length} ton="bg-success-bg text-success" />
-            <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5">
-              {sortis.map(f => (
-                <div key={f.id} className="bg-cream-warm border border-line rounded-2xl overflow-hidden">
-                  <PhotoFeuille f={f} className="w-full aspect-square" />
-                  <div className="px-2 pt-1.5 pb-2">
-                    <div className="text-[12px] font-bold leading-tight text-ink">
-                      {propre(f.libelle || f.produit)}
-                    </div>
-                    <div className="text-[12px] font-semibold text-ink-mute tabular-nums">
-                      {qte(f.qty_prevue, f.unite)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Cascades feuilles={sortis} bord="border-l-ok" />
           </>
         )}
       </div>
