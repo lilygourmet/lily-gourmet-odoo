@@ -49,21 +49,21 @@ const enRetard = f => Date.now() - Date.parse(f.donne_le || f.imprime_le || 0) >
 function Fiche({ f, rend, onDeclarer, onRendre }) {
   const tard = enRetard(f)
   return (
-    <div className={`bg-cream-warm border border-line border-l-[6px] rounded-3xl overflow-hidden
-                     shadow-sm mb-3 ${tard ? 'border-l-danger' : 'border-l-gold'}`}>
-      <div className="flex gap-3 p-3">
-        <PhotoFeuille f={f} className="w-[86px] h-[86px] rounded-2xl flex-none" />
-        <div className="min-w-0 flex flex-col justify-center gap-1">
-          <span className={`self-start rounded-full px-2.5 py-0.5 text-[13px] font-extrabold
+    <div className={`bg-cream-warm border border-line border-l-[5px] rounded-2xl overflow-hidden
+                     shadow-sm ${tard ? 'border-l-danger' : 'border-l-gold'}`}>
+      <div className="flex gap-2.5 p-2.5">
+        <PhotoFeuille f={f} className="w-[62px] h-[62px] rounded-xl flex-none" />
+        <div className="min-w-0 flex flex-col justify-center gap-0.5">
+          <span className={`self-start rounded-full px-2 py-0.5 text-[11px] font-extrabold
                             tabular-nums ${tard ? 'bg-danger-bg text-danger' : 'bg-gold-pale text-gold'}`}>
             ⏰ {depuis(f.donne_le || f.imprime_le)}
           </span>
-          <div className="text-[18px] font-extrabold leading-tight text-ink">
+          <div className="text-[15px] font-extrabold leading-tight text-ink">
             {propre(f.libelle || f.produit)}
           </div>
-          <GrosseQuantite f={f} />
+          <GrosseQuantite f={f} compact />
           {f.pour && (
-            <div className="text-[12.5px] text-ink-mute truncate">→ {propre(f.pour)}</div>
+            <div className="text-[11.5px] text-ink-mute truncate">→ {propre(f.pour)}</div>
           )}
         </div>
       </div>
@@ -74,7 +74,7 @@ function Fiche({ f, rend, onDeclarer, onRendre }) {
           Toucher la ligne ouvre donc le vrai écran, exactement comme le QR. */}
       <button
         onClick={() => onDeclarer(f)}
-        className="w-full bg-bordeaux text-cream py-4 text-[19px] font-extrabold
+        className="w-full bg-bordeaux text-cream py-2.5 text-[16px] font-extrabold
                    active:brightness-90 transition">
         ✍️ Déclarer
       </button>
@@ -86,7 +86,7 @@ function Fiche({ f, rend, onDeclarer, onRendre }) {
       {f.donne_le && (
         <button
           onClick={() => onRendre(f)} disabled={rend === f.id}
-          className="w-full border-t border-line text-ink-mute py-3 text-[14px] font-bold
+          className="w-full border-t border-line text-ink-mute py-2 text-[13px] font-bold
                      active:bg-cream-deep transition disabled:opacity-50">
           {rend === f.id ? '…' : '↩ Je rends'}
         </button>
@@ -108,10 +108,22 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
 
   useEffect(() => {
     relire()
-    // Plusieurs personnes travaillent dessus en même temps : l'économe donne
-    // pendant que le pâtissier déclare. On relit sans bruit, écran visible.
-    const t = setInterval(() => { if (!document.hidden) relire() }, 60 * 1000)
-    return () => clearInterval(t)
+    // ⚠️ AU RETOUR SUR L'ÉCRAN, TOUT DE SUITE (Layla, 2026-09-20 : « je dois
+    // mettre à jour la page pour les voir »). Plusieurs personnes travaillent
+    // en même temps — l'économe donne pendant que le pâtissier déclare — et on
+    // revient sans arrêt d'ailleurs : du scan, de la fiche, d'une autre app.
+    // On tombait alors sur la liste d'AVANT, et il fallait recharger la page à
+    // la main pour la croire. On relit donc à chaque retour, en plus du rythme
+    // de fond.
+    const auRetour = () => { if (!document.hidden) relire() }
+    document.addEventListener('visibilitychange', auRetour)
+    window.addEventListener('focus', auRetour)
+    const t = setInterval(auRetour, 30 * 1000)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', auRetour)
+      window.removeEventListener('focus', auRetour)
+    }
   }, [relire])
 
   /**
@@ -176,10 +188,12 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
 
         {feuilles && !dues.length && <Rien emoji="✅" mot="Tout est déclaré" />}
 
-        {dues.map(f => (
-          <Fiche key={f.id} f={f} rend={rend}
-            onDeclarer={ouvrirPourDeclarer} onRendre={rendre} />
-        ))}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {dues.map(f => (
+            <Fiche key={f.id} f={f} rend={rend}
+              onDeclarer={ouvrirPourDeclarer} onRendre={rendre} />
+          ))}
+        </div>
 
         {/* ⚠️ UNE SEULE QUESTION, ET SEULEMENT QUAND ELLE SE POSE. */}
         {aRendre && (

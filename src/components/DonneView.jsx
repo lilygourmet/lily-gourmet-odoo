@@ -76,10 +76,22 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
 
   useEffect(() => {
     relire()
-    // Les pâtissiers déclarent pendant qu'il sert : la liste se rafraîchit
-    // seule, écran visible.
-    const t = setInterval(() => { if (!document.hidden) relire() }, 60 * 1000)
-    return () => clearInterval(t)
+    // ⚠️ AU RETOUR SUR L'ÉCRAN, TOUT DE SUITE (Layla, 2026-09-20 : « je dois
+    // mettre à jour la page pour les voir »). Plusieurs personnes travaillent
+    // en même temps — l'économe donne pendant que le pâtissier déclare — et on
+    // revient sans arrêt d'ailleurs : du scan, de la fiche, d'une autre app.
+    // On tombait alors sur la liste d'AVANT, et il fallait recharger la page à
+    // la main pour la croire. On relit donc à chaque retour, en plus du rythme
+    // de fond.
+    const auRetour = () => { if (!document.hidden) relire() }
+    document.addEventListener('visibilitychange', auRetour)
+    window.addEventListener('focus', auRetour)
+    const t = setInterval(auRetour, 30 * 1000)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', auRetour)
+      window.removeEventListener('focus', auRetour)
+    }
   }, [relire])
 
   const agir = async (f, quoi) => {

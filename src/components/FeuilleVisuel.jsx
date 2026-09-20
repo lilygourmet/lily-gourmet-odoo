@@ -42,14 +42,25 @@ export function PhotoFeuille({ f, className = '' }) {
   )
 }
 
-/** Le chiffre en gros, l'unité en petit : c'est le chiffre qu'on sert. */
-export function GrosseQuantite({ f }) {
+/**
+ * Le chiffre en gros, l'unité en petit : c'est le chiffre qu'on sert.
+ *
+ * ⚠️ `compact` pour les longues listes (Layla, 2026-09-20 : « c'est trop large
+ * et zoomé à déclarer »). Chez l'économe il y a trois fournées à servir ; chez
+ * le pâtissier il y en a douze à solder, et tout doit tenir à l'écran.
+ */
+export function GrosseQuantite({ f, compact }) {
   const t = qte(f.qty_prevue, f.unite)
   const i = t.lastIndexOf(' ')
   return (
-    <div className="text-[29px] font-extrabold tabular-nums leading-none text-ink">
+    <div className={`${compact ? 'text-[21px]' : 'text-[29px]'} font-extrabold tabular-nums
+                     leading-none text-ink`}>
       {i < 0 ? t : t.slice(0, i)}
-      {i > 0 && <span className="text-[15px] font-semibold text-ink-mute ml-1">{t.slice(i + 1)}</span>}
+      {i > 0 && (
+        <span className={`${compact ? 'text-[12.5px]' : 'text-[15px]'} font-semibold text-ink-mute ml-1`}>
+          {t.slice(i + 1)}
+        </span>
+      )}
     </div>
   )
 }

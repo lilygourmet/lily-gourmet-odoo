@@ -1048,7 +1048,18 @@ export default async function handler(req, res) {
     }
 
     if (req.query.photo) {
-      const b64 = await photoDe(String(req.query.photo))
+      const nom = String(req.query.photo)
+      let b64 = await photoDe(nom)
+      // ⚠️ À DÉFAUT, LA PHOTO DE SON ARTICLE MÈRE (Layla, 2026-09-20 : « mettre
+      // les photos de l'article mère »). Une crème, un biscuit, un crunchy
+      // n'ont pas d'image à eux : on laissait un carré vide, et un carré vide
+      // ne se reconnaît pas. C'est déjà la règle de la liste « Déclarer » —
+      // elle vaut partout, et le graphe des recettes est gardé en mémoire.
+      if (!b64) {
+        const s = (await grapheParents()).get(sansRef(nom))
+        const mere = s && s.size ? [...s].sort((x, y) => x.localeCompare(y, 'fr'))[0] : null
+        if (mere) b64 = await photoDe(mere)
+      }
       if (!b64) {
         // ⚠️ Une photo ABSENTE se garde en cache elle aussi : sans ça, chaque
         // ouverture de « Déclarer » redemandait à Odoo les images qui
