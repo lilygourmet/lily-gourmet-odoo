@@ -10,7 +10,7 @@
 // ============================================================
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe, resteDeLaCascade } from './feuilles'
+import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe, resteDeLaCascade, ingredientsSortis } from './feuilles'
 
 const imprimee = { id: 'a', imprime_le: '2026-09-19T08:00:00Z' }
 const donnee = { ...imprimee, id: 'b', donne_le: '2026-09-19T09:00:00Z' }
@@ -244,5 +244,33 @@ describe('ce qu’un retour emporte avec lui', () => {
   it('ne repropose pas ce qui est déjà en retour', () => {
     const dejaRendue = { ...genoise, retour_le: 'tout à l’heure' }
     expect(resteDeLaCascade([creme, dejaRendue, gateau], creme).map(f => f.id)).toEqual(['gateau'])
+  })
+})
+
+
+// ⚠️ « Quand c'est figé, imprimé et ingrédient donné, ça reste figé — impossible
+// de réinitialiser à moins qu'on retourne les ingrédients » (Layla,
+// 2026-09-20). Ce qui est SORTI de la fournée, lui, reste toujours libre.
+describe('ce qui fige le prévu pour de bon', () => {
+  const p = 'SM. Creme Citron'
+  it('la matière est sortie : le chiffre est engagé', () => {
+    expect(ingredientsSortis([{ produit: p, donne_le: 'ce matin' }], p)).toBe(true)
+  })
+
+  it('imprimé mais pas donné : rien n’est engagé', () => {
+    expect(ingredientsSortis([{ produit: p }], p)).toBe(false)
+  })
+
+  it('rendue : le chiffre se rouvre', () => {
+    // C'est LE seul chemin : on rend la marchandise, on reprend la main.
+    expect(ingredientsSortis([{ produit: p, donne_le: 'ce matin', retour_le: 'midi' }], p)).toBe(false)
+  })
+
+  it('déjà déclarée : plus rien à figer', () => {
+    expect(ingredientsSortis([{ produit: p, donne_le: 'ce matin', declare_le: 'midi' }], p)).toBe(false)
+  })
+
+  it('la sortie d’un AUTRE article ne fige rien', () => {
+    expect(ingredientsSortis([{ produit: 'SM. Genoise', donne_le: 'ce matin' }], p)).toBe(false)
   })
 })

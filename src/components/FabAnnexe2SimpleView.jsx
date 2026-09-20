@@ -28,7 +28,7 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistorique
   toutConsomme, relireRecettes, restesTheoriques } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
-import { nouvelId, poserFeuilles, eteindreFeuille } from '../lib/feuilles'
+import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis } from '../lib/feuilles'
 import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
@@ -284,6 +284,19 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
 
   // Le catalogue complet part avec le reste, sans attendre le clic sur
   // l'onglet : quand elle y arrive, il est déjà là.
+  // ⚠️ CE QUI EST SORTI DE LA RÉSERVE fige le prévu pour de bon (Layla,
+  // 2026-09-20 : « quand c'est figé, imprimé et ingrédient donné, ça reste
+  // figé — impossible de réinitialiser à moins qu'on retourne les
+  // ingrédients »). On a donc besoin de savoir, ici, ce que l'économe a donné.
+  const [feuillesJour, setFeuillesJour] = useState([])
+  useEffect(() => {
+    let vivant = true
+    feuillesDuJour()
+      .then(l => { if (vivant) setFeuillesJour(l) })
+      .catch(() => { /* le verrou se relâche, il ne bloque jamais l'écran */ })
+    return () => { vivant = false }
+  }, [tour])
+
   useEffect(() => {
     let vivant = true
     loadToutFabAnnexe()
@@ -869,11 +882,21 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                 : undefined}
               faits={faits} envoi={envoi}
               verrouille={!!prevus[tete.produit]?.fige && noeud.produit === tete.produit}
-              onLiberer={(estTete ? prevus[noeud.produit] : quantites[noeud.produit] !== undefined)
+              // ⚠️ PLUS DE « RÉINITIALISER » UNE FOIS LA MATIÈRE SORTIE. Tant
+              // qu'on pouvait, on pouvait prétendre après coup avoir prévu
+              // moins — alors que les ingrédients avaient déjà quitté la
+              // réserve pour le compte d'origine, et Odoo en aurait consommé
+              // moins qu'il n'en était réellement parti. Le seul chemin est
+              // désormais de RENDRE la marchandise.
+              onLiberer={(!ingredientsSortis(feuillesJour, noeud.produit)
+                && (estTete ? prevus[noeud.produit] : quantites[noeud.produit] !== undefined))
                 ? () => {
                   if (estTete) setPrevus(oublierPrevu(noeud.produit))
                   setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
                 } : undefined}
+              noteVerrou={ingredientsSortis(feuillesJour, noeud.produit)
+                ? 'Les ingrédients sont sortis de la réserve pour ce nombre. Pour le changer, rends-les à l’économe depuis « À déclarer ».'
+                : undefined}
               onOuvrir={p => { figer(q); setChemin([...chemin, p]) }}
               onFait={gesteFait}
               // ⚠️ ARRIVÉ PAR LE QR : c'est la FICHE qui appuie, parce qu'elle

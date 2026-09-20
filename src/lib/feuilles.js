@@ -284,5 +284,24 @@ export function aDeclarer(feuilles) {
 export const aReprendre = feuilles => (feuilles || []).filter(f =>
   f.donne_le && !f.declare_le && !f.pas_faite_le && !f.retour_le)
 
+/**
+ * LES INGRÉDIENTS SONT-ILS SORTIS POUR CET ARTICLE ?
+ *
+ * « Quand c'est figé, imprimé et ingrédient donné, ça reste figé — impossible
+ * de réinitialiser à moins qu'on retourne les ingrédients » (Layla,
+ * 2026-09-20).
+ *
+ * C'est plus strict que le verrou d'avant, et c'est juste : tant qu'on pouvait
+ * réinitialiser, on pouvait prétendre après coup avoir prévu moins — alors que
+ * la matière était déjà sortie de la réserve pour le compte d'origine. Odoo
+ * aurait alors consommé moins que ce qui avait réellement quitté l'économat.
+ *
+ * Le seul moyen de rouvrir le chiffre est donc de RENDRE la marchandise. Ce
+ * qui est SORTI de la fournée, lui, reste libre : on déclare toujours ce qu'on
+ * a vraiment obtenu.
+ */
+export const ingredientsSortis = (feuilles, produit) => (feuilles || []).some(f =>
+  f.produit === produit && f.donne_le && !f.retour_le && !f.declare_le && !f.pas_faite_le)
+
 /** Ce que l'économe n'a pas encore donné — et lui seul peut le débloquer. */
 export const aDonner = feuilles => (feuilles || []).filter(attendLEconome)

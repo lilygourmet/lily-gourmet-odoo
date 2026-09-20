@@ -325,7 +325,7 @@ export function Clavier({ titre, valeur, unite, onValider, onFermer }) {
  * `onChange`, eux, parlent l'unité de l'ARTICLE — c'est elle qui part chez
  * Odoo. La conversion ne vit qu'ici, via `enGrammes` / `enUnite`.
  */
-export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose, verrouille, onLiberer }) {
+export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose, verrouille, onLiberer, note }) {
   const [clavier, setClavier] = useState(false)
   const vu = enGrammes(valeur, unite)
   // Le pas par défaut : la pièce, ou 50 g. Une DÉCOUPE impose le sien — on ne
@@ -347,6 +347,14 @@ export function GrosChiffre({ titre, valeur, unite, onChange, pas: impose, verro
                        decoration-dotted underline-offset-4">
             réinitialiser
           </button>
+        )}
+        {/* ⚠️ Plus de « réinitialiser » quand la matière est sortie : on dit
+            POURQUOI, et par où passer. Un bouton qui disparaît sans un mot,
+            c'est un bug aux yeux de celui qui le cherche. */}
+        {!onLiberer && note && (
+          <p className="print:hidden mt-1.5 text-[12.5px] text-ink-mute leading-snug max-w-[260px] mx-auto">
+            {note}
+          </p>
         )}
       </div>
     )
@@ -411,7 +419,7 @@ function AppuieUneFois({ faire }) {
 }
 
 export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait, envoi, autoFait, onAutoFait,
-  verrouille, onLiberer }) {
+  verrouille, onLiberer, noteVerrou }) {
   const decoupe = onCuites ? decoupeDe(noeud) : null
   const dejaFaits = declares(faits)
   // ⚠️ ON NE COUPE PAS PLUS QUE CE QU'ON A. Une plaque cuite donne un nombre
@@ -480,7 +488,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
         <GrosChiffre titre={decoupe ? 'à cuire' : 'à faire'}
           valeur={quantitePesee} unite={aPeser.unite}
           pas={decoupe ? dosePourUnePlaque(noeud) || undefined : undefined}
-          verrouille={decoupe ? false : verrouille} onLiberer={onLiberer}
+          verrouille={decoupe ? false : verrouille} onLiberer={onLiberer} note={noteVerrou}
           onChange={decoupe ? onCuites : onQuantite} />
       </div>
       {!decoupe && (
