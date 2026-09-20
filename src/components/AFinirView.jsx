@@ -23,7 +23,7 @@ import { AutresTailles, Clavier, Confirmation } from './FabAnnexe2Simple'
 import { Rien } from './FeuilleVisuel'
 import { toast } from '../lib/toast'
 import { propre, qte } from '../lib/ecranSimple'
-import { photoFabAnnexe, declarer } from '../lib/fabAnnexe'
+import { photoFabAnnexe, declarer, loadArticleFabAnnexe, bloquants, ingredientsPour } from '../lib/fabAnnexe'
 import { hasValidJwt } from '../lib/auth'
 import { loadAFinir, loadFormats, prevuParLaRecette, dispatchVersOdoo } from '../lib/miseEnForme'
 
@@ -107,6 +107,22 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
     navigator.vibrate?.(15)
     setEnvoi(true)
     try {
+      // ⚠️ LE MÊME VERROU QU'AILLEURS, SINON C'EST UNE PORTE DÉROBÉE. Cet écran
+      // déclare des moules — et un moule a d'autres composants que le vrac
+      // qu'on répartit : le gianduja indiv veut aussi son crémeux et son
+      // biscuit. Sans cette vérification, deux doigts ici auraient fait
+      // consommer à Odoo des composants qui n'existent pas, alors que l'écran
+      // de fabrication, lui, l'interdit depuis toujours.
+      for (const o of ordres) {
+        const n = await loadArticleFabAnnexe(o.produit)
+        const manque = n
+          ? bloquants({ ...n, composants: ingredientsPour(n, o.qty), enfants: undefined }, {})
+          : []
+        if (manque.length) {
+          toast(`Il manque ${propre(manque[0])} pour ${propre(o.produit)} — passe par Fabrication Annexe 2.`)
+          return
+        }
+      }
       // ⚠️ UN PAR UN, jamais de front : un ordre orphelin chez Odoo ne se
       // rattrape pas tout seul. Même règle que le reste de l'écran.
       for (const o of ordres) {

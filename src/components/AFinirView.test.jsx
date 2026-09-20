@@ -21,15 +21,26 @@ const formats = [
 ]
 
 const declarer = vi.fn(async () => ({ produit: 'x', qty: 1, ordre: 'MO/1', erreur: null }))
+// Ce que le moule demande en plus du vrac : par défaut, tout est là.
+let composantsDuMoule = [
+  { produit: 'SM. Biscuit Gianduja Indiv', unite: 'u', besoin: 10, stock: 50,
+    dejaFait: 0, fabrique: true, ok: true },
+]
 let liste = [vrac]
 
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
-vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
+const toasts = []
+vi.mock('../lib/toast', () => ({
+  toast: Object.assign(m => toasts.push(String(m)), { success: () => {}, error: () => {} }),
+}))
 vi.mock('../lib/auth', () => ({ hasValidJwt: () => true, isAdmin: () => true }))
 vi.mock('../lib/fabAnnexe', async importOriginal => ({
-  ...await importOriginal(),
+  ...await importOriginal(),          // les VRAIES règles de verrou
   declarer: (...a) => declarer(...a),
+  loadArticleFabAnnexe: async produit => ({
+    produit, tourneeTaille: 10, composants: composantsDuMoule, recette: [],
+  }),
 }))
 vi.mock('../lib/miseEnForme', async importOriginal => ({
   ...await importOriginal(),          // les VRAIS calculs de dispatch
@@ -39,7 +50,11 @@ vi.mock('../lib/miseEnForme', async importOriginal => ({
 
 const { default: AFinirView } = await import('./AFinirView')
 
-beforeEach(() => { vi.clearAllMocks(); liste = [vrac] })
+beforeEach(() => {
+  vi.clearAllMocks(); liste = [vrac]
+  composantsDuMoule = [{ produit: 'SM. Biscuit Gianduja Indiv', unite: 'u', besoin: 10,
+    stock: 50, dejaFait: 0, fabrique: true, ok: true }]
+})
 afterEach(cleanup)
 
 /** Ouvre le vrac et attend ses moules. */
@@ -104,6 +119,20 @@ describe('le dispatch', () => {
     await waitFor(() => expect(declarer).toHaveBeenCalled())
     expect(declarer.mock.calls[0][0].ajustements)
       .toEqual({ 'SM. Gélée Mangue Ananas Pistache': 2030 })
+  })
+
+  // ⚠️ LA PORTE DÉROBÉE QU'IL NE FAUT PAS LAISSER OUVERTE : un moule a
+  // d'autres composants que le vrac qu'on répartit. Sans ce verrou, deux
+  // doigts ici faisaient consommer à Odoo un crémeux qui n'existe pas — alors
+  // que l'écran de fabrication l'interdit depuis toujours.
+  it('refuse de couler dans un moule dont un composant manque', async () => {
+    composantsDuMoule = [{ produit: 'SM. Cremeux Gianduja', libelle: 'Crémeux gianduja',
+      unite: 'u', besoin: 10, stock: 0, dejaFait: 0, fabrique: true, ok: false }]
+    await ouvrir()
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
+    fireEvent.click(screen.getByText("C'est fait"))
+    await waitFor(() => expect(toasts.at(-1)).toMatch(/manque/i))
+    expect(declarer).not.toHaveBeenCalled()
   })
 
   // ⚠️ On ne coule pas plus que ce qu'on a : 20 × 140 g = 2 800 g pour 2 030.

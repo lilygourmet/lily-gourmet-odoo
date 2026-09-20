@@ -1044,6 +1044,12 @@ async function formatsDe(nom) {
   const vus = new Set()
   return (vers.get(sansRef(nom)) || [])
     .filter(f => connus.has(f.produit) && f.parUnite > 0)
+    // ⚠️ ON NE VEND PAS DEPUIS « À FINIR ». Le graphe rendait TOUT ce qui
+    // consomme le vrac — y compris les gâteaux vendus : la génoise chocolat CD
+    // proposait « CD- Cakedesign 60 cm (90 pers) », et deux doigts auraient
+    // suffi à lancer chez Odoo l'ordre d'un gâteau de commande. Mettre en
+    // forme, c'est couler dans un moule, pas fabriquer un gâteau vendu.
+    .filter(f => !/^\s*(CD-|E-|MI-|V-)/i.test(f.produit))
     .filter(f => (vus.has(f.produit) ? false : vus.add(f.produit)))
     .map(f => ({ ...f, photo: connus.get(f.produit)?.photo || null }))
     .sort((a, b) => b.parUnite - a.parUnite)
@@ -1090,10 +1096,21 @@ async function aFinir(sb) {
   for (const q of quants) parId.set(q.product_id[0], (parId.get(q.product_id[0]) || 0) + q.quantity)
   const connus = new Map(sq.map(a => [a.produit, a]))
 
+  // ⚠️ UN ARTICLE TOUT NEUF N'EST PAS DANS LE SQUELETTE. Celui-ci se construit
+  // à partir des ordres et des stocks : une préparation créée ce matin n'a ni
+  // l'un ni l'autre, et elle serait restée muette jusqu'à sa première
+  // fabrication — donc son premier reste n'aurait jamais été réclamé. Vécu le
+  // 2026-09-20 avec les trois mousses (gianduja, tiramisu, royal) créées le
+  // jour même. On va donc les chercher chez Odoo, une seule fois.
+  const cache = creerCache()
   const out = []
   for (const l of liste) {
-    const a = connus.get(l.produit)
-    if (!a) continue                                   // renommé chez Odoo : on se tait
+    let a = connus.get(l.produit)
+    if (!a) {
+      const p = await produitParNom(cache, l.produit)
+      if (!p) continue                                 // renommé chez Odoo : on se tait
+      a = { id: p.id, produit: l.produit, libelle: l.produit, unite: uniteDe(p), photo: null }
+    }
     const stock = Math.round((parId.get(a.id) || 0) * 1000) / 1000
     // Ce que les formats déclarés aujourd'hui lui ont déjà pris.
     let pris = 0
