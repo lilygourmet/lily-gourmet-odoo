@@ -206,7 +206,12 @@ export function parJour(histo) {
 }
 
 /** La photo d'un article, servie par Odoo (souvent celle du produit vendu). */
-export const photoFabAnnexe = nom => '/api/fab-annexe?photo=' + encodeURIComponent(nom)
+// ⚠️ LE « v2 » SERT À OUBLIER LES CARRÉS VIDES. Tant qu'aucun SM n'avait
+// d'image chez Odoo, l'app répondait « pas de photo » — et les téléphones
+// gardaient cette réponse une heure. Maintenant qu'on sert la photo du gâteau
+// mère, il fallait une adresse neuve pour que les écrans arrêtent de servir le
+// vide en mémoire. Ce numéro ne bouge que si ça se reproduit.
+export const photoFabAnnexe = nom => '/api/fab-annexe?photo=' + encodeURIComponent(nom) + '&v=2'
 
 /** Les composants d'un nœud, qu'il soit l'article de tête ou un morceau. */
 export const enfantsDe = noeud => noeud?.composants || noeud?.enfants || []
