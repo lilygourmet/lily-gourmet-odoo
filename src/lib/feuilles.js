@@ -73,6 +73,8 @@ export function poserFeuilles(feuilles, userId) {
       unite: f.unite || null,
       qty: f.qty,
       pour: (f.chemin || [])[0] || null,
+      // Du gâteau jusqu'à cette recette : c'est par là que le scan la rouvrira.
+      chemin: f.chemin || null,
       // ⚠️ RIEN À ALLER CHERCHER = RIEN À ATTENDRE (Layla, 2026-09-19 : « si
       // une cascade est imprimée et qu'elle n'a pas de MP, elle doit aller
       // directement dans À déclarer »). Une fournée dont tous les composants

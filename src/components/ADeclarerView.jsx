@@ -58,7 +58,9 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
   /** Le vrai écran de déclaration, posé sur cet article. */
   const ouvrirPourDeclarer = f => {
     navigator.vibrate?.(15)
-    poserLeScan({ article: f.produit, declarer: true })
+    // Le chemin entier : une crème ne s'ouvre pas seule, elle se descend
+    // depuis son gâteau (voir `scanEntrant`).
+    poserLeScan({ chemin: (f.chemin && f.chemin.length) ? f.chemin : [f.produit], declarer: true })
     onNavigate?.('fabrication-annexe-2')
   }
 

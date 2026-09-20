@@ -140,3 +140,28 @@ ALTER TABLE annexe_feuilles
 
 COMMENT ON COLUMN annexe_feuilles.sans_economat IS
   'true = cette feuille n''avait rien à demander à l''économat. Elle devient due quand plus aucune demande de sa liasse n''attend.';
+
+
+-- ============================================================
+-- LE CHEMIN : par où l'app doit passer pour rouvrir cette feuille.
+--
+-- « Toujours le même problème : quand je scanne, ça m'emmène dans À faire
+-- général, pas dans l'article même » (Layla, 2026-09-20).
+--
+-- LA CAUSE, mesurée : sur ses 12 dernières feuilles, 9 portent un COMPOSANT
+-- (« SM. Creme Citron Production », « SM. Genoise Vanille KG ») qui n'est PAS
+-- au catalogue des 106 articles suivis. L'app ne sait ouvrir qu'un article
+-- suivi ; elle cherchait le composant, ne le trouvait pas, et retombait sur sa
+-- liste d'accueil. On n'atteint une crème qu'en DESCENDANT depuis son gâteau.
+--
+-- On garde donc le chemin entier tel qu'il était à l'impression — « Cadre
+-- Citron › Crème au beurre › Crème citron » — et le scan rouvre exactement là.
+--
+-- Relançable sans risque.
+-- ============================================================
+
+ALTER TABLE annexe_feuilles
+  ADD COLUMN IF NOT EXISTS chemin JSONB;
+
+COMMENT ON COLUMN annexe_feuilles.chemin IS
+  'Du gâteau jusqu''à cette recette. C''est par là que le scan rouvre la fiche : un composant ne s''ouvre pas tout seul, il se descend depuis son gâteau.';

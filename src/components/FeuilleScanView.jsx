@@ -149,17 +149,20 @@ export default function FeuilleScanView() {
       <p className="text-[15px] font-bold text-center py-16 text-ink-mute">
         On t’emmène à {nom}…
       </p>
-      <CommeSiOnAvaitScanne produit={f.produit} />
+      <CommeSiOnAvaitScanne chemin={(f.chemin && f.chemin.length) ? f.chemin : [f.produit]} />
     </Cadre>
   )
 }
 
 /** Emmener, une seule fois, sans rien demander. */
-function CommeSiOnAvaitScanne({ produit }) {
+function CommeSiOnAvaitScanne({ chemin }) {
   useEffect(() => {
     navigator.vibrate?.(15)
-    window.location.replace(
-      `/?view=fabrication-annexe-2&article=${encodeURIComponent(produit)}&declarer=1`)
-  }, [produit])
+    // ⚠️ ON EMMÈNE PAR LE CHEMIN ENTIER. Une crème n'est pas au catalogue des
+    // articles suivis : la nommer seule ne l'ouvre pas, il faut descendre
+    // depuis son gâteau — « Cadre Citron › Crème au beurre › Crème citron ».
+    window.location.replace('/?view=fabrication-annexe-2&declarer=1&chemin='
+      + encodeURIComponent(JSON.stringify(chemin)))
+  }, [chemin])
   return null
 }

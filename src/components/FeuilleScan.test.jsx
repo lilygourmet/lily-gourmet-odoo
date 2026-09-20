@@ -16,6 +16,7 @@ const feuille = {
   id: ID, jour: '2026-09-20', produit: 'SM. Creme Citron Gingembre',
   libelle: 'Crème citron gingembre', unite: 'g', qty_prevue: 11844,
   pour: 'SM- Tarte Citron Gin 23 cm', liasse: 'l1', sans_economat: false,
+  chemin: ['SM- Tarte Citron Gin 23 cm', 'SM. Creme Citron Gingembre'],
   imprime_le: new Date(Date.now() - 12 * 60000).toISOString(),
   donne_le: null, donne_par: null, declare_le: null, pas_faite_le: null,
 }
@@ -77,8 +78,11 @@ describe('le QR du pâtissier', () => {
     const url = remplace.mock.calls[0][0]
     // Le bon onglet, le bon article, et l'ordre d'aller droit au chiffre.
     expect(url).toMatch(/view=fabrication-annexe-2/)
-    expect(url).toMatch(/article=SM\.%20Creme%20Citron%20Gingembre/)
     expect(url).toMatch(/declarer=1/)
+    // ⚠️ LE CHEMIN ENTIER : une crème n'est pas au catalogue, elle ne s'ouvre
+    // qu'en descendant depuis son gâteau. Le nommer seule renvoyait à l'accueil.
+    const chemin = JSON.parse(decodeURIComponent(url.split('chemin=')[1]))
+    expect(chemin).toEqual(['SM- Tarte Citron Gin 23 cm', 'SM. Creme Citron Gingembre'])
   })
 
   it('ne propose ni « pas faite » ni quantité à taper', async () => {

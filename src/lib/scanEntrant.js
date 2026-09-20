@@ -17,11 +17,22 @@
 const lu = (() => {
   try {
     const sp = new URLSearchParams(window.location.search)
+    const declarer = sp.get('declarer') === '1'
+    // ⚠️ LE CHEMIN ENTIER, pas seulement le nom (Layla, 2026-09-20 : « ça
+    // m'emmène dans À faire général, pas dans l'article même »). Une crème
+    // n'est pas au catalogue des articles suivis : elle ne s'ouvre qu'en
+    // DESCENDANT depuis son gâteau. L'app cherchait la crème toute seule, ne
+    // la trouvait pas, et retombait sur sa liste d'accueil.
+    const brut = sp.get('chemin')
+    if (brut) {
+      const chemin = JSON.parse(brut)
+      if (Array.isArray(chemin) && chemin.length) return { chemin, declarer }
+    }
+    // Un gâteau, lui, s'ouvre tout seul : il est au catalogue.
     const article = sp.get('article')
-    if (!article) return null
-    return { article, declarer: sp.get('declarer') === '1' }
+    return article ? { chemin: [article], declarer } : null
   } catch {
-    return null   // pas d'adresse lisible (rendu hors navigateur)
+    return null   // adresse illisible, ou chemin abîmé : on ouvre l'accueil
   }
 })()
 

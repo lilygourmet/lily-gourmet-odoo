@@ -75,7 +75,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // ⚠️ Pas lu dans l'adresse : elle a déjà été réécrite par `App.jsx` au
   // démarrage. `scanEntrant` l'avait mis de côté avant — voir ce fichier.
   const auScan = prendreLeScan()
-  const [chemin, setChemin] = useState(auScan ? [auScan.article] : [])
+  const [chemin, setChemin] = useState(auScan ? auScan.chemin : [])
   // Ne vaut qu'une fois : une fois la question posée, on n'y revient pas.
   const [droitALaDeclaration, setDroitALaDeclaration] = useState(!!auScan?.declarer)
   // Ce qu'on a décidé de faire. On part travailler, on revient — même le

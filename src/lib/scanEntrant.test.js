@@ -31,7 +31,7 @@ describe('ce que le QR demandait', () => {
     expect(window.location.search).not.toMatch(/article/)
 
     // L'écran arrive maintenant, bien après : il doit quand même savoir.
-    expect(m.prendreLeScan()).toEqual({ article: 'SM. Creme', declarer: true })
+    expect(m.prendreLeScan()).toEqual({ chemin: ['SM. Creme'], declarer: true })
   })
 
   it('ne se sert qu’UNE fois', async () => {
@@ -48,13 +48,30 @@ describe('ce que le QR demandait', () => {
 
   it('ouvre l’article sans déclarer quand le QR ne le demande pas', async () => {
     const m = await demarrerA('/?article=SM.%20Creme')
-    expect(m.prendreLeScan()).toEqual({ article: 'SM. Creme', declarer: false })
+    expect(m.prendreLeScan()).toEqual({ chemin: ['SM. Creme'], declarer: false })
+  })
+
+  // ⚠️ LE CŒUR DU BUG (Layla, 2026-09-20). Une crème n'est PAS au catalogue des
+  // articles suivis : la nommer seule ne l'ouvre pas — l'app la cherchait, ne
+  // la trouvait pas, et retombait sur sa liste d'accueil. Mesuré sur ses
+  // feuilles : 9 sur 12 sont des composants dans ce cas.
+  it('rouvre une CRÈME par le chemin de son gâteau', async () => {
+    const chemin = ['SM- Cadre Citron Meringuée Production',
+      'SM. Creme au Beurre Citron Production', 'SM. Creme Citron Production']
+    const m = await demarrerA('/?declarer=1&chemin=' + encodeURIComponent(JSON.stringify(chemin)))
+    window.history.replaceState({}, '', '?view=fabrication-annexe-2')
+    expect(m.prendreLeScan()).toEqual({ chemin, declarer: true })
+  })
+
+  it('un chemin abîmé ouvre l’accueil au lieu de casser', async () => {
+    const m = await demarrerA('/?chemin=pas-du-json')
+    expect(m.prendreLeScan()).toBeNull()
   })
 
   it('« À déclarer » peut poser sa demande sans passer par l’adresse', async () => {
     const m = await demarrerA('/?view=a-declarer')
-    m.poserLeScan({ article: 'SM. Fond', declarer: true })
-    expect(m.prendreLeScan()).toEqual({ article: 'SM. Fond', declarer: true })
+    m.poserLeScan({ chemin: ['SM- Tarte', 'SM. Fond'], declarer: true })
+    expect(m.prendreLeScan()).toEqual({ chemin: ['SM- Tarte', 'SM. Fond'], declarer: true })
     expect(m.prendreLeScan()).toBeNull()
   })
 })

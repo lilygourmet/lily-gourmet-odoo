@@ -1001,9 +1001,9 @@ export default async function handler(req, res) {
     // Supabase en direct : le jeton est vérifié ici, et nulle part ailleurs.
     // ============================================================
     if (req.query.feuille || req.query.feuilles) {
-      const F = 'id, jour, produit, libelle, unite, qty_prevue, pour, liasse, sans_economat,'
-        + ' imprime_par, imprime_le, donne_par, donne_le, declare_le, declare_qty,'
-        + ' pas_faite_le, motif'
+      const F = 'id, jour, produit, libelle, unite, qty_prevue, pour, chemin, liasse,'
+        + ' sans_economat, imprime_par, imprime_le, donne_par, donne_le, declare_le,'
+        + ' declare_qty, pas_faite_le, motif'
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
 
       // Toutes les feuilles du jour : « à donner » chez l'économe, « à
@@ -1060,6 +1060,10 @@ export default async function handler(req, res) {
           // la question ; c'est `aDeclarer` qui décide, en regardant la
           // cascade entière.
           sans_economat: !!f.sansEconomat,
+          // ⚠️ LE CHEMIN ENTIER, pas seulement le nom : une crème n'est pas au
+          // catalogue des articles suivis, elle ne s'ouvre qu'en DESCENDANT
+          // depuis son gâteau. Sans lui, le scan retombait sur l'accueil.
+          chemin: Array.isArray(f.chemin) && f.chemin.length ? f.chemin : null,
           liasse: body.liasse || null,
         }))
         if (!lignes.length) return res.status(200).json({ ok: true, posees: 0 })
