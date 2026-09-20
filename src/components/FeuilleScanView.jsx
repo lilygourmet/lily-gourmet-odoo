@@ -71,8 +71,14 @@ export default function FeuilleScanView() {
   const nom = propre(f.libelle || f.produit)
   const attendu = qte(f.qty_prevue, f.unite)
 
+  // ⚠️ UNE MARCHANDISE RENDUE PUIS RESSORTIE SE REDONNE AVEC LE MÊME PAPIER
+  // (Layla, 2026-09-20 : « le pâtissier peut redonner cette même marchandise
+  // et la boucle se relance avec le même QR code »). L'écran de l'économe doit
+  // donc rester ouvert sur ces feuilles-là, au lieu d'annoncer une fin.
+  const rendueEtRessortie = etat === 'pas-faite' && f.motif !== 'remplacee'
+
   // ---- ce qui est fait ne propose plus rien ----
-  if (fini || etat === 'declaree' || etat === 'pas-faite') {
+  if (fini || etat === 'declaree' || (etat === 'pas-faite' && !(estEconome && rendueEtRessortie))) {
     const dit = fini === 'donne' || (!fini && etat === 'imprimee')
       ? { t: '✓ Donné', s: `${nom} — le pâtissier doit maintenant déclarer.`, c: 'ok' }
       : (fini === 'pas-faite' || etat === 'pas-faite')
@@ -105,6 +111,12 @@ export default function FeuilleScanView() {
           <p className="text-[12.5px] text-ink-mute mt-3">
             imprimé il y a {depuis(f.imprime_le)}{f.pour ? ` · pour ${propre(f.pour)}` : ''}
           </p>
+          {rendueEtRessortie && (
+            <p className="text-[13px] font-bold text-gold mt-3">
+              ↩ Cette marchandise t’avait été rendue. Tu la ressors : la fournée
+              repart de zéro.
+            </p>
+          )}
 
           <button
             onClick={faire}

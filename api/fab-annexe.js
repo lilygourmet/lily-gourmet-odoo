@@ -1100,24 +1100,31 @@ export default async function handler(req, res) {
 
       // L'ÉCONOME DONNE. Le geste qui rend la déclaration due.
       if (req.query.mode === 'donner') {
-        // ⚠️ UNE FEUILLE CLOSE NE SE ROUVRE PAS (Layla, 2026-09-20 : « quand
-        // rendu et rescanné, ça se redonne » — et ensuite « je ne trouve pas
-        // dans la liste »). Les deux n'en font qu'un : on la redonnait sans
-        // effacer le « rendue », donc elle repartait donnée ET close — visible
-        // nulle part. Un papier qui traîne et qu'on rescanne par réflexe ne
-        // doit rien pouvoir défaire.
+        // ⚠️ UNE FOURNÉE DÉJÀ DÉCLARÉE NE SE ROUVRE JAMAIS : c'est du travail
+        // fait, et le redonner le compterait deux fois.
         if (feuille.declare_le) {
           return res.status(200).json({ feuille, refus: 'Cette fournée a déjà été déclarée.' })
         }
-        if (feuille.pas_faite_le) {
+        // Une feuille REMPLACÉE par une impression plus récente reste morte :
+        // le bon papier est ailleurs.
+        if (feuille.pas_faite_le && feuille.motif === 'remplacee') {
           return res.status(200).json({
             feuille,
-            refus: feuille.motif === 'remplacee'
-              ? 'Cette feuille a été remplacée par une impression plus récente — prends le dernier papier.'
-              : 'Cette marchandise a été rendue : la feuille est close. Réimprime la fiche pour la ressortir.',
+            refus: 'Cette feuille a été remplacée par une impression plus récente — prends le dernier papier.',
           })
         }
-        if (feuille.donne_le) return res.status(200).json({ feuille, deja: true })
+        if (feuille.donne_le && !feuille.pas_faite_le) {
+          return res.status(200).json({ feuille, deja: true })
+        }
+        // ⚠️ LA BOUCLE SE RELANCE AVEC LE MÊME QR (Layla, 2026-09-20 : « le
+        // pâtissier peut redonner cette même marchandise et la boucle se
+        // relance avec le même QR code »). Une marchandise rendue puis
+        // ressortie, c'est le même papier, la même fournée : on repart de zéro
+        // sur cette ligne plutôt que d'obliger à réimprimer.
+        //
+        // ⚠️ On efface TOUT l'ancien passage (le retour ET la clôture). C'est
+        // l'oubli de ce ménage qui avait rendu une feuille « donnée ET close »
+        // — visible nulle part (2026-09-20, plus tôt dans la journée).
         // ⚠️ UNE FEUILLE À LA FOIS, ET SEULEMENT CELLE-LÀ (Layla, 2026-09-19 :
         // « l'économe doit scanner feuille par feuille, sinon ça dit qu'il a
         // donné toute la matière »). J'avais fait l'inverse une heure plus tôt,
@@ -1125,7 +1132,10 @@ export default async function handler(req, res) {
         // matières premières qu'il n'avait pas sorties. Un registre qui ment
         // sur la marchandise ne vaut rien.
         const { data, error } = await sb.from('annexe_feuilles')
-          .update({ donne_le: new Date().toISOString(), donne_par: body.userId || null })
+          .update({
+            donne_le: new Date().toISOString(), donne_par: body.userId || null,
+            retour_le: null, retour_par: null, pas_faite_le: null, motif: null,
+          })
           .eq('id', id).select(F).single()
         if (error) return res.status(200).json({ error: error.message })
 
