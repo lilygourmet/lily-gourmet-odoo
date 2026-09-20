@@ -921,7 +921,7 @@ function grapheParents() {
       sr('mrp.bom', [], ['id', 'product_tmpl_id'], { limit: 5000 }),
       sr('mrp.bom.line', [], ['bom_id', 'product_id', 'bom_product_template_attribute_value_ids'], { limit: 40000 }),
       sr('product.product', [], ['id', 'name', 'display_name', 'product_tmpl_id',
-        'product_template_attribute_value_ids'], { limit: 20000 }),
+        'product_template_attribute_value_ids', 'sale_ok'], { limit: 20000 }),
     ])
     const bomDuTmpl = new Map()
     for (const b of boms) if (!bomDuTmpl.has(b.product_tmpl_id[0])) bomDuTmpl.set(b.product_tmpl_id[0], b.id)
@@ -933,8 +933,22 @@ function grapheParents() {
     const parId = new Map(prods.map(p => [p.id, p]))
 
     // On part des articles VENDUS et on descend.
+    //
+    // ⚠️ C'EST ODOO QUI DIT S'IL EST VENDABLE (Layla, 2026-09-20 : « seulement
+    // qui est coché peut être vendable »). Le préfixe dit ce qu'est l'article —
+    // un gâteau fini plutôt qu'une préparation — mais pas s'il se vend encore.
+    // Mesuré ce jour-là : 24 articles à préfixe ne sont plus cochés « peut être
+    // vendu » chez Odoo (E- Fraisier, V- Babka Noisette…), et 67 gâteaux
+    // groupés tombent à 49. Ce sont les recettes mortes qui encombraient
+    // l'écran des mini/maxi.
+    //
+    // ⚠️ Le préfixe RESTE nécessaire : 1 758 articles sont cochés « peut être
+    // vendu » chez Odoo — matières premières et variantes de cake design
+    // comprises. S'y fier seul ferait exploser le graphe au lieu de le
+    // nettoyer.
     const parents = new Map()          // nom d'une préparation → Set de gâteaux
-    const vendus = prods.filter(p => /^(E-|MI-|V-)/i.test(String(p.name || '').trim()))
+    const vendus = prods.filter(p =>
+      p.sale_ok && /^(E-|MI-|V-)/i.test(String(p.name || '').trim()))
     for (const v of vendus) {
       // Sans la taille : « E- Citron meringué (1) », « (5) », « (10) »… sont le
       // MÊME gâteau. Les garder séparés faisait cinq groupes pour un seul.
