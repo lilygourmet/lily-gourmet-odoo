@@ -8,7 +8,7 @@
 --
 -- ⚠️ UNE TABLE À PART, ET PAS UNE COLONNE DU CATALOGUE. J'ai d'abord voulu
 -- poser une case sur `fab_annexe_articles` : vérification faite avant de
--- lancer quoi que ce soit, 5 des 18 vracs seulement y figurent. Cette
+-- lancer quoi que ce soit, 5 des 21 vracs seulement y figurent. Cette
 -- table-là ne tient que les articles à mini/maxi ; les 272 articles de l'écran
 -- « Déclarer », eux, viennent d'Odoo. La liste vit donc seule.
 --
@@ -45,7 +45,10 @@ DROP POLICY IF EXISTS annexe_mise_en_forme_lecture ON annexe_mise_en_forme;
 CREATE POLICY annexe_mise_en_forme_lecture ON annexe_mise_en_forme
   FOR SELECT TO authenticated USING (true);
 
--- Les 18 vracs retenus avec Layla le 2026-09-20.
+-- Les 21 vracs retenus avec Layla le 2026-09-20.
+--
+-- ⚠️ « Subleme », pas « Sublime » : c'est écrit comme ça chez Odoo, et la liste
+-- doit coller au nom EXACT, sinon la ligne ne rattrape jamais son article.
 INSERT INTO annexe_mise_en_forme (produit, note) VALUES
   ('SM. Crémeux Pistache',                 'coulé en moules — 10 pers, indiv'),
   ('SM. Mousse Meringue Citron (kg)',      'coulée — indiv (le 10 pers est inactif chez Odoo)'),
@@ -64,7 +67,10 @@ INSERT INTO annexe_mise_en_forme (produit, note) VALUES
   ('SM CD*. Creme Citron',                 'cake design'),
   ('SM CD*. Creme au Beurre Praline',      'cake design'),
   ('SM. Genoise Chocolat KG CD',           'cake design'),
-  ('SM. Fourrage Nougat CD',               'cake design')
+  ('SM. Fourrage Nougat CD',               'cake design'),
+  ('SM. Subleme Fromage Passion',          'coulé — cheesecake exotique 10 pers, indiv'),
+  ('SM. Ganache Montée Sapin',             'pipée — tarte CBS 23 cm, 18 cm, indiv'),
+  ('SM. Subleme Fleur d''Oranger Pistache', 'coulé — pistache fleur d''oranger 10 pers, indiv')
 ON CONFLICT (produit) DO UPDATE SET actif = true, note = EXCLUDED.note;
 
 -- Ce qui est coché, pour vérifier d'un coup d'œil après le passage.
