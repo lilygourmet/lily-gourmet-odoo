@@ -98,10 +98,17 @@ function Ligne({ f, bord, couleur, quoi, busy, onAgir }) {
   )
 }
 
-/** Une pile de fournées, rangée par cascade. */
-function Cascades({ feuilles, ...reste }) {
+/**
+ * Une pile de fournées, rangée par cascade.
+ *
+ * ⚠️ DEUX SENS DE LECTURE, ET ILS VIENNENT D'ELLE (Layla, 2026-09-20) : ce
+ * qu'on SERT se range « à l'horizontal » — une grille qui se remplit de gauche
+ * à droite, pour voir d'un coup tout ce qu'on lui demande ; ce qu'on REGARDE
+ * (déjà donné, historique) reste « à la verticale », une ligne après l'autre.
+ */
+function Cascades({ feuilles, horizontal, ...reste }) {
   return (
-    <div className="grid sm:grid-cols-2 sm:gap-x-4">
+    <div className={horizontal ? 'grid sm:grid-cols-2 sm:gap-x-4' : ''}>
       {parCascade(feuilles).map(g => (
         <div key={g.tete}>
           <TeteCascade g={g} />
@@ -186,7 +193,7 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
           <>
             <Bande emoji="🤲" titre="À donner" n={attente.length} ton="bg-gold-pale text-gold" />
             <Cascades feuilles={attente} bord="border-l-gold" couleur="bg-ok"
-              quoi="donner" busy={busy} onAgir={agir} />
+              quoi="donner" busy={busy} onAgir={agir} horizontal />
           </>
         )}
 
@@ -195,7 +202,7 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
           <>
             <Bande emoji="↩️" titre="On te rend" n={retours.length} ton="bg-bordeaux/10 text-bordeaux" />
             <Cascades feuilles={retours} bord="border-l-bordeaux" couleur="bg-bordeaux"
-              quoi="retour" busy={busy} onAgir={agir} />
+              quoi="retour" busy={busy} onAgir={agir} horizontal />
           </>
         )}
 
