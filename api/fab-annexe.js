@@ -1143,6 +1143,31 @@ export default async function handler(req, res) {
 
     const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
+    // QUI DOIT ÊTRE MIS EN FORME — la liste que Layla coche depuis l'écran
+    // « Mini / maxi Annexe » (2026-09-20 : « à choisir dans les mini et maxi
+    // annexe ce qui apparaît dans les à finir »).
+    //
+    // ⚠️ Ça passe par le serveur, pas par la table en direct : ouvrir
+    // `annexe_mise_en_forme` en écriture aux navigateurs, c'était une porte de
+    // plus pour rien (voir la faille anon fermée le 2026-06-05).
+    if (req.query.miseenforme) {
+      if (req.method === 'POST') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+        const produit = String(body.produit || '').trim()
+        if (!produit) return res.status(400).json({ error: 'produit manquant' })
+        const { error: e1 } = await sb.from('annexe_mise_en_forme')
+          .upsert({ produit, actif: body.actif !== false, note: body.note ?? null },
+            { onConflict: 'produit' })
+        if (e1) return res.status(200).json({ error: e1.message })
+        return res.status(200).json({ ok: true })
+      }
+      const { data, error: e2 } = await sb.from('annexe_mise_en_forme')
+        .select('produit, note').eq('actif', true).limit(500)
+      if (e2) return res.status(200).json({ error: e2.message })
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({ produits: (data || []).map(x => x.produit) })
+    }
+
     // Ce qui reste à mettre en forme — l'onglet « À finir ».
     if (req.query.afinir) {
       res.setHeader('Cache-Control', 'no-store')

@@ -3,6 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { canSeeMinMaxAnnexe } from '../lib/auth'
+import { loadMiseEnForme, setMiseEnForme } from '../lib/miseEnForme'
 import {
   loadCatalogueAnnexe, saveCatalogueAnnexe, retirerDuCatalogue, loadToutFabAnnexe,
   saveFigesAnnexe, loadArticleFabAnnexe, parGateauMere,
@@ -156,6 +157,10 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
   // Les gâteaux sont repliés : 277 lignes d'un coup, personne n'y voit rien.
   // On ouvre celui sur lequel on travaille. (Layla, 2026-09-09.)
   const [ouverts, setOuverts] = useState(() => new Set())
+  // ⚠️ CE QUI DOIT ÊTRE MIS EN FORME (Layla, 2026-09-20 : « à choisir dans les
+  // mini et maxi annexe ce qui apparaît dans les à finir »). La liste vivait
+  // en base, hors de sa portée — comme les mini/maxi avant cet écran.
+  const [enForme, setEnForme] = useState(() => new Set())
 
   useEffect(() => {
     let vivant = true
@@ -167,6 +172,9 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
     loadToutFabAnnexe()
       .then(t => { if (vivant) setTout(t) })
       .catch(() => { /* régler un seuil reste possible sans voir le stock */ })
+    loadMiseEnForme()
+      .then(l => { if (vivant) setEnForme(new Set(l)) })
+      .catch(() => { /* la case restera décochée : rien de cassé */ })
     return () => { vivant = false }
   }, [])
 
@@ -338,6 +346,31 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
                           className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
                             (l.actif !== false ? 'bg-success/10 text-success border-success/30' : 'bg-cream text-ink-mute border-cream-deep')}>
                           {l.actif !== false ? 'suivi' : 'en pause'}
+                        </button>
+                        {/* ⚠️ « À FINIR » : ce qui sort de la cuve et doit
+                            encore être coulé, pipé, découpé. C'est ce bouton
+                            qui remplit l'onglet 🍮 — coché, l'article y
+                            revient tant qu'il en reste en stock. */}
+                        <button
+                          onClick={async () => {
+                            const veut = !enForme.has(l.produit)
+                            setEnForme(s0 => {
+                              const n = new Set(s0)
+                              if (veut) n.add(l.produit); else n.delete(l.produit)
+                              return n
+                            })
+                            try { await setMiseEnForme(l.produit, veut) } catch (e) {
+                              toast('Pas enregistré : ' + (e.message || e))
+                            }
+                          }}
+                          title={enForme.has(l.produit)
+                            ? 'Il revient dans « À finir » tant qu\'il en reste'
+                            : 'Le faire revenir dans « À finir » pour être coulé, pipé, découpé'}
+                          className={'rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold border ' +
+                            (enForme.has(l.produit)
+                              ? 'bg-bordeaux/10 text-bordeaux border-bordeaux/40'
+                              : 'bg-cream text-ink-mute border-cream-deep')}>
+                          🍮
                         </button>
                         <button onClick={() => setFiges(l)}
                           title="Choisir les ingrédients dont la quantité ne bouge pas"

@@ -120,3 +120,29 @@ export function dispatchVersOdoo({ vrac, stock, uniteStock, formats, quantites, 
 }
 
 const arrondi = v => Math.round(v * 1000) / 1000
+
+/**
+ * QUI EST COCHÉ « à mettre en forme » — pour l'écran Mini / maxi.
+ *
+ * « À choisir dans les mini et maxi annexe ce qui apparaît dans les à finir »
+ * (Layla, 2026-09-20). La liste vivait en base, hors de sa portée, comme les
+ * mini/maxi avant l'écran qui les a ouverts.
+ */
+export async function loadMiseEnForme() {
+  const r = await fetch('/api/fab-annexe?miseenforme=1&cb=' + Date.now())
+  if (!r.ok) throw new Error(`Liste illisible (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+  return d.produits || []
+}
+
+/** Cocher ou décocher un article. */
+export async function setMiseEnForme(produit, actif, note = null) {
+  const r = await fetch('/api/fab-annexe?miseenforme=1', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ produit, actif, note }),
+  })
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+  return true
+}
