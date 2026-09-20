@@ -1107,25 +1107,36 @@ export function fourneesIncoherentes(lignes, ajustements, facteur) {
 }
 
 /**
- * ⚠️ ON ALERTE, ON NE REFUSE PAS.
+ * ⚠️ ON CORRIGE — on ne se contente pas de prévenir.
  *
- * Passé sur 150 ordres réels avant de le brancher : six auraient été bloqués,
- * et je n'ai pu certifier qu'UN SEUL comme une vraie erreur — les autres
- * ressemblent à la répartition de cuve entre tailles, qui est voulue. Bloquer
- * 4 % des déclarations sur un soupçon arrêterait l'atelier.
+ * « Si j'ai produit 10 000 parce que la recette demandait 10 000, eh bien
+ * 10 000 doivent passer par moins » (Layla, 2026-09-20). C'est la règle, et
+ * elle est physique : ce qu'on fabrique est consommé.
  *
- * Le vrai problème n'était pas que l'ordre parte : c'est qu'il soit parti EN
- * SILENCE pendant six jours. On le laisse donc passer, et on crie — dans le
- * fil de l'ordre chez Odoo, où ça reste même si personne ne regarde l'écran.
+ * Une première version se contentait d'alerter. Ça ne répare rien : le stock
+ * reste faux, il faut juste que quelqu'un le remarque. On REMET donc la
+ * quantité de la recette, et on écrit ce qu'on a fait dans le fil de l'ordre —
+ * pour que la correction soit retrouvable, pas silencieuse à son tour.
+ *
+ * ⚠️ On ne corrige QUE vers le haut, et QUE sur les préparations « SM » (voir
+ * `fourneesIncoherentes`) : la cuve qui part en entier sur une petite taille
+ * impose PLUS que la recette, et ça, c'est voulu — on n'y touche pas.
  */
-export function alerteFournee(nomProduit, lignes, ajustements, facteur) {
+export function corrigerFournees(lignes, ajustements, facteur) {
   const pb = fourneesIncoherentes(lignes, ajustements, facteur)
-  if (!pb.length) return null
-  const d = pb[0]
-  return `⚠️ ${nomProduit} : l'ordre prend ${Math.round(d.impose)} g de ${d.nom},`
-    + ` alors que la recette en demande ${Math.round(d.attendu)} g pour cette taille`
-    + ` — ${Math.abs(d.facteur)} fois trop peu. Une fournée oubliée ?`
-    + ' À vérifier avant de valider, sinon il restera du stock fantôme.'
+  if (!pb.length) return { ajustements, note: null }
+  const net = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const corriges = { ...(ajustements || {}) }
+  for (const d of pb) {
+    for (const k of Object.keys(corriges)) {
+      if (net(k) === net(d.nom)) corriges[k] = Math.round(d.attendu * 1000) / 1000
+    }
+  }
+  const note = 'Quantité corrigée par l\'app : '
+    + pb.map(d => `${d.nom} ${Math.round(d.impose)} g → ${Math.round(d.attendu)} g`).join(' · ')
+    + ` (l'ordre fait ${Math.round(facteur * 100) / 100} fournée(s) ;`
+    + ' ce qui est produit doit être consommé).'
+  return { ajustements: corriges, note }
 }
 
 function refuseSiFourneeMinuscule(nom, qty, sortieRecette, uniteBom) {
@@ -1284,9 +1295,10 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   // restait bloqué plusieurs secondes avant d'enregistrer. Odoo accepte une
   // liste et rend la liste des identifiants.
   // ⚠️ Une quantité imposée qui rate d'un nombre ENTIER de fournées n'est pas
-  // une pesée : c'est un facteur oublié. On refuse plutôt que d'écrire un
-  // chiffre faux dans Odoo. (2026-09-20.)
-  const alerte = alerteFournee(prod.display_name, lignes, ajustements, facteur)
+  // une pesée : c'est un facteur oublié. On remet la quantité de la recette —
+  // « ce qui est produit doit être consommé » (Layla, 2026-09-20).
+  const { ajustements: ajustesOk, note: noteFournee } = corrigerFournees(lignes, ajustements, facteur)
+  ajustements = ajustesOk
 
   const valsLignes = lignes.map(l => {
     const pesee = mesure.get(cleNom(Array.isArray(l.product_id) ? l.product_id[1] : ''))
@@ -1313,14 +1325,14 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   // son résultat n'est pas lu, et l'ordre existe déjà. On la laisse finir
   // derrière la réponse. (Layla, 2026-09-10 : « l'envoi est lent ».)
   apresLaReponse(odooCall(uid, 'mrp.production', 'action_assign', [[id]]))
-  if (alerte) {
-    apresLaReponse(odooCall(uid, 'mrp.production', 'message_post', [[id]], { body: alerte })
-      .catch(e => console.warn('[alerte fournee]', e?.message || e)))
-    console.warn('[alerte fournee]', alerte)
+  if (noteFournee) {
+    apresLaReponse(odooCall(uid, 'mrp.production', 'message_post', [[id]], { body: noteFournee })
+      .catch(e => console.warn('[fournee]', e?.message || e)))
+    console.warn('[fournee corrigee]', noteFournee)
   }
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
   await rattacherEnfants(uid, id, cree.name)
-  return { id, name: cree.name, produit: prod.display_name, qty: cree.product_qty, etat: cree.state, alerte }
+  return { id, name: cree.name, produit: prod.display_name, qty: cree.product_qty, etat: cree.state, note: noteFournee }
 }
 
 /**

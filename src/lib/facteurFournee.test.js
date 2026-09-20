@@ -15,7 +15,7 @@
 // 5 407 au lieu de 5 425, c'est la balance — ça doit passer sans un mot.
 // ============================================================
 import { describe, it, expect } from 'vitest'
-import { facteurFournee, fourneesIncoherentes, alerteFournee } from '../../api/freezer-list.js'
+import { facteurFournee, fourneesIncoherentes, corrigerFournees } from '../../api/freezer-list.js'
 
 describe('le facteur fournée', () => {
   it('⚠️ LE CAS DU 14 SEPTEMBRE : une fournée au lieu de deux', () => {
@@ -113,19 +113,46 @@ describe('ce que le garde-fou laisse passer exprès', () => {
 })
 
 
-describe('l’alerte, telle qu’elle s’écrit', () => {
+describe('la correction', () => {
+  // « Si j'ai produit 10 000 parce que la recette demandait 10 000, eh bien
+  // 10 000 doivent passer par moins » (Layla, 2026-09-20).
   const lignes = [{ product_id: [3620, 'SM. Creme au Beurre Nature Production'], product_qty: 5425 }]
 
-  it('⚠️ elle dit le produit, les deux chiffres, et quoi faire', () => {
-    const a = alerteFournee('SM. Creme au Beurre Praline Production', lignes,
-      { 'SM. Creme au Beurre Nature Production': 5407 }, 2)
-    expect(a).toContain('5407')
-    expect(a).toContain('10850')
-    expect(a).toContain('2 fois trop peu')
-    expect(a).toContain('fournée oubliée')
+  it('⚠️ LE CAS DU 14 SEPTEMBRE : 5 407 g redeviennent 10 850 g', () => {
+    const r = corrigerFournees(lignes, { 'SM. Creme au Beurre Nature Production': 5407 }, 2)
+    expect(r.ajustements['SM. Creme au Beurre Nature Production']).toBe(10850)
   })
 
-  it('rien à dire quand tout est cohérent', () => {
-    expect(alerteFournee('X', lignes, { 'SM. Creme au Beurre Nature Production': 10850 }, 2)).toBe(null)
+  it('elle écrit ce qu’elle a fait, pour que ça se retrouve', () => {
+    const r = corrigerFournees(lignes, { 'SM. Creme au Beurre Nature Production': 5407 }, 2)
+    expect(r.note).toContain('5407 g → 10850 g')
+    expect(r.note).toContain('2 fournée(s)')
+  })
+
+  it('une pesée normale n’est PAS touchée', () => {
+    const r = corrigerFournees(lignes, { 'SM. Creme au Beurre Nature Production': 5407 }, 1)
+    expect(r.ajustements['SM. Creme au Beurre Nature Production']).toBe(5407)
+    expect(r.note).toBe(null)
+  })
+
+  it('⚠️ la CUVE, qui impose plus, n’est pas touchée non plus', () => {
+    const mousse = [{ product_id: [9, 'SM. Mousse Pistache'], product_qty: 1800 }]
+    const r = corrigerFournees(mousse, { 'SM. Mousse Pistache': 3600 }, 1)
+    expect(r.ajustements['SM. Mousse Pistache']).toBe(3600)
+    expect(r.note).toBe(null)
+  })
+
+  it('les matières premières restent telles quelles', () => {
+    const mp = [{ product_id: [5, 'MP- Sucre Granule'], product_qty: 1999 }]
+    const r = corrigerFournees(mp, { 'MP- Sucre Granule': 1000 }, 1)
+    expect(r.ajustements['MP- Sucre Granule']).toBe(1000)
+    expect(r.note).toBe(null)
+  })
+
+  it('les autres ingrédients de la recette ne bougent pas', () => {
+    const deux = [...lignes, { product_id: [11, 'MP- Praliné Noisette 50%'], product_qty: 1800 }]
+    const r = corrigerFournees(deux, {
+      'SM. Creme au Beurre Nature Production': 5407, 'MP- Praliné Noisette 50%': 3600 }, 2)
+    expect(r.ajustements['MP- Praliné Noisette 50%']).toBe(3600)
   })
 })
