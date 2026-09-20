@@ -419,7 +419,7 @@ function AppuieUneFois({ faire }) {
 }
 
 export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait, envoi, autoFait, onAutoFait,
-  verrouille, onLiberer, noteVerrou }) {
+  verrouille, onLiberer, noteVerrou, imposees }) {
   const decoupe = onCuites ? decoupeDe(noeud) : null
   const dejaFaits = declares(faits)
   // ⚠️ ON NE COUPE PAS PLUS QUE CE QU'ON A. Une plaque cuite donne un nombre
@@ -509,7 +509,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       )}
       <EnClair noeud={aPeser} quantite={quantitePesee} />
 
-      <Ingredients noeud={aPeser} quantite={quantitePesee}
+      <Ingredients noeud={aPeser} quantite={quantitePesee} imposees={imposees}
         dejaFaits={dejaFaits} onOuvrir={onOuvrir}
         onQuantite={decoupe ? onCuites : onQuantite} />
 
@@ -679,7 +679,22 @@ function EnClair({ noeud, quantite }) {
  * ⚠️ Les quantités FIGÉES n'y sont pas : elles ont leur bloc à part, parce
  * qu'elles ne suivent pas la sortie réelle.
  */
-function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
+/**
+ * ⚠️ CE QU'ON AFFICHE À CÔTÉ DE « À FAIRE › ».
+ *
+ * « Les composants bougent aussi » (Layla, 2026-09-20). Sa fiche annonçait
+ * 1 200 g de crème citron là où son papier disait 2 589 g — deux nombres
+ * différents pour le même geste, et le pâtissier entre les deux.
+ *
+ * Les deux étaient vrais : 1 200 g, c'est ce que le gâteau CONSOMME ; 2 589 g,
+ * c'est la tournée qu'il faut FABRIQUER. Mais l'étiquette dit « à faire », et
+ * c'est le papier qu'il a sous les yeux. Dès qu'une feuille existe pour ce
+ * composant, c'est son chiffre qui s'affiche.
+ *
+ * Les lignes de matière première gardent le besoin de la recette : c'est bien
+ * ça qu'on pèse dans cette bassine-là.
+ */
+function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite, imposees }) {
   const [dose, setDose] = useState(null)
   const liste = ingredientsPour(noeud, quantite).filter(c => !(c.fige && !c.fabrique))
   if (!liste.length) return null
@@ -697,7 +712,11 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite }) {
         const presque = presqueLa(c)
         const manque = !c.pese && !c.ok && !fait && c.fabrique && !aPresser && !presque
         const nom = nomAtelier(c.produit)
-        const combien = qte(c.besoin * facteurAtelier(c.produit), c.unite)
+        // Le chiffre du papier quand il existe — voir l'en-tête de ce composant.
+        const impose = c.fabrique ? imposees?.[c.produit] : null
+        const combien = impose > 0
+          ? qte(impose, c.unite)
+          : qte(c.besoin * facteurAtelier(c.produit), c.unite)
         return (
           <div key={c.produit + i}
             className="flex items-center gap-2 py-3 border-t border-cream-deep">

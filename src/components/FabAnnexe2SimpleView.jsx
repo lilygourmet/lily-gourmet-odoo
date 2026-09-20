@@ -299,12 +299,17 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // 2026-09-20 : « quand c'est figé, imprimé et ingrédient donné, ça reste
   // figé — impossible de réinitialiser à moins qu'on retourne les
   // ingrédients »). On a donc besoin de savoir, ici, ce que l'économe a donné.
-  const [feuillesJour, setFeuillesJour] = useState([])
+  // `null` = pas encore lues. ⚠️ La nuance compte : la fiche s'affichait avec
+  // son chiffre CALCULÉ, puis sautait sur celui du papier une fois les feuilles
+  // arrivées — « ça bouge encore » (Layla, 2026-09-20). On attend donc de
+  // savoir avant de montrer un nombre.
+  const [feuillesJour, setFeuillesJour] = useState(null)
   useEffect(() => {
     let vivant = true
     feuillesDuJour()
       .then(l => { if (vivant) setFeuillesJour(l) })
-      .catch(() => { /* le verrou se relâche, il ne bloque jamais l'écran */ })
+      // Réseau coupé : on n'attend pas indéfiniment, l'écran reprend la main.
+      .catch(() => { if (vivant) setFeuillesJour([]) })
     return () => { vivant = false }
   }, [tour])
 
@@ -690,7 +695,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
 
   // ---------- la fiche ----------
   const brut = details[ouvert]
-  if (!brut) {
+  // ⚠️ On ne montre AUCUN chiffre tant qu'on ne sait pas ce que le papier
+  // impose : mieux vaut une demi-seconde d'attente qu'un nombre qui saute.
+  if (!brut || feuillesJour === null) {
     return (
       <div className="min-h-screen bg-cream">
         <AppHeader {...nav} />
@@ -916,6 +923,8 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                   if (estTete) setPrevus(oublierPrevu(noeud.produit))
                   setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
                 } : undefined}
+              // Les chiffres du papier, pour les composants aussi.
+              imposees={quantitesImposees(feuillesJour)}
               noteVerrou={ingredientsSortis(feuillesJour, noeud.produit)
                 ? 'C’est le chiffre de la feuille imprimée : la recette et les pesées en dépendent. Pour le changer, rends la marchandise à l’économe, ou réimprime.'
                 : undefined}
