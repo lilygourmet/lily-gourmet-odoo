@@ -67,6 +67,16 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const [droitALaDeclaration, setDroitALaDeclaration] = useState(!!scan?.declarer)
   useEffect(() => { if (scan) oublierLeScan() }, [scan])
 
+  // ⚠️ ON RENTRE PAR OÙ L'ON EST VENU (Layla, 2026-09-20 : « quand je suis dans
+  // À déclarer, pour revenir c'est toujours dans le même dossier »). Refermer
+  // la fiche renvoyait dans la liste de Fabrication Annexe, loin de la sienne.
+  // Depuis le QR d'un papier, en revanche, on ne vient de nulle part : on reste
+  // ici.
+  const retourVers = scan?.retour || null
+  useEffect(() => {
+    if (retourVers && !chemin.length) onNavigate?.(retourVers)
+  }, [retourVers, chemin.length, onNavigate])
+
   // ⚠️ ET SI ÇA N'ABOUTIT PAS, ON LE DIT. Retomber en silence sur l'accueil,
   // c'est ce qui a fait croire trois fois de suite que le scan « ne faisait
   // rien ». Le chemin part plein : s'il se vide, c'est qu'on n'y est pas

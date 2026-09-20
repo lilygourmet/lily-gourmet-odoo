@@ -97,7 +97,10 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
     navigator.vibrate?.(15)
     // Le chemin entier : une crème ne s'ouvre pas seule, elle se descend
     // depuis son gâteau (voir `cheminDe`).
-    poserLeScan({ chemin: cheminDe(f), declarer: true })
+    // `retour` : d'où l'on vient. Sans lui, refermer la fiche laissait le
+    // pâtissier dans le dossier Fabrication, loin de sa liste — « pour revenir,
+    // c'est toujours dans le même dossier » (Layla, 2026-09-20).
+    poserLeScan({ chemin: cheminDe(f), declarer: true, retour: 'a-declarer' })
     onNavigate?.('fabrication-annexe-2')
   }
 

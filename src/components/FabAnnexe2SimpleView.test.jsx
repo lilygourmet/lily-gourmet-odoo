@@ -127,6 +127,31 @@ describe('arriver par le scan', () => {
     expect(envoyerAValider).toHaveBeenCalled()
   })
 
+  // ⚠️ « Quand je suis dans À déclarer, pour revenir c'est toujours dans le
+  // même dossier » (Layla, 2026-09-20) : refermer la fiche la laissait dans la
+  // liste de Fabrication Annexe, loin de la sienne.
+  it('refermer la fiche ramène là d’où l’on vient', async () => {
+    const onNavigate = vi.fn()
+    const { poserLeScan } = await import('../lib/scanEntrant')
+    poserLeScan({ chemin: ['SM. sirop Imbibage production KG'], retour: 'a-declarer' })
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} onNavigate={onNavigate} />)
+    await waitFor(() => expect(screen.getByText("C'est fait")).toBeTruthy())
+    // On referme (le fil d'Ariane).
+    fireEvent.click(screen.getByText(/← /))
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('a-declarer'))
+  })
+
+  it('mais depuis le QR d’un papier, on reste sur l’écran', async () => {
+    const onNavigate = vi.fn()
+    const { poserLeScan } = await import('../lib/scanEntrant')
+    poserLeScan({ chemin: ['SM. sirop Imbibage production KG'] })
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} onNavigate={onNavigate} />)
+    await waitFor(() => expect(screen.getByText("C'est fait")).toBeTruthy())
+    fireEvent.click(screen.getByText(/← /))
+    await new Promise(r => setTimeout(r, 80))
+    expect(onNavigate).not.toHaveBeenCalled()
+  })
+
   it('un chemin abîmé retombe sur le gâteau, pas sur la liste', async () => {
     const { poserLeScan } = await import('../lib/scanEntrant')
     poserLeScan({ chemin: ['SM. sirop Imbibage production KG', 'SM- Composant disparu'] })
