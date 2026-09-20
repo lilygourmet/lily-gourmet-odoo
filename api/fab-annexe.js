@@ -1065,6 +1065,23 @@ export default async function handler(req, res) {
         if (!lignes.length) return res.status(200).json({ ok: true, posees: 0 })
         const { error } = await sb.from('annexe_feuilles').insert(lignes)
         if (error) return res.status(200).json({ error: error.message })
+
+        // ⚠️ RÉIMPRIMER REMPLACE, ça ne double pas. Le papier sort mal, on
+        // change la quantité, on relance : sans ça, chaque impression créait
+        // une dette de plus, et celle qu'on ne déclarait pas restait rouge à
+        // vie. La feuille d'avant est donc close, et son vieux QR le dira.
+        //
+        // ⚠️ Mais SEULEMENT la même fournée : même article, même jour, ET même
+        // gâteau. La crème du 20 cm et celle du 23 cm sont deux vrais travaux,
+        // imprimés séparément — les confondre effacerait une dette réelle.
+        const remplacee = { pas_faite_le: new Date().toISOString(), motif: 'remplacee' }
+        for (const l of lignes) {
+          let q = sb.from('annexe_feuilles').update(remplacee)
+            .eq('produit', l.produit).eq('jour', new Date().toLocaleDateString('sv-SE'))
+            .neq('id', l.id).is('declare_le', null).is('pas_faite_le', null)
+          q = l.pour ? q.eq('pour', l.pour) : q.is('pour', null)
+          await q
+        }
         return res.status(200).json({ ok: true, posees: lignes.length })
       }
 
@@ -1091,7 +1108,9 @@ export default async function handler(req, res) {
         if (feuille.pas_faite_le) {
           return res.status(200).json({
             feuille,
-            refus: 'Cette marchandise a été rendue : la feuille est close. Réimprime la fiche pour la ressortir.',
+            refus: feuille.motif === 'remplacee'
+              ? 'Cette feuille a été remplacée par une impression plus récente — prends le dernier papier.'
+              : 'Cette marchandise a été rendue : la feuille est close. Réimprime la fiche pour la ressortir.',
           })
         }
         if (feuille.donne_le) return res.status(200).json({ feuille, deja: true })
