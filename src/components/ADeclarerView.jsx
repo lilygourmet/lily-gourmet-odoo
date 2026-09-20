@@ -28,7 +28,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { propre } from '../lib/ecranSimple'
 import { PhotoFeuille, GrosseQuantite, Rien, TeteCascade, Bande } from './FeuilleVisuel'
-import { feuillesDuJour, aDeclarer, depuis, cheminDe, demanderRetour, resteDeLaCascade, parCascade, parJour, nomDuJour } from '../lib/feuilles'
+import { feuillesDuJour, aDeclarer, cheminDe, demanderRetour, resteDeLaCascade, parCascade, parJour, nomDuJour } from '../lib/feuilles'
 import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
 import { poserLeScan } from '../lib/scanEntrant'
@@ -65,13 +65,13 @@ function Ligne({ f, rend, onDeclarer, onRendre }) {
           <span className="block text-[14px] font-bold leading-tight text-ink truncate">
             {propre(f.libelle || f.produit)}
           </span>
-          <span className="flex items-baseline gap-2">
-            <GrosseQuantite f={f} compact />
-            <span className={`text-[11px] font-extrabold tabular-nums
-                              ${tard ? 'text-danger' : 'text-ink-mute'}`}>
-              ⏰ {depuis(f.donne_le || f.imprime_le)}
-            </span>
-          </span>
+          {/* ⚠️ PLUS D'HORLOGE (Layla, 2026-09-20 : « enlève de à déclarer
+              l'horloge avec 2 min, 5 min »). Un compteur qui tourne sur du
+              travail en cours, c'est un reproche pour rien : une crème prend le
+              temps qu'elle prend. Le jour est déjà écrit au-dessus, et le
+              liseré rouge suffit à faire ressortir ce qui traîne depuis la
+              veille — sans rien à lire. */}
+          <GrosseQuantite f={f} compact />
         </span>
         <span aria-hidden="true" className="flex-none text-[19px] pr-0.5">✍️</span>
       </button>
