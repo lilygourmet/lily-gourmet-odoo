@@ -257,8 +257,12 @@ describe('ce qui fige le prévu pour de bon', () => {
     expect(ingredientsSortis([{ produit: p, donne_le: 'ce matin' }], p)).toBe(true)
   })
 
-  it('imprimé mais pas donné : rien n’est engagé', () => {
-    expect(ingredientsSortis([{ produit: p }], p)).toBe(false)
+  // ⚠️ « Tu dois figer les quantités ET les ingrédients : dans À déclarer, plus
+  // rien ne bouge » (Layla, 2026-09-20). Le GÂTEAU n'a rien à demander à
+  // l'économe — il restait donc libre, et c'est lui qui commande toute la
+  // recette en dessous.
+  it('une feuille imprimée fige, même sans rien demander', () => {
+    expect(ingredientsSortis([{ produit: p, sans_economat: true }], p)).toBe(true)
   })
 
   it('rendue : le chiffre se rouvre', () => {
@@ -285,8 +289,20 @@ describe('le chiffre que la matière sortie impose', () => {
     expect(quantitesImposees(f)).toEqual({ 'SM. Creme': 2589 })
   })
 
-  it('n’impose rien tant que rien n’est sorti', () => {
-    expect(quantitesImposees([{ produit: 'SM. Creme', qty_prevue: 2589 }])).toEqual({})
+  it('impose dès l’impression, même sans rien demander', () => {
+    // C'est le papier qui fait foi : le pâtissier a pesé d'après lui.
+    expect(quantitesImposees([{ produit: 'SM. Gateau', qty_prevue: 92, sans_economat: true }]))
+      .toEqual({ 'SM. Gateau': 92 })
+  })
+
+  it('fige TOUTE la cascade, donc les ingrédients avec', () => {
+    const cascade = [
+      { produit: 'SM. Gateau', qty_prevue: 92, sans_economat: true },
+      { produit: 'SM. Creme', qty_prevue: 2589, donne_le: 'ce matin' },
+      { produit: 'SM. Genoise', qty_prevue: 24000, donne_le: 'ce matin' },
+    ]
+    expect(quantitesImposees(cascade))
+      .toEqual({ 'SM. Gateau': 92, 'SM. Creme': 2589, 'SM. Genoise': 24000 })
   })
 
   it('n’impose plus rien une fois rendue', () => {

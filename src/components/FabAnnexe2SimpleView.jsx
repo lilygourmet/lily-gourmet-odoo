@@ -917,7 +917,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                   setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
                 } : undefined}
               noteVerrou={ingredientsSortis(feuillesJour, noeud.produit)
-                ? 'Les ingrédients sont sortis de la réserve pour ce nombre. Pour le changer, rends-les à l’économe depuis « À déclarer ».'
+                ? 'C’est le chiffre de la feuille imprimée : la recette et les pesées en dépendent. Pour le changer, rends la marchandise à l’économe, ou réimprime.'
                 : undefined}
               onOuvrir={p => { figer(q); setChemin([...chemin, p]) }}
               onFait={gesteFait}

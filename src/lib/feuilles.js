@@ -300,24 +300,44 @@ export const aReprendre = feuilles => (feuilles || []).filter(f =>
  * qui est SORTI de la fournée, lui, reste libre : on déclare toujours ce qu'on
  * a vraiment obtenu.
  */
-export const feuilleSortie = (feuilles, produit) => (feuilles || []).find(f =>
-  f.produit === produit && f.donne_le && !f.retour_le && !f.declare_le && !f.pas_faite_le) || null
+/**
+ * LA FEUILLE QUI FAIT FOI pour cet article — celle qui est encore en cours.
+ *
+ * ⚠️ Toutes les feuilles ouvertes figent, pas seulement celles dont l'économe
+ * a servi la matière (Layla, 2026-09-20 : « tu dois figer les quantités et les
+ * ingrédients, dans À déclarer plus rien ne bouge »).
+ *
+ * Je ne figeais d'abord que ce qui était SORTI. Mais le gâteau, lui, n'a rien
+ * à demander à l'économe : il restait donc libre — et c'est LUI qui commande
+ * toute la recette en dessous. Tout le reste bougeait avec.
+ *
+ * Dès qu'une feuille est imprimée, c'est le papier qui fait foi : le pâtissier
+ * l'a sous les yeux, il a pesé d'après lui. Pour changer les chiffres, on
+ * réimprime — et la nouvelle impression remplace l'ancienne.
+ */
+export const feuilleOuverte = (feuilles, produit) => (feuilles || []).find(f =>
+  f.produit === produit && !f.retour_le && !f.declare_le && !f.pas_faite_le) || null
 
-export const ingredientsSortis = (feuilles, produit) => !!feuilleSortie(feuilles, produit)
+export const ingredientsSortis = (feuilles, produit) => !!feuilleOuverte(feuilles, produit)
 
 /**
  * Les quantités que la matière sortie IMPOSE, par article.
  *
  * ⚠️ Le verrou ne sert à rien s'il fige le mauvais chiffre (Layla, 2026-09-20 :
  * « attention, les ingrédients ne se sont pas figés »). On reprend donc le
- * nombre écrit sur le papier — celui pour lequel l'économe a servi — et pas
- * celui que l'écran proposait au moment où on l'ouvre.
+ * nombre écrit sur le papier, et pas celui que l'écran proposait au moment où
+ * on l'ouvre.
+ *
+ * ⚠️ Et comme ce nombre commande la recette, figer TOUTE la cascade suffit à
+ * figer les ingrédients avec : chaque feuille impose le sien, du gâteau
+ * jusqu'à la dernière crème. « Dans À déclarer, plus rien ne bouge. »
  */
 export function quantitesImposees(feuilles) {
   const out = {}
   for (const f of feuilles || []) {
-    if (f.donne_le && !f.retour_le && !f.declare_le && !f.pas_faite_le
-      && Number(f.qty_prevue) > 0) out[f.produit] = Number(f.qty_prevue)
+    if (!f.retour_le && !f.declare_le && !f.pas_faite_le && Number(f.qty_prevue) > 0) {
+      out[f.produit] = Number(f.qty_prevue)
+    }
   }
   return out
 }
