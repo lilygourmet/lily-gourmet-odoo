@@ -1125,7 +1125,11 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         out[l.produit] = (out[l.produit] || 0) + k.q
       }
     }
-    const liste = Object.entries(out).map(([p, q]) => {
+    // La génoise ne se prépare plus ici : son stock Odoo est faux (17,9 tonnes
+    // pour « Genoise Vanille KG CD », vieux bug de l'unité « Tournée »), donc la
+    // ligne affichait « en stock (17 903 948 g) » sans jamais rien proposer
+    // (Layla, 2026-09-20). Elle reste jamais bloquante via `toujoursLa`.
+    const liste = Object.entries(out).filter(([p]) => !estGenoise(p)).map(([p, q]) => {
       const stock = stockDe(p), t = tailleTournee(recettes, p)
       const manque = Math.max(0, q - stock)
       const n = t && t.q ? Math.ceil(manque / t.q) : 0
