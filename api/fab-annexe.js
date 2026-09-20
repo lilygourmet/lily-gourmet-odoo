@@ -1131,7 +1131,13 @@ async function aFinir(sb) {
     // `pris` est en grammes (ou en pièces) ; le stock, lui, dans l'unité de
     // l'article. On compare donc dans la même monnaie.
     const enG = estKgOdoo(a.unite) ? 1000 : 1
-    const resteG = Math.round(((stock + fait) * enG - pris) * 1000) / 1000
+    // ⚠️ JAMAIS MOINS QUE RIEN. Un reste négatif n'est pas une dette, c'est un
+    // compteur faux — même règle que le stock négatif ailleurs. Vécu le
+    // 2026-09-20, une heure après avoir créé « SM. Mousse Tiramisu » : les
+    // tiramisus déclarés les jours d'AVANT étaient déduits d'une cuve qui
+    // n'existait pas encore, et la mousse annonçait −9 569 g. On aurait
+    // sous-compté ses restes pendant une semaine, sans rien afficher d'anormal.
+    const resteG = Math.max(0, Math.round(((stock + fait) * enG - pris) * 1000) / 1000)
     out.push({ ...a, note: l.note || null, stock, fait: Math.round(fait * 1000) / 1000,
       pris: Math.round(pris * 1000) / 1000, resteG })
   }
