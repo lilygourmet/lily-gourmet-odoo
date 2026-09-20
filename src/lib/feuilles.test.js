@@ -15,7 +15,7 @@ import { etatFeuille, aDeclarer, aDonner, depuis, lienFeuille, nouvelId } from '
 const imprimee = { id: 'a', imprime_le: '2026-09-19T08:00:00Z' }
 const donnee = { ...imprimee, id: 'b', donne_le: '2026-09-19T09:00:00Z' }
 const declaree = { ...donnee, id: 'c', declare_le: '2026-09-19T10:00:00Z', declare_qty: 8 }
-const pasFaite = { ...donnee, id: 'd', pas_faite_le: '2026-09-19T10:00:00Z' }
+const renduee = { ...donnee, id: 'd', pas_faite_le: '2026-09-19T10:00:00Z' }
 
 describe('ce qui rend une déclaration due', () => {
   it('imprimer n’engage à rien', () => {
@@ -35,11 +35,18 @@ describe('ce qui rend une déclaration due', () => {
     expect(aDeclarer([donnee, declaree]).map(f => f.id)).toEqual(['b'])
   })
 
-  it('« pas faite » est une réponse, pas un oubli', () => {
-    // Sans cette porte de sortie, ils cesseraient de passer par l'économe —
-    // et on perdrait la trace qu'on cherche à construire.
-    expect(etatFeuille(pasFaite)).toBe('pas-faite')
-    expect(aDeclarer([pasFaite])).toEqual([])
+  it('une fournée RENDUE à l’économe s’efface', () => {
+    // ⚠️ C'est la SEULE sortie sans déclaration (Layla, 2026-09-20). Une
+    // fournée qu'on n'a pas eu le temps de faire, elle, reste due : « c'est
+    // systématique gardé », la crème attend au frigo et le travail se fera.
+    expect(etatFeuille(renduee)).toBe('pas-faite')
+    expect(aDeclarer([renduee])).toEqual([])
+  })
+
+  it('une fournée pas encore faite RESTE due, sans rien cliquer', () => {
+    // Personne n'a à dire « pas faite » : tant qu'elle n'est ni déclarée ni
+    // rendue, elle réclame.
+    expect(aDeclarer([donnee]).map(f => f.id)).toEqual(['b'])
   })
 
   it('la liste de l’économe ne montre que ce qu’il n’a pas donné', () => {
@@ -83,9 +90,9 @@ describe('la cascade de la tarte', () => {
       .toEqual(['creme', 'fond', 'pate', 'tarte'])
   })
 
-  it('« pas faite » sur une demande ne bloque plus les autres', () => {
-    // La pâte ne se fera pas : elle n'attend plus rien de l'économe, donc elle
-    // ne doit pas retenir le reste de la cascade en otage.
+  it('une demande RENDUE ne bloque plus les autres', () => {
+    // La pâte est revenue à l'économe : elle n'attend plus rien de lui, donc
+    // elle ne doit pas retenir le reste de la cascade en otage.
     const pateAbandonnee = { ...pate, pas_faite_le: '2026-09-19T09:30:00Z' }
     expect(ids([donne(creme), pateAbandonnee, fond, tarte]))
       .toEqual(['creme', 'fond', 'tarte'])

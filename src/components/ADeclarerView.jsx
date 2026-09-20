@@ -17,8 +17,9 @@ import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
+import { confirmDialog } from '../lib/confirmDialog'
 import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDeclarer, aDonner, donner, declarer, pasFaite, depuis, lienFeuille }
+import { feuillesDuJour, aDeclarer, aDonner, donner, declarer, rendue, depuis, lienFeuille }
   from '../lib/feuilles'
 
 /**
@@ -57,10 +58,15 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
   const agir = async (f, quoi) => {
     if (busy) return
     navigator.vibrate?.(15)
+    // C'est la seule façon pour une ligne de disparaître sans qu'aucun travail
+    // n'ait été enregistré : on demande confirmation, une fois.
+    if (quoi === 'rendue' && !await confirmDialog(
+      `La marchandise de « ${propre(f.libelle || f.produit)} » est revenue à l’économe ?`,
+      { confirmLabel: 'Oui, rendue' })) return
     setBusy(f.id)
     try {
       if (quoi === 'donner') await donner(f.id, user?.id)
-      else if (quoi === 'pas-faite') await pasFaite(f.id)
+      else if (quoi === 'rendue') await rendue(f.id)
       else {
         const q = Number(String(saisie[f.id] ?? f.qty_prevue ?? '').replace(',', '.'))
         if (!(q > 0)) { toast('Écris d’abord combien ça a sorti.'); setBusy(null); return }
@@ -125,11 +131,17 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
                            active:scale-95 transition disabled:opacity-50">
                 {busy === f.id ? '…' : 'Déclarer'}
               </button>
+              {/* ⚠️ LA SEULE SORTIE SANS DÉCLARATION (Layla, 2026-09-20).
+                  « Pas faite » n'existe plus : une fournée qu'on n'a pas eu le
+                  temps de faire n'a rien à effacer — « c'est systématique
+                  gardé », la crème attend au frigo et le travail se fera. La
+                  ligne reste donc là, sans qu'on ait à cliquer.
+                  Elle ne part que si la marchandise est REVENUE à l'économe. */}
               <button
-                onClick={() => agir(f, 'pas-faite')} disabled={busy === f.id}
+                onClick={() => agir(f, 'rendue')} disabled={busy === f.id}
                 className="rounded-full border border-line text-ink-soft px-4 py-2 text-[13px]
                            font-bold active:scale-95 transition disabled:opacity-50">
-                Pas faite
+                Rendue
               </button>
             </div>
           </Ligne>

@@ -59,7 +59,7 @@ COMMENT ON TABLE annexe_feuilles IS
 COMMENT ON COLUMN annexe_feuilles.donne_le IS
   'Quand l''économe a donné la marchandise. C''est CE moment qui rend la déclaration due — pas l''impression.';
 COMMENT ON COLUMN annexe_feuilles.pas_faite_le IS
-  'Réponse valable : servi mais pas fait. Sans cette issue, la contrainte se contournerait.';
+  'Marchandise RENDUE à l''économe : la seule façon pour une ligne de partir sans avoir été déclarée. Une fournée simplement pas encore faite, elle, reste due — « c''est systématique gardé » (Layla, 2026-09-20). Le nom de la colonne date d''avant cette règle.';
 
 -- Les deux écrans qui liront cette table : « à donner » chez l'économe,
 -- « à déclarer » chez les pâtissiers. Les deux regardent le jour en cours.

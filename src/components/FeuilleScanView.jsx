@@ -76,7 +76,7 @@ export default function FeuilleScanView() {
     const dit = fini === 'donne' || (!fini && etat === 'imprimee')
       ? { t: '✓ Donné', s: `${nom} — le pâtissier doit maintenant déclarer.`, c: 'ok' }
       : (fini === 'pas-faite' || etat === 'pas-faite')
-        ? { t: 'Noté : pas faite', s: `${nom} — rien ne sera compté.`, c: 'ink-mute' }
+        ? { t: 'Rendue à l’économe', s: `${nom} — rien ne sera compté.`, c: 'ink-mute' }
         : { t: '✓ Déclaré', s: `${nom} · ${qte(f.declare_qty, f.unite)}`, c: 'ok' }
     return (
       <Cadre>
@@ -140,8 +140,10 @@ export default function FeuilleScanView() {
   // intermédiaire avec un bouton, c'est un geste de plus au plan de travail —
   // et on en a déjà retiré partout ailleurs.
   //
-  // « Pas faite » vit maintenant dans l'onglet ✍️ À déclarer : cette réponse-là
-  // se donne en fin de service, la tête froide, pas la main dans la farine.
+  // Et il n'y a rien d'autre à proposer : une fournée qu'on n'a pas faite reste
+  // simplement due (« c'est systématique gardé »), et « rendue à l'économe » se
+  // dit en fin de service dans l'onglet ✍️ À déclarer — pas la main dans la
+  // farine.
   return (
     <Cadre>
       <p className="text-[15px] font-bold text-center py-16 text-ink-mute">

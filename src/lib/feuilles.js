@@ -135,11 +135,22 @@ export const donner = (id, userId) => agir(id, 'donner', { userId })
 export const declarer = (id, qty) => agir(id, 'declarer', { qty })
 
 /**
- * « Pas faite » — une réponse valable, et il en faut une.
- * Sans porte de sortie, ils cesseraient de passer par l'économe, et on perdrait
- * justement la trace qu'on cherche à construire.
+ * RENDUE À L'ÉCONOME — la seule façon pour une ligne de partir sans avoir été
+ * déclarée.
+ *
+ * ⚠️ « PAS FAITE » N'EXISTE PLUS COMME BOUTON (Layla, 2026-09-20). Une fournée
+ * qu'on n'a pas eu le temps de faire n'a rien à effacer : « c'est systématique
+ * gardé » — la crème attend au frigo, le travail se fera. La ligne reste donc
+ * dans « À déclarer » jusqu'à ce qu'elle soit faite, sans qu'on ait à cliquer
+ * quoi que ce soit.
+ *
+ * Elle ne disparaît que si la marchandise est REVENUE à l'économe : là, il n'y
+ * a plus rien à attendre de personne.
+ *
+ * (La colonne s'appelle encore `pas_faite_le` en base : la renommer coûterait
+ * une migration pour rien.)
  */
-export const pasFaite = (id, motif = '') => agir(id, 'pas-faite', { motif })
+export const rendue = id => agir(id, 'pas-faite', { motif: 'rendue' })
 
 /** Fini, d'une façon ou d'une autre : plus rien à en attendre. */
 const clos = f => !!(f?.declare_le || f?.pas_faite_le)
