@@ -419,7 +419,7 @@ function AppuieUneFois({ faire }) {
 }
 
 export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait, envoi, autoFait, onAutoFait,
-  verrouille, onLiberer, noteVerrou, imposees }) {
+  verrouille, onLiberer, noteVerrou, imposees, pasDonne }) {
   const decoupe = onCuites ? decoupeDe(noeud) : null
   const dejaFaits = declares(faits)
   // ⚠️ ON NE COUPE PAS PLUS QUE CE QU'ON A. Une plaque cuite donne un nombre
@@ -465,7 +465,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
           Le déclencheur est donc posé au seul endroit qui connaît `bloque` —
           et si ça bloque, il ne se passe RIEN : la fiche reste ouverte, avec
           ses composants manquants écrits en rouge. */}
-      {autoFait && !bloque.length && quantite > 0 && !envoi && (
+      {autoFait && !bloque.length && !pasDonne && quantite > 0 && !envoi && (
         <AppuieUneFois faire={() => { onAutoFait?.(); onFait() }} />
       )}
       <div className="flex items-center gap-3">
@@ -543,11 +543,28 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
           secondes, pendant lesquelles il faut VOIR qu'il se passe quelque
           chose — sinon on appuie deux fois. « Je dois double-cliquer pour
           réaliser que c'est fait » (Layla, 2026-09-11). */}
-      <button onClick={onFait} disabled={bloque.length > 0 || !(quantite > 0) || envoi}
+      {/* ⚠️ PAS D'INGRÉDIENTS SORTIS, PAS DE DÉCLARATION (Layla, 2026-09-20 :
+          « si pour une recette on n'a pas donné d'ingrédient, il ne peut pas
+          non plus marquer comme fait »). La feuille est imprimée, elle réclame
+          l'économat, et personne ne l'a servie : la matière n'a pas quitté la
+          réserve, la recette n'a donc pas pu être faite. */}
+      {pasDonne && (
+        <div className="mt-5 rounded-2xl bg-danger-bg border border-danger p-3 text-center">
+          <div className="text-[30px] leading-none">🤲</div>
+          <div className="text-[15px] font-extrabold text-danger mt-1">
+            L’économe ne t’a rien donné
+          </div>
+          <div className="text-[13px] text-ink-soft mt-0.5">
+            Va chercher les ingrédients avec ton papier.
+          </div>
+        </div>
+      )}
+
+      <button onClick={onFait} disabled={bloque.length > 0 || pasDonne || !(quantite > 0) || envoi}
         className={`print:hidden w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold transition-colors
           md:mt-5 md:py-4 md:text-[18px]
           ${envoi ? 'bg-bordeaux text-cream'
-            : bloque.length || !(quantite > 0) ? 'bg-cream-deep text-ink-mute'
+            : bloque.length || pasDonne || !(quantite > 0) ? 'bg-cream-deep text-ink-mute'
             : 'bg-success text-cream'}`}>
         {envoi ? 'en cours…' : "C'est fait"}
       </button>

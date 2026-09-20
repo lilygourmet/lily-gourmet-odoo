@@ -347,6 +347,21 @@ export function quantitesImposees(feuilles) {
 export const aDonner = feuilles => (feuilles || []).filter(attendLEconome)
 
 /**
+ * CETTE FOURNÉE ATTEND-ELLE ENCORE SES INGRÉDIENTS ?
+ *
+ * « Si pour une recette on n'a pas donné d'ingrédient, il ne peut pas non plus
+ * marquer comme fait » (Layla, 2026-09-20). Une feuille imprimée qui réclame
+ * l'économat et que personne n'a servie, c'est de la matière qui n'a pas
+ * quitté la réserve : la recette n'a pas pu être faite, point.
+ *
+ * ⚠️ Rien d'imprimé, rien à dire : on ne bloque que ce qu'une feuille attend
+ * vraiment. Tout ne passe pas encore par le papier, et transformer l'absence
+ * de feuille en interdiction fermerait l'écran à tout le monde.
+ */
+export const attendLeDon = (feuilles, produit) =>
+  (feuilles || []).some(f => f.produit === produit && attendLEconome(f) && !f.retour_le)
+
+/**
  * LES FOURNÉES RANGÉES PAR CASCADE.
  *
  * « Crée des groupes de cascade, pour ne pas se perdre quand il y a plusieurs

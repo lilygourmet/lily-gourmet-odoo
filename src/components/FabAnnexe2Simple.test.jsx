@@ -409,6 +409,41 @@ describe('le garde-fou du zéro', () => {
   })
 })
 
+// ⚠️ « Si pour une recette on n'a pas donné d'ingrédient, il ne peut pas non
+// plus marquer comme fait » (Layla, 2026-09-20). La feuille est imprimée, elle
+// réclame l'économat, personne ne l'a servie : la matière n'a pas quitté la
+// réserve.
+describe('l’économe n’a rien donné', () => {
+  // Tout est là — stock compris : seul l'économe manque à l'appel.
+  const complet = { ...tiramisu,
+    enfants: tiramisu.enfants.map(c => ({ ...c, ok: true, stock: (c.besoin || 0) + 1 })) }
+
+  it('« C’est fait » reste éteint, et l’écran dit pourquoi', () => {
+    const onFait = vi.fn()
+    render(<Fiche noeud={complet} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={onFait} pasDonne />)
+    fireEvent.click(screen.getByText("C'est fait"))
+    expect(onFait).not.toHaveBeenCalled()
+    expect(screen.getByText('L’économe ne t’a rien donné')).toBeTruthy()
+  })
+
+  it('et le QR n’appuie pas tout seul à sa place', () => {
+    const onFait = vi.fn()
+    render(<Fiche noeud={complet} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={onFait} pasDonne autoFait onAutoFait={() => {}} />)
+    expect(onFait).not.toHaveBeenCalled()
+  })
+
+  it('mais rien ne bloque quand la matière est sortie', () => {
+    const onFait = vi.fn()
+    render(<Fiche noeud={complet} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={onFait} />)
+    fireEvent.click(screen.getByText("C'est fait"))
+    expect(onFait).toHaveBeenCalled()
+    expect(screen.queryByText('L’économe ne t’a rien donné')).toBeNull()
+  })
+})
+
 describe('ce qui manque', () => {
   it('montre le besoin de la recette juste à côté du bouton', () => {
     // Sans ce chiffre, on voyait qu'il manquait quelque chose sans savoir

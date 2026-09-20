@@ -29,7 +29,7 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistorique
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis,
-  quantitesImposees } from '../lib/feuilles'
+  quantitesImposees, attendLeDon } from '../lib/feuilles'
 import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
@@ -934,6 +934,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               // seule connaît son verrou — « il me laisse le déclarer alors que
               // rien de la branche n'est validé » (Layla, 2026-09-20). Si un
               // composant manque, il ne se passe rien et l'écran le montre.
+              // ⚠️ « Si pour une recette on n'a pas donné d'ingrédient, il ne
+              // peut pas non plus marquer comme fait » (Layla, 2026-09-20).
+              pasDonne={attendLeDon(feuillesJour, noeud.produit)}
               autoFait={droitALaDeclaration && !sortie}
               onAutoFait={() => setDroitALaDeclaration(false)} />
             </div>
