@@ -42,6 +42,13 @@ const attendue = {
   qty_prevue: 1800, liasse: 'l3', imprime_le: ilYA(20), donne_le: null,
 }
 
+/** Donnée la veille, toujours pas déclarée : la dette ne s'efface pas à minuit. */
+const veille = {
+  ...donnee, id: 'f5', produit: 'SM. Ganache Gold', libelle: 'Ganache gold',
+  qty_prevue: 1800, liasse: 'l5', chemin: ['SM- Tarte CBS 18 cm', 'SM. Ganache Gold'],
+  imprime_le: ilYA(26 * 60), donne_le: ilYA(25 * 60),
+}
+
 /** Rendue par le pâtissier : l'économe doit confirmer l'avoir récupérée. */
 const rendue = {
   ...donnee, id: 'f4', produit: 'SM. Crunchy Pistache', libelle: 'Crunchy pistache',
@@ -122,6 +129,20 @@ describe('« À déclarer », pour des mains farineuses', () => {
 
     fireEvent.click(screen.getByLabelText(/^Rendre /))
     await waitFor(() => expect(demanderRetour).toHaveBeenCalledWith('f1', 'u1', false))
+  })
+
+  // ⚠️ « Regroupe par date dans À déclarer, pour voir ce qui a aussi été donné
+  // par date » (Layla, 2026-09-20). La liste remonte une semaine.
+  it('range par jour, le plus récent en haut', async () => {
+    lues = [donnee, veille]
+    render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText('Crème citron')
+
+    const jours = [...document.querySelectorAll('span')]
+      .filter(e => /^(Aujourd’hui|Hier|[a-zé.]+ \d{2}\/\d{2})$/.test(e.textContent))
+    expect(jours.length).toBe(2)
+    expect(jours[0].textContent).toBe('Aujourd’hui')   // le jour en cours d'abord
+    expect(jours[1].textContent).not.toBe('Aujourd’hui')
   })
 
   it('le vide se dit en deux mots', async () => {

@@ -17,6 +17,7 @@
 
 import qr from 'qrcode-generator'
 import { aBesoinDeLEconomat } from './feuillesAImprimer'
+import { todayISO, jourLocal } from './dates'
 
 /** Un jeton par feuille, fabriqué ICI. */
 export function nouvelId() {
@@ -367,4 +368,44 @@ export function parCascade(feuilles) {
     m.set(tete, g)
   }
   return [...m.values()]
+}
+
+/**
+ * LES FOURNÉES RANGÉES PAR JOUR.
+ *
+ * « Regroupe par date dans À déclarer, pour voir ce qui a aussi été donné par
+ * date » (Layla, 2026-09-20). La liste remonte une semaine — une dette ne
+ * s'efface pas à minuit — et tout s'empilait sans dire de quand ça datait.
+ *
+ * ⚠️ LE JOUR OÙ ELLE EST DEVENUE DUE, pas celui de l'impression : c'est le
+ * « donné » de l'économe qui fait naître la dette. Pour les fournées qui
+ * n'avaient rien à lui demander, c'est l'impression qui compte.
+ *
+ * ⚠️ EN HEURE LOCALE (`jourLocal`) : la base horodate en UTC, et au Maroc tout
+ * ce qui se donne entre minuit et 1 h porterait la veille.
+ *
+ * Le plus récent d'abord : c'est là qu'est le travail du jour ; ce qui traîne
+ * depuis hier descend, avec sa pastille rouge.
+ */
+export function parJour(feuilles) {
+  const m = new Map()
+  for (const f of feuilles || []) {
+    const jour = jourLocal(f.donne_le || f.imprime_le)
+    const g = m.get(jour) || { jour, feuilles: [] }
+    g.feuilles.push(f)
+    m.set(jour, g)
+  }
+  return [...m.values()].sort((a, b) => b.jour.localeCompare(a.jour))
+}
+
+/** « Aujourd'hui », « Hier », sinon « sam. 19/09 ». */
+export function nomDuJour(jour) {
+  if (jour === todayISO()) return 'Aujourd’hui'
+  const hier = new Date()
+  hier.setDate(hier.getDate() - 1)
+  if (jour === jourLocal(hier.toISOString())) return 'Hier'
+  const d = new Date(jour + 'T12:00:00')
+  return isNaN(d) ? jour : d.toLocaleDateString('fr-FR', {
+    weekday: 'short', day: '2-digit', month: '2-digit',
+  })
 }

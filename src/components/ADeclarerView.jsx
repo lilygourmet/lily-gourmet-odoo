@@ -27,8 +27,8 @@ import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { propre } from '../lib/ecranSimple'
-import { PhotoFeuille, GrosseQuantite, Rien, TeteCascade } from './FeuilleVisuel'
-import { feuillesDuJour, aDeclarer, depuis, cheminDe, demanderRetour, resteDeLaCascade, parCascade } from '../lib/feuilles'
+import { PhotoFeuille, GrosseQuantite, Rien, TeteCascade, Bande } from './FeuilleVisuel'
+import { feuillesDuJour, aDeclarer, depuis, cheminDe, demanderRetour, resteDeLaCascade, parCascade, parJour, nomDuJour } from '../lib/feuilles'
 import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
 import { poserLeScan } from '../lib/scanEntrant'
@@ -191,17 +191,28 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
             Douze lignes à plat n'ont aucun rapport apparent ; rangées, ce sont
             trois gâteaux. Deux colonnes dès qu'il y a de la place — un groupe
             n'est jamais coupé en deux. */}
-        <div className="sm:columns-2 sm:gap-4">
-          {parCascade(dues).map(g => (
-            <div key={g.tete} className="sm:break-inside-avoid">
-              <TeteCascade g={g} />
-              {g.feuilles.map(f => (
-                <Ligne key={f.id} f={f} rend={rend}
-                  onDeclarer={ouvrirPourDeclarer} onRendre={rendre} />
+        {/* ⚠️ PUIS PAR JOUR PAR-DESSUS (Layla, 2026-09-20 : « regroupe par date
+            dans À déclarer, pour voir ce qui a aussi été donné par date »).
+            La liste remonte une semaine — une dette ne s'efface pas à minuit —
+            et tout s'empilait sans dire de quand ça datait. Le jour retenu est
+            celui où la fournée est devenue DUE. */}
+        {parJour(dues).map(gj => (
+          <div key={gj.jour}>
+            <Bande emoji="📅" titre={nomDuJour(gj.jour)} n={gj.feuilles.length}
+              ton="bg-cream-deep text-ink-soft" />
+            <div className="sm:columns-2 sm:gap-4">
+              {parCascade(gj.feuilles).map(g => (
+                <div key={g.tete} className="sm:break-inside-avoid">
+                  <TeteCascade g={g} />
+                  {g.feuilles.map(f => (
+                    <Ligne key={f.id} f={f} rend={rend}
+                      onDeclarer={ouvrirPourDeclarer} onRendre={rendre} />
+                  ))}
+                </div>
               ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
 
         {/* ⚠️ UNE SEULE QUESTION, ET SEULEMENT QUAND ELLE SE POSE. */}
         {aRendre && (
