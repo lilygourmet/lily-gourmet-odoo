@@ -1079,6 +1079,21 @@ export default async function handler(req, res) {
 
       // L'ÉCONOME DONNE. Le geste qui rend la déclaration due.
       if (req.query.mode === 'donner') {
+        // ⚠️ UNE FEUILLE CLOSE NE SE ROUVRE PAS (Layla, 2026-09-20 : « quand
+        // rendu et rescanné, ça se redonne » — et ensuite « je ne trouve pas
+        // dans la liste »). Les deux n'en font qu'un : on la redonnait sans
+        // effacer le « rendue », donc elle repartait donnée ET close — visible
+        // nulle part. Un papier qui traîne et qu'on rescanne par réflexe ne
+        // doit rien pouvoir défaire.
+        if (feuille.declare_le) {
+          return res.status(200).json({ feuille, refus: 'Cette fournée a déjà été déclarée.' })
+        }
+        if (feuille.pas_faite_le) {
+          return res.status(200).json({
+            feuille,
+            refus: 'Cette marchandise a été rendue : la feuille est close. Réimprime la fiche pour la ressortir.',
+          })
+        }
         if (feuille.donne_le) return res.status(200).json({ feuille, deja: true })
         // ⚠️ UNE FEUILLE À LA FOIS, ET SEULEMENT CELLE-LÀ (Layla, 2026-09-19 :
         // « l'économe doit scanner feuille par feuille, sinon ça dit qu'il a

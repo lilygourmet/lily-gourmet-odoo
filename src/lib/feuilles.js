@@ -125,6 +125,9 @@ const agir = async (id, mode, corps = {}) => {
   })
   const j = await r.json()
   if (j?.error) throw new Error(j.error)
+  // ⚠️ Un refus n'est pas une panne : la feuille est close, et le serveur dit
+  // pourquoi. On le remonte tel quel pour que l'écran l'affiche en clair.
+  if (j?.refus) throw new Error(j.refus)
   return j
 }
 
