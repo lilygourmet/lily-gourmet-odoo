@@ -28,7 +28,8 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistorique
   toutConsomme, relireRecettes, restesTheoriques } from '../lib/fabAnnexe'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
-import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis } from '../lib/feuilles'
+import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis,
+  quantitesImposees } from '../lib/feuilles'
 import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
@@ -692,7 +693,10 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // tous les prévus, c'était faire entrer dans cette recette des chiffres
   // décidés dans une autre.
   const prevuTete = prevus[chemin[0]]?.q
-  const choisies = { ...(prevuTete !== undefined ? { [chemin[0]]: prevuTete } : {}), ...quantites }
+  // ⚠️ ET C'EST LE CHIFFRE DU PAPIER QUI S'IMPOSE, en dernier : un verrou qui
+  // fige le mauvais nombre ne sert à rien. L'économe a servi pour CE nombre-là.
+  const choisies = { ...(prevuTete !== undefined ? { [chemin[0]]: prevuTete } : {}),
+    ...quantites, ...quantitesImposees(feuillesJour) }
   const { tete, noeud } = noeudDuChemin(brut, chemin, choisies)
   // ⚠️ ON NE JETTE PAS TOUT LE CHEMIN (Layla, 2026-09-20 : « ça n'emmène
   // toujours pas vers l'article, ça dit que ça le fait mais ça ne le fait
@@ -881,7 +885,15 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                 ? v => setCuites(x => ({ ...x, [noeud.produit]: Math.max(0, Math.round(v)) }))
                 : undefined}
               faits={faits} envoi={envoi}
-              verrouille={!!prevus[tete.produit]?.fige && noeud.produit === tete.produit}
+              // ⚠️ LA MATIÈRE SORTIE FIGE, à elle seule. Je n'avais d'abord
+              // retiré que l'échappatoire (« réinitialiser ») sans poser le
+              // verrou : le chiffre restait librement modifiable — « les
+              // ingrédients ne se sont pas figés » (Layla, 2026-09-20).
+              // Et ça vaut à TOUS les niveaux, pas seulement sur le gâteau :
+              // c'est la crème dont la matière est sortie, c'est elle qu'on
+              // fige.
+              verrouille={ingredientsSortis(feuillesJour, noeud.produit)
+                || (!!prevus[tete.produit]?.fige && noeud.produit === tete.produit)}
               // ⚠️ PLUS DE « RÉINITIALISER » UNE FOIS LA MATIÈRE SORTIE. Tant
               // qu'on pouvait, on pouvait prétendre après coup avoir prévu
               // moins — alors que les ingrédients avaient déjà quitté la

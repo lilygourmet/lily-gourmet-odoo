@@ -10,7 +10,7 @@
 // ============================================================
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe, resteDeLaCascade, ingredientsSortis } from './feuilles'
+import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe, resteDeLaCascade, ingredientsSortis, quantitesImposees } from './feuilles'
 
 const imprimee = { id: 'a', imprime_le: '2026-09-19T08:00:00Z' }
 const donnee = { ...imprimee, id: 'b', donne_le: '2026-09-19T09:00:00Z' }
@@ -272,5 +272,34 @@ describe('ce qui fige le prévu pour de bon', () => {
 
   it('la sortie d’un AUTRE article ne fige rien', () => {
     expect(ingredientsSortis([{ produit: 'SM. Genoise', donne_le: 'ce matin' }], p)).toBe(false)
+  })
+})
+
+
+// ⚠️ « Attention, les ingrédients ne se sont pas figés » (Layla, 2026-09-20).
+// Un verrou qui fige le mauvais chiffre ne sert à rien : c'est le nombre du
+// PAPIER qui s'impose, celui pour lequel l'économe a servi.
+describe('le chiffre que la matière sortie impose', () => {
+  it('reprend la quantité écrite sur la feuille donnée', () => {
+    const f = [{ produit: 'SM. Creme', qty_prevue: 2589, donne_le: 'ce matin' }]
+    expect(quantitesImposees(f)).toEqual({ 'SM. Creme': 2589 })
+  })
+
+  it('n’impose rien tant que rien n’est sorti', () => {
+    expect(quantitesImposees([{ produit: 'SM. Creme', qty_prevue: 2589 }])).toEqual({})
+  })
+
+  it('n’impose plus rien une fois rendue', () => {
+    const f = [{ produit: 'SM. Creme', qty_prevue: 2589, donne_le: 'ce matin', retour_le: 'midi' }]
+    expect(quantitesImposees(f)).toEqual({})
+  })
+
+  it('n’impose plus rien une fois déclarée', () => {
+    const f = [{ produit: 'SM. Creme', qty_prevue: 2589, donne_le: 'ce matin', declare_le: 'midi' }]
+    expect(quantitesImposees(f)).toEqual({})
+  })
+
+  it('ignore une feuille sans quantité', () => {
+    expect(quantitesImposees([{ produit: 'SM. Creme', donne_le: 'ce matin' }])).toEqual({})
   })
 })

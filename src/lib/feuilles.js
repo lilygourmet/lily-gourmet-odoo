@@ -300,8 +300,27 @@ export const aReprendre = feuilles => (feuilles || []).filter(f =>
  * qui est SORTI de la fournée, lui, reste libre : on déclare toujours ce qu'on
  * a vraiment obtenu.
  */
-export const ingredientsSortis = (feuilles, produit) => (feuilles || []).some(f =>
-  f.produit === produit && f.donne_le && !f.retour_le && !f.declare_le && !f.pas_faite_le)
+export const feuilleSortie = (feuilles, produit) => (feuilles || []).find(f =>
+  f.produit === produit && f.donne_le && !f.retour_le && !f.declare_le && !f.pas_faite_le) || null
+
+export const ingredientsSortis = (feuilles, produit) => !!feuilleSortie(feuilles, produit)
+
+/**
+ * Les quantités que la matière sortie IMPOSE, par article.
+ *
+ * ⚠️ Le verrou ne sert à rien s'il fige le mauvais chiffre (Layla, 2026-09-20 :
+ * « attention, les ingrédients ne se sont pas figés »). On reprend donc le
+ * nombre écrit sur le papier — celui pour lequel l'économe a servi — et pas
+ * celui que l'écran proposait au moment où on l'ouvre.
+ */
+export function quantitesImposees(feuilles) {
+  const out = {}
+  for (const f of feuilles || []) {
+    if (f.donne_le && !f.retour_le && !f.declare_le && !f.pas_faite_le
+      && Number(f.qty_prevue) > 0) out[f.produit] = Number(f.qty_prevue)
+  }
+  return out
+}
 
 /** Ce que l'économe n'a pas encore donné — et lui seul peut le débloquer. */
 export const aDonner = feuilles => (feuilles || []).filter(attendLEconome)
