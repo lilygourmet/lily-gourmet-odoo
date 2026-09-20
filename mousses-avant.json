@@ -1,0 +1,1353 @@
+{
+ "SM- Gianduja Indiv": {
+  "produit": {
+   "id": 872,
+   "name": "SM- Gianduja Indiv",
+   "product_tmpl_id": [
+    1583,
+    "SM- Gianduja Indiv"
+   ]
+  },
+  "bom": {
+   "id": 96,
+   "product_qty": 126,
+   "product_uom_id": [
+    1,
+    "Units"
+   ]
+  },
+  "lignes": [
+   {
+    "id": 847,
+    "product_id": [
+     5956,
+     "MP- Gelatine feuille"
+    ],
+    "product_qty": 40,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 849,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 1320,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 851,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 2200,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 852,
+    "product_id": [
+     835,
+     "SM. Cremeux Gianduja Indiv Production"
+    ],
+    "product_qty": 126,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   },
+   {
+    "id": 3200,
+    "product_id": [
+     834,
+     "SM. Cremeux a la Vanille Indiv Gianduja Production"
+    ],
+    "product_qty": 126,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   },
+   {
+    "id": 4103,
+    "product_id": [
+     6817,
+     "SM. Biscuit Gianduja Indiv"
+    ],
+    "product_qty": 126,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   },
+   {
+    "id": 7059,
+    "product_id": [
+     5841,
+     "MP- Chocolat Weiss Gianduja"
+    ],
+    "product_qty": 2200,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7128,
+    "product_id": [
+     5839,
+     "MP- Praliné Noisette 50%"
+    ],
+    "product_qty": 360,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ],
+  "figes": [
+   "MP- Gelatine feuille",
+   "MP- Crème whipping",
+   "MP- Chocolat Weiss Gianduja",
+   "MP- Praliné Noisette 50%"
+  ],
+  "figesNom": "Mousse Gianduja",
+  "aRetirer": [
+   {
+    "id": 847,
+    "product_id": [
+     5956,
+     "MP- Gelatine feuille"
+    ],
+    "product_qty": 40,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 849,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 1320,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 851,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 2200,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7059,
+    "product_id": [
+     5841,
+     "MP- Chocolat Weiss Gianduja"
+    ],
+    "product_qty": 2200,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7128,
+    "product_id": [
+     5839,
+     "MP- Praliné Noisette 50%"
+    ],
+    "product_qty": 360,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ]
+ },
+ "SM- Gianduja 10 pers": {
+  "produit": {
+   "id": 2193,
+   "name": "SM- Gianduja 10 pers",
+   "product_tmpl_id": [
+    2758,
+    "SM- Gianduja 10 pers"
+   ]
+  },
+  "bom": {
+   "id": 147,
+   "product_qty": 1,
+   "product_uom_id": [
+    1,
+    "Units"
+   ]
+  },
+  "lignes": [
+   {
+    "id": 1193,
+    "product_id": [
+     5956,
+     "MP- Gelatine feuille"
+    ],
+    "product_qty": 4.52,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1195,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 149.25,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7148,
+    "product_id": [
+     5839,
+     "MP- Praliné Noisette 50%"
+    ],
+    "product_qty": 40.71,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7069,
+    "product_id": [
+     5841,
+     "MP- Chocolat Weiss Gianduja"
+    ],
+    "product_qty": 248.76,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1197,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 248.76,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1198,
+    "product_id": [
+     2192,
+     "SM. Cremeux Gianduja 10 pers Production"
+    ],
+    "product_qty": 1,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   },
+   {
+    "id": 1199,
+    "product_id": [
+     2194,
+     "SM. Cremeux a la Vanille 10 pers Production"
+    ],
+    "product_qty": 1,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   },
+   {
+    "id": 4102,
+    "product_id": [
+     6808,
+     "SM. Biscuit Gianduja 10 pers"
+    ],
+    "product_qty": 1,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   }
+  ],
+  "figes": [
+   "MP- Gelatine feuille",
+   "MP- Crème whipping",
+   "MP- Chocolat Weiss Gianduja",
+   "MP- Praliné Noisette 50%"
+  ],
+  "figesNom": "Mousse Gianduja",
+  "aRetirer": [
+   {
+    "id": 1193,
+    "product_id": [
+     5956,
+     "MP- Gelatine feuille"
+    ],
+    "product_qty": 4.52,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1195,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 149.25,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7148,
+    "product_id": [
+     5839,
+     "MP- Praliné Noisette 50%"
+    ],
+    "product_qty": 40.71,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7069,
+    "product_id": [
+     5841,
+     "MP- Chocolat Weiss Gianduja"
+    ],
+    "product_qty": 248.76,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1197,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 248.76,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ]
+ },
+ "SM- Tiramisu 20cm": {
+  "produit": {
+   "id": 2909,
+   "name": "SM- Tiramisu 20cm",
+   "product_tmpl_id": [
+    2956,
+    "SM- Tiramisu 20cm"
+   ]
+  },
+  "bom": {
+   "id": 236,
+   "product_qty": 1,
+   "product_uom_id": [
+    1,
+    "Units"
+   ]
+  },
+  "lignes": [
+   {
+    "id": 2066,
+    "product_id": [
+     4539,
+     "MP- Sucre Granule"
+    ],
+    "product_qty": 104,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2067,
+    "product_id": [
+     5941,
+     "MP- Oeufs jaune"
+    ],
+    "product_qty": 56,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2068,
+    "product_id": [
+     5977,
+     "MP- Mascarpone"
+    ],
+    "product_qty": 120,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2069,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 200,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2070,
+    "product_id": [
+     7092,
+     "SM. Masse Gélatine"
+    ],
+    "product_qty": 21.63,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2071,
+    "product_id": [
+     3075,
+     "SM. Amaretti Orange Tiramisu"
+    ],
+    "product_qty": 120,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2073,
+    "product_id": [
+     1929,
+     "SM. Sirop d'Imbibage Cafe Tiramisu"
+    ],
+    "product_qty": 180,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 9149,
+    "product_id": [
+     3344,
+     "MP- Eau robinet"
+    ],
+    "product_qty": 30,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 4192,
+    "product_id": [
+     4108,
+     "SM. Biscuit a la Cuillere 10 pers"
+    ],
+    "product_qty": 1,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   }
+  ],
+  "figes": [
+   "MP- Mascarpone",
+   "MP- Crème whipping",
+   "MP- Oeufs jaune",
+   "MP- Sucre Granule",
+   "SM. Masse Gélatine",
+   "MP- Eau robinet"
+  ],
+  "figesNom": "La mousse",
+  "aRetirer": [
+   {
+    "id": 2066,
+    "product_id": [
+     4539,
+     "MP- Sucre Granule"
+    ],
+    "product_qty": 104,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2067,
+    "product_id": [
+     5941,
+     "MP- Oeufs jaune"
+    ],
+    "product_qty": 56,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2068,
+    "product_id": [
+     5977,
+     "MP- Mascarpone"
+    ],
+    "product_qty": 120,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2069,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 200,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2070,
+    "product_id": [
+     7092,
+     "SM. Masse Gélatine"
+    ],
+    "product_qty": 21.63,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 9149,
+    "product_id": [
+     3344,
+     "MP- Eau robinet"
+    ],
+    "product_qty": 30,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ]
+ },
+ "SM- Tiramisu 15cm": {
+  "produit": {
+   "id": 2908,
+   "name": "SM- Tiramisu 15cm",
+   "product_tmpl_id": [
+    2955,
+    "SM- Tiramisu 15cm"
+   ]
+  },
+  "bom": {
+   "id": 235,
+   "product_qty": 1,
+   "product_uom_id": [
+    1,
+    "Units"
+   ]
+  },
+  "lignes": [
+   {
+    "id": 2026,
+    "product_id": [
+     4539,
+     "MP- Sucre Granule"
+    ],
+    "product_qty": 69.33,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2027,
+    "product_id": [
+     5941,
+     "MP- Oeufs jaune"
+    ],
+    "product_qty": 37.33,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2028,
+    "product_id": [
+     5977,
+     "MP- Mascarpone"
+    ],
+    "product_qty": 80,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2029,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 133.33,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2030,
+    "product_id": [
+     7092,
+     "SM. Masse Gélatine"
+    ],
+    "product_qty": 14.42,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2031,
+    "product_id": [
+     3075,
+     "SM. Amaretti Orange Tiramisu"
+    ],
+    "product_qty": 60,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2033,
+    "product_id": [
+     1929,
+     "SM. Sirop d'Imbibage Cafe Tiramisu"
+    ],
+    "product_qty": 100,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 9150,
+    "product_id": [
+     3344,
+     "MP- Eau robinet"
+    ],
+    "product_qty": 20,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 4191,
+    "product_id": [
+     4107,
+     "SM. Biscuit a la Cuillere 5 pers"
+    ],
+    "product_qty": 1,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   }
+  ],
+  "figes": [
+   "MP- Mascarpone",
+   "MP- Crème whipping",
+   "MP- Oeufs jaune",
+   "MP- Sucre Granule",
+   "SM. Masse Gélatine",
+   "MP- Eau robinet"
+  ],
+  "figesNom": "La mousse",
+  "aRetirer": [
+   {
+    "id": 2026,
+    "product_id": [
+     4539,
+     "MP- Sucre Granule"
+    ],
+    "product_qty": 69.33,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2027,
+    "product_id": [
+     5941,
+     "MP- Oeufs jaune"
+    ],
+    "product_qty": 37.33,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2028,
+    "product_id": [
+     5977,
+     "MP- Mascarpone"
+    ],
+    "product_qty": 80,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2029,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 133.33,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 2030,
+    "product_id": [
+     7092,
+     "SM. Masse Gélatine"
+    ],
+    "product_qty": 14.42,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 9150,
+    "product_id": [
+     3344,
+     "MP- Eau robinet"
+    ],
+    "product_qty": 20,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ]
+ },
+ "SM- Tiramisu Indiv": {
+  "produit": {
+   "id": 2907,
+   "name": "SM- Tiramisu Indiv",
+   "product_tmpl_id": [
+    2954,
+    "SM- Tiramisu Indiv"
+   ]
+  },
+  "bom": {
+   "id": 234,
+   "product_qty": 1,
+   "product_uom_id": [
+    1,
+    "Units"
+   ]
+  },
+  "lignes": [
+   {
+    "id": 1986,
+    "product_id": [
+     4539,
+     "MP- Sucre Granule"
+    ],
+    "product_qty": 10,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1987,
+    "product_id": [
+     5941,
+     "MP- Oeufs jaune"
+    ],
+    "product_qty": 7.47,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1988,
+    "product_id": [
+     5977,
+     "MP- Mascarpone"
+    ],
+    "product_qty": 16,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1989,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 26.67,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1990,
+    "product_id": [
+     7092,
+     "SM. Masse Gélatine"
+    ],
+    "product_qty": 2.87,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1991,
+    "product_id": [
+     3075,
+     "SM. Amaretti Orange Tiramisu"
+    ],
+    "product_qty": 15,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1993,
+    "product_id": [
+     1929,
+     "SM. Sirop d'Imbibage Cafe Tiramisu"
+    ],
+    "product_qty": 20,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 4168,
+    "product_id": [
+     4073,
+     "SM. Biscuit a la Cuillere Indiv"
+    ],
+    "product_qty": 1,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   },
+   {
+    "id": 9147,
+    "product_id": [
+     4539,
+     "MP- Sucre Granule"
+    ],
+    "product_qty": 3.86,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 9148,
+    "product_id": [
+     3344,
+     "MP- Eau robinet"
+    ],
+    "product_qty": 4,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ],
+  "figes": [
+   "MP- Mascarpone",
+   "MP- Crème whipping",
+   "MP- Oeufs jaune",
+   "MP- Sucre Granule",
+   "SM. Masse Gélatine",
+   "MP- Eau robinet"
+  ],
+  "figesNom": "La mousse",
+  "aRetirer": [
+   {
+    "id": 1986,
+    "product_id": [
+     4539,
+     "MP- Sucre Granule"
+    ],
+    "product_qty": 10,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1987,
+    "product_id": [
+     5941,
+     "MP- Oeufs jaune"
+    ],
+    "product_qty": 7.47,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1988,
+    "product_id": [
+     5977,
+     "MP- Mascarpone"
+    ],
+    "product_qty": 16,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1989,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 26.67,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 1990,
+    "product_id": [
+     7092,
+     "SM. Masse Gélatine"
+    ],
+    "product_qty": 2.87,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 9147,
+    "product_id": [
+     4539,
+     "MP- Sucre Granule"
+    ],
+    "product_qty": 3.86,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 9148,
+    "product_id": [
+     3344,
+     "MP- Eau robinet"
+    ],
+    "product_qty": 4,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ]
+ },
+ "SM- Royal Chocolat 20 cm": {
+  "produit": {
+   "id": 1942,
+   "name": "SM- Royal Chocolat 20 cm",
+   "product_tmpl_id": [
+    2597,
+    "SM- Royal Chocolat 20 cm"
+   ]
+  },
+  "bom": {
+   "id": 89,
+   "product_qty": 15,
+   "product_uom_id": [
+    1,
+    "Units"
+   ]
+  },
+  "lignes": [
+   {
+    "id": 808,
+    "product_id": [
+     5945,
+     "MP- Lait UHT"
+    ],
+    "product_qty": 2100,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 809,
+    "product_id": [
+     5956,
+     "MP- Gelatine feuille"
+    ],
+    "product_qty": 126,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 812,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 6300,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 814,
+    "product_id": [
+     2136,
+     "SM. Craquant Royal"
+    ],
+    "product_qty": 2400,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 4080,
+    "product_id": [
+     4069,
+     "SM. Biscuit Brownie 10 pers"
+    ],
+    "product_qty": 15,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   },
+   {
+    "id": 7033,
+    "product_id": [
+     5825,
+     "MP- Chocolat Valrhona Guanaja"
+    ],
+    "product_qty": 1470,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7035,
+    "product_id": [
+     5824,
+     "MP- Chocolat Valrhona Jivara"
+    ],
+    "product_qty": 1470,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ],
+  "figes": [
+   "MP- Lait UHT",
+   "MP- Gelatine feuille",
+   "MP- Crème whipping",
+   "MP- Chocolat Valrhona Guanaja",
+   "MP- Chocolat Valrhona Jivara"
+  ],
+  "figesNom": "La mousse",
+  "aRetirer": [
+   {
+    "id": 809,
+    "product_id": [
+     5956,
+     "MP- Gelatine feuille"
+    ],
+    "product_qty": 126,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 812,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 6300,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7033,
+    "product_id": [
+     5825,
+     "MP- Chocolat Valrhona Guanaja"
+    ],
+    "product_qty": 1470,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7035,
+    "product_id": [
+     5824,
+     "MP- Chocolat Valrhona Jivara"
+    ],
+    "product_qty": 1470,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ]
+ },
+ "SM- Royal Chocolat 15 cm": {
+  "produit": {
+   "id": 1941,
+   "name": "SM- Royal Chocolat 15 cm",
+   "product_tmpl_id": [
+    2596,
+    "SM- Royal Chocolat 15 cm"
+   ]
+  },
+  "bom": {
+   "id": 88,
+   "product_qty": 11,
+   "product_uom_id": [
+    1,
+    "Units"
+   ]
+  },
+  "lignes": [
+   {
+    "id": 801,
+    "product_id": [
+     5945,
+     "MP- Lait UHT"
+    ],
+    "product_qty": 838,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 802,
+    "product_id": [
+     5956,
+     "MP- Gelatine feuille"
+    ],
+    "product_qty": 50,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 805,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 2514,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 807,
+    "product_id": [
+     2136,
+     "SM. Craquant Royal"
+    ],
+    "product_qty": 880,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 4079,
+    "product_id": [
+     3950,
+     "SM. Biscuit Brownie 5 pers"
+    ],
+    "product_qty": 11,
+    "product_uom_id": [
+     1,
+     "Units"
+    ]
+   },
+   {
+    "id": 7038,
+    "product_id": [
+     5825,
+     "MP- Chocolat Valrhona Guanaja"
+    ],
+    "product_qty": 590,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7039,
+    "product_id": [
+     5824,
+     "MP- Chocolat Valrhona Jivara"
+    ],
+    "product_qty": 590,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ],
+  "figes": [
+   "MP- Lait UHT",
+   "MP- Gelatine feuille",
+   "MP- Crème whipping",
+   "MP- Chocolat Valrhona Guanaja",
+   "MP- Chocolat Valrhona Jivara"
+  ],
+  "figesNom": "La mousse",
+  "aRetirer": [
+   {
+    "id": 802,
+    "product_id": [
+     5956,
+     "MP- Gelatine feuille"
+    ],
+    "product_qty": 50,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 805,
+    "product_id": [
+     5985,
+     "MP- Crème whipping"
+    ],
+    "product_qty": 2514,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7038,
+    "product_id": [
+     5825,
+     "MP- Chocolat Valrhona Guanaja"
+    ],
+    "product_qty": 590,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   },
+   {
+    "id": 7039,
+    "product_id": [
+     5824,
+     "MP- Chocolat Valrhona Jivara"
+    ],
+    "product_qty": 590,
+    "product_uom_id": [
+     13,
+     "g"
+    ]
+   }
+  ]
+ }
+}
