@@ -1104,12 +1104,19 @@ async function aFinir(sb) {
       const n = declare[f.produit] || 0
       if (n > 0) pris += n * (Number(f.parUnite) || 0) * (estKgOdoo(f.uniteVrac) ? 1000 : 1)
     }
+    // ⚠️ ET CE QUI VIENT D'ÊTRE DÉCLARÉ COMPTE AUSSI. Le stock d'Odoo ne monte
+    // qu'à la VALIDATION, en fin de journée : une cuve montée ce matin
+    // n'existait donc pas encore pour lui, alors que les gâteaux qu'elle a
+    // servis, eux, étaient déjà comptés. Le reste tombait négatif et la mousse
+    // ne réclamait rien — exactement le travail qu'on cherche à réclamer.
+    const fait = declare[l.produit] || 0
+
     // `pris` est en grammes (ou en pièces) ; le stock, lui, dans l'unité de
     // l'article. On compare donc dans la même monnaie.
-    const stockG = stock * (estKgOdoo(a.unite) ? 1000 : 1)
-    const resteG = Math.round((stockG - pris) * 1000) / 1000
-    out.push({ ...a, note: l.note || null, stock, pris: Math.round(pris * 1000) / 1000,
-      resteG })
+    const enG = estKgOdoo(a.unite) ? 1000 : 1
+    const resteG = Math.round(((stock + fait) * enG - pris) * 1000) / 1000
+    out.push({ ...a, note: l.note || null, stock, fait: Math.round(fait * 1000) / 1000,
+      pris: Math.round(pris * 1000) / 1000, resteG })
   }
   return out
 }
