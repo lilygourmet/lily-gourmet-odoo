@@ -29,7 +29,7 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistorique
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { nouvelId, poserFeuilles, eteindreFeuille } from '../lib/feuilles'
-import { prendreLeScan } from '../lib/scanEntrant'
+import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
 import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock, tetesDe } from '../lib/feuillesAImprimer'
@@ -53,12 +53,29 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // déclaration (`&declarer=1`). Il n'y a plus qu'UNE façon de déclarer,
   // celle-ci — avec ses cuves, son verrou et le reste de la crème. Le scan
   // n'est qu'un raccourci vers elle.
-  // ⚠️ Pas lu dans l'adresse : elle a déjà été réécrite par `App.jsx` au
-  // démarrage. `scanEntrant` l'avait mis de côté avant — voir ce fichier.
-  const auScan = prendreLeScan()
-  const [chemin, setChemin] = useState(auScan ? auScan.chemin : [])
-  // Ne vaut qu'une fois : une fois la question posée, on n'y revient pas.
-  const [droitALaDeclaration, setDroitALaDeclaration] = useState(!!auScan?.declarer)
+  // ⚠️ ON REGARDE LE SCAN SANS LE PRENDRE (Layla, 2026-09-20 : « le cadre
+  // marche, la crème m'envoie à la page à faire »).
+  //
+  // Je le consommais dans le corps du composant. Un rendu que React jette — et
+  // il en jette — emportait la demande avec lui : elle était « prise » sans
+  // jamais être appliquée, et l'écran ouvrait sa liste d'accueil sans un mot.
+  // Le gâteau passait parce qu'il tombe juste du premier coup ; un composant,
+  // non. On lit donc sans effacer, et on n'oublie qu'une fois posé.
+  const [scan] = useState(lireLeScan)
+  const [chemin, setChemin] = useState(() => (scan ? scan.chemin : []))
+  const [droitALaDeclaration, setDroitALaDeclaration] = useState(!!scan?.declarer)
+  useEffect(() => { if (scan) oublierLeScan() }, [scan])
+
+  // ⚠️ ET SI ÇA N'ABOUTIT PAS, ON LE DIT. Retomber en silence sur l'accueil,
+  // c'est ce qui a fait croire trois fois de suite que le scan « ne faisait
+  // rien ». Le chemin part plein : s'il se vide, c'est qu'on n'y est pas
+  // arrivé.
+  const vise = scan?.chemin?.[scan.chemin.length - 1]
+  useEffect(() => {
+    if (vise && !chemin.length) {
+      toast(`« ${propre(vise)} » n'a pas pu s'ouvrir : il n'est pas dans cette recette aujourd'hui.`)
+    }
+  }, [vise, chemin.length])
   // Ce qu'on a décidé de faire. On part travailler, on revient — même le
   // lendemain — le chiffre est toujours là. Il ne part qu'avec
   // « réinitialiser », ou quand l'article est déclaré. (Layla, 2026-09-11.)

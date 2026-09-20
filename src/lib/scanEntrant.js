@@ -51,6 +51,22 @@ export function prendreLeScan() {
 }
 
 /**
+ * REGARDER sans prendre.
+ *
+ * ⚠️ Prendre pendant le rendu, c'était perdre la demande (Layla, 2026-09-20 :
+ * « le cadre marche, la crème m'envoie à la page à faire »). React jette
+ * certains rendus — et il emportait le scan avec lui : la demande était
+ * consommée sans jamais être appliquée, et l'écran ouvrait sa liste d'accueil
+ * sans un mot. On regarde donc d'abord, et on n'oublie qu'une fois posé.
+ */
+export const lireLeScan = () => restant
+
+/** Une fois la demande appliquée, elle ne doit plus resservir. */
+export function oublierLeScan() {
+  restant = null
+}
+
+/**
  * Poser une demande sans passer par l'adresse — quand on vient de « À
  * déclarer » et qu'on est déjà dans l'app.
  *

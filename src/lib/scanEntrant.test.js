@@ -41,6 +41,19 @@ describe('ce que le QR demandait', () => {
     expect(m.prendreLeScan()).toBeNull()
   })
 
+  // ⚠️ LE BUG DE FOND (Layla, 2026-09-20). Prendre la demande pendant le rendu,
+  // c'était la perdre : React jette certains rendus, et il emportait le scan
+  // avec lui — « pris » sans jamais être appliqué.
+  it('REGARDER ne consomme pas : on peut regarder dix fois', async () => {
+    const m = await demarrerA('/?article=SM.%20Creme&declarer=1')
+    expect(m.lireLeScan()).toBeTruthy()
+    expect(m.lireLeScan()).toBeTruthy()
+    expect(m.lireLeScan()).toBeTruthy()
+    // …et on n'oublie qu'une fois la demande posée pour de bon.
+    m.oublierLeScan()
+    expect(m.lireLeScan()).toBeNull()
+  })
+
   it('ne demande rien quand on arrive normalement', async () => {
     const m = await demarrerA('/?view=fabrication-annexe-2')
     expect(m.prendreLeScan()).toBeNull()
