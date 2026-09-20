@@ -1139,6 +1139,23 @@ export default async function handler(req, res) {
           .eq('id', id).select(F).single()
         if (error) return res.status(200).json({ error: error.message })
 
+        // ⚠️ ET LA CASCADE REVIENT AVEC (Layla, 2026-09-20 : « quand je redonne
+        // une deuxième fois, toute la cascade doit revenir comme au début »).
+        // On ne relève QUE ce qui était tombé par ricochet — le gâteau et les
+        // articles mère, fermés avec le motif « cascade-rendue » parce qu'ils
+        // n'avaient aucune marchandise à rendre.
+        //
+        // ⚠️ Ce qui portait de la VRAIE matière, lui, attend son propre scan :
+        // relever ces lignes-là, ce serait écrire que l'économe a ressorti une
+        // marchandise qu'il n'a pas ressortie — la faute qu'elle m'avait déjà
+        // fait corriger ce matin.
+        if (feuille.liasse) {
+          await sb.from('annexe_feuilles')
+            .update({ pas_faite_le: null, motif: null, retour_le: null, retour_par: null })
+            .eq('liasse', feuille.liasse).neq('id', id)
+            .eq('motif', 'cascade-rendue').is('declare_le', null)
+        }
+
         // En revanche, on lui dit ce qui l'attend encore pour CE gâteau — sans
         // rien cocher à sa place. C'est tout ce à quoi sert la liasse.
         let reste = 0
