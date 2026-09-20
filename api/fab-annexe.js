@@ -1115,53 +1115,12 @@ export default async function handler(req, res) {
         return res.status(200).json({ feuille: data })
       }
 
-      // LA DÉCLARATION.
-      if (req.query.mode === 'declarer') {
-        if (feuille.declare_le) return res.status(200).json({ feuille, deja: true })
-        const qty = Number(body.qty)
-        if (!(qty > 0)) return res.status(200).json({ error: 'Il manque la quantité sortie.' })
-
-        // ⚠️ LE JOURNAL D'ABORD, et lui seul est attendu : c'est le travail de
-        // l'atelier, il ne doit jamais se perdre. L'ordre Odoo suit.
-        // `fait_par` = celui à qui l'économe a DONNÉ : c'est de là que vient le
-        // nom, pas d'un écran de connexion.
-        const qui = feuille.imprime_par || feuille.donne_par || null
-        const { data: ligne, error: eJournal } = await sb.from('prod_fabrications')
-          .insert({
-            jour: feuille.jour, article: feuille.produit, qty, unite: feuille.unite,
-            atelier: 'annexe', fait_par: qui, fait_le: new Date().toISOString(),
-            pour: feuille.pour || null,
-          }).select('id').single()
-        if (eJournal) return res.status(200).json({ error: eJournal.message })
-
-        const { data: maj } = await sb.from('annexe_feuilles')
-          .update({ declare_le: new Date().toISOString(), declare_qty: qty, fabrication_id: ligne.id })
-          .eq('id', id).select(F).single()
-
-        // ⚠️ UNE SEULE CONVENTION VERS ODOO : des GRAMMES, ou des pièces.
-        // L'unité de l'article ne voyage pas — c'est elle qui avait produit un
-        // ordre de « 14,33 g » là où il en fallait 14 328 (Layla, 11/09).
-        // L'ordre part DERRIÈRE : sept allers-retours à Odoo, on ne fait
-        // attendre personne. La déclaration, elle, est déjà enregistrée.
-        const enPieces = /^u$/i.test(String(feuille.unite || '').trim())
-        const pourOdoo = enPieces ? qty : enGrammes(qty, feuille.unite)
-        const base = process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : ''
-        waitUntil(fetch(base + '/api/freezer-list?mode=creer-of', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            produit: feuille.produit, qty: pourOdoo, unite: enPieces ? 'u' : 'g',
-            atelier: 'annexe', actorId: qui,
-          }),
-        }).then(r => r.json()).then(of => {
-          if (of?.name && !of.error) {
-            return sb.from('prod_fabrications')
-              .update({ ordre: of.name, ordre_cree: !of.deja }).eq('id', ligne.id)
-          }
-          console.warn('[feuille] ordre non créé pour', feuille.produit, of?.error)
-        }).catch(e => console.warn('[feuille] ordre non parti :', e?.message || e)))
-
-        return res.status(200).json({ feuille: maj || feuille, fabrication: ligne.id })
-      }
+      // ⚠️ IL N'Y A PLUS DE DÉCLARATION ICI (Layla, 2026-09-20). Cette page
+      // savait déclarer toute seule : c'était une deuxième comptabilité, plus
+      // pauvre que l'écran « c'est fait » — sans les cuves, sans le pressage,
+      // sans le verrou des composants, sans le reste de la crème — et la
+      // garantie de compter deux fois le même travail. Le QR emmène désormais
+      // à l'écran, et c'est lui qui éteint la ligne (`feuilles=eteindre`).
 
       return res.status(400).json({ error: 'action inconnue' })
     }

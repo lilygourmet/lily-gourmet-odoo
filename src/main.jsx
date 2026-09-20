@@ -2,6 +2,9 @@ import { StrictMode, Component, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './lib/autoUpdate'   // recharge l'app toute seule quand une nouvelle version est déployée
+// ⚠️ À LIRE AVANT REACT : l'app réécrit l'adresse au démarrage et emporterait
+// le `?article=` du QR. Ce module le met de côté au premier instant.
+import './lib/scanEntrant'
 // Chargés à la demande : l'app interne et les pages clients publiques sont des
 // bundles séparés → chaque visiteur ne télécharge QUE ce dont il a besoin.
 const App = lazy(() => import('./App.jsx'))

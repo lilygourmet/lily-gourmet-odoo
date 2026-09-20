@@ -29,6 +29,7 @@ import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistorique
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { nouvelId, poserFeuilles, eteindreFeuille } from '../lib/feuilles'
+import { prendreLeScan } from '../lib/scanEntrant'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
 import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock, teteDe } from '../lib/feuillesAImprimer'
@@ -71,15 +72,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // déclaration (`&declarer=1`). Il n'y a plus qu'UNE façon de déclarer,
   // celle-ci — avec ses cuves, son verrou et le reste de la crème. Le scan
   // n'est qu'un raccourci vers elle.
-  const auScan = (() => {
-    try {
-      const sp = new URLSearchParams(window.location.search)
-      const a = sp.get('article')
-      if (!a) return null
-      window.history.replaceState({}, '', '?view=fabrication-annexe-2')
-      return { article: a, declarer: sp.get('declarer') === '1' }
-    } catch { return null }
-  })()
+  // ⚠️ Pas lu dans l'adresse : elle a déjà été réécrite par `App.jsx` au
+  // démarrage. `scanEntrant` l'avait mis de côté avant — voir ce fichier.
+  const auScan = prendreLeScan()
   const [chemin, setChemin] = useState(auScan ? [auScan.article] : [])
   // Ne vaut qu'une fois : une fois la question posée, on n'y revient pas.
   const [droitALaDeclaration, setDroitALaDeclaration] = useState(!!auScan?.declarer)

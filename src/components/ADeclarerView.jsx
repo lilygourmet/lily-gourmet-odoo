@@ -19,8 +19,9 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDeclarer, aDonner, donner, declarer, rendue, depuis, lienFeuille }
+import { feuillesDuJour, aDeclarer, aDonner, donner, rendue, depuis, lienFeuille }
   from '../lib/feuilles'
+import { poserLeScan } from '../lib/scanEntrant'
 
 /**
  * Rouge au-delà de deux heures : 40 min c'est normal, 5 h se voit de loin.
@@ -41,7 +42,6 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
   const [feuilles, setFeuilles] = useState(null)
   const [erreur, setErreur] = useState('')
   const [busy, setBusy] = useState(null)
-  const [saisie, setSaisie] = useState({})
 
   const relire = useCallback(() => {
     feuillesDuJour().then(setFeuilles).catch(e => setErreur(e.message || String(e)))
@@ -55,6 +55,13 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
     return () => clearInterval(t)
   }, [relire])
 
+  /** Le vrai écran de déclaration, posé sur cet article. */
+  const ouvrirPourDeclarer = f => {
+    navigator.vibrate?.(15)
+    poserLeScan({ article: f.produit, declarer: true })
+    onNavigate?.('fabrication-annexe-2')
+  }
+
   const agir = async (f, quoi) => {
     if (busy) return
     navigator.vibrate?.(15)
@@ -66,12 +73,7 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
     setBusy(f.id)
     try {
       if (quoi === 'donner') await donner(f.id, user?.id)
-      else if (quoi === 'rendue') await rendue(f.id)
-      else {
-        const q = Number(String(saisie[f.id] ?? f.qty_prevue ?? '').replace(',', '.'))
-        if (!(q > 0)) { toast('Écris d’abord combien ça a sorti.'); setBusy(null); return }
-        await declarer(f.id, q)
-      }
+      else await rendue(f.id)
       relire()
     } catch (e) { toast('Erreur : ' + (e.message || e)) }
     finally { setBusy(null) }
@@ -117,19 +119,16 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
             </div>
 
             <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <input
-                type="text" inputMode="decimal"
-                aria-label={`Quantité sortie de ${propre(f.libelle || f.produit)}`}
-                value={saisie[f.id] ?? (f.qty_prevue ?? '')}
-                onChange={e => setSaisie(s => ({ ...s, [f.id]: e.target.value.replace(/[^\d.,]/g, '') }))}
-                className="w-[104px] text-right text-[17px] font-extrabold tabular-nums
-                           rounded-xl px-3 py-2 border-2 border-bordeaux bg-cream" />
-              <span className="text-[13px] font-bold text-ink-mute">{f.unite || ''}</span>
+              {/* ⚠️ ON NE DÉCLARE PAS ICI. Cet onglet avait sa propre petite
+                  saisie : c'était une déclaration appauvrie, à côté de l'écran
+                  qui connaît les cuves, le pressage, le verrou des composants
+                  et le reste de la crème. Toucher la ligne ouvre donc le vrai
+                  écran, exactement comme le QR — une seule façon de déclarer. */}
               <button
-                onClick={() => agir(f, 'declarer')} disabled={busy === f.id}
+                onClick={() => ouvrirPourDeclarer(f)}
                 className="rounded-full bg-bordeaux text-cream px-5 py-2 text-[13px] font-bold
-                           active:scale-95 transition disabled:opacity-50">
-                {busy === f.id ? '…' : 'Déclarer'}
+                           active:scale-95 transition">
+                Ouvrir pour déclarer
               </button>
               {/* ⚠️ LA SEULE SORTIE SANS DÉCLARATION (Layla, 2026-09-20).
                   « Pas faite » n'existe plus : une fournée qu'on n'a pas eu le

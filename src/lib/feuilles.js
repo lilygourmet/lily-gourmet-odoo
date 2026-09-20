@@ -131,9 +131,6 @@ const agir = async (id, mode, corps = {}) => {
 /** L'économe a donné la marchandise : la déclaration devient due. */
 export const donner = (id, userId) => agir(id, 'donner', { userId })
 
-/** Ce qui est sorti de la fournée. */
-export const declarer = (id, qty) => agir(id, 'declarer', { qty })
-
 /**
  * RENDUE À L'ÉCONOME — la seule façon pour une ligne de partir sans avoir été
  * déclarée.
