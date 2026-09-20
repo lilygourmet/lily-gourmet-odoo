@@ -10,7 +10,7 @@
 // ============================================================
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { etatFeuille, aDeclarer, aDonner, depuis, lienFeuille, nouvelId } from './feuilles'
+import { etatFeuille, aDeclarer, aDonner, depuis, lienFeuille, nouvelId, cheminDe } from './feuilles'
 
 const imprimee = { id: 'a', imprime_le: '2026-09-19T08:00:00Z' }
 const donnee = { ...imprimee, id: 'b', donne_le: '2026-09-19T09:00:00Z' }
@@ -139,5 +139,28 @@ describe('depuis combien de temps', () => {
 
   it('ne dit rien quand il n’y a pas de date', () => {
     expect(depuis(null)).toBe('')
+  })
+})
+
+
+// ⚠️ « Ça ne m'emmène encore pas vers le produit » (Layla, 2026-09-20). Les
+// papiers imprimés AVANT le chemin n'en ont pas — et ils se ressemblent tous
+// sur le plan de travail. Sans repli, les scanner renvoyait à l'accueil.
+describe('par où rouvrir une feuille', () => {
+  it('prend le chemin complet quand il existe', () => {
+    const chemin = ['SM- Cadre', 'SM. Creme au Beurre', 'SM. Creme Citron']
+    expect(cheminDe({ produit: 'SM. Creme Citron', pour: 'SM- Cadre', chemin })).toEqual(chemin)
+  })
+
+  it('à défaut, descend du gâteau vers l’article', () => {
+    // Vérifié sur les vraies données de Layla : 8 vieux papiers sur 10
+    // retombent juste ainsi.
+    expect(cheminDe({ produit: 'SM. Creme Citron', pour: 'SM- Cadre' }))
+      .toEqual(['SM- Cadre', 'SM. Creme Citron'])
+  })
+
+  it('un gâteau s’ouvre seul : il est au catalogue', () => {
+    expect(cheminDe({ produit: 'SM- Cadre', pour: 'SM- Cadre' })).toEqual(['SM- Cadre'])
+    expect(cheminDe({ produit: 'SM- Cadre' })).toEqual(['SM- Cadre'])
   })
 })

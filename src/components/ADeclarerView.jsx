@@ -21,7 +21,7 @@ import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDeclarer, depuis } from '../lib/feuilles'
+import { feuillesDuJour, aDeclarer, depuis, cheminDe } from '../lib/feuilles'
 import { poserLeScan } from '../lib/scanEntrant'
 
 /**
@@ -59,8 +59,8 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
   const ouvrirPourDeclarer = f => {
     navigator.vibrate?.(15)
     // Le chemin entier : une crème ne s'ouvre pas seule, elle se descend
-    // depuis son gâteau (voir `scanEntrant`).
-    poserLeScan({ chemin: (f.chemin && f.chemin.length) ? f.chemin : [f.produit], declarer: true })
+    // depuis son gâteau (voir `cheminDe`).
+    poserLeScan({ chemin: cheminDe(f), declarer: true })
     onNavigate?.('fabrication-annexe-2')
   }
 

@@ -20,7 +20,7 @@
 // ============================================================
 
 import { useState, useEffect } from 'react'
-import { lireFeuille, donner, etatFeuille, depuis } from '../lib/feuilles'
+import { lireFeuille, donner, etatFeuille, depuis, cheminDe } from '../lib/feuilles'
 import { propre, qte } from '../lib/ecranSimple'
 
 const Cadre = ({ children }) => (
@@ -149,7 +149,7 @@ export default function FeuilleScanView() {
       <p className="text-[15px] font-bold text-center py-16 text-ink-mute">
         On t’emmène à {nom}…
       </p>
-      <CommeSiOnAvaitScanne chemin={(f.chemin && f.chemin.length) ? f.chemin : [f.produit]} />
+      <CommeSiOnAvaitScanne chemin={cheminDe(f)} />
     </Cadre>
   )
 }

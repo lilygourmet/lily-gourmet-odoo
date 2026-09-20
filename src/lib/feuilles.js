@@ -165,6 +165,26 @@ const clos = f => !!(f?.declare_le || f?.pas_faite_le)
  */
 const attendLEconome = f => !clos(f) && !f.sans_economat && !f.donne_le
 
+/**
+ * PAR OÙ ROUVRIR CETTE FEUILLE.
+ *
+ * Le chemin complet quand on l'a — « Cadre Citron › Crème au beurre › Crème
+ * citron ». Une crème n'est PAS au catalogue des articles suivis : la nommer
+ * seule ne l'ouvre pas, on n'y descend que depuis son gâteau.
+ *
+ * ⚠️ REPLI POUR LES PAPIERS D'AVANT. Les feuilles imprimées avant le
+ * 2026-09-20 n'ont pas de chemin enregistré, et les papiers se ressemblent
+ * tous sur le plan de travail : sans repli, scanner un vieux papier renvoyait
+ * à la liste d'accueil sans rien dire. Avec `[gâteau, article]`, 8 des 10
+ * derniers vieux papiers de Layla retombent juste — vérifié sur ses vraies
+ * données. Les deux autres descendent de trois niveaux : l'écran pèle alors
+ * une marche et ouvre le gâteau, ce qui reste utilisable.
+ */
+export function cheminDe(f) {
+  if (f?.chemin && f.chemin.length) return f.chemin
+  return f?.pour && f.pour !== f.produit ? [f.pour, f.produit] : [f?.produit]
+}
+
 /** L'état d'une feuille, en un mot. */
 export function etatFeuille(f) {
   if (f?.declare_le) return 'declaree'
