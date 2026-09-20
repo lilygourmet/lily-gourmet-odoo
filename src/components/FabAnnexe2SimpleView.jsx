@@ -13,7 +13,7 @@
 // Les composants d'affichage vivent dans `FabAnnexe2Simple.jsx` ; ici, on
 // charge, on navigue, on déclare.
 // ============================================================
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
@@ -44,23 +44,45 @@ import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec
  */
 const photoGateau = a => (a.pour && a.pour[0]) || a.photo || a.produit
 
+/**
+ * REJOUER LE GESTE « C'EST FAIT », UNE SEULE FOIS.
+ *
+ * « Scanne pour déclarer doit t'emmener direct vers la page de c'est fait de
+ * cet article » (Layla, 2026-09-20).
+ *
+ * ⚠️ On rejoue le geste, on ne le court-circuite pas : « c'est fait » décide
+ * s'il faut demander la découpe, le pressage, ou rien du tout. Sauter par-
+ * dessus pour ouvrir l'écran de sortie à la main, c'était perdre ces règles-là
+ * pour tous ceux qui arrivent par le QR.
+ */
+function CommeSiOnAvaitAppuye({ appuyer }) {
+  const fait = useRef(false)
+  useEffect(() => {
+    if (!fait.current) { fait.current = true; appuyer() }
+  })
+  return null
+}
+
 export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activeView }) {
   const [articles, setArticles] = useState(() => dernierEcran('fab_annexe2'))
   const [details, setDetails] = useState(() =>
     Object.fromEntries((dernierEcran('fab_annexe2') || []).map(a => [a.produit, a])))
-  // ⚠️ LE QR OUVRE DIRECTEMENT LE BON ARTICLE (`?article=…`). C'est tout ce
-  // qu'il fait : il n'y a plus qu'UNE façon de déclarer, celle-ci — avec ses
-  // cuves, son verrou et le reste de la crème. Le scan n'est qu'un raccourci.
-  const [chemin, setChemin] = useState(() => {
+  // ⚠️ LE QR OUVRE DIRECTEMENT LE BON ARTICLE (`?article=…`), et va droit à sa
+  // déclaration (`&declarer=1`). Il n'y a plus qu'UNE façon de déclarer,
+  // celle-ci — avec ses cuves, son verrou et le reste de la crème. Le scan
+  // n'est qu'un raccourci vers elle.
+  const auScan = (() => {
     try {
-      const a = new URLSearchParams(window.location.search).get('article')
-      if (a) {
-        window.history.replaceState({}, '', '?view=fabrication-annexe-2')
-        return [a]
-      }
-    } catch { /* pas d'URL lisible */ }
-    return []
-  })
+      const sp = new URLSearchParams(window.location.search)
+      const a = sp.get('article')
+      if (!a) return null
+      window.history.replaceState({}, '', '?view=fabrication-annexe-2')
+      return { article: a, declarer: sp.get('declarer') === '1' }
+    } catch { return null }
+  })()
+  const [chemin, setChemin] = useState(auScan ? [auScan.article] : [])
+  // Ne vaut qu'une fois : une fois la question posée, on n'y revient pas.
+  const [droitALaDeclaration, setDroitALaDeclaration] = useState(!!auScan?.declarer)
   // Ce qu'on a décidé de faire. On part travailler, on revient — même le
   // lendemain — le chiffre est toujours là. Il ne part qu'avec
   // « réinitialiser », ou quand l'article est déclaré. (Layla, 2026-09-11.)
@@ -701,6 +723,41 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // L'étape de mise en forme qu'on confirmera en validant — la base de flan.
   const pressage = pressageDe(noeud)
 
+  /**
+   * LE GESTE « C'EST FAIT », nommé pour pouvoir être REJOUÉ à l'identique
+   * quand on arrive par le QR (Layla, 2026-09-20 : « scanne pour déclarer doit
+   * t'emmener direct vers la page de c'est fait de cet article »).
+   *
+   * ⚠️ C'est lui qui décide s'il faut demander la découpe, le pressage, ou
+   * rien du tout. Ouvrir l'écran de sortie à la main par-dessus, c'était
+   * perdre ces règles-là pour tous ceux qui arrivent par le scan.
+   */
+  const gesteFait = () => {
+    // Une DÉCOUPE : si on a cuit quelque chose, on demande combien
+    // il en est vraiment sorti — « il faudrait qu'il demande
+    // combien il en a fait de ce sablé crispy » (Layla,
+    // 2026-09-11). Si on n'a rien cuit (c'était au frigo), rien à
+    // demander : seules les pièces partent.
+    if (decoupe) {
+      const nb = aCuire(noeud, decoupe)
+      if (nb > 0 && !sansRendement(decoupe.enfant.produit)) {
+        return setSortie({ pour: 'enfant', valeur: nb })
+      }
+      return envoyer(noeud, tete, q)
+    }
+    // La MISE EN FORME se confirme ici, pas dans une étape à part :
+    // « tu as validé flan ; le crispy y est, combien de base tu as
+    // coupé ? » (Layla, 2026-09-11). Le nombre qu'il faut est déjà
+    // rempli — on peut en presser plus si on veut de l'avance.
+    if (pressage) {
+      return setSortie({ pour: 'pressage', valeur: Math.ceil(pressage.besoin) })
+    }
+    // On ne demande « combien ça a donné ? » que quand la réponse
+    // peut surprendre : un biscuit sort toujours son compte.
+    if (sansRendement(noeud.libelle || noeud.produit)) return envoyer(noeud, tete, q)
+    setSortie({ pour: 'article', valeur: q })
+  }
+
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader {...nav} />
@@ -807,31 +864,15 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                   setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
                 } : undefined}
               onOuvrir={p => { figer(q); setChemin([...chemin, p]) }}
-              onFait={() => {
-                // Une DÉCOUPE : si on a cuit quelque chose, on demande combien
-                // il en est vraiment sorti — « il faudrait qu'il demande
-                // combien il en a fait de ce sablé crispy » (Layla,
-                // 2026-09-11). Si on n'a rien cuit (c'était au frigo), rien à
-                // demander : seules les pièces partent.
-                if (decoupe) {
-                  const nb = aCuire(noeud, decoupe)
-                  if (nb > 0 && !sansRendement(decoupe.enfant.produit)) {
-                    return setSortie({ pour: 'enfant', valeur: nb })
-                  }
-                  return envoyer(noeud, tete, q)
-                }
-                // La MISE EN FORME se confirme ici, pas dans une étape à part :
-                // « tu as validé flan ; le crispy y est, combien de base tu as
-                // coupé ? » (Layla, 2026-09-11). Le nombre qu'il faut est déjà
-                // rempli — on peut en presser plus si on veut de l'avance.
-                if (pressage) {
-                  return setSortie({ pour: 'pressage', valeur: Math.ceil(pressage.besoin) })
-                }
-                // On ne demande « combien ça a donné ? » que quand la réponse
-                // peut surprendre : un biscuit sort toujours son compte.
-                if (sansRendement(noeud.libelle || noeud.produit)) return envoyer(noeud, tete, q)
-                setSortie({ pour: 'article', valeur: q })
-              }} />
+              onFait={gesteFait} />
+              {/* Arrivé par le QR : on appuie sur « c'est fait » à sa place,
+                  une seule fois, et par le même chemin que son doigt. */}
+              {droitALaDeclaration && !sortie && (
+                <CommeSiOnAvaitAppuye appuyer={() => {
+                  setDroitALaDeclaration(false)
+                  gesteFait()
+                }} />
+              )}
             </div>
           )}
       </div>

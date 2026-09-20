@@ -20,7 +20,7 @@
 // ============================================================
 
 import { useState, useEffect } from 'react'
-import { lireFeuille, donner, pasFaite, etatFeuille, depuis } from '../lib/feuilles'
+import { lireFeuille, donner, etatFeuille, depuis } from '../lib/feuilles'
 import { propre, qte } from '../lib/ecranSimple'
 
 const Cadre = ({ children }) => (
@@ -52,16 +52,13 @@ export default function FeuilleScanView() {
       .catch(e => setErreur(e.message || String(e)))
   }, [id])
 
-  const faire = async (quoi) => {
+  const faire = async () => {
     if (envoi) return
     navigator.vibrate?.(15)
     setEnvoi(true)
     try {
-      if (quoi === 'donner') {
-        const r = await donner(id, null)
-        setF(r.feuille); setReste(r.reste || 0); setFini('donne')
-      }
-      else { const r = await pasFaite(id); setF(r.feuille); setFini('pas-faite') }
+      const r = await donner(id, null)
+      setF(r.feuille); setReste(r.reste || 0); setFini('donne')
     } catch (e) { setErreur(e.message || String(e)) }
     finally { setEnvoi(false) }
   }
@@ -110,7 +107,7 @@ export default function FeuilleScanView() {
           </p>
 
           <button
-            onClick={() => faire('donner')}
+            onClick={faire}
             disabled={envoi}
             className="w-full mt-7 rounded-2xl bg-ok text-cream py-5 text-[19px] font-extrabold
                        active:scale-95 transition disabled:opacity-50">
@@ -138,45 +135,29 @@ export default function FeuilleScanView() {
   // écran. Le prix, et je l'ai dit à Layla : le pâtissier doit être connecté —
   // une fois le matin, ça tient 12 h. L'économe, lui, garde son geste sans mot
   // de passe, parce que le sien est simple : donné, ou pas donné.
-  const pasEncoreDonne = etat === 'imprimee'
-  const ouvrirLEcran = () => {
-    navigator.vibrate?.(15)
-    window.location.href = `/?view=fabrication-annexe-2&article=${encodeURIComponent(f.produit)}`
-  }
+  // ⚠️ AUCUNE PAGE D'ATTENTE (Layla, 2026-09-20 : « scanne pour déclarer doit
+  // t'emmener DIRECT vers la page de c'est fait de cet article »). Une page
+  // intermédiaire avec un bouton, c'est un geste de plus au plan de travail —
+  // et on en a déjà retiré partout ailleurs.
+  //
+  // « Pas faite » vit maintenant dans l'onglet ✍️ À déclarer : cette réponse-là
+  // se donne en fin de service, la tête froide, pas la main dans la farine.
   return (
     <Cadre>
-      <div className="bg-cream-warm border border-line rounded-3xl p-6">
-        <h1 className="font-fraunces italic text-[25px] text-ink leading-tight">{nom}</h1>
-        {f.donne_le
-          ? <p className="text-[12.5px] text-ink-mute mt-1">donné il y a {depuis(f.donne_le)}</p>
-          : <p className="text-[12.5px] text-gold mt-1">l’économe n’a pas encore validé</p>}
-        <p className="text-[14px] text-ink-soft mt-4">Prévu : <b>{attendu}</b></p>
-
-        <button
-          onClick={ouvrirLEcran}
-          className="w-full mt-6 rounded-2xl bg-bordeaux text-cream py-5 text-[19px] font-extrabold
-                     active:scale-95 transition">
-          Déclarer cette fournée
-        </button>
-
-        {/* ⚠️ LA PORTE DE SORTIE, elle, reste ici : « pas faite » ne demande
-            aucune des règles de l'écran, et sans elle ils cesseraient de passer
-            par l'économe — on perdrait la trace qu'on cherche à construire. */}
-        <button
-          onClick={() => faire('pas-faite')}
-          disabled={envoi}
-          className="w-full mt-2 rounded-2xl border border-line text-ink-soft py-3 text-[14px]
-                     font-bold active:scale-95 transition disabled:opacity-50">
-          {envoi ? '…' : 'Pas faite'}
-        </button>
-
-        {pasEncoreDonne && (
-          <p className="text-[11.5px] text-ink-mute text-center mt-4">
-            Cette feuille n’est pas encore passée par l’économe.
-          </p>
-        )}
-        {erreur && <p className="text-[13px] text-bordeaux text-center mt-3">{erreur}</p>}
-      </div>
+      <p className="text-[15px] font-bold text-center py-16 text-ink-mute">
+        On t’emmène à {nom}…
+      </p>
+      <CommeSiOnAvaitScanne produit={f.produit} />
     </Cadre>
   )
+}
+
+/** Emmener, une seule fois, sans rien demander. */
+function CommeSiOnAvaitScanne({ produit }) {
+  useEffect(() => {
+    navigator.vibrate?.(15)
+    window.location.replace(
+      `/?view=fabrication-annexe-2&article=${encodeURIComponent(produit)}&declarer=1`)
+  }, [produit])
+  return null
 }
