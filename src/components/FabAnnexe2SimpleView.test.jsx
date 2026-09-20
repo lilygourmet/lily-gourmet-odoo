@@ -65,6 +65,40 @@ const ouvrirLaFiche = async () => {
   await waitFor(() => expect(screen.getByText("C'est fait")).toBeTruthy())
 }
 
+// ============================================================
+// ARRIVER PAR LE QR : la fiche doit s'OUVRIR.
+//
+// « Non, ça n'emmène toujours pas vers l'article. Ça dit que ça le fait mais ça
+// ne le fait pas » (Layla, 2026-09-20). Trois tentatives de ma part, trois
+// échecs — cette fois on rejoue le geste ici, en entier.
+// ============================================================
+describe('arriver par le scan', () => {
+  it('ouvre la fiche de l’article, pas la liste d’accueil', async () => {
+    const { poserLeScan } = await import('../lib/scanEntrant')
+    poserLeScan({ chemin: ['SM. sirop Imbibage production KG'], declarer: false })
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    // La fiche, pas la liste : le bouton « C'est fait » n'existe que dedans.
+    await waitFor(() => expect(screen.getByText("C'est fait")).toBeTruthy())
+  })
+
+  // ⚠️ Un chemin dont une marche ne colle plus ne doit PAS renvoyer à
+  // l'accueil : on remonte d'un cran, jusqu'au gâteau s'il le faut.
+  it('un chemin abîmé retombe sur le gâteau, pas sur la liste', async () => {
+    const { poserLeScan } = await import('../lib/scanEntrant')
+    poserLeScan({ chemin: ['SM. sirop Imbibage production KG', 'SM- Composant disparu'] })
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    await waitFor(() => expect(screen.getByText("C'est fait")).toBeTruthy())
+  })
+
+  it('et va DROIT au chiffre quand le QR le demande', async () => {
+    const { poserLeScan } = await import('../lib/scanEntrant')
+    poserLeScan({ chemin: ['SM. sirop Imbibage production KG'], declarer: true })
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    // « Scanne pour déclarer doit t'emmener direct vers la page de c'est fait »
+    await waitFor(() => expect(screen.getByText(/Il en est sorti combien/)).toBeTruthy())
+  })
+})
+
 describe('le chemin complet', () => {
   it('la fiche s’ouvre sur la fournée, écrite en GRAMMES', async () => {
     await ouvrirLaFiche()

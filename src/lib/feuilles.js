@@ -215,5 +215,15 @@ export function aDeclarer(feuilles) {
   })
 }
 
+/**
+ * Ce que l'économe a SORTI DE SA RÉSERVE et que personne n'a déclaré.
+ *
+ * C'est ce qu'il peut reprendre — et rien d'autre : une fournée qui n'avait
+ * rien à lui demander n'a rien à lui rendre. « Rendue n'est pas à rendre »
+ * (Layla, 2026-09-20).
+ */
+export const aReprendre = feuilles => (feuilles || []).filter(f =>
+  f.donne_par && !f.declare_le && !f.pas_faite_le)
+
 /** Ce que l'économe n'a pas encore donné — et lui seul peut le débloquer. */
 export const aDonner = feuilles => (feuilles || []).filter(attendLEconome)

@@ -11,16 +11,17 @@
 //
 // ⚠️ CE QUI EST DÉCLARÉ DISPARAÎT. « Que ce qui reste à déclarer » : une liste
 // vide veut dire qu'il n'y a rien à faire — et rien à cliquer.
+//
+// ⚠️ ET RIEN DE L'ÉCONOME ICI (Layla, 2026-09-20). « Rendue » traînait sur des
+// fournées dont il n'avait rien donné — « rendue n'est pas à rendre ». Ce qu'il
+// a sorti, et peut reprendre, vit dans SON onglet : voir `DonneView`.
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { toast } from '../lib/toast'
-import { confirmDialog } from '../lib/confirmDialog'
 import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDeclarer, aDonner, donner, rendue, depuis, lienFeuille }
-  from '../lib/feuilles'
+import { feuillesDuJour, aDeclarer, depuis } from '../lib/feuilles'
 import { poserLeScan } from '../lib/scanEntrant'
 
 /**
@@ -41,7 +42,6 @@ function Ligne({ children, ton }) {
 export default function ADeclarerView({ user, onLogout, onNavigate, activeView }) {
   const [feuilles, setFeuilles] = useState(null)
   const [erreur, setErreur] = useState('')
-  const [busy, setBusy] = useState(null)
 
   const relire = useCallback(() => {
     feuillesDuJour().then(setFeuilles).catch(e => setErreur(e.message || String(e)))
@@ -64,26 +64,8 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
     onNavigate?.('fabrication-annexe-2')
   }
 
-  const agir = async (f, quoi) => {
-    if (busy) return
-    navigator.vibrate?.(15)
-    // C'est la seule façon pour une ligne de disparaître sans qu'aucun travail
-    // n'ait été enregistré : on demande confirmation, une fois.
-    if (quoi === 'rendue' && !await confirmDialog(
-      `La marchandise de « ${propre(f.libelle || f.produit)} » est revenue à l’économe ?`,
-      { confirmLabel: 'Oui, rendue' })) return
-    setBusy(f.id)
-    try {
-      if (quoi === 'donner') await donner(f.id, user?.id)
-      else await rendue(f.id)
-      relire()
-    } catch (e) { toast('Erreur : ' + (e.message || e)) }
-    finally { setBusy(null) }
-  }
-
   const nav = { user, onLogout, onNavigate, activeView }
   const dues = feuilles ? aDeclarer(feuilles) : []
-  const attente = feuilles ? aDonner(feuilles) : []
 
   return (
     <div className="min-h-screen bg-cream">
@@ -132,54 +114,10 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
                            active:scale-95 transition">
                 Ouvrir pour déclarer
               </button>
-              {/* ⚠️ LA SEULE SORTIE SANS DÉCLARATION (Layla, 2026-09-20).
-                  « Pas faite » n'existe plus : une fournée qu'on n'a pas eu le
-                  temps de faire n'a rien à effacer — « c'est systématique
-                  gardé », la crème attend au frigo et le travail se fera. La
-                  ligne reste donc là, sans qu'on ait à cliquer.
-                  Elle ne part que si la marchandise est REVENUE à l'économe. */}
-              <button
-                onClick={() => agir(f, 'rendue')} disabled={busy === f.id}
-                className="rounded-full border border-line text-ink-soft px-4 py-2 text-[13px]
-                           font-bold active:scale-95 transition disabled:opacity-50">
-                Rendue
-              </button>
             </div>
           </Ligne>
         ))}
 
-        {/* ⚠️ LA LISTE DE L'ÉCONOME, EN SECOND. Elle ne sert pas à servir — il
-            scanne le papier pour ça — mais à voir ce qui traîne : imprimé, et
-            jamais venu chercher. Rien n'est dû sur ces lignes-là. */}
-        {!!attente.length && (
-          <>
-            <h2 className="font-fraunces italic text-[19px] text-ink mt-9">Pas encore donné</h2>
-            <p className="text-[12.5px] text-ink-mute mb-3">
-              Imprimé, mais personne n’est venu chercher la marchandise. Rien n’est dû.
-            </p>
-            {attente.map(f => (
-              <Ligne key={f.id} ton="border-l-line">
-                <div className="text-[14.5px] font-bold text-ink">{propre(f.libelle || f.produit)}</div>
-                <div className="text-[12px] text-ink-mute">
-                  imprimé il y a {depuis(f.imprime_le)} · {qte(f.qty_prevue, f.unite)}
-                </div>
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <button
-                    onClick={() => agir(f, 'donner')} disabled={busy === f.id}
-                    className="rounded-full bg-ok text-cream px-5 py-2 text-[13px] font-bold
-                               active:scale-95 transition disabled:opacity-50">
-                    {busy === f.id ? '…' : '✓ Donné'}
-                  </button>
-                  <a
-                    href={lienFeuille(f.id, true)} target="_blank" rel="noopener noreferrer"
-                    className="text-[12px] text-ink-mute underline">
-                    ouvrir la page du QR
-                  </a>
-                </div>
-              </Ligne>
-            ))}
-          </>
-        )}
       </div>
     </div>
   )

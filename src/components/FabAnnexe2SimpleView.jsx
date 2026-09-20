@@ -683,7 +683,14 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const prevuTete = prevus[chemin[0]]?.q
   const choisies = { ...(prevuTete !== undefined ? { [chemin[0]]: prevuTete } : {}), ...quantites }
   const { tete, noeud } = noeudDuChemin(brut, chemin, choisies)
-  if (!noeud) { setChemin([]); return null }
+  // ⚠️ ON NE JETTE PAS TOUT LE CHEMIN (Layla, 2026-09-20 : « ça n'emmène
+  // toujours pas vers l'article, ça dit que ça le fait mais ça ne le fait
+  // pas »). Une seule étape qui ne correspond plus à l'arbre du moment — la
+  // recette a changé, ou le composant n'est plus demandé à cette quantité —
+  // et on repartait à la liste d'accueil, comme si le scan n'avait rien dit.
+  // On pèle une marche à la fois : au pire on arrive sur le gâteau, jamais
+  // sur l'accueil.
+  if (!noeud) { setChemin(c => (c.length > 1 ? c.slice(0, -1) : [])); return null }
 
   const estTete = noeud.produit === tete.produit
   const q = quantites[noeud.produit]
