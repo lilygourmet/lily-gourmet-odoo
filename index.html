@@ -39,5 +39,40 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- ============================================================
+         FILET : L'ÉCRAN BLANC APRÈS UN DÉPLOIEMENT.
+         « Le lien d'essai ne fonctionne plus » — page blanche (Layla,
+         2026-09-20). Le téléphone gardait la page d'avant, qui réclame des
+         fichiers renommés depuis : ils répondent 404, et RIEN ne s'affiche.
+
+         ⚠️ Le garde qui existe déjà (`vite:preloadError`) ne couvre pas ce
+         cas-là : il ne parle que des écrans chargés à la demande. Quand c'est
+         le fichier PRINCIPAL qui manque, l'app ne démarre jamais — aucun code
+         à nous ne tourne, donc personne pour s'en apercevoir. D'où ce bout de
+         code dans la page elle-même.
+
+         Si rien n'est affiché au bout de 12 secondes, on recharge UNE fois
+         avec une adresse neuve (le `?lg=` contourne la page gardée en
+         mémoire). Une seule fois par minute : une app vraiment cassée ne doit
+         pas tourner en boucle — c'est ce qui était arrivé le 09/09, « le site
+         saute, se remet et saute ».
+
+         ⚠️ L'adresse est conservée telle quelle : le `?article=` d'un QR code
+         voyage dedans, et le perdre renverrait le pâtissier à l'accueil.
+         ============================================================ -->
+    <script>
+      setTimeout(function () {
+        var r = document.getElementById('root')
+        if (r && r.childElementCount > 0) return
+        try {
+          var dernier = Number(sessionStorage.getItem('lg:secours') || 0)
+          if (Date.now() - dernier < 60000) return
+          sessionStorage.setItem('lg:secours', String(Date.now()))
+        } catch (e) { return }
+        var u = new URL(window.location.href)
+        u.searchParams.set('lg', String(Date.now()))
+        window.location.replace(u.toString())
+      }, 12000)
+    </script>
   </body>
 </html>
