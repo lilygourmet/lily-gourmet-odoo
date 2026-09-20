@@ -1003,7 +1003,7 @@ export default async function handler(req, res) {
     if (req.query.feuille || req.query.feuilles) {
       const F = 'id, jour, produit, libelle, unite, qty_prevue, pour, chemin, liasse,'
         + ' sans_economat, imprime_par, imprime_le, donne_par, donne_le, declare_le,'
-        + ' declare_qty, pas_faite_le, motif'
+        + ' declare_qty, retour_le, retour_par, pas_faite_le, motif'
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
 
       // Toutes les feuilles du jour : « à donner » chez l'économe, « à
@@ -1140,6 +1140,31 @@ export default async function handler(req, res) {
           reste = count || 0
         }
         return res.status(200).json({ feuille: data, reste })
+      }
+
+      // LE PÂTISSIER REND LA MARCHANDISE. Il est le seul à savoir qu'il ne
+      // fera pas cette fournée — « c'est le pâtissier qui décide » (Layla,
+      // 2026-09-20). La ligne quitte « À déclarer » et va attendre dans
+      // l'onglet de l'économe, qui seul pourra la clore.
+      if (req.query.mode === 'rendre') {
+        if (feuille.declare_le) {
+          return res.status(200).json({ feuille, refus: 'Cette fournée a déjà été déclarée.' })
+        }
+        const { data, error } = await sb.from('annexe_feuilles')
+          .update({ retour_le: new Date().toISOString(), retour_par: body.userId || null })
+          .eq('id', id).select(F).single()
+        if (error) return res.status(200).json({ error: error.message })
+        return res.status(200).json({ feuille: data })
+      }
+
+      // L'ÉCONOME CONFIRME AVOIR RÉCUPÉRÉ. Le seul geste qu'il puisse honnêtement
+      // poser : la marchandise est revenue dans sa réserve. La ligne se ferme.
+      if (req.query.mode === 'retour-recu') {
+        const { data, error } = await sb.from('annexe_feuilles')
+          .update({ pas_faite_le: new Date().toISOString(), motif: 'retournee' })
+          .eq('id', id).select(F).single()
+        if (error) return res.status(200).json({ error: error.message })
+        return res.status(200).json({ feuille: data })
       }
 
       // « PAS FAITE » — une réponse valable, et il en faut une : sans porte de

@@ -9,8 +9,12 @@
 // mélanger, c'était proposer « Rendue » sur des fournées dont il n'avait rien
 // donné — « rendue n'est pas à rendre », et elle avait raison.
 //
-// ⚠️ ON NE MONTRE QUE CE QU'IL A DONNÉ LUI-MÊME. Une feuille qui n'avait rien
-// à demander n'a rien à rendre : elle n'a jamais rien pris.
+// ⚠️ IL NE DÉCIDE PAS DES RETOURS (Layla, 2026-09-20 : « c'est le pâtissier qui
+// décide »). Celui qui a la marchandise entre les mains est le seul à savoir
+// qu'il ne la fera pas ; l'économe, lui, ne peut confirmer qu'une chose — qu'il
+// l'a bien récupérée dans sa réserve. J'avais d'abord laissé l'économe fermer
+// des lignes tout seul : il aurait soldé de la marchandise sans rien avoir vu
+// revenir.
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
@@ -19,7 +23,7 @@ import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDonner, aReprendre, donner, rendue, depuis } from '../lib/feuilles'
+import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu, depuis } from '../lib/feuilles'
 
 export default function DonneView({ user, onLogout, onNavigate, activeView }) {
   const [feuilles, setFeuilles] = useState(null)
@@ -41,13 +45,13 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
   const agir = async (f, quoi) => {
     if (busy) return
     navigator.vibrate?.(15)
-    if (quoi === 'rendue' && !await confirmDialog(
-      `La marchandise de « ${propre(f.libelle || f.produit)} » est revenue dans ta réserve ?`,
-      { confirmLabel: 'Oui, reprise' })) return
+    if (quoi === 'retour' && !await confirmDialog(
+      `Tu as bien récupéré « ${propre(f.libelle || f.produit)} » dans ta réserve ?`,
+      { confirmLabel: 'Oui, récupérée' })) return
     setBusy(f.id)
     try {
       if (quoi === 'donner') await donner(f.id, user?.id)
-      else await rendue(f.id)
+      else await retourRecu(f.id)
       relire()
     } catch (e) { toast('Erreur : ' + (e.message || e)) }
     finally { setBusy(null) }
@@ -56,6 +60,7 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
   const nav = { user, onLogout, onNavigate, activeView }
   const attente = feuilles ? aDonner(feuilles) : []
   const sortis = feuilles ? aReprendre(feuilles) : []
+  const retours = feuilles ? enRetour(feuilles) : []
 
   const Carte = ({ f, children, ton }) => (
     <div className={`bg-cream-warm border border-line border-l-4 ${ton} rounded-2xl p-3 mb-2`}>
@@ -103,10 +108,35 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
           </>
         )}
 
-        {/* ---- ce qu'il a sorti, et peut reprendre ---- */}
+        {/* ---- ce que le pâtissier rend : le seul geste de l'économe ---- */}
+        {!!retours.length && (
+          <>
+            <h2 className="font-fraunces italic text-[19px] text-ink mt-8">On te rend</h2>
+            <p className="text-[12.5px] text-ink-mute mb-3">
+              Le pâtissier ne fera pas ces fournées. Confirme quand la marchandise
+              est revenue dans ta réserve.
+            </p>
+            {retours.map(f => (
+              <Carte key={f.id} f={f} ton="border-l-gold">
+                <div className="text-[11.5px] text-ink-mute mt-1">
+                  rendu il y a {depuis(f.retour_le)}
+                </div>
+                <button
+                  onClick={() => agir(f, 'retour')} disabled={busy === f.id}
+                  className="mt-3 rounded-full bg-bordeaux text-cream px-5 py-2 text-[13px]
+                             font-bold active:scale-95 transition disabled:opacity-50">
+                  {busy === f.id ? '…' : '✓ Retourné'}
+                </button>
+              </Carte>
+            ))}
+          </>
+        )}
+
+        {/* ---- ce qui est dehors : pour savoir, pas pour agir ---- */}
         <h2 className="font-fraunces italic text-[19px] text-ink mt-8">Sorti de la réserve</h2>
         <p className="text-[12.5px] text-ink-mute mb-3">
-          Pas encore déclaré. Si la marchandise te revient, reprends-la ici.
+          Donné, pas encore déclaré. Rien à faire ici : c’est le pâtissier qui
+          rend, s’il doit rendre.
         </p>
         {feuilles && !sortis.length && (
           <div className="text-center py-8 text-ink-mute italic text-[14px]">
@@ -118,12 +148,6 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
             <div className="text-[11.5px] text-ink-mute mt-1">
               donné il y a {depuis(f.donne_le)}
             </div>
-            <button
-              onClick={() => agir(f, 'rendue')} disabled={busy === f.id}
-              className="mt-3 rounded-full border border-line text-ink-soft px-4 py-2 text-[13px]
-                         font-bold active:scale-95 transition disabled:opacity-50">
-              {busy === f.id ? '…' : '↩ Repris'}
-            </button>
           </Carte>
         ))}
       </div>

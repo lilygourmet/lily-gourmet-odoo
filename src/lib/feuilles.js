@@ -137,6 +137,25 @@ const agir = async (id, mode, corps = {}) => {
 export const donner = (id, userId) => agir(id, 'donner', { userId })
 
 /**
+ * LE PÂTISSIER REND LA MARCHANDISE.
+ *
+ * « Si je veux faire un retour, c'est le pâtissier qui décide » (Layla,
+ * 2026-09-20). Il est le seul à savoir qu'il ne fera pas cette fournée. La
+ * ligne quitte alors « À déclarer » et va attendre chez l'économe.
+ */
+export const demanderRetour = (id, userId) => agir(id, 'rendre', { userId })
+
+/**
+ * L'ÉCONOME CONFIRME L'AVOIR RÉCUPÉRÉE — « jusqu'à ce qu'il clique retourné ».
+ * C'est le seul geste qu'il puisse honnêtement poser, et il ferme la ligne.
+ */
+export const retourRecu = id => agir(id, 'retour-recu', {})
+
+/** Rendue par le pâtissier, pas encore récupérée par l'économe. */
+export const enRetour = feuilles => (feuilles || []).filter(f =>
+  f.retour_le && !f.pas_faite_le && !f.declare_le)
+
+/**
  * RENDUE À L'ÉCONOME — la seule façon pour une ligne de partir sans avoir été
  * déclarée.
  *
@@ -227,6 +246,8 @@ export function aDeclarer(feuilles) {
     (feuilles || []).filter(attendLEconome).map(f => f.liasse))
   return (feuilles || []).filter(f => {
     if (clos(f)) return false
+    // Rendue : le pâtissier n'a plus rien à en faire, elle attend l'économe.
+    if (f.retour_le) return false
     if (f.donne_le) return true              // l'économe a donné : c'est dû
     if (!f.sans_economat) return false       // elle attend encore son « donné »
     // Rien à demander : elle attend que sa cascade soit servie en entier.
@@ -243,7 +264,7 @@ export function aDeclarer(feuilles) {
  * (Layla, 2026-09-20).
  */
 export const aReprendre = feuilles => (feuilles || []).filter(f =>
-  f.donne_par && !f.declare_le && !f.pas_faite_le)
+  f.donne_par && !f.declare_le && !f.pas_faite_le && !f.retour_le)
 
 /** Ce que l'économe n'a pas encore donné — et lui seul peut le débloquer. */
 export const aDonner = feuilles => (feuilles || []).filter(attendLEconome)

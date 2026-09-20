@@ -21,7 +21,9 @@ import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDeclarer, depuis, cheminDe } from '../lib/feuilles'
+import { feuillesDuJour, aDeclarer, depuis, cheminDe, demanderRetour } from '../lib/feuilles'
+import { confirmDialog } from '../lib/confirmDialog'
+import { toast } from '../lib/toast'
 import { poserLeScan } from '../lib/scanEntrant'
 
 /**
@@ -42,6 +44,7 @@ function Ligne({ children, ton }) {
 export default function ADeclarerView({ user, onLogout, onNavigate, activeView }) {
   const [feuilles, setFeuilles] = useState(null)
   const [erreur, setErreur] = useState('')
+  const [rend, setRend] = useState(null)
 
   const relire = useCallback(() => {
     feuillesDuJour().then(setFeuilles).catch(e => setErreur(e.message || String(e)))
@@ -54,6 +57,22 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
     const t = setInterval(() => { if (!document.hidden) relire() }, 60 * 1000)
     return () => clearInterval(t)
   }, [relire])
+
+  /** Rendre la marchandise : elle part attendre chez l'économe. */
+  const rendre = async f => {
+    if (rend) return
+    navigator.vibrate?.(15)
+    if (!await confirmDialog(
+      `Tu rends la marchandise de « ${propre(f.libelle || f.produit)} » à l'économe ?`,
+      { confirmLabel: 'Oui, je rends' })) return
+    setRend(f.id)
+    try {
+      await demanderRetour(f.id, user?.id)
+      toast('C’est noté — l’économe la verra dans son onglet.')
+      relire()
+    } catch (e) { toast('Erreur : ' + (e.message || e)) }
+    finally { setRend(null) }
+  }
 
   /** Le vrai écran de déclaration, posé sur cet article. */
   const ouvrirPourDeclarer = f => {
@@ -114,6 +133,19 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
                            active:scale-95 transition">
                 Ouvrir pour déclarer
               </button>
+              {/* ⚠️ LE RETOUR SE DÉCIDE ICI (Layla, 2026-09-20 : « c'est le
+                  pâtissier qui décide »). Lui seul sait qu'il ne fera pas cette
+                  fournée. La ligne part alors attendre chez l'économe, qui
+                  confirmera l'avoir récupérée.
+                  Rien à rendre quand l'économe n'a rien donné. */}
+              {f.donne_par && (
+                <button
+                  onClick={() => rendre(f)} disabled={rend === f.id}
+                  className="rounded-full border border-line text-ink-soft px-4 py-2 text-[13px]
+                             font-bold active:scale-95 transition disabled:opacity-50">
+                  {rend === f.id ? '…' : '↩ Je rends'}
+                </button>
+              )}
             </div>
           </Ligne>
         ))}

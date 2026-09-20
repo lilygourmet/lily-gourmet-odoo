@@ -165,3 +165,40 @@ ALTER TABLE annexe_feuilles
 
 COMMENT ON COLUMN annexe_feuilles.chemin IS
   'Du gâteau jusqu''à cette recette. C''est par là que le scan rouvre la fiche : un composant ne s''ouvre pas tout seul, il se descend depuis son gâteau.';
+
+
+-- ============================================================
+-- LE RETOUR DE MARCHANDISE : le pâtissier décide, l'économe confirme.
+--
+-- « Si je veux faire un retour, c'est le pâtissier qui décide. Et quand ça
+-- retourne, ça va dans Donné, jusqu'à ce qu'il clique retourné » (Layla,
+-- 2026-09-20).
+--
+-- C'est juste : celui qui a la marchandise entre les mains est le seul à savoir
+-- qu'il ne la fera pas. L'économe, lui, ne peut confirmer qu'une chose : qu'il
+-- l'a bien récupérée dans sa réserve. J'avais laissé l'économe décider tout
+-- seul — il aurait fermé des lignes sans rien avoir revu passer.
+--
+-- Le chemin :
+--   donnée → [le pâtissier rend] → en retour → [l'économe confirme] → close
+--
+-- Entre les deux, la ligne quitte « À déclarer » (le pâtissier n'a plus rien à
+-- faire) et attend dans l'onglet de l'économe.
+--
+-- ⚠️ AUCUN MOUVEMENT DE STOCK, ni ici ni ailleurs (Layla : « donné ne déclenche
+-- pas de transfert »). Ces colonnes sont un registre entre deux personnes : la
+-- matière n'est consommée dans Odoo qu'à la déclaration de la fournée.
+--
+-- Relançable sans risque.
+-- ============================================================
+
+ALTER TABLE annexe_feuilles
+  ADD COLUMN IF NOT EXISTS retour_le  TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS retour_par UUID REFERENCES profiles(id);
+
+COMMENT ON COLUMN annexe_feuilles.retour_le IS
+  'Le pâtissier rend la marchandise : la ligne quitte « À déclarer » et attend que l''économe confirme l''avoir récupérée.';
+
+CREATE INDEX IF NOT EXISTS annexe_feuilles_retour_idx
+  ON annexe_feuilles (retour_le)
+  WHERE retour_le IS NOT NULL AND pas_faite_le IS NULL;

@@ -10,7 +10,7 @@
 // ============================================================
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { etatFeuille, aDeclarer, aDonner, depuis, lienFeuille, nouvelId, cheminDe } from './feuilles'
+import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe } from './feuilles'
 
 const imprimee = { id: 'a', imprime_le: '2026-09-19T08:00:00Z' }
 const donnee = { ...imprimee, id: 'b', donne_le: '2026-09-19T09:00:00Z' }
@@ -162,5 +162,42 @@ describe('par où rouvrir une feuille', () => {
   it('un gâteau s’ouvre seul : il est au catalogue', () => {
     expect(cheminDe({ produit: 'SM- Cadre', pour: 'SM- Cadre' })).toEqual(['SM- Cadre'])
     expect(cheminDe({ produit: 'SM- Cadre' })).toEqual(['SM- Cadre'])
+  })
+})
+
+
+// ============================================================
+// LE RETOUR : le pâtissier décide, l'économe confirme.
+//
+// « Si je veux faire un retour, c'est le pâtissier qui décide. Et quand ça
+// retourne, ça va dans Donné, jusqu'à ce qu'il clique retourné » (Layla,
+// 2026-09-20).
+// ============================================================
+describe('rendre de la marchandise', () => {
+  const donnee2 = { id: 'x', donne_le: '2026-09-20T09:00:00Z', donne_par: 'eco' }
+  const rendue2 = { ...donnee2, retour_le: '2026-09-20T11:00:00Z', retour_par: 'pat' }
+  const recuperee = { ...rendue2, pas_faite_le: '2026-09-20T11:30:00Z', motif: 'retournee' }
+
+  it('tant qu’elle n’est pas rendue, c’est au pâtissier de déclarer', () => {
+    expect(aDeclarer([donnee2]).map(f => f.id)).toEqual(['x'])
+    expect(enRetour([donnee2])).toEqual([])
+  })
+
+  it('rendue : elle quitte « À déclarer » et attend l’économe', () => {
+    // Le pâtissier n'a plus rien à en faire.
+    expect(aDeclarer([rendue2])).toEqual([])
+    expect(enRetour([rendue2]).map(f => f.id)).toEqual(['x'])
+  })
+
+  it('elle ne traîne plus dans « sorti de la réserve »', () => {
+    // Sinon l'économe la verrait deux fois : dans ce qu'il attend, et dans ce
+    // qui est dehors.
+    expect(aReprendre([rendue2])).toEqual([])
+  })
+
+  it('l’économe confirme : tout se referme', () => {
+    expect(enRetour([recuperee])).toEqual([])
+    expect(aDeclarer([recuperee])).toEqual([])
+    expect(etatFeuille(recuperee)).toBe('pas-faite')
   })
 })
