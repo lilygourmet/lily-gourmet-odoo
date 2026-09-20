@@ -113,6 +113,34 @@ describe('la fiche', () => {
     return { onQuantite, onOuvrir, onFait }
   }
 
+  // ⚠️ « J'arrive à bouger les chiffres des composants encore » (Layla,
+  // 2026-09-20). Le nombre d'un ingrédient est un BOUTON : il ouvre un clavier
+  // qui ne change pas que la ligne — il REMONTE au gâteau, en recalculant
+  // combien de gâteaux correspondent à la dose tapée. C'était la porte dérobée
+  // du verrou : on figeait le nombre du haut, on le déplaçait par en dessous.
+  const taperSurLaDose = () => {
+    // Le chiffre d'un ingrédient — « 780 g » pour l'amaretti, écrit avec une
+    // espace fine dans l'app.
+    const cible = [...document.querySelectorAll('button, span')]
+      .reverse()
+      .find(e => /^780\s*g$/.test(e.textContent.replace(/[\u202f\u00a0]/g, ' ').trim()))
+    if (!cible) throw new Error('dose introuvable')
+    fireEvent.click(cible)
+  }
+
+  it('sans verrou, taper sur une dose ouvre le clavier', () => {
+    poser(tiramisu)
+    taperSurLaDose()
+    expect(screen.getByLabelText('Valider le nombre')).toBeTruthy()
+  })
+
+  it('quand le papier fait foi, la dose ne s’ouvre plus', () => {
+    poser(tiramisu, 13, { verrouille: true })
+    taperSurLaDose()
+    // Pas de clavier : rien ne peut remonter jusqu'à la quantité du gâteau.
+    expect(screen.queryByLabelText('Valider le nombre')).toBeNull()
+  })
+
   it('montre la QUANTITÉ en gros, jamais un nombre de tournées', () => {
     poser(tiramisu)
     expect(screen.getByText('13')).toBeTruthy()

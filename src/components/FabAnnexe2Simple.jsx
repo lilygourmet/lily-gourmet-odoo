@@ -509,11 +509,11 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
       )}
       <EnClair noeud={aPeser} quantite={quantitePesee} />
 
-      <Ingredients noeud={aPeser} quantite={quantitePesee} imposees={imposees}
+      <Ingredients noeud={aPeser} quantite={quantitePesee} imposees={imposees} fige={verrouille}
         dejaFaits={dejaFaits} onOuvrir={onOuvrir}
         onQuantite={decoupe ? onCuites : onQuantite} />
 
-      <QuantiteFigee noeud={aPeser} quantite={quantitePesee}
+      <QuantiteFigee noeud={aPeser} quantite={quantitePesee} fige={verrouille}
         onQuantite={decoupe ? onCuites : onQuantite} />
 
       {!decoupe && <PourUn noeud={noeud} quantite={quantite} />}
@@ -694,7 +694,7 @@ function EnClair({ noeud, quantite }) {
  * Les lignes de matière première gardent le besoin de la recette : c'est bien
  * ça qu'on pèse dans cette bassine-là.
  */
-function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite, imposees }) {
+function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite, imposees, fige }) {
   const [dose, setDose] = useState(null)
   const liste = ingredientsPour(noeud, quantite).filter(c => !(c.fige && !c.fabrique))
   if (!liste.length) return null
@@ -748,13 +748,27 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite, imposee
                 )}
               </span>
             </button>
-            {/* La dose, qu'on peut retaper — le nombre reste gros et lisible. */}
-            <button onClick={() => setDose({ ...c, nom, combien })}
-              className={`shrink-0 rounded-xl px-3 py-1.5 text-[19px] font-extrabold tabular-nums
-                md:text-[17px] print:text-[12pt] print:px-0 print:py-0 print:border-0
-                ${manque ? 'border-2 border-danger text-danger' : ''}`}>
-              {combien}
-            </button>
+            {/* ⚠️ LA DOSE NE SE RETAPE PLUS QUAND LE PAPIER FAIT FOI (Layla,
+                2026-09-20 : « j'arrive à bouger les chiffres des composants
+                encore »). Ce clavier-là ne changeait pas que la ligne : il
+                REMONTE au gâteau, en recalculant combien de gâteaux
+                correspondent à la dose tapée. C'était donc la porte dérobée du
+                verrou — on figeait le nombre du haut, et on le déplaçait par en
+                dessous. */}
+            {fige ? (
+              <span className={`shrink-0 rounded-xl px-3 py-1.5 text-[19px] font-extrabold tabular-nums
+                md:text-[17px] print:text-[12pt] print:px-0 print:py-0
+                ${manque ? 'text-danger' : ''}`}>
+                {combien}
+              </span>
+            ) : (
+              <button onClick={() => setDose({ ...c, nom, combien })}
+                className={`shrink-0 rounded-xl px-3 py-1.5 text-[19px] font-extrabold tabular-nums
+                  md:text-[17px] print:text-[12pt] print:px-0 print:py-0 print:border-0
+                  ${manque ? 'border-2 border-danger text-danger' : ''}`}>
+                {combien}
+              </button>
+            )}
           </div>
         )
       })}
@@ -782,7 +796,14 @@ const nombreDe = txt => Number(String(txt).replace(/[^\d,.-]/g, '').replace(',',
  * bouge pas avec la sortie réelle — d'où son bloc à part, sous son nom
  * (« La mousse », « La crème citron »).
  */
-export function QuantiteFigee({ noeud, quantite, onQuantite }) {
+/**
+ * LA CUVE — les ingrédients montés sur place, pour la fournée entière.
+ *
+ * ⚠️ Son clavier remonte lui aussi au gâteau : quand le papier fait foi, on
+ * n'y touche plus (Layla, 2026-09-20). Même porte dérobée que la liste
+ * au-dessus.
+ */
+export function QuantiteFigee({ noeud, quantite, onQuantite, fige }) {
   const [dose, setDose] = useState(null)
   const figes = ingredientsPour(noeud, quantite).filter(c => c.fige && !c.fabrique)
   if (!figes.length) return null
@@ -811,7 +832,7 @@ export function QuantiteFigee({ noeud, quantite, onQuantite }) {
                 calcul que les autres ingrédients (`quantitePourDose`, son
                 « choix A » du 2026-09-07). Une cuve plus grande, c'est une
                 fournée plus grande. */}
-            <button onClick={() => onQuantite && setDose({ ...c, nom, combien })}
+            <button onClick={() => !fige && onQuantite && setDose({ ...c, nom, combien })}
               className="shrink-0 text-[19px] font-extrabold tabular-nums rounded-xl px-3 py-1.5
                          print:text-[11pt] print:px-0 print:py-0">
               {combien}
