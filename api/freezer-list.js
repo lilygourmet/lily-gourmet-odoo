@@ -1049,6 +1049,85 @@ export function fourneeRelue(brut, uniteArticle, uniteBom, sortieRecette) {
   return (fois >= 0.05 && fois <= 20) ? relu : null
 }
 
+/**
+ * LE FACTEUR FOURNÉE — l'erreur qui a coûté 5,4 kg de crème.
+ *
+ * Une quantité IMPOSÉE (ce que l'atelier a pesé) est écrite telle quelle dans
+ * l'ordre : c'est voulu, la balance prime sur la règle de trois. Mais rien ne
+ * vérifiait qu'elle corresponde à la TAILLE de l'ordre.
+ *
+ * Vécu le 2026-09-14 : un ordre de crème au beurre praliné lancé pour DEUX
+ * fournées (14 057 g) n'a imposé qu'UNE fournée de crème nature (5 407 g au
+ * lieu de 10 814). Odoo a écrit 5 407 sans discuter. Résultat : 5,4 kg de
+ * crème nature restés au stock alors qu'ils étaient partis dans le praliné —
+ * et personne ne l'a vu pendant six jours. (Layla : « ça ne doit pas se
+ * faire !! ».)
+ *
+ * La règle : on compare l'imposé à ce que la recette attend pour cette taille
+ * d'ordre. Un écart de balance (5 407 au lieu de 5 425) passe sans un mot. Un
+ * écart qui vaut un NOMBRE ENTIER de fournées — la moitié, le double, le
+ * tiers — n'est pas une pesée, c'est un facteur oublié : on refuse.
+ *
+ * Rend le facteur fautif (2 = on en a imposé deux fois trop peu), ou null.
+ */
+export function facteurFournee(impose, attendu) {
+  const i = Number(impose), a = Number(attendu)
+  if (!(i > 0) || !(a > 0)) return null
+  const grand = Math.max(i, a), petit = Math.min(i, a)
+  const k = grand / petit
+  const entier = Math.round(k)
+  if (entier < 2 || entier > 12) return null        // ni un rapport entier, ni crédible
+  if (Math.abs(k - entier) > 0.05) return null      // pas assez net : c'est autre chose
+  return i < a ? entier : -entier                   // négatif = on en a imposé trop
+}
+
+/** Les ingrédients dont la quantité imposée rate d'un nombre entier de fournées. */
+export function fourneesIncoherentes(lignes, ajustements, facteur) {
+  const net = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const mesure = new Map(Object.entries(ajustements || {})
+    .filter(([, v]) => Number(v) > 0).map(([k, v]) => [net(k), Number(v)]))
+  const out = []
+  for (const l of lignes || []) {
+    const nom = Array.isArray(l.product_id) ? l.product_id[1] : ''
+    const impose = mesure.get(net(nom))
+    if (impose === undefined) continue
+    const attendu = (Number(l.product_qty) || 0) * facteur
+    const k = facteurFournee(impose, attendu)
+    // ⚠️ On ne refuse QUE le cas dangereux : une préparation « SM » dont on
+    // impose MOINS que la recette. Deux exclusions, vérifiées sur 150 ordres :
+    //   • imposer PLUS, c'est la règle de la cuve — elle part en entier sur la
+    //     taille lancée, même si l'ordre est plus petit. C'est voulu.
+    //   • les matières premières (MP-, F-) ne sont pas suivies à l'annexe :
+    //     « ne pas prendre en considération les MP- » (Layla, 2026-09-11).
+    if (k !== null && k > 0 && /^\s*sm/i.test(String(nom).replace(/^\[[^\]]*\]\s*/, ''))) {
+      out.push({ nom: String(nom).replace(/^\[[^\]]*\]\s*/, ''), impose, attendu, facteur: k })
+    }
+  }
+  return out
+}
+
+/**
+ * ⚠️ ON ALERTE, ON NE REFUSE PAS.
+ *
+ * Passé sur 150 ordres réels avant de le brancher : six auraient été bloqués,
+ * et je n'ai pu certifier qu'UN SEUL comme une vraie erreur — les autres
+ * ressemblent à la répartition de cuve entre tailles, qui est voulue. Bloquer
+ * 4 % des déclarations sur un soupçon arrêterait l'atelier.
+ *
+ * Le vrai problème n'était pas que l'ordre parte : c'est qu'il soit parti EN
+ * SILENCE pendant six jours. On le laisse donc passer, et on crie — dans le
+ * fil de l'ordre chez Odoo, où ça reste même si personne ne regarde l'écran.
+ */
+export function alerteFournee(nomProduit, lignes, ajustements, facteur) {
+  const pb = fourneesIncoherentes(lignes, ajustements, facteur)
+  if (!pb.length) return null
+  const d = pb[0]
+  return `⚠️ ${nomProduit} : l'ordre prend ${Math.round(d.impose)} g de ${d.nom},`
+    + ` alors que la recette en demande ${Math.round(d.attendu)} g pour cette taille`
+    + ` — ${Math.abs(d.facteur)} fois trop peu. Une fournée oubliée ?`
+    + ' À vérifier avant de valider, sinon il restera du stock fantôme.'
+}
+
 function refuseSiFourneeMinuscule(nom, qty, sortieRecette, uniteBom) {
   if (!fourneeMinuscule(qty, sortieRecette, uniteBom)) return
   throw new Error(`${qty} ${uniteBom} de ${nom}, pour une recette qui en sort`
@@ -1204,6 +1283,11 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   // vers Odoo par ligne de recette : sur une recette de 13 ingrédients, l'écran
   // restait bloqué plusieurs secondes avant d'enregistrer. Odoo accepte une
   // liste et rend la liste des identifiants.
+  // ⚠️ Une quantité imposée qui rate d'un nombre ENTIER de fournées n'est pas
+  // une pesée : c'est un facteur oublié. On refuse plutôt que d'écrire un
+  // chiffre faux dans Odoo. (2026-09-20.)
+  const alerte = alerteFournee(prod.display_name, lignes, ajustements, facteur)
+
   const valsLignes = lignes.map(l => {
     const pesee = mesure.get(cleNom(Array.isArray(l.product_id) ? l.product_id[1] : ''))
     return {
@@ -1229,9 +1313,14 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
   // son résultat n'est pas lu, et l'ordre existe déjà. On la laisse finir
   // derrière la réponse. (Layla, 2026-09-10 : « l'envoi est lent ».)
   apresLaReponse(odooCall(uid, 'mrp.production', 'action_assign', [[id]]))
+  if (alerte) {
+    apresLaReponse(odooCall(uid, 'mrp.production', 'message_post', [[id]], { body: alerte })
+      .catch(e => console.warn('[alerte fournee]', e?.message || e)))
+    console.warn('[alerte fournee]', alerte)
+  }
   const cree = (await odooSearchRead(uid, 'mrp.production', [['id', '=', id]], ['name', 'product_qty', 'state']))[0]
   await rattacherEnfants(uid, id, cree.name)
-  return { id, name: cree.name, produit: prod.display_name, qty: cree.product_qty, etat: cree.state }
+  return { id, name: cree.name, produit: prod.display_name, qty: cree.product_qty, etat: cree.state, alerte }
 }
 
 /**
