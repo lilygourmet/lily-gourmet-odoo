@@ -178,6 +178,15 @@ describe('rendre de la marchandise', () => {
   const rendue2 = { ...donnee2, retour_le: '2026-09-20T11:00:00Z', retour_par: 'pat' }
   const recuperee = { ...rendue2, pas_faite_le: '2026-09-20T11:30:00Z', motif: 'retournee' }
 
+  // ⚠️ Le scan au comptoir est ANONYME : `donne_par` reste vide. Se fier à lui,
+  // c'était faire disparaître le bouton « Je rends » dès que la marchandise
+  // avait été donnée par le QR (Layla, 2026-09-20).
+  it('une fournée donnée AU COMPTOIR reste rendable', () => {
+    const parLeQr = { id: 'q', donne_le: '2026-09-20T09:00:00Z', donne_par: null }
+    expect(aDeclarer([parLeQr]).map(f => f.id)).toEqual(['q'])
+    expect(aReprendre([parLeQr]).map(f => f.id)).toEqual(['q'])
+  })
+
   it('tant qu’elle n’est pas rendue, c’est au pâtissier de déclarer', () => {
     expect(aDeclarer([donnee2]).map(f => f.id)).toEqual(['x'])
     expect(enRetour([donnee2])).toEqual([])

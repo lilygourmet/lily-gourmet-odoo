@@ -259,12 +259,18 @@ export function aDeclarer(feuilles) {
 /**
  * Ce que l'économe a SORTI DE SA RÉSERVE et que personne n'a déclaré.
  *
+ * ⚠️ ON REGARDE `donne_le`, PAS `donne_par` (Layla, 2026-09-20 : « quand je
+ * redonne, ça ne me donne pas la main de re-rendre »). Le scan est anonyme —
+ * c'est tout l'intérêt, les mains sont farineuses — donc `donne_par` reste
+ * souvent vide. S'appuyer dessus, c'était faire disparaître le bouton dès que
+ * la marchandise était donnée AU COMPTOIR plutôt que depuis l'app.
+ *
  * C'est ce qu'il peut reprendre — et rien d'autre : une fournée qui n'avait
  * rien à lui demander n'a rien à lui rendre. « Rendue n'est pas à rendre »
  * (Layla, 2026-09-20).
  */
 export const aReprendre = feuilles => (feuilles || []).filter(f =>
-  f.donne_par && !f.declare_le && !f.pas_faite_le && !f.retour_le)
+  f.donne_le && !f.declare_le && !f.pas_faite_le && !f.retour_le)
 
 /** Ce que l'économe n'a pas encore donné — et lui seul peut le débloquer. */
 export const aDonner = feuilles => (feuilles || []).filter(attendLEconome)

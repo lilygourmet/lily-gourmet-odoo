@@ -137,8 +137,10 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
                   pâtissier qui décide »). Lui seul sait qu'il ne fera pas cette
                   fournée. La ligne part alors attendre chez l'économe, qui
                   confirmera l'avoir récupérée.
-                  Rien à rendre quand l'économe n'a rien donné. */}
-              {f.donne_par && (
+                  Rien à rendre quand l'économe n'a rien donné — mais on regarde
+                  `donne_le`, pas `donne_par` : le scan au comptoir est anonyme,
+                  et le bouton disparaissait dès qu'on donnait par le QR. */}
+              {f.donne_le && (
                 <button
                   onClick={() => rendre(f)} disabled={rend === f.id}
                   className="rounded-full border border-line text-ink-soft px-4 py-2 text-[13px]
