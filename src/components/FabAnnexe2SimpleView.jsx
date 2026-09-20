@@ -25,7 +25,8 @@ import { ChoixImpression, FeuillesImpression } from './ImpressionFournee'
 import { loadFabAnnexe, loadToutFabAnnexe, loadArticlesFabAnnexe, loadHistoriqueAnnexe,
   decoupeDe, noeudDuChemin, defautDe, aCuireParDefaut, parGateauMere, peseesDe,
   declarer, envoyerAValider, repartirCuve, sansRendement, pressageDe,
-  toutConsomme, relireRecettes, restesTheoriques } from '../lib/fabAnnexe'
+  toutConsomme, relireRecettes, restesTheoriques, resteDesCuves } from '../lib/fabAnnexe'
+import { setMiseEnForme } from '../lib/miseEnForme'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis,
@@ -474,6 +475,15 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         // le MÊME travail : sans ce raccord, la fournée restait « à déclarer »
         // et la redéclarer la comptait deux fois — deux ordres Odoo.
         eteindreFeuille(noeud.produit, qty)
+        // ⚠️ ET LE RESTE DE LA CUVE PART DANS « À FINIR » (Layla, 2026-09-20 :
+        // « si mousse, crémeux, etc., ça doit toujours me dire combien il t'en
+        // reste — et le reste va dans À finir »). Une mousse qui reste n'est
+        // pas finie : elle attend d'être coulée. On l'inscrit donc sur la
+        // liste, sans faire attendre l'écran — et elle s'en retire d'un doigt
+        // dans Mini / maxi si ce n'est pas un moulage.
+        for (const r of resteDesCuves(noeud)) {
+          setMiseEnForme(r.produit, true).catch(() => {})
+        }
         // Plein écran, vert, une seconde et demie : ça ne se rate pas.
         setConfirme({ quoi: propre(noeud.libelle || noeud.produit), combien: qte(qty, noeud.unite) })
         setTimeout(() => setConfirme(null), 1500)
@@ -867,6 +877,16 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                 // La question du reste ne se pose qu'à la TOUTE FIN, sur
                 // l'article qu'on est venu faire — jamais en plein milieu.
                 restes={finale ? restesTheoriques(cible) : []}
+                // ⚠️ ANNONCÉ, PAS DEMANDÉ : la mousse sortie du frigo n'entre
+                // pas dans la question du dessus, dont la réponse vaut
+                // consigne (0 = « tout est parti dedans », et Odoo consomme
+                // tout). Un zéro tapé par habitude y ferait entrer cinq kilos
+                // de mousse dans un seul gâteau. On dit ce qui restera ; le
+                // chiffre se corrige dans « À finir », au moment de la couler.
+                restants={finale
+      ? resteDesCuves(cible).filter(r =>
+        !restesTheoriques(cible).some(x => x.produit === r.produit))
+      : []}
                 restesValeurs={restes}
                 onReste={finale ? (p, v) => setRestes(x => ({ ...x, [p]: v })) : undefined}
                 onTaille={finale && (brut.tailles || []).length

@@ -494,6 +494,44 @@ export function restesTheoriques(noeud) {
 }
 
 /**
+ * CE QU'IL RESTERA DE LA CUVE — annoncé, pas demandé.
+ *
+ * « Si mousse, crémeux, etc., ça doit toujours me dire combien de mousse il te
+ * reste. Et le reste va dans À finir » (Layla, 2026-09-20), devant l'écran de
+ * fin de tournée du gianduja indiv.
+ *
+ * ⚠️ POURQUOI PAS DANS LA QUESTION DU DESSUS. `restesTheoriques` ne parle que
+ * de ce qui a été FAIT dans la séance, et sa réponse vaut consigne : 0 veut
+ * dire « tout est parti dedans », et Odoo consomme tout. Y verser la mousse
+ * SORTIE DU FRIGO, c'était risquer qu'un zéro tapé par habitude fasse entrer
+ * cinq kilos de mousse dans un seul gâteau — irrattrapable.
+ *
+ * Ici on ANNONCE : voilà ce qui restera au frigo une fois la recette passée.
+ * Le chiffre se corrige plus tard, au moment de la mettre en forme, dans
+ * l'onglet « À finir » — là où on sait vraiment ce qu'on a coulé.
+ *
+ * Ne rend que les FIGÉS : la cuve, la mousse, le crémeux. Le sucre et la
+ * farine ne se « finissent » pas.
+ */
+export function resteDesCuves(noeud) {
+  return enfantsDe(noeud)
+    .filter(c => c.fige && c.fabrique)
+    .map(c => {
+      const fait = Math.max(0, Number(c.stock) || 0) + (Number(c.dejaFait) || 0)
+      const besoin = Number(c.besoin) || 0
+      return {
+        produit: c.produit,
+        libelle: c.libelle || c.produit,
+        unite: c.unite,
+        fait,
+        besoin,
+        reste: fait - besoin,
+      }
+    })
+    .filter(x => x.reste > 0.001)
+}
+
+/**
  * Ce que le produit consomme vraiment de chaque préparation, une fois le reste
  * dit. « Il ne m'en reste rien » (0) fait passer TOUT ce qui a été fait dans le
  * produit — c'est la règle de Layla, et c'est le cas par défaut.

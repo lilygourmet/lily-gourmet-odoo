@@ -367,6 +367,21 @@ describe('la sortie', () => {
     expect(onValider).toHaveBeenCalled()
   })
 
+  // ⚠️ « Si mousse, crémeux, etc., ça doit TOUJOURS me dire combien de mousse
+  // il te reste — et le reste va dans À finir » (Layla, 2026-09-20). Avant,
+  // rien n'était dit quand la mousse venait du frigo.
+  it('annonce ce qui restera de la cuve, sans case à remplir', () => {
+    const { container } = render(
+      <Sortie noeud={caramel} valeur={25} onValeur={() => {}} onValider={() => {}} envoi={false}
+        restants={[{ produit: 'SM. Mousse Gianduja', libelle: 'Mousse gianduja',
+          unite: 'g', fait: 2500, besoin: 1212, reste: 1288 }]} />)
+    expect(screen.getByText('Mousse gianduja')).toBeTruthy()
+    expect(screen.getByText(/1[\u202f\u00a0 ]288 g/)).toBeTruthy()
+    expect(screen.getByText(/retrouveras dans « À finir »/)).toBeTruthy()
+    // Annoncé, pas demandé : rien à taper, donc rien qui parte chez Odoo.
+    expect(container.querySelectorAll('input').length).toBe(0)
+  })
+
   it('ne dit RIEN de l’écart : perdre à la cuisson n’est pas une faute', () => {
     render(<Sortie noeud={caramel} valeur={3700} onValeur={() => {}}
       onValider={() => {}} envoi={false} />)

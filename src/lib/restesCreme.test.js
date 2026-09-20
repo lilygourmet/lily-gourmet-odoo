@@ -77,3 +77,63 @@ describe('où va le reste', () => {
     expect(c['SM. Creme Citron Gingembre']).toBe(12500)
   })
 })
+
+// ============================================================
+// LA CUVE SORTIE DU FRIGO : on ANNONCE ce qui restera.
+//
+// « Si mousse, crémeux, etc., ça doit toujours me dire combien de mousse il te
+// reste. Et le reste va dans À finir » (Layla, 2026-09-20), devant la fin de
+// tournée du gianduja indiv — où la mousse venait du frigo, donc aucune
+// question n'était posée.
+// ============================================================
+import { resteDesCuves } from './fabAnnexe'
+
+// 25 gianduja indiv : la mousse était déjà là (692 g par dix-personnes…).
+const gianduja = {
+  produit: 'SM- Gianduja Indiv',
+  composants: [
+    { produit: 'SM. Mousse Gianduja', libelle: 'Mousse gianduja', unite: 'g',
+      fabrique: true, fige: true, besoin: 1212, dejaFait: 0, stock: 2500 },
+    // Le sucre ne se « finit » pas : il n'a rien à faire dans cette annonce.
+    { produit: 'MP- Sucre Granule', unite: 'g', fabrique: false, fige: false,
+      besoin: 300, dejaFait: 0, stock: 40000 },
+    // Un biscuit qui se fabrique mais n'est PAS la cuve : pas un moulage.
+    { produit: 'SM. Biscuit Gianduja', unite: 'u', fabrique: true, fige: false,
+      besoin: 25, dejaFait: 0, stock: 60 },
+  ],
+}
+
+describe('ce qui restera de la cuve', () => {
+  it('compte le frigo ET ce qui vient d’être fait', () => {
+    const r = resteDesCuves(gianduja)
+    expect(r).toHaveLength(1)
+    expect(r[0].produit).toBe('SM. Mousse Gianduja')
+    expect(r[0].fait).toBe(2500)
+    expect(r[0].reste).toBe(2500 - 1212)
+  })
+
+  it('ne parle QUE de la cuve — ni le sucre, ni le biscuit', () => {
+    expect(resteDesCuves(gianduja).map(x => x.produit)).toEqual(['SM. Mousse Gianduja'])
+  })
+
+  it('rien à annoncer quand la cuve y passe en entier', () => {
+    const juste = { composants: [{ ...gianduja.composants[0], stock: 1212 }] }
+    expect(resteDesCuves(juste)).toEqual([])
+  })
+
+  // ⚠️ Un stock NÉGATIF est un compteur faux, pas une réserve : il ne doit
+  // jamais faire croire qu'il reste quelque chose.
+  it('un stock négatif n’annonce rien', () => {
+    const casse = { composants: [{ ...gianduja.composants[0], stock: -900, dejaFait: 0 }] }
+    expect(resteDesCuves(casse)).toEqual([])
+  })
+
+  // ⚠️ ET SURTOUT : cette annonce ne touche PAS à ce qu'Odoo consomme. La
+  // question éditable (`restesTheoriques`) reste seule maîtresse — y verser la
+  // mousse du frigo, c'était risquer qu'un zéro tapé par habitude fasse entrer
+  // 2,5 kg de mousse dans 25 individuels.
+  it('n’entre pas dans ce qu’Odoo consomme', () => {
+    expect(restesTheoriques(gianduja)).toEqual([])
+    expect(consommeApresRestes(gianduja, {})).toEqual({})
+  })
+})

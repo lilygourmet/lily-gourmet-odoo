@@ -1061,7 +1061,40 @@ function Restes({ restes, valeurs, onChange }) {
   )
 }
 
-export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nomCuve, parTaille, onTaille, prevu, question, restes = [], restesValeurs = {}, onReste }) {
+/**
+ * CE QUI RESTERA DE LA CUVE — annoncé, pas demandé.
+ *
+ * « Si mousse, crémeux, etc., ça doit toujours me dire combien de mousse il te
+ * reste. Et le reste va dans À finir » (Layla, 2026-09-20).
+ *
+ * ⚠️ Pas de case à remplir ici, et c'est voulu : la question du dessus vaut
+ * consigne pour Odoo (0 = « tout est parti dedans »). La mousse sortie du
+ * frigo n'a rien à y faire — un zéro tapé par habitude y ferait entrer cinq
+ * kilos dans un seul gâteau. On annonce, et le chiffre se corrige au moment de
+ * la couler, dans « À finir ».
+ */
+function Restants({ restants }) {
+  if (!restants?.length) return null
+  return (
+    <div className="mt-6 rounded-2xl bg-cream-deep/40 border border-cream-deep p-3">
+      {restants.map(r => (
+        <div key={r.produit} className="flex items-baseline gap-2 py-0.5">
+          <span className="text-[15px] font-bold text-ink flex-1 min-w-0 truncate">
+            {propre(r.libelle)}
+          </span>
+          <span className="text-[19px] font-extrabold tabular-nums text-ink">
+            {qte(r.reste, r.unite)}
+          </span>
+        </div>
+      ))}
+      <div className="text-[12.5px] text-ink-mute mt-1">
+        🍮 il t’en restera ça — tu le retrouveras dans « À finir »
+      </div>
+    </div>
+  )
+}
+
+export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nomCuve, parTaille, onTaille, prevu, question, restes = [], restesValeurs = {}, onReste, restants = [] }) {
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -1100,6 +1133,8 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nom
       )}
 
       {onReste && <Restes restes={restes} valeurs={restesValeurs} onChange={onReste} />}
+
+      <Restants restants={restants} />
 
       <button onClick={onValider} disabled={!(valeur > 0) || envoi}
         className={`w-full mt-8 rounded-2xl py-5 text-[20px] font-extrabold
