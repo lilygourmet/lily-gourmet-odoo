@@ -107,3 +107,27 @@ export function chercher(liste, requete, texteDe = x => x) {
     .sort((a, b) => a.n - b.n || a.i - b.i)     // à note égale, l'ordre d'origine
     .map(o => o.x)
 }
+
+/**
+ * UN PRÉFIXE SE CHERCHE À LA LETTRE PRÈS.
+ *
+ * « Dans recherche mini/maxi Annexe, si je tape SM- ça doit me sortir que les
+ * SM- » (Layla, 2026-09-20).
+ *
+ * La recherche ordinaire aplatit la ponctuation — « SM- » et « SM. » deviennent
+ * tous les deux « sm », et les 280 articles de l'annexe remontent ensemble.
+ * Or chez elle les deux préfixes ne disent pas la même chose : « SM- » est un
+ * gâteau ou un format, « SM. » une préparation. Le tiret EST l'information.
+ *
+ * Rend le préfixe demandé (« sm- ») et ce qui reste à chercher derrière, pour
+ * que « SM- citron » marche aussi.
+ */
+export function couperPrefixe(requete) {
+  const m = /^\s*([a-zA-Z]{1,4})\s*([-.])\s*(.*)$/.exec(String(requete || ''))
+  if (!m) return { prefixe: null, reste: String(requete || '') }
+  return { prefixe: (m[1] + m[2]).toLowerCase(), reste: m[3] }
+}
+
+/** Ce nom commence-t-il par ce préfixe ? (la référence [1234] d'Odoo ne compte pas) */
+export const aPourPrefixe = (nom, prefixe) => String(nom || '')
+  .replace(/^\[[^\]]*\]\s*/, '').trim().toLowerCase().startsWith(String(prefixe || ''))

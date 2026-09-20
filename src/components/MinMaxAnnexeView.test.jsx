@@ -9,7 +9,7 @@
 //     un interrupteur, plus dans un mot.
 // ============================================================
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 
 const catalogue = [
   { produit: 'SM. Crémeux Pistache', libelle: 'Crémeux pistache', mini: 600, maxi: 2400,
@@ -19,6 +19,9 @@ const catalogue = [
 // d'essai ne sert plus à rien.
 const tout = [
   { produit: 'SM. Crémeux Pistache', unite: 'g', stock: 230, pour: ['E- Pistache fleur d’oranger'] },
+  // Même gâteau, mais un FORMAT (« SM- ») et non une préparation (« SM. »).
+  { produit: 'SM- Pistache Fleur d’Oranger 10 pers', unite: 'u', stock: 4,
+    pour: ['E- Pistache fleur d’oranger'] },
   { produit: 'SM. Essai Abandonné', unite: 'g', stock: 0, pour: [] },
 ]
 
@@ -54,6 +57,24 @@ describe('ce que la liste montre', () => {
     expect(screen.getByText(/sans gâteau, tape un nom/)).toBeTruthy()
   })
 
+  // ⚠️ « Si je tape SM- ça doit me sortir que les SM- » (Layla, 2026-09-20).
+  // La recherche ordinaire aplatit la ponctuation : « SM- » et « SM. »
+  // deviennent tous deux « sm ». Or le tiret EST l'information.
+  it('« SM- » ne sort QUE les SM-', async () => {
+    poser()
+    fireEvent.click(await screen.findByText(/Pistache fleur d’oranger/))
+    await screen.findByText('Crémeux pistache')
+
+    fireEvent.change(screen.getByPlaceholderText(/chercher|Chercher/i), { target: { value: 'SM-' } })
+    expect(await screen.findByText(/Pistache Fleur d’Oranger 10 pers/)).toBeTruthy()
+    expect(screen.queryByText('Crémeux pistache')).toBeNull()
+
+    // …et « SM. » fait l'inverse.
+    fireEvent.change(screen.getByPlaceholderText(/chercher|Chercher/i), { target: { value: 'SM.' } })
+    expect(await screen.findByText('Crémeux pistache')).toBeTruthy()
+    expect(screen.queryByText(/Pistache Fleur d’Oranger 10 pers/)).toBeNull()
+  })
+
   it('une recherche, elle, fouille partout', async () => {
     poser()
     await screen.findByText(/Pistache fleur d’oranger/)
@@ -80,7 +101,10 @@ describe('les réglages d’une ligne', () => {
 
   it('l’interrupteur dit s’il est allumé, et l’éteindre s’enregistre', async () => {
     await ouvrirLeGateau()
-    const inter = screen.getByRole('switch')
+    // Le gâteau porte plusieurs articles : on vise l'interrupteur DE CETTE
+    // ligne, pas le premier venu.
+    const ligne = screen.getByText('Crémeux pistache').closest('[class*="rounded-xl"]')
+    const inter = within(ligne).getByRole('switch')
     expect(inter.getAttribute('aria-checked')).toBe('true')
     fireEvent.click(inter)
     await waitFor(() => expect(save).toHaveBeenCalled())

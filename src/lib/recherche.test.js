@@ -90,3 +90,41 @@ describe('chercher : le plus proche en premier', () => {
     expect(chercher(l, 'gribha', x => x.nom)).toEqual([{ nom: 'Ghriba Behla' }])
   })
 })
+
+// ============================================================
+// LES PRÉFIXES, À LA LETTRE PRÈS.
+//
+// « Si je tape SM- ça doit me sortir que les SM- » (Layla, 2026-09-20). Le
+// tiret EST l'information : « SM- » est un gâteau ou un format, « SM. » une
+// préparation. La recherche ordinaire aplatit la ponctuation et remontait les
+// deux ensemble.
+// ============================================================
+import { couperPrefixe, aPourPrefixe } from './recherche'
+
+describe('chercher un préfixe', () => {
+  it('reconnaît « SM- » et « SM. » comme deux demandes différentes', () => {
+    expect(couperPrefixe('SM-').prefixe).toBe('sm-')
+    expect(couperPrefixe('SM.').prefixe).toBe('sm.')
+    expect(couperPrefixe('MP-').prefixe).toBe('mp-')
+    expect(couperPrefixe('E-').prefixe).toBe('e-')
+  })
+
+  it('accepte un mot derrière : « SM- citron »', () => {
+    expect(couperPrefixe('SM- citron')).toEqual({ prefixe: 'sm-', reste: 'citron' })
+    expect(couperPrefixe('sm.creme')).toEqual({ prefixe: 'sm.', reste: 'creme' })
+  })
+
+  it('laisse tranquille une recherche ordinaire', () => {
+    expect(couperPrefixe('citron').prefixe).toBeNull()
+    expect(couperPrefixe('creme brulee').prefixe).toBeNull()
+    expect(couperPrefixe('').prefixe).toBeNull()
+  })
+
+  it('trie les noms sans se laisser avoir par le point', () => {
+    expect(aPourPrefixe('SM- Cadre Citron', 'sm-')).toBe(true)
+    expect(aPourPrefixe('SM. Creme Citron', 'sm-')).toBe(false)
+    expect(aPourPrefixe('SM. Creme Citron', 'sm.')).toBe(true)
+    // ⚠️ La référence d'Odoo devant le nom ne doit pas gêner.
+    expect(aPourPrefixe('[1234] SM- Cadre Citron', 'sm-')).toBe(true)
+  })
+})

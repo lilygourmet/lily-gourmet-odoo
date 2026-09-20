@@ -5,6 +5,7 @@ import { toast } from '../lib/toast'
 import { canSeeMinMaxAnnexe } from '../lib/auth'
 import { loadMiseEnForme, setMiseEnForme } from '../lib/miseEnForme'
 import { Interrupteur, Pastille } from './Interrupteur'
+import { couperPrefixe, aPourPrefixe } from '../lib/recherche'
 import {
   loadCatalogueAnnexe, saveCatalogueAnnexe, retirerDuCatalogue, loadToutFabAnnexe,
   saveFigesAnnexe, loadArticleFabAnnexe, parGateauMere,
@@ -194,9 +195,17 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
     for (const l of lignes || []) {
       if (!base.some(a => a.produit === l.produit)) base.push({ ...l, suivi: true, pour: [] })
     }
+    // ⚠️ UN PRÉFIXE SE CHERCHE À LA LETTRE PRÈS (Layla, 2026-09-20 : « si je
+    // tape SM- ça doit me sortir que les SM- »). La recherche ordinaire aplatit
+    // la ponctuation : « SM- » et « SM. » deviennent tous deux « sm » et les
+    // 280 articles remontent ensemble. Or le tiret EST l'information — « SM- »
+    // est un gâteau ou un format, « SM. » une préparation.
+    const { prefixe, reste } = couperPrefixe(filtre)
+    const tries = prefixe ? base.filter(a => aPourPrefixe(a.produit, prefixe)) : base
+
     // Dans un gâteau, les tailles d'un même article se suivent, de la plus
     // petite à la plus grande : indiv, 5 pers, 10 pers…
-    return parGateauMere(base, filtre, true).map(g => ({
+    return parGateauMere(tries, prefixe ? reste : filtre, true).map(g => ({
       ...g,
       articles: [...g.articles].sort((x, y) =>
         baseDe(x.produit).localeCompare(baseDe(y.produit), 'fr')
