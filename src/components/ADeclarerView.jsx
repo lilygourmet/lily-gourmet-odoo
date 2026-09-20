@@ -12,6 +12,12 @@
 // ⚠️ CE QUI EST DÉCLARÉ DISPARAÎT. « Que ce qui reste à déclarer » : une liste
 // vide veut dire qu'il n'y a rien à faire — et rien à cliquer.
 //
+// ⚠️ ET ON NE LIT PAS ICI (Layla, 2026-09-20 : « trop compliqué pour quelqu'un
+// qui ne lit pas / facilite le visuel »). Une photo, un gros chiffre, un bouton
+// pleine largeur — le même écran que celui de l'économe, ce sont les mêmes
+// mains. Le temps écoulé tient dans une pastille (« ⏰ 5 h ») : c'est le seul
+// mot restant, et c'est celui qui fait bouger.
+//
 // ⚠️ ET RIEN DE L'ÉCONOME ICI (Layla, 2026-09-20). « Rendue » traînait sur des
 // fournées dont il n'avait rien donné — « rendue n'est pas à rendre ». Ce qu'il
 // a sorti, et peut reprendre, vit dans SON onglet : voir `DonneView`.
@@ -20,7 +26,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { propre, qte } from '../lib/ecranSimple'
+import { propre } from '../lib/ecranSimple'
+import { PhotoFeuille, GrosseQuantite, Rien } from './FeuilleVisuel'
 import { feuillesDuJour, aDeclarer, depuis, cheminDe, demanderRetour, resteDeLaCascade } from '../lib/feuilles'
 import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
@@ -33,10 +40,57 @@ import { poserLeScan } from '../lib/scanEntrant'
  */
 const enRetard = f => Date.now() - Date.parse(f.donne_le || f.imprime_le || 0) > 2 * 3600 * 1000
 
-function Ligne({ children, ton }) {
+/**
+ * Une fournée due : photo, gros chiffre, et le bouton qui ouvre la déclaration.
+ *
+ * ⚠️ Hors du composant, sans quoi React la prend pour un autre composant à
+ * chaque relecture (toutes les minutes) et recharge toutes les photos.
+ */
+function Fiche({ f, rend, onDeclarer, onRendre }) {
+  const tard = enRetard(f)
   return (
-    <div className={`bg-cream-warm border border-line border-l-4 ${ton} rounded-2xl p-3 mb-2`}>
-      {children}
+    <div className={`bg-cream-warm border border-line border-l-[6px] rounded-3xl overflow-hidden
+                     shadow-sm mb-3 ${tard ? 'border-l-danger' : 'border-l-gold'}`}>
+      <div className="flex gap-3 p-3">
+        <PhotoFeuille f={f} className="w-[86px] h-[86px] rounded-2xl flex-none" />
+        <div className="min-w-0 flex flex-col justify-center gap-1">
+          <span className={`self-start rounded-full px-2.5 py-0.5 text-[13px] font-extrabold
+                            tabular-nums ${tard ? 'bg-danger-bg text-danger' : 'bg-gold-pale text-gold'}`}>
+            ⏰ {depuis(f.donne_le || f.imprime_le)}
+          </span>
+          <div className="text-[18px] font-extrabold leading-tight text-ink">
+            {propre(f.libelle || f.produit)}
+          </div>
+          <GrosseQuantite f={f} />
+          {f.pour && (
+            <div className="text-[12.5px] text-ink-mute truncate">→ {propre(f.pour)}</div>
+          )}
+        </div>
+      </div>
+
+      {/* ⚠️ ON NE DÉCLARE PAS ICI. Cet onglet avait sa propre petite saisie :
+          c'était une déclaration appauvrie, à côté de l'écran qui connaît les
+          cuves, le pressage, le verrou des composants et le reste de la crème.
+          Toucher la ligne ouvre donc le vrai écran, exactement comme le QR. */}
+      <button
+        onClick={() => onDeclarer(f)}
+        className="w-full bg-bordeaux text-cream py-4 text-[19px] font-extrabold
+                   active:brightness-90 transition">
+        ✍️ Déclarer
+      </button>
+      {/* ⚠️ LE RETOUR SE DÉCIDE ICI (Layla, 2026-09-20 : « c'est le pâtissier
+          qui décide »). Lui seul sait qu'il ne fera pas cette fournée.
+          Rien à rendre quand l'économe n'a rien donné — mais on regarde
+          `donne_le`, pas `donne_par` : le scan au comptoir est anonyme, et le
+          bouton disparaissait dès qu'on donnait par le QR. */}
+      {f.donne_le && (
+        <button
+          onClick={() => onRendre(f)} disabled={rend === f.id}
+          className="w-full border-t border-line text-ink-mute py-3 text-[14px] font-bold
+                     active:bg-cream-deep transition disabled:opacity-50">
+          {rend === f.id ? '…' : '↩ Je rends'}
+        </button>
+      )}
     </div>
   )
 }
@@ -111,10 +165,7 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
     <div className="min-h-screen bg-cream">
       <AppHeader {...nav} />
       <div className="max-w-[820px] mx-auto px-4 py-5">
-        <h1 className="font-fraunces italic text-[26px] text-ink">À déclarer</h1>
-        <p className="text-[12.5px] text-ink-mute mb-4">
-          Donné par l’économe, pas encore déclaré.
-        </p>
+        <h1 className="font-fraunces italic text-[26px] text-ink mb-4">À déclarer</h1>
 
         {erreur && (
           <div className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-3 rounded-2xl mb-4 text-[13px]">
@@ -123,56 +174,12 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
         )}
         {!feuilles && !erreur && <Skeleton />}
 
-        {feuilles && !dues.length && (
-          <div className="text-center py-10 text-ink-mute italic text-[14px]">
-            Rien à déclarer. Tout ce qui a été donné aujourd’hui est déclaré.
-          </div>
-        )}
+        {feuilles && !dues.length && <Rien emoji="✅" mot="Tout est déclaré" />}
 
         {dues.map(f => (
-          <Ligne key={f.id} ton={enRetard(f) ? 'border-l-danger' : 'border-l-gold'}>
-            <span className={`inline-block text-[9.5px] font-extrabold tracking-wide px-2 py-0.5
-              rounded-full border mb-1
-              ${enRetard(f) ? 'bg-danger-bg text-danger border-danger' : 'bg-gold-pale text-gold border-gold'}`}>
-              {f.donne_le ? `DONNÉ IL Y A ${depuis(f.donne_le).toUpperCase()}`
-                : `RIEN À DEMANDER · IMPRIMÉ IL Y A ${depuis(f.imprime_le).toUpperCase()}`}
-            </span>
-            <div className="text-[15px] font-bold text-ink">{propre(f.libelle || f.produit)}</div>
-            <div className="text-[12px] text-ink-mute">
-              attendu {qte(f.qty_prevue, f.unite)}{f.pour ? ` · pour ${propre(f.pour)}` : ''}
-            </div>
-
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
-              {/* ⚠️ ON NE DÉCLARE PAS ICI. Cet onglet avait sa propre petite
-                  saisie : c'était une déclaration appauvrie, à côté de l'écran
-                  qui connaît les cuves, le pressage, le verrou des composants
-                  et le reste de la crème. Toucher la ligne ouvre donc le vrai
-                  écran, exactement comme le QR — une seule façon de déclarer. */}
-              <button
-                onClick={() => ouvrirPourDeclarer(f)}
-                className="rounded-full bg-bordeaux text-cream px-5 py-2 text-[13px] font-bold
-                           active:scale-95 transition">
-                Ouvrir pour déclarer
-              </button>
-              {/* ⚠️ LE RETOUR SE DÉCIDE ICI (Layla, 2026-09-20 : « c'est le
-                  pâtissier qui décide »). Lui seul sait qu'il ne fera pas cette
-                  fournée. La ligne part alors attendre chez l'économe, qui
-                  confirmera l'avoir récupérée.
-                  Rien à rendre quand l'économe n'a rien donné — mais on regarde
-                  `donne_le`, pas `donne_par` : le scan au comptoir est anonyme,
-                  et le bouton disparaissait dès qu'on donnait par le QR. */}
-              {f.donne_le && (
-                <button
-                  onClick={() => rendre(f)} disabled={rend === f.id}
-                  className="rounded-full border border-line text-ink-soft px-4 py-2 text-[13px]
-                             font-bold active:scale-95 transition disabled:opacity-50">
-                  {rend === f.id ? '…' : '↩ Je rends'}
-                </button>
-              )}
-            </div>
-          </Ligne>
+          <Fiche key={f.id} f={f} rend={rend}
+            onDeclarer={ouvrirPourDeclarer} onRendre={rendre} />
         ))}
-
 
         {/* ⚠️ UNE SEULE QUESTION, ET SEULEMENT QUAND ELLE SE POSE. */}
         {aRendre && (

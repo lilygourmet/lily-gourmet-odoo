@@ -15,15 +15,55 @@
 // l'a bien récupérée dans sa réserve. J'avais d'abord laissé l'économe fermer
 // des lignes tout seul : il aurait soldé de la marchandise sans rien avoir vu
 // revenir.
+//
+// ⚠️ ET ON NE LIT PAS ICI (Layla, 2026-09-20 : « trop compliqué pour quelqu'un
+// qui ne lit pas / facilite le visuel »). Les trois paragraphes d'explication
+// sont partis : une photo, deux mots, un gros chiffre, un bouton pleine
+// largeur. Ce qui ne sert qu'à SAVOIR — le déjà-donné — passe en vignettes :
+// pas la même place que ce qui demande un geste.
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
+import { PhotoFeuille, GrosseQuantite, Bande, Rien } from './FeuilleVisuel'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu, depuis } from '../lib/feuilles'
+import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu } from '../lib/feuilles'
+
+/**
+ * Une fournée qui attend un geste : photo, gros chiffre, UN bouton.
+ *
+ * ⚠️ Hors du composant — redéfinie à chaque rendu, React la prenait pour un
+ * autre composant et rechargeait les photos à chaque relecture (toutes les
+ * minutes).
+ */
+function Fiche({ f, bord, couleur, mot, quoi, busy, onAgir }) {
+  return (
+    <div className={`bg-cream-warm border border-line border-l-[6px] ${bord} rounded-3xl
+                     overflow-hidden shadow-sm mb-3`}>
+      <div className="flex gap-3 p-3">
+        <PhotoFeuille f={f} className="w-[86px] h-[86px] rounded-2xl flex-none" />
+        <div className="min-w-0 flex flex-col justify-center gap-1">
+          <div className="text-[18px] font-extrabold leading-tight text-ink">
+            {propre(f.libelle || f.produit)}
+          </div>
+          <GrosseQuantite f={f} />
+          {f.pour && (
+            <div className="text-[12.5px] text-ink-mute truncate">→ {propre(f.pour)}</div>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={() => onAgir(f, quoi)} disabled={busy === f.id}
+        className={`w-full ${couleur} text-cream py-4 text-[19px] font-extrabold
+                    active:brightness-90 transition disabled:opacity-50`}>
+        {busy === f.id ? '…' : mot}
+      </button>
+    </div>
+  )
+}
 
 export default function DonneView({ user, onLogout, onNavigate, activeView }) {
   const [feuilles, setFeuilles] = useState(null)
@@ -61,25 +101,13 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
   const attente = feuilles ? aDonner(feuilles) : []
   const sortis = feuilles ? aReprendre(feuilles) : []
   const retours = feuilles ? enRetour(feuilles) : []
-
-  const Carte = ({ f, children, ton }) => (
-    <div className={`bg-cream-warm border border-line border-l-4 ${ton} rounded-2xl p-3 mb-2`}>
-      <div className="text-[15px] font-bold text-ink">{propre(f.libelle || f.produit)}</div>
-      <div className="text-[12px] text-ink-mute">
-        {qte(f.qty_prevue, f.unite)}{f.pour ? ` · pour ${propre(f.pour)}` : ''}
-      </div>
-      {children}
-    </div>
-  )
+  const rienDuTout = feuilles && !attente.length && !sortis.length && !retours.length
 
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader {...nav} />
       <div className="max-w-[820px] mx-auto px-4 py-5">
         <h1 className="font-fraunces italic text-[26px] text-ink">Donné</h1>
-        <p className="text-[12.5px] text-ink-mute mb-4">
-          Ce que tu as sorti de la réserve, et ce qu’on te demande encore.
-        </p>
 
         {erreur && (
           <div className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-3 rounded-2xl mb-4 text-[13px]">
@@ -88,22 +116,15 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
         )}
         {!feuilles && !erreur && <Skeleton />}
 
+        {rienDuTout && <div className="mt-6"><Rien emoji="🌙" mot="Rien dehors" /></div>}
+
         {/* ---- ce qu'on lui demande ---- */}
         {!!attente.length && (
           <>
-            <h2 className="font-fraunces italic text-[19px] text-ink mt-2">À donner</h2>
-            <p className="text-[12.5px] text-ink-mute mb-3">
-              Le plus simple reste de scanner le papier qu’on te tend.
-            </p>
+            <Bande emoji="🤲" titre="À donner" n={attente.length} ton="bg-gold-pale text-gold" />
             {attente.map(f => (
-              <Carte key={f.id} f={f} ton="border-l-gold">
-                <button
-                  onClick={() => agir(f, 'donner')} disabled={busy === f.id}
-                  className="mt-3 rounded-full bg-ok text-cream px-5 py-2 text-[13px] font-bold
-                             active:scale-95 transition disabled:opacity-50">
-                  {busy === f.id ? '…' : '✓ Donné'}
-                </button>
-              </Carte>
+              <Fiche key={f.id} f={f} bord="border-l-gold" couleur="bg-ok" mot="✓ Donné"
+                quoi="donner" busy={busy} onAgir={agir} />
             ))}
           </>
         )}
@@ -111,45 +132,35 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
         {/* ---- ce que le pâtissier rend : le seul geste de l'économe ---- */}
         {!!retours.length && (
           <>
-            <h2 className="font-fraunces italic text-[19px] text-ink mt-8">On te rend</h2>
-            <p className="text-[12.5px] text-ink-mute mb-3">
-              Le pâtissier ne fera pas ces fournées. Confirme quand la marchandise
-              est revenue dans ta réserve.
-            </p>
+            <Bande emoji="↩️" titre="On te rend" n={retours.length} ton="bg-bordeaux/10 text-bordeaux" />
             {retours.map(f => (
-              <Carte key={f.id} f={f} ton="border-l-gold">
-                <div className="text-[11.5px] text-ink-mute mt-1">
-                  rendu il y a {depuis(f.retour_le)}
-                </div>
-                <button
-                  onClick={() => agir(f, 'retour')} disabled={busy === f.id}
-                  className="mt-3 rounded-full bg-bordeaux text-cream px-5 py-2 text-[13px]
-                             font-bold active:scale-95 transition disabled:opacity-50">
-                  {busy === f.id ? '…' : '✓ Retourné'}
-                </button>
-              </Carte>
+              <Fiche key={f.id} f={f} bord="border-l-bordeaux" couleur="bg-bordeaux" mot="✓ Repris"
+                quoi="retour" busy={busy} onAgir={agir} />
             ))}
           </>
         )}
 
         {/* ---- ce qui est dehors : pour savoir, pas pour agir ---- */}
-        <h2 className="font-fraunces italic text-[19px] text-ink mt-8">Sorti de la réserve</h2>
-        <p className="text-[12.5px] text-ink-mute mb-3">
-          Donné, pas encore déclaré. Rien à faire ici : c’est le pâtissier qui
-          rend, s’il doit rendre.
-        </p>
-        {feuilles && !sortis.length && (
-          <div className="text-center py-8 text-ink-mute italic text-[14px]">
-            Rien n’est sorti sans avoir été déclaré.
-          </div>
-        )}
-        {sortis.map(f => (
-          <Carte key={f.id} f={f} ton="border-l-ok">
-            <div className="text-[11.5px] text-ink-mute mt-1">
-              donné il y a {depuis(f.donne_le)}
+        {!!sortis.length && (
+          <>
+            <Bande emoji="✅" titre="Déjà donné" n={sortis.length} ton="bg-success-bg text-success" />
+            <div className="grid grid-cols-3 md:grid-cols-4 gap-2.5">
+              {sortis.map(f => (
+                <div key={f.id} className="bg-cream-warm border border-line rounded-2xl overflow-hidden">
+                  <PhotoFeuille f={f} className="w-full aspect-square" />
+                  <div className="px-2 pt-1.5 pb-2">
+                    <div className="text-[12px] font-bold leading-tight text-ink">
+                      {propre(f.libelle || f.produit)}
+                    </div>
+                    <div className="text-[12px] font-semibold text-ink-mute tabular-nums">
+                      {qte(f.qty_prevue, f.unite)}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </Carte>
-        ))}
+          </>
+        )}
       </div>
     </div>
   )
