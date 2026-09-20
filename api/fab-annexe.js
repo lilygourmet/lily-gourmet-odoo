@@ -963,6 +963,78 @@ function grapheParents() {
   })
 }
 
+/**
+ * LES FORMATS D'UN VRAC — qui reçoit cette crème quand on la met en forme.
+ *
+ * « Quand une mousse, crème, chantilly, crémeux se fait, j'ai besoin que ça
+ * parte dans À déclarer leur découpe » (Layla, 2026-09-20). Une préparation
+ * n'est jamais finie quand elle sort de la cuve : la chantilly est PIPÉE, le
+ * crémeux COULÉ dans les moules, le voile DÉCOUPÉ.
+ *
+ * Et chez elle, cette mise en forme est un article à part entière :
+ *   SM. Chantilly à la Rose  →  SM- Chantilly rose pipée (1) / (5) / (10)
+ *   SM. Crémeux Pistache     →  Crémeux Pistache 10 pers / Indiv
+ *
+ * L'écran ne pouvait pas les retrouver seul : son catalogue ne porte pas les
+ * recettes. Le serveur, lui, a déjà tout le graphe en mémoire — on ne fait que
+ * le lire à l'envers.
+ *
+ * `parUnite` : combien de vrac part dans UN exemplaire du format. C'est lui qui
+ * permettra de dire, à partir des pièces annoncées, ce qui a été consommé.
+ */
+function grapheConsommateurs() {
+  return memo('graphe:consommateurs', async () => {
+    const [boms, lignes, prods] = await Promise.all([
+      sr('mrp.bom', [], ['id', 'product_tmpl_id', 'product_qty', 'product_uom_id'], { limit: 5000 }),
+      sr('mrp.bom.line', [], ['bom_id', 'product_id', 'product_qty', 'product_uom_id'], { limit: 40000 }),
+      sr('product.product', [], ['id', 'name', 'display_name', 'product_tmpl_id', 'uom_id'],
+        { limit: 20000 }),
+    ])
+    const bomParId = new Map(boms.map(b => [b.id, b]))
+    const prodsDuTmpl = new Map()
+    for (const p of prods) {
+      const a = prodsDuTmpl.get(p.product_tmpl_id[0]) || []
+      a.push(p); prodsDuTmpl.set(p.product_tmpl_id[0], a)
+    }
+    // nom du vrac → [ { produit, unite, parUnite } ]
+    const vers = new Map()
+    for (const l of lignes) {
+      const bom = bomParId.get(l.bom_id[0])
+      if (!bom) continue
+      const sortie = Number(bom.product_qty) || 0
+      if (!(sortie > 0)) continue
+      for (const parent of prodsDuTmpl.get(bom.product_tmpl_id[0]) || []) {
+        const nom = sansRef(l.product_id[1])
+        const a = vers.get(nom) || []
+        a.push({
+          produit: sansRef(parent.display_name || parent.name),
+          unite: parent.uom_id ? parent.uom_id[1] : null,
+          uniteVrac: l.product_uom_id ? l.product_uom_id[1] : null,
+          parUnite: Math.round((Number(l.product_qty) || 0) / sortie * 1000) / 1000,
+        })
+        vers.set(nom, a)
+      }
+    }
+    return vers
+  })
+}
+
+/**
+ * Les formats SUIVIS d'un vrac : on ne propose que ce que l'annexe fabrique
+ * vraiment — le graphe d'Odoo, lui, contient aussi des gâteaux vendus et des
+ * articles morts.
+ */
+async function formatsDe(nom) {
+  const [vers, suivis] = await Promise.all([grapheConsommateurs(), squeletteTout()])
+  const connus = new Map(suivis.map(a => [a.produit, a]))
+  const vus = new Set()
+  return (vers.get(sansRef(nom)) || [])
+    .filter(f => connus.has(f.produit) && f.parUnite > 0)
+    .filter(f => (vus.has(f.produit) ? false : vus.add(f.produit)))
+    .map(f => ({ ...f, photo: connus.get(f.produit)?.photo || null }))
+    .sort((a, b) => b.parUnite - a.parUnite)
+}
+
 async function photoDe(nom) {
   const t = await sr('product.product', [['name', '=', nom]], ['image_256', 'image_512'], { limit: 1 })
   return t[0]?.image_256 || t[0]?.image_512 || null
@@ -970,6 +1042,11 @@ async function photoDe(nom) {
 
 export default async function handler(req, res) {
   try {
+    // Les formats d'un vrac — lecture seule, rien d'autre n'est touché.
+    if (req.query.formats) {
+      return res.status(200).json({ formats: await formatsDe(String(req.query.formats)) })
+    }
+
     if (req.query.photo) {
       const b64 = await photoDe(String(req.query.photo))
       if (!b64) {
