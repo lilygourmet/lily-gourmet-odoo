@@ -1122,13 +1122,16 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nom
  * qu'en plus petit. Avant, celui qui lançait un individuel n'avait aucune case
  * où déclarer le reste.
  */
-export function AutresTailles({ tailles, nomCuve, valeurs, onChange }) {
+export function AutresTailles({ tailles, nomCuve, valeurs, onChange, titre }) {
   const [clavier, setClavier] = useState(null)
   if (!tailles?.length) return null
   return (
     <div className="mt-7 rounded-2xl border-2 border-cream-deep overflow-hidden text-left">
       <div className="px-4 py-2.5 bg-cream-deep/40 text-[15px] font-bold">
-        Tu en as fait d'autres tailles avec {nomCuve ? `« ${nomCuve} »` : 'la même cuve'} ?
+        {/* ⚠️ Le même tableau sert à la mise en forme (« tu en as fait
+            combien ? ») : là, il n'y a pas de « taille lancée », rien que des
+            moules à remplir. D'où le titre qu'on peut remplacer. */}
+        {titre || `Tu en as fait d'autres tailles avec ${nomCuve ? `« ${nomCuve} »` : 'la même cuve'} ?`}
       </div>
       {tailles.map(t => {
         const v = Number(valeurs?.[t.produit]) || 0

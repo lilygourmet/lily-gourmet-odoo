@@ -1035,6 +1035,73 @@ async function formatsDe(nom) {
     .sort((a, b) => b.parUnite - a.parUnite)
 }
 
+/**
+ * CE QUI RESTE À METTRE EN FORME — la liste de l'onglet « À finir ».
+ *
+ * « Quand une mousse reste en stock, elle revient dans À déclarer parce qu'elle
+ * doit être finie » (Layla, 2026-09-20). Sortir de la cuve n'est pas être
+ * fini : la chantilly se pipe, le crémeux se coule dans les moules.
+ *
+ * ⚠️ LE STOCK D'ODOO NE SUFFIT PAS. Il ne baisse qu'à la VALIDATION de l'ordre,
+ * et l'atelier valide en fin de journée : un vrac dispatché ce matin serait
+ * resté toute la journée dans la liste, à réclamer un travail déjà fait. On
+ * retire donc ce que les formats déclarés aujourd'hui en ont consommé —
+ * exactement comme l'écran « Déclarer » compte `dejaFait`.
+ */
+async function aFinir(sb) {
+  const { data: liste } = await sb.from('annexe_mise_en_forme').select('produit, note').eq('actif', true)
+  if (!liste || !liste.length) return []
+
+  const depuis = new Date()
+  depuis.setDate(depuis.getDate() - 6)
+  const [sq, vers, { data: faits }, quants] = await Promise.all([
+    squeletteTout(),
+    grapheConsommateurs(),
+    sb.from('prod_fabrications').select('article, qty, ordre')
+      .gte('jour', depuis.toLocaleDateString('sv-SE')).eq('atelier', 'annexe').limit(5000),
+    sr('stock.quant', [['location_id', '=', LIEU_ANNEXE]], ['product_id', 'quantity'], { limit: 4000 }),
+  ])
+
+  // Ce qui est VALIDÉ ne compte plus : le stock d'Odoo le porte déjà.
+  const ordres = [...new Set((faits || []).map(f => f.ordre).filter(Boolean))]
+  const clos = new Set()
+  if (ordres.length) {
+    for (const m of await sr('mrp.production', [['name', 'in', ordres]], ['name', 'state'])) {
+      if (m.state === 'done' || m.state === 'cancel') clos.add(m.name)
+    }
+  }
+  const declare = partagerDeclarations(faits, clos).total
+
+  const parId = new Map()
+  for (const q of quants) parId.set(q.product_id[0], (parId.get(q.product_id[0]) || 0) + q.quantity)
+  const connus = new Map(sq.map(a => [a.produit, a]))
+
+  const out = []
+  for (const l of liste) {
+    const a = connus.get(l.produit)
+    if (!a) continue                                   // renommé chez Odoo : on se tait
+    const stock = Math.round((parId.get(a.id) || 0) * 1000) / 1000
+    // Ce que les formats déclarés aujourd'hui lui ont déjà pris.
+    let pris = 0
+    const vus = new Set()
+    for (const f of vers.get(l.produit) || []) {
+      if (vus.has(f.produit)) continue
+      vus.add(f.produit)
+      const n = declare[f.produit] || 0
+      if (n > 0) pris += n * (Number(f.parUnite) || 0) * (estKgOdoo(f.uniteVrac) ? 1000 : 1)
+    }
+    // `pris` est en grammes (ou en pièces) ; le stock, lui, dans l'unité de
+    // l'article. On compare donc dans la même monnaie.
+    const stockG = stock * (estKgOdoo(a.unite) ? 1000 : 1)
+    const resteG = Math.round((stockG - pris) * 1000) / 1000
+    out.push({ ...a, note: l.note || null, stock, pris: Math.round(pris * 1000) / 1000,
+      resteG })
+  }
+  return out
+}
+
+const estKgOdoo = u => /^kg$/i.test(String(u || '').trim())
+
 async function photoDe(nom) {
   const t = await sr('product.product', [['name', '=', nom]], ['image_256', 'image_512'], { limit: 1 })
   return t[0]?.image_256 || t[0]?.image_512 || null
@@ -1075,6 +1142,12 @@ export default async function handler(req, res) {
     }
 
     const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+    // Ce qui reste à mettre en forme — l'onglet « À finir ».
+    if (req.query.afinir) {
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({ vracs: await aFinir(sb) })
+    }
 
     // ============================================================
     // LES FEUILLES DE FOURNÉE : imprimée → donnée → déclarée.

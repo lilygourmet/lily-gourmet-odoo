@@ -17,37 +17,106 @@
 // « SM- Base Tarte CBS 18 cm » sont la même chose écrite de deux façons.
 // ============================================================
 
-import { supabase } from './supabase'
+import { enGrammes, enUnite } from './ecranSimple'
 
-/** Les vracs qui doivent être mis en forme. */
-export async function loadMiseEnForme() {
-  const { data, error } = await supabase.from('annexe_mise_en_forme')
-    .select('produit, note').eq('actif', true).order('produit').limit(500)
-  if (error) throw error
-  return data || []
+/**
+ * CE QUI RESTE À METTRE EN FORME, prêt à afficher.
+ *
+ * ⚠️ C'est le SERVEUR qui compte, et pour une bonne raison : le stock d'Odoo ne
+ * baisse qu'à la validation de l'ordre, et l'atelier valide en fin de journée.
+ * Un vrac dispatché ce matin serait resté toute la journée dans la liste, à
+ * réclamer un travail déjà fait. Le serveur retire donc ce que les formats
+ * déclarés aujourd'hui en ont consommé (`resteG`, en grammes).
+ */
+export async function loadAFinir() {
+  const r = await fetch('/api/fab-annexe?afinir=1&cb=' + Date.now())
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+  return aMettreEnForme(d.vracs)
 }
 
 /**
- * Ce qui attend sa mise en forme MAINTENANT : un vrac de la liste dont il
- * reste quelque chose au Stock Prod.
+ * Ce qui attend VRAIMENT sa mise en forme.
  *
  * ⚠️ On ne compte pas les poussières. Un stock traîne toujours à 0,4 g après
  * une répartition — l'afficher, c'est une ligne qui ne part jamais et qu'on
- * apprend à ignorer. Sous le gramme (ou sous 5 pièces d'un article compté à
- * l'unité), on considère que c'est fini.
+ * apprend à ignorer, puis tout le reste avec.
  */
-export function aMettreEnForme(articles, liste) {
-  const voulus = new Map((liste || []).map(l => [l.produit, l]))
-  return (articles || [])
-    .filter(a => voulus.has(a.produit))
-    .map(a => ({ ...a, note: voulus.get(a.produit)?.note || null }))
-    .filter(a => resteVraiment(a.stock, a.unite))
+export function aMettreEnForme(vracs) {
+  return (vracs || [])
+    .filter(a => resteVraiment(a.resteG, a.unite))
     .sort((a, b) => (a.libelle || a.produit).localeCompare(b.libelle || b.produit, 'fr'))
 }
 
-const resteVraiment = (stock, unite) => {
-  const s = Number(stock) || 0
-  if (/^kg$/i.test(String(unite || '').trim())) return s >= 0.001   // 1 g
-  if (/^u$/i.test(String(unite || '').trim())) return s >= 1
-  return s >= 1
+/** `resteG` est déjà en grammes — sauf pour ce qui se compte en pièces. */
+const resteVraiment = (resteG, unite) => {
+  const s = Number(resteG) || 0
+  return /^u$/i.test(String(unite || '').trim()) ? s >= 1 : s >= 1
 }
+
+/**
+ * LES FORMATS d'un vrac : ce dans quoi il se coule, se pipe, se découpe.
+ * `parUnite` est ce qu'une pièce en prend, dans `uniteVrac`.
+ */
+export async function loadFormats(produit) {
+  const r = await fetch('/api/fab-annexe?formats=' + encodeURIComponent(produit))
+  if (!r.ok) throw new Error(`Formats illisibles (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+  return d.formats || []
+}
+
+/**
+ * CE QUE LA RECETTE PRÉVOIT pour ce dispatch, en GRAMMES.
+ *
+ * ⚠️ Tout se calcule en grammes et rien qu'en grammes. Le vrac se compte
+ * parfois en kilos chez Odoo et sa ligne de recette en grammes (ou l'inverse) :
+ * c'est exactement le chemin par lequel un facteur mille se glisse — il l'a
+ * déjà fait, avec 14,33 g de crème là où il en fallait 14 328.
+ */
+export function prevuParLaRecette(formats, quantites) {
+  return (formats || []).reduce((t, f) => {
+    const n = Number(quantites?.[f.produit]) || 0
+    return t + n * enGrammes(f.parUnite, f.uniteVrac)
+  }, 0)
+}
+
+/**
+ * LE DISPATCH, PRÊT À PARTIR : un ordre par format, et ce que le vrac y laisse.
+ *
+ * « Une ligne qui demande la répartition, la mise en forme doit être réclamée.
+ * Et surtout dire : est-ce qu'il t'est resté de la crème à la fin, pour
+ * compléter ou pour stocker » (Layla, 2026-09-20).
+ *
+ * Deux cas, et c'est sa règle depuis le 19 :
+ *   • il reste quelque chose → on n'y touche pas, la recette s'applique telle
+ *     quelle et le reste dort au frigo (il reviendra demain dans « À finir ») ;
+ *   • il ne reste RIEN → tout ce qui a été fait rentre dans les produits, même
+ *     ce que la recette ne demandait pas. La consigne va sur le PREMIER format
+ *     servi, et les autres reçoivent zéro : sans ce zéro, Odoo reprendrait sa
+ *     recette au prorata et compterait le vrac deux fois (même règle que
+ *     `repartir`, qui pose la cuve entière sur la taille lancée).
+ */
+export function dispatchVersOdoo({ vrac, stock, uniteStock, formats, quantites, reste }) {
+  const servis = (formats || [])
+    .filter(f => (Number(quantites?.[f.produit]) || 0) > 0)
+    .map(f => ({ produit: f.produit, qty: Number(quantites[f.produit]), unite: f.unite,
+      uniteVrac: f.uniteVrac }))
+  if (!servis.length) return []
+
+  const stockG = enGrammes(stock, uniteStock)
+  const resteG = Math.max(0, Math.min(stockG, enGrammes(reste, uniteStock)))
+  const consommeG = stockG - resteG
+  const prevuG = prevuParLaRecette(formats, quantites)
+
+  // La recette tombe juste (au gramme près) : rien à imposer à Odoo.
+  if (Math.abs(consommeG - prevuG) <= 1) return servis.map(s => ({ ...s, ajustements: null }))
+
+  return servis.map((s, i) => ({
+    ...s,
+    ajustements: { [vrac]: i === 0 ? arrondi(enUnite(consommeG, s.uniteVrac)) : 0 },
+  }))
+}
+
+const arrondi = v => Math.round(v * 1000) / 1000

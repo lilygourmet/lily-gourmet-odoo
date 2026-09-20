@@ -73,18 +73,6 @@ vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
 vi.mock('../lib/confirmDialog', () => ({ confirmDialog: async () => true }))
 vi.mock('../lib/scanEntrant', () => ({ poserLeScan: (...a) => poserLeScan(...a) }))
-// Les vracs qui attendent leur mise en forme : le catalogue vient d'Odoo, la
-// liste de notre base.
-let stockVrac = []
-vi.mock('../lib/fabAnnexe', async importOriginal => ({
-  ...await importOriginal(),
-  loadToutFabAnnexe: async () => stockVrac,
-}))
-vi.mock('../lib/miseEnForme', async importOriginal => ({
-  ...await importOriginal(),
-  loadMiseEnForme: async () => [{ produit: 'SM. Gélée Mangue Ananas Pistache', note: 'coulée — 10 pers, indiv' }],
-}))
-
 vi.mock('../lib/feuilles', async importOriginal => ({
   ...await importOriginal(),            // les VRAIES règles de tri
   feuillesDuJour: async () => lues,
@@ -96,7 +84,7 @@ vi.mock('../lib/feuilles', async importOriginal => ({
 const { default: ADeclarerView } = await import('./ADeclarerView')
 const { default: DonneView } = await import('./DonneView')
 
-beforeEach(() => { vi.clearAllMocks(); stockVrac = [] })
+beforeEach(() => { vi.clearAllMocks() })
 afterEach(cleanup)
 
 describe('« À déclarer », pour des mains farineuses', () => {
@@ -162,28 +150,6 @@ describe('« À déclarer », pour des mains farineuses', () => {
     expect(jours.length).toBe(2)
     expect(jours[0].textContent).toBe('Aujourd’hui')   // le jour en cours d'abord
     expect(jours[1].textContent).not.toBe('Aujourd’hui')
-  })
-
-  // ⚠️ « Quand une mousse reste en stock, elle revient dans À déclarer parce
-  // qu'elle doit être finie » (Layla, 2026-09-20). Sortir de la cuve n'est pas
-  // être fini : la gelée se coule encore dans ses moules.
-  it('réclame la mise en forme de ce qui reste en cuve', async () => {
-    lues = []
-    stockVrac = [{ produit: 'SM. Gélée Mangue Ananas Pistache', libelle: 'Gélée mangue',
-      unite: 'g', stock: 2030, photo: 'E- Pistache fleur d’oranger' }]
-    const onNavigate = vi.fn()
-    render(<ADeclarerView user={{ id: 'u1' }} onNavigate={onNavigate} />)
-
-    expect(await screen.findByText('À finir')).toBeTruthy()
-    expect(screen.getByText('Gélée mangue')).toBeTruthy()
-    expect(screen.getByText(/2[\u202f\u00a0 ]030 g/)).toBeTruthy()
-    expect(screen.getByText('coulée — 10 pers, indiv')).toBeTruthy()
-
-    // ⚠️ Et « tout est déclaré » ne s'affiche PAS : il reste du travail.
-    expect(screen.queryByText('Tout est déclaré')).toBeNull()
-
-    fireEvent.click(screen.getByText('Gélée mangue'))
-    expect(onNavigate).toHaveBeenCalledWith('fabrication-annexe-2')
   })
 
   it('le vide se dit en deux mots', async () => {

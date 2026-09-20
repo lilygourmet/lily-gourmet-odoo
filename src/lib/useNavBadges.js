@@ -6,6 +6,7 @@ import { countModificationsATraiter } from './modifications'
 import { countLivraisonsARelancer } from './deliveries'
 import { compterCheckCd } from './checkCd'
 import { canCheckCd, canValiderAnnexe, isAdmin } from './auth'
+import { loadAFinir } from './miseEnForme'
 import { loadEnAttentePour, lieuxDe } from './transfertsStock'
 import { loadFabProdDepuis, depuisJours } from './fabricationProd'
 import { loadManques, loadFaits, loadEtats } from './fabrication'
@@ -38,6 +39,13 @@ export function useNavBadges(user, activeView = '') {
         // vérifiés. Seulement pour qui en a la charge — la lecture passe par
         // Odoo, inutile de la faire tourner pour tout le monde.
         canCheckCd(user) ? compterCheckCd().then(n => set('check-cd', n)).catch(() => {}) : Promise.resolve(),
+        // Ce qui est sorti de la cuve et attend d'être coulé, pipé, découpé.
+        // « À finir, c'est un autre onglet avec badge du nombre d'articles »
+        // (Layla, 2026-09-20). La lecture passe par Odoo : seulement pour ceux
+        // que ça regarde, comme pour le double contrôle juste au-dessus.
+        (isAdmin(user) || user?.perm_fabrication_annexe)
+          ? loadAFinir().then(v => set('a-finir', v.length)).catch(() => {})
+          : Promise.resolve(),
         // Ce que l'annexe a déclaré aujourd'hui et qui attend sa validation :
         // on ne compte que les déclarations rattachées à un ordre ENCORE ouvert
         // dans Odoo, sinon le chiffre resterait allumé après la validation.

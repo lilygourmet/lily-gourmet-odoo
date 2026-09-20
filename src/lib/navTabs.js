@@ -28,6 +28,10 @@ const TAB_DEFS = [
   { view: 'fabrication-pate-sucre', emoji: '🎂', label: 'Fabrication Pâte à sucre', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_pate_sucre) },
   { view: 'fabrication-annexe-2', emoji: '🥧', label: 'Fabrication Annexe 2', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_annexe) },
   { view: 'a-declarer',          emoji: '✍️', label: 'À déclarer',           can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_annexe) },
+  // « À finir, c'est un autre onglet avec badge du nombre d'articles »
+  // (Layla, 2026-09-20) : ce qui est sorti de la cuve et attend d'être coulé,
+  // pipé, découpé.
+  { view: 'a-finir',            emoji: '🍮', label: 'À finir',              can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_annexe) },
   { view: 'donne',              emoji: '📦', label: 'Donné',                can: u => !isLivreur(u) && (isAdmin(u) || !!u?.economat_profil || !!u?.perm_econome) },
   { view: 'fabrication-prod', emoji: '🥣', label: 'Fabrication Prod', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_prod) },
   { view: 'valider-annexe',      emoji: '🏭', label: 'À valider Annexe',   can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_annexe) },
