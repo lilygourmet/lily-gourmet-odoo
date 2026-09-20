@@ -13,7 +13,7 @@
 import { Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { qte, propre, nb, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
-import { assezEnStock, aDemander, aBesoinDeLEconomat, teteDe } from '../lib/feuillesAImprimer'
+import { assezEnStock, aDemander, aBesoinDeLEconomat, teteDe, tetesDe } from '../lib/feuillesAImprimer'
 import { imageQr } from '../lib/feuilles'
 
 /**
@@ -29,9 +29,10 @@ export function ChoixImpression({
   onImprimer, onFermer, sous,
 }) {
   const seule = mode === 'seule'
-  // ⚠️ La fiche qu'on regarde est la PREMIÈRE de la liasse (voir `teteDe`).
-  const visibles = seule ? [teteDe(feuilles)].filter(Boolean) : feuilles
-  const combien = seule ? 1 : feuilles.filter(f => coches[f.produit]).length
+  // ⚠️ Les têtes, ce sont les gâteaux eux-mêmes — un seul depuis une fiche,
+  // plusieurs quand on en a coché à l'accueil (voir `tetesDe`).
+  const visibles = seule ? tetesDe(feuilles) : feuilles
+  const combien = seule ? visibles.length : feuilles.filter(f => coches[f.produit]).length
   // La tête est la DERNIÈRE feuille : c'est elle qui donne la profondeur.
   const profondeurDe = f => Math.max(0, f.chemin.length - 1)
 
@@ -53,7 +54,8 @@ export function ChoixImpression({
         {!!onMode && (
         <div className="px-4 pt-3 flex-shrink-0">
           <div className="grid grid-cols-2 gap-1.5 bg-cream-deep rounded-2xl p-1">
-            {[['seule', 'Juste cette fiche', 'cette recette seule'],
+            {[['seule', tetesDe(feuilles).length > 1 ? 'Juste les fiches' : 'Juste cette fiche',
+              tetesDe(feuilles).length > 1 ? 'les gâteaux seuls' : 'cette recette seule'],
               ['tout', 'Tout ce qui manque', 'la cascade entière']].map(([k, t, s]) => (
               <button key={k} onClick={() => onMode(k)} aria-pressed={mode === k}
                 className={`rounded-xl py-2.5 px-2 text-[13.5px] font-bold leading-tight

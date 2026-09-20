@@ -94,6 +94,29 @@ describe('le panneau « Tu imprimes quoi ? »', () => {
     expect(screen.queryByLabelText('Sirop Imbibage Production KG')).toBeNull()
   })
 
+  // ⚠️ Le panneau de l'ACCUEIL (plusieurs gâteaux cochés) n'offrait aucun
+  // choix : « dans imprimer, ça donne maintenant toujours imprimer la cascade,
+  // pas juste la page même » (Layla, 2026-09-20). « Juste les fiches » doit y
+  // sortir LES GÂTEAUX, pas un seul.
+  it('« juste les fiches » garde TOUTES les têtes, pas la première', () => {
+    const deuxGateaux = [
+      ...feuilles,
+      { produit: 'SM- 23 cm Vitrine (Fraise)', libelle: 'Vitrine fraise · 23 cm',
+        unite: 'u', stock: 0, besoin: 12, manque: 12, qty: 12,
+        chemin: ['SM- 23 cm Vitrine (Fraise)'], pour: [], ingredients: [] },
+    ]
+    render(<ChoixImpression feuilles={deuxGateaux} mode="seule" coches={coches} tapes={{}}
+      onMode={() => {}} onCoche={() => {}} onQuantite={() => {}} onRendre={() => {}}
+      onImprimer={() => {}} onFermer={() => {}} />)
+    expect(screen.getByLabelText('Vitrine citron · 20 cm')).toBeTruthy()
+    expect(screen.getByLabelText('Vitrine fraise · 23 cm')).toBeTruthy()
+    // Et pas les composants : ce sont bien les gâteaux seuls.
+    expect(screen.queryByLabelText('Creme Citron Production')).toBeNull()
+    expect(screen.getByText('Imprimer 2 feuilles')).toBeTruthy()
+    // Le mot change au pluriel : ce ne sont plus « cette fiche » mais les deux.
+    expect(screen.getByText('Juste les fiches')).toBeTruthy()
+  })
+
   it('le ↺ ne se montre que sur un chiffre tapé à la main', () => {
     const onRendre = vi.fn()
     poser({ tapes: { 'SM. Creme Citron Production': 5000 }, onRendre })

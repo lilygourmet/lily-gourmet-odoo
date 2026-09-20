@@ -254,6 +254,22 @@ export function teteDe(feuilles) {
   return (feuilles || [])[0]
 }
 
+/**
+ * LES TÊTES — les gâteaux eux-mêmes, sans ce qu'ils demandent.
+ *
+ * Une seule quand on imprime depuis une fiche ; plusieurs quand on a coché
+ * plusieurs gâteaux à l'accueil. Ce sont les feuilles dont le chemin ne
+ * contient qu'elles : personne ne les a appelées, on est venu les faire.
+ *
+ * « Dans imprimer, ça donne maintenant toujours imprimer la cascade, pas juste
+ * la page même » (Layla, 2026-09-20) : le panneau de l'accueil n'offrait aucun
+ * choix, il sortait tout. Il propose maintenant les deux, comme celui des
+ * fiches.
+ */
+export function tetesDe(feuilles) {
+  return (feuilles || []).filter(f => (f.chemin || []).length === 1)
+}
+
 /** Y en a-t-il déjà assez ? C'est ce qui décide du vert et du décochage. */
 export const assezEnStock = f => !((Number(f?.manque) || 0) > 0.001)
 

@@ -367,6 +367,23 @@ describe('rien ne part avant que la liasse soit posée', () => {
 // cascade » (Layla, 2026-09-16) : plus d'écran recopié tel quel, la même
 // feuille que les autres — avec son tableau à remplir.
 describe('« juste cette fiche »', () => {
+  // ⚠️ GARDE : « dans imprimer, ça donne maintenant toujours imprimer la
+  // cascade, pas juste la page même » (Layla, 2026-09-20). Depuis une FICHE,
+  // le choix doit exister, et s'ouvrir sur « juste cette fiche ».
+  it('le panneau s’ouvre sur « juste cette fiche », pas sur la cascade', async () => {
+    window.print = vi.fn()
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    await screen.findByText('🖨 Tu imprimes quoi ?')
+    // Les deux façons sont proposées…
+    expect(screen.getByText('Juste cette fiche')).toBeTruthy()
+    expect(screen.getByText('Tout ce qui manque')).toBeTruthy()
+    // …et c'est « juste cette fiche » qui est choisie d'avance.
+    expect(screen.getByText('Juste cette fiche').closest('button')
+      .getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('Imprimer 1 feuille')).toBeTruthy()
+  })
+
   it('sort la feuille de la cascade, pas l’écran', async () => {
     window.print = vi.fn()
     await ouvrirLaFiche()

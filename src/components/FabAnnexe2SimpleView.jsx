@@ -32,7 +32,7 @@ import { nouvelId, poserFeuilles, eteindreFeuille } from '../lib/feuilles'
 import { prendreLeScan } from '../lib/scanEntrant'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
-import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock, teteDe } from '../lib/feuillesAImprimer'
+import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock, tetesDe } from '../lib/feuillesAImprimer'
 
 /**
  * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
@@ -559,15 +559,26 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
           </div>
           {imprAssemble && (
             <ChoixImpression
-              feuilles={feuillesChoisies} mode="tout" coches={cochesAssemble}
+              feuilles={feuillesChoisies}
+              // ⚠️ LE CHOIX EXISTE AUSSI ICI (Layla, 2026-09-20 : « dans
+              // imprimer, ça donne maintenant toujours imprimer la cascade,
+              // pas juste la page même »). Ce panneau sortait tout, sans rien
+              // demander — alors que celui des fiches propose les deux depuis
+              // le début. Il s'ouvre sur la cascade, parce qu'on vient d'en
+              // cocher plusieurs : c'est pour ça qu'on est là.
+              mode={imprAssemble.mode || 'tout'}
+              onMode={m => setImprAssemble(x => ({ ...x, mode: m }))}
+              coches={cochesAssemble}
               tapes={quantites}
               sous={`pour ${choisis.length} gâteau${choisis.length > 1 ? 'x' : ''}`}
               onCoche={(p, v) => setImprAssemble(x => ({ ...x, choix: { ...(x.choix || {}), [p]: v } }))}
               onQuantite={(p, v) => poser(p, v)}
               onRendre={p => setQuantites(x => { const n = { ...x }; delete n[p]; return n })}
               onImprimer={() => {
+                const quoi = imprAssemble.mode === 'seule'
+                  ? tetesDe(feuillesChoisies) : aImprimerAssemble
                 setImprAssemble(null)
-                lancer(aImprimerAssemble)
+                lancer(quoi)
               }}
               onFermer={() => setImprAssemble(null)} />
           )}
@@ -710,7 +721,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // — avec sa demande à l'économat et son tableau à remplir, comme les autres.
     // La tête est la PREMIÈRE de la liste, c'est elle qu'on a sous les yeux —
     // elle l'était en dernier avant que le parent passe devant (voir `teteDe`).
-    const quoi = impr?.mode === 'seule' ? [teteDe(feuilles)].filter(Boolean) : aImprimer
+    const quoi = impr?.mode === 'seule' ? tetesDe(feuilles) : aImprimer
     setImpr(null)
     lancer(quoi)
   }
