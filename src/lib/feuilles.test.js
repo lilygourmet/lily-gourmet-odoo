@@ -10,7 +10,7 @@
 // ============================================================
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe, resteDeLaCascade, ingredientsSortis, quantitesImposees } from './feuilles'
+import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe, resteDeLaCascade, ingredientsSortis, quantitesImposees, sansPapier } from './feuilles'
 
 const imprimee = { id: 'a', imprime_le: '2026-09-19T08:00:00Z' }
 const donnee = { ...imprimee, id: 'b', donne_le: '2026-09-19T09:00:00Z' }
@@ -317,5 +317,54 @@ describe('le chiffre que la matière sortie impose', () => {
 
   it('ignore une feuille sans quantité', () => {
     expect(quantitesImposees([{ produit: 'SM. Creme', donne_le: 'ce matin' }])).toEqual({})
+  })
+})
+
+// ============================================================
+// RIEN NE SORT DE L'ANNEXE SANS SA CASCADE.
+//
+// « Il ne doit pas pouvoir créer une mousse liée à un autre papier » puis
+// « je veux bloquer dans un premier temps pour comprendre ce qu'il fait de
+// chaque chose » — et, sur la portée : « à tout » (Layla, 2026-09-21).
+//
+// Le 21/09 au soir, une mousse gianduja de 6 120 g a été déclarée sans rien
+// imprimer. L'app ne savait pas pour quel gâteau, et l'écran « À valider » lui
+// a prêté la liasse d'une autre fournée, faite six heures plus tôt.
+// ============================================================
+describe('pas de papier, pas de déclaration', () => {
+  const mousse = p => ({ ...p, produit: 'SM. Mousse Gianduja' })
+
+  it('sans la moindre feuille, la fournée est bloquée', () => {
+    expect(sansPapier([], 'SM. Mousse Gianduja')).toBe(true)
+  })
+
+  it('une feuille imprimée suffit à débloquer — même pas encore servie', () => {
+    expect(sansPapier([mousse(imprimee)], 'SM. Mousse Gianduja')).toBe(false)
+  })
+
+  // ⚠️ C'est ce qui empêche l'impasse : la feuille est enregistrée AVANT de
+  // partir à l'imprimante. Bourrage, plus d'encre — elle existe quand même.
+  it('l’imprimante en panne ne bloque personne : la fiche est déjà posée', () => {
+    expect(sansPapier([mousse(imprimee)], 'SM. Mousse Gianduja')).toBe(false)
+  })
+
+  it('une feuille DÉJÀ DÉCLARÉE ne vaut plus : la 2e fournée veut son papier', () => {
+    expect(sansPapier([mousse(declaree)], 'SM. Mousse Gianduja')).toBe(true)
+  })
+
+  it('une feuille rendue ne vaut plus non plus', () => {
+    expect(sansPapier([mousse(renduee)], 'SM. Mousse Gianduja')).toBe(true)
+  })
+
+  it('le papier d’un AUTRE article ne débloque rien', () => {
+    expect(sansPapier([{ ...imprimee, produit: 'SM. Mousse Tiramisu' }],
+      'SM. Mousse Gianduja')).toBe(true)
+  })
+
+  // Le cas vécu, remis tel quel : la mousse de 13h02 est déclarée, celle du
+  // soir n'a pas de papier à elle.
+  it('le soir du 21/09, la deuxième mousse aurait été bloquée', () => {
+    const feuilles = [mousse({ ...declaree, id: '13h02' })]
+    expect(sansPapier(feuilles, 'SM. Mousse Gianduja')).toBe(true)
   })
 })

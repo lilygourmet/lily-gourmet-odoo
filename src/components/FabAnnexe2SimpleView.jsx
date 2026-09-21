@@ -30,7 +30,7 @@ import { setMiseEnForme } from '../lib/miseEnForme'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis,
-  quantitesImposees, attendLeDon, feuilleOuverte, complementsAImprimer } from '../lib/feuilles'
+  quantitesImposees, attendLeDon, feuilleOuverte, complementsAImprimer, sansPapier } from '../lib/feuilles'
 import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
 import { confirmDialog } from '../lib/confirmDialog'
 import { todayISO } from '../lib/dates'
@@ -1001,6 +1001,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
               // ⚠️ « Si pour une recette on n'a pas donné d'ingrédient, il ne
               // peut pas non plus marquer comme fait » (Layla, 2026-09-20).
               pasDonne={attendLeDon(feuillesJour, noeud.produit)}
+              // ⚠️ ET RIEN NE SORT DE L'ANNEXE SANS SA CASCADE (Layla,
+              // 2026-09-21 : « il ne doit pas pouvoir créer une mousse liée à
+              // un autre papier », puis « je veux bloquer dans un premier
+              // temps pour comprendre ce qu'il fait de chaque chose » — « à
+              // tout », préparations comme gâteaux montés).
+              sansPapier={sansPapier(feuillesJour, noeud.produit)}
+              onImprimer={() => setImpr({ choix: {} })}
               autoFait={droitALaDeclaration && !sortie}
               onAutoFait={() => setDroitALaDeclaration(false)} />
             </div>

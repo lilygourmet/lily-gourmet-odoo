@@ -39,6 +39,34 @@ const gateauBloque = {
     besoin: 2589, stock: 0, dejaFait: 0, fabrique: true, ok: false }],
 }
 
+let PRODUITS_IMPRIMES = [
+  'SM. sirop Imbibage production KG',
+  'SM- Cadre Citron',
+  'SM. Creme Citron',
+]
+const PAPIERS_PAR_DEFAUT = [...PRODUITS_IMPRIMES]
+
+// ⚠️ TOUT CE QUI SE DÉCLARE A DÉSORMAIS SON PAPIER (Layla, 2026-09-21 : « je
+// veux bloquer dans un premier temps pour comprendre ce qu'il fait de chaque
+// chose » — « à tout »). Ces tests rejouent le geste du pâtissier : il a donc
+// imprimé sa cascade avant. Sans ces feuilles, l'écran bloque — et c'est
+// exactement ce que vérifie `FabAnnexe2Simple.test.jsx`.
+//
+// `qty_prevue: null` : le papier ne fige aucun chiffre, pour que les tests
+// gardent la main sur les quantités. `sans_economat` : rien à aller chercher.
+const papierOuvert = x => {
+  const nom = typeof x === 'string' ? x : x.produit
+  return {
+    id: 'f-' + nom, produit: nom, jour: '2026-09-21',
+    imprime_le: '2026-09-21T08:00:00Z', sans_economat: true,
+    qty_prevue: typeof x === 'string' ? null : x.qty,
+  }
+}
+vi.mock('../lib/feuilles', async importOriginal => {
+  const vrai = await importOriginal()
+  return { ...vrai, feuillesDuJour: async () => PRODUITS_IMPRIMES.map(papierOuvert) }
+})
+
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
@@ -62,6 +90,7 @@ vi.mock('../lib/fabAnnexe', async importOriginal => {
 const { default: FabAnnexe2SimpleView } = await import('./FabAnnexe2SimpleView')
 
 beforeEach(() => {
+  PRODUITS_IMPRIMES = [...PAPIERS_PAR_DEFAUT]
   localStorage.clear(); declarer.mockClear(); envoyerAValider.mockClear()
   relireRecettes.mockClear(); listesLues = 0
 })
@@ -187,12 +216,24 @@ describe('le chemin complet', () => {
     expect(sortie).toBeCloseTo(5.55, 3)     // ⚠️ jamais 5 550 : ce serait mille fois trop
   })
 
-  it('le chiffre corrigé au clavier repart juste — en kilos', async () => {
+  // ⚠️ LE PIÈGE DES MILLE, EN DEUX TEMPS depuis que le papier est obligatoire
+  // (Layla, 2026-09-21 : « à tout »). Le pâtissier tape ses grammes AVANT
+  // d'imprimer — une feuille ouverte fige le chiffre, c'est sa raison d'être.
+  // Puis il imprime, et c'est le papier qui part chez Odoo.
+  it('le clavier compte en grammes et garde des kilos', async () => {
+    PRODUITS_IMPRIMES = []
     await ouvrirLaFiche()
     fireEvent.click(screen.getByLabelText('Changer à faire'))
     const touche = t => fireEvent.click(screen.getAllByText(t).find(e => e.tagName === 'BUTTON'))
     touche('3'); touche('0'); touche('0'); touche('0')          // 3 000 g
     fireEvent.click(screen.getByLabelText('Valider le nombre'))
+    expect(JSON.parse(localStorage.getItem('lg:annexe2-prevu')).par['SM. sirop Imbibage production KG'].q)
+      .toBeCloseTo(3, 6)                    // ⚠️ jamais 3 000 : ce serait des tonnes
+  })
+
+  it('et le chiffre du papier repart juste — en kilos', async () => {
+    PRODUITS_IMPRIMES = [{ produit: 'SM. sirop Imbibage production KG', qty: 3 }]
+    await ouvrirLaFiche()
     fireEvent.click(screen.getByText("C'est fait"))
     await waitFor(() => expect(screen.getByText('Il en est sorti combien ?')).toBeTruthy())
     fireEvent.click(screen.getByText("C'est bon"))
@@ -200,7 +241,10 @@ describe('le chemin complet', () => {
     expect(envoyerAValider.mock.calls[0][1]).toBeCloseTo(3, 6)
   })
 
+  // ⚠️ Pas encore de papier : une fois imprimé, « réinitialiser » disparaît —
+  // le seul chemin est alors de rendre la marchandise à l'économe.
   it('le chiffre décidé est gardé, et « réinitialiser » le rend', async () => {
+    PRODUITS_IMPRIMES = []
     await ouvrirLaFiche()
     fireEvent.click(screen.getByLabelText('Plus à faire'))         // 5 550 → 5 600 g
     expect(JSON.parse(localStorage.getItem('lg:annexe2-prevu')).par['SM. sirop Imbibage production KG'].q)

@@ -459,6 +459,63 @@ describe('l’économe n’a rien donné', () => {
   })
 })
 
+// ⚠️ RIEN NE SORT DE L'ANNEXE SANS SA CASCADE (Layla, 2026-09-21 : « il ne
+// doit pas pouvoir créer une mousse liée à un autre papier », puis « je veux
+// bloquer dans un premier temps pour comprendre ce qu'il fait de chaque
+// chose » — et, sur la portée : « à tout »).
+//
+// Le 21/09 au soir, une mousse gianduja déclarée sans rien imprimer s'est
+// retrouvée rangée sous le gâteau d'une autre fournée, faite six heures plus
+// tôt. Sans papier, l'app n'a aucun moyen de savoir pour quel gâteau c'est.
+describe('pas de papier imprimé', () => {
+  const complet = { ...tiramisu,
+    enfants: tiramisu.enfants.map(c => ({ ...c, ok: true, stock: (c.besoin || 0) + 1 })) }
+
+  it('« C’est fait » reste éteint, et l’écran dit pourquoi', () => {
+    const onFait = vi.fn()
+    render(<Fiche noeud={complet} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={onFait} sansPapier />)
+    fireEvent.click(screen.getByText("C'est fait"))
+    expect(onFait).not.toHaveBeenCalled()
+    expect(screen.getByText('Il n’y a pas de papier pour ça')).toBeTruthy()
+  })
+
+  // ⚠️ JAMAIS UNE IMPASSE : le bouton d'à côté imprime, et la fiche est
+  // enregistrée même si l'imprimante ne sort rien.
+  it('offre d’imprimer sur place', () => {
+    const onImprimer = vi.fn()
+    render(<Fiche noeud={complet} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} sansPapier onImprimer={onImprimer} />)
+    fireEvent.click(screen.getByText('🖨 Imprimer d’abord'))
+    expect(onImprimer).toHaveBeenCalled()
+  })
+
+  it('et le QR n’appuie pas tout seul à sa place', () => {
+    const onFait = vi.fn()
+    render(<Fiche noeud={complet} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={onFait} sansPapier autoFait onAutoFait={() => {}} />)
+    expect(onFait).not.toHaveBeenCalled()
+  })
+
+  it('avec son papier, rien ne bloque', () => {
+    const onFait = vi.fn()
+    render(<Fiche noeud={complet} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={onFait} />)
+    fireEvent.click(screen.getByText("C'est fait"))
+    expect(onFait).toHaveBeenCalled()
+    expect(screen.queryByText('Il n’y a pas de papier pour ça')).toBeNull()
+  })
+
+  // Deux cadres rouges l'un sur l'autre, c'est illisible : l'économe passe
+  // devant, parce que c'est le geste suivant.
+  it('ne double pas le cadre de l’économe', () => {
+    render(<Fiche noeud={complet} quantite={13} onQuantite={() => {}}
+      faits={[]} onOuvrir={() => {}} onFait={() => {}} sansPapier pasDonne />)
+    expect(screen.queryByText('Il n’y a pas de papier pour ça')).toBeNull()
+    expect(screen.getByText('L’économe ne t’a rien donné')).toBeTruthy()
+  })
+})
+
 describe('ce qui manque', () => {
   it('montre le besoin de la recette juste à côté du bouton', () => {
     // Sans ce chiffre, on voyait qu'il manquait quelque chose sans savoir

@@ -419,7 +419,7 @@ function AppuieUneFois({ faire }) {
 }
 
 export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, onOuvrir, onFait, envoi, autoFait, onAutoFait,
-  verrouille, onLiberer, noteVerrou, imposees, pasDonne }) {
+  verrouille, onLiberer, noteVerrou, imposees, pasDonne, sansPapier, onImprimer }) {
   const decoupe = onCuites ? decoupeDe(noeud) : null
   const dejaFaits = declares(faits)
   // ⚠️ ON NE COUPE PAS PLUS QUE CE QU'ON A. Une plaque cuite donne un nombre
@@ -465,7 +465,7 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
           Le déclencheur est donc posé au seul endroit qui connaît `bloque` —
           et si ça bloque, il ne se passe RIEN : la fiche reste ouverte, avec
           ses composants manquants écrits en rouge. */}
-      {autoFait && !bloque.length && !pasDonne && quantite > 0 && !envoi && (
+      {autoFait && !bloque.length && !pasDonne && !sansPapier && quantite > 0 && !envoi && (
         <AppuieUneFois faire={() => { onAutoFait?.(); onFait() }} />
       )}
       <div className="flex items-center gap-3">
@@ -575,6 +575,32 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
           non plus marquer comme fait »). La feuille est imprimée, elle réclame
           l'économat, et personne ne l'a servie : la matière n'a pas quitté la
           réserve, la recette n'a donc pas pu être faite. */}
+      {/* ⚠️ PAS DE PAPIER, PAS DE DÉCLARATION (Layla, 2026-09-21 : « il ne doit
+          pas pouvoir créer une mousse liée à un autre papier », puis « je veux
+          bloquer dans un premier temps pour comprendre ce qu'il fait de chaque
+          chose »). Sans cascade imprimée, l'app ne sait pas pour quel gâteau la
+          fournée est faite — et l'écran « À valider » finissait par lui en
+          inventer un. Ce n'est pas une impasse : le bouton d'à côté imprime,
+          et la fiche est enregistrée même si aucun papier ne sort. */}
+      {sansPapier && !pasDonne && (
+        <div className="mt-5 rounded-2xl bg-danger-bg border border-danger p-3 text-center">
+          <div className="text-[30px] leading-none">🖨</div>
+          <div className="text-[15px] font-extrabold text-danger mt-1">
+            Il n’y a pas de papier pour ça
+          </div>
+          <div className="text-[13px] text-ink-soft mt-0.5">
+            Imprime la cascade d’abord : c’est elle qui dit pour quel gâteau.
+          </div>
+          {onImprimer && (
+            <button onClick={onImprimer}
+              className="mt-3 w-full rounded-xl bg-bordeaux text-cream py-3
+                         text-[16px] font-extrabold">
+              🖨 Imprimer d’abord
+            </button>
+          )}
+        </div>
+      )}
+
       {pasDonne && (
         <div className="mt-5 rounded-2xl bg-danger-bg border border-danger p-3 text-center">
           <div className="text-[30px] leading-none">🤲</div>
@@ -587,11 +613,11 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
         </div>
       )}
 
-      <button onClick={onFait} disabled={bloque.length > 0 || pasDonne || !(quantite > 0) || envoi}
+      <button onClick={onFait} disabled={bloque.length > 0 || pasDonne || sansPapier || !(quantite > 0) || envoi}
         className={`print:hidden w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold transition-colors
           md:mt-5 md:py-4 md:text-[18px]
           ${envoi ? 'bg-bordeaux text-cream'
-            : bloque.length || pasDonne || !(quantite > 0) ? 'bg-cream-deep text-ink-mute'
+            : bloque.length || pasDonne || sansPapier || !(quantite > 0) ? 'bg-cream-deep text-ink-mute'
             : 'bg-success text-cream'}`}>
         {envoi ? 'en cours…' : "C'est fait"}
       </button>

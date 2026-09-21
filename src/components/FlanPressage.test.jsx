@@ -35,6 +35,29 @@ const flan = {
   ],
 }
 
+const PRODUITS_IMPRIMES = [
+  'SM- flan vanille 20 cm',
+  'SM- base flan vanille 20 cm',
+  'SM. Sable Crispy',
+]
+
+// ⚠️ TOUT CE QUI SE DÉCLARE A DÉSORMAIS SON PAPIER (Layla, 2026-09-21 : « je
+// veux bloquer dans un premier temps pour comprendre ce qu'il fait de chaque
+// chose » — « à tout »). Ces tests rejouent le geste du pâtissier : il a donc
+// imprimé sa cascade avant. Sans ces feuilles, l'écran bloque — et c'est
+// exactement ce que vérifie `FabAnnexe2Simple.test.jsx`.
+//
+// `qty_prevue: null` : le papier ne fige aucun chiffre, pour que les tests
+// gardent la main sur les quantités. `sans_economat` : rien à aller chercher.
+const papierOuvert = nom => ({
+  id: 'f-' + nom, produit: nom, jour: '2026-09-21',
+  imprime_le: '2026-09-21T08:00:00Z', qty_prevue: null, sans_economat: true,
+})
+vi.mock('../lib/feuilles', async importOriginal => {
+  const vrai = await importOriginal()
+  return { ...vrai, feuillesDuJour: async () => PRODUITS_IMPRIMES.map(papierOuvert) }
+})
+
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))

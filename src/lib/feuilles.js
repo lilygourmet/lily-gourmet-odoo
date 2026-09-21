@@ -415,6 +415,29 @@ export const attendLeDon = (feuilles, produit) =>
   (feuilles || []).some(f => f.produit === produit && attendLEconome(f) && !f.retour_le)
 
 /**
+ * CETTE FOURNÉE A-T-ELLE UN PAPIER ?
+ *
+ * « Il ne doit pas pouvoir créer une mousse liée à un autre papier » puis
+ * « je veux bloquer dans un premier temps pour comprendre ce qu'il fait de
+ * chaque chose » (Layla, 2026-09-21).
+ *
+ * Le 21/09 au soir, une mousse gianduja a été déclarée SANS rien imprimer :
+ * l'app n'avait alors aucun moyen de savoir pour quel gâteau, et l'écran
+ * « À valider » lui a prêté la liasse d'une autre fournée. Tout ce qui sort de
+ * l'annexe doit donc avoir sa cascade.
+ *
+ * ⚠️ CE N'EST JAMAIS UNE IMPASSE. La feuille est enregistrée AVANT de partir à
+ * l'imprimante (`poserFeuilles`) : imprimante en panne, bourrage, plus de
+ * papier — la fiche existe quand même, et elle part chez l'économe. Le seul
+ * geste demandé est d'avoir appuyé sur « Imprimer ».
+ *
+ * ⚠️ Et une feuille déjà DÉCLARÉE ne compte plus : une deuxième fournée du même
+ * article réclame son propre papier. C'est tout l'intérêt — savoir combien de
+ * fois la chose a vraiment été faite.
+ */
+export const sansPapier = (feuilles, produit) => !feuilleOuverte(feuilles, produit)
+
+/**
  * LES FOURNÉES RANGÉES PAR CASCADE.
  *
  * « Crée des groupes de cascade, pour ne pas se perdre quand il y a plusieurs
