@@ -72,8 +72,6 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
     })
   }, [toutes, filtre])
 
-  const nbRegles = (toutes || []).filter(l => Number(l.mini) > 0 || Number(l.maxi) > 0).length
-
   /**
    * ⚠️ RANGÉ PAR CATÉGORIE (Layla, 2026-09-21 : « regrouper mini/maxi par
    * catégorie »). L'écran alignait 293 articles à la suite : on cherchait une
@@ -133,11 +131,11 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
       <div className="max-w-[820px] mx-auto px-4 py-5">
         <h1 className="font-fraunces italic text-[26px] font-medium mb-1">Mini / maxi CD</h1>
-        <p className="text-[12.5px] text-ink-mute mb-3">
-          C'est l'app qui tient ces seuils, plus Odoo. Chaque matin à 5 h — et à chaque
-          « Actualiser » de Fabrication CD — elle relance ce qui est passé sous son mini,
-          jusqu'à son maxi. Un article à <b>0 / 0</b> ne sera jamais relancé tout seul.
-        </p>
+        {/* ⚠️ PLUS DE MODE D'EMPLOI, PLUS DE COMPTES (Layla, 2026-09-21) : le
+            paragraphe et la ligne « 293 articles — dont 40 réglés, en tête de
+            liste » sont partis. Les dossiers disent déjà combien ils portent et
+            combien y sont réglés — et « en tête de liste » n'était même plus
+            vrai depuis qu'on range par catégorie. */}
 
         {erreur && <div className="px-4 py-3 rounded-lg bg-[#FCEEE8] text-danger text-[13px] mb-3">{erreur}</div>}
         {!lignes && !erreur && <Skeleton rows={6} />}
@@ -147,12 +145,6 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
             <input value={filtre} onChange={e => setFiltre(e.target.value)}
               placeholder="chercher un article…"
               className="w-full text-[13.5px] border border-line rounded-xl px-3 py-2 bg-white mb-3" />
-
-            <div className="text-[12px] text-ink-mute mb-1.5">
-              {visibles.length} article{visibles.length > 1 ? 's' : ''}
-              {filtre ? ` sur ${(toutes || []).length}` : ''}
-              {!filtre && nbRegles > 0 && <> — dont <b>{nbRegles} réglé{nbRegles > 1 ? 's' : ''}</b>, en tête de liste</>}
-            </div>
 
             {groupes.map(g => {
               const ouvert = !!filtre.trim() || ouverts.has(g.cle)

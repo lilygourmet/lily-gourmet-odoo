@@ -233,8 +233,6 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
    * ⚠️ Cachés, pas supprimés : la RECHERCHE, elle, fouille partout. Taper un
    * nom les fait réapparaître, sinon un article égaré deviendrait introuvable.
    */
-  const orphelins = useMemo(
-    () => (groupes.find(g => g.nom === 'Le reste')?.articles.length || 0), [groupes])
   const visibles = useMemo(
     () => (filtre.trim() || queAFinir ? groupes : groupes.filter(g => g.nom !== 'Le reste')),
     [groupes, filtre, queAFinir])
@@ -293,12 +291,11 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
       <AppHeader user={user} onLogout={onLogout} onNavigate={onNavigate} activeView={activeView} />
       <div className="max-w-[860px] mx-auto px-4 py-5 pb-24">
         <h1 className="font-serif italic text-[26px] leading-tight mb-1">Mini / maxi Annexe</h1>
-        <p className="text-[12.5px] text-ink-mute mb-3">
-          Tout ce que l'annexe sait fabriquer, rangé sous son gâteau. Sous le
-          <b> mini</b> (ou pile dessus), l'article apparaît dans Fabrication
-          Annexe 2 ; on en fait des <b>tournées</b> entières jusqu'au <b>maxi</b>.
-          Un article à <b>0 / 0</b> n'apparaîtra qu'une fois à zéro.
-        </p>
+        {/* ⚠️ PLUS DE MODE D'EMPLOI, PLUS DE COMPTES (Layla, 2026-09-21).
+            Le paragraphe expliquait le mini, le maxi et la tournée ; la ligne
+            en dessous annonçait « 192 articles · 48 gâteaux · 86 sans gâteau ».
+            Rien de tout ça ne se lit deux fois : les dossiers portent déjà leur
+            compte, et l'écran sert à régler des chiffres, pas à se relire. */}
 
         {erreur && <div className="px-4 py-3 rounded-xl bg-danger/5 border border-danger/30 text-danger text-[13px] mb-3">{erreur}</div>}
         {!lignes && !erreur && <Skeleton rows={6} />}
@@ -323,16 +320,16 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
               <span className="tabular-nums opacity-70">({enForme.size})</span>
             </button>
 
-            <div className="text-[12px] text-ink-mute mb-2">
-              {combien} article{combien > 1 ? 's' : ''} · {visibles.length} gâteau{visibles.length > 1 ? 'x' : ''}
-              {queAFinir && !combien && (
-                <> · <span className="text-bordeaux">aucun article coché 🍮 ici</span></>
-              )}
-              {!filtre.trim() && !queAFinir && orphelins > 0 && (
-                <> · <span className="text-ink-mute">{orphelins} sans gâteau, tape un nom pour les voir</span></>
-              )}
-              {!tout && ' — lecture d’Odoo en cours…'}
-            </div>
+            {/* Ce qui reste utile : dire que rien n'est coché plutôt que de
+                laisser un écran vide, et prévenir quand les stocks d'Odoo ne
+                sont pas encore arrivés. */}
+            {(queAFinir && !combien) || !tout ? (
+              <div className="text-[12px] text-ink-mute mb-2">
+                {queAFinir && !combien
+                  ? <span className="text-bordeaux">aucun article coché 🍮</span>
+                  : 'lecture d’Odoo en cours…'}
+              </div>
+            ) : null}
 
             {visibles.map(g => {
               // Une recherche ouvre tout : sinon on cherche et on ne voit rien.

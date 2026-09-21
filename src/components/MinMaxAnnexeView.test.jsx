@@ -55,9 +55,10 @@ describe('ce que la liste montre', () => {
     poser()
     expect(await screen.findByText(/Pistache fleur d’oranger/)).toBeTruthy()
     // ⚠️ « Le reste » (ce qui ne remonte à aucun gâteau vendu) reste dehors.
+    // ⚠️ Et on ne l'annonce plus : « enlève 192 articles · 48 gâteaux · 86 sans
+    // gâteau » (Layla, 2026-09-21). La recherche, elle, les retrouve toujours.
     expect(screen.queryByText('Le reste')).toBeNull()
-    // …mais on dit qu'il existe, et comment le retrouver.
-    expect(screen.getByText(/sans gâteau, tape un nom/)).toBeTruthy()
+    expect(screen.queryByText(/sans gâteau/)).toBeNull()
   })
 
   // ⚠️ « Si je tape SM- ça doit me sortir que les SM- » (Layla, 2026-09-20).
