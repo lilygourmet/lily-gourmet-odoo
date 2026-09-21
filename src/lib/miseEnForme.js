@@ -28,8 +28,12 @@ import { enGrammes, enUnite } from './ecranSimple'
  * réclamer un travail déjà fait. Le serveur retire donc ce que les formats
  * déclarés aujourd'hui en ont consommé (`resteG`, en grammes).
  */
-export async function loadAFinir() {
-  const r = await fetch('/api/fab-annexe?afinir=1&cb=' + Date.now())
+export async function loadAFinir({ frais = false } = {}) {
+  // ⚠️ L'ÉCRAN VEUT DU FRAIS, LA PASTILLE NON. Le calcul coûte six secondes à
+  // froid et la barre le relance à chaque changement d'écran : elle se
+  // contente d'un chiffre d'une minute. L'écran, lui, doit voir la ligne
+  // disparaître dès qu'on a dispatché.
+  const r = await fetch('/api/fab-annexe?afinir=1' + (frais ? '&frais=1' : '') + '&cb=' + Date.now())
   if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
   const d = await r.json()
   if (d.error) throw new Error(d.error)

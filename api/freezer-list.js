@@ -2651,6 +2651,39 @@ export default async function handler(req, res) {
       return res.status(200).json({ ordres: mos.map(m => ({ name: m.name, etat: m.state })) })
     }
 
+    // ⚠️ RETROUVER L'ORDRE D'UNE DÉCLARATION ORPHELINE (Layla, 2026-09-21).
+    // Vécu le matin même : les ordres du tiramisu ÉTAIENT créés (21702, 21703),
+    // mais leur numéro n'était pas revenu se coller sur la ligne du journal.
+    // L'écran disait alors « refais-le dans Fabrication Annexe » — c'est ce
+    // conseil qui a fabriqué deux ordres de plus (21707, 21708) pour le même
+    // travail. On va donc REGARDER chez Odoo avant d'accuser.
+    //
+    // ⚠️ On ne rend qu'un ordre créé PAR L'APP (origine LG-APP), le même jour,
+    // pour le même article et la même quantité — et jamais un déjà rattaché
+    // ailleurs (`exclure`), sinon deux déclarations se partageraient un ordre.
+    if (req.method === 'POST' && req.query.mode === 'retrouver-of') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+      const produit = String(body.produit || '').trim()
+      const qty = Number(body.qty) || 0
+      if (!produit || !(qty > 0)) return res.status(400).json({ error: 'article ou quantité manquante' })
+      const uid = await odooAuth()
+      const jour = String(body.jour || '').slice(0, 10) || new Date().toLocaleDateString('sv-SE')
+      const exclure = new Set((body.exclure || []).filter(Boolean))
+      const cle = t => String(t || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+      const mos = await odooSearchRead(uid, 'mrp.production',
+        [['create_date', '>=', jour + ' 00:00:00'], ['create_date', '<=', jour + ' 23:59:59'],
+          ['state', 'not in', ['cancel', 'done']]],
+        ['name', 'product_id', 'product_qty', 'origin', 'create_date'], { limit: 300, order: 'id asc' })
+      const trouve = mos.find(m => !exclure.has(m.name)
+        && String(m.origin || '').includes('LG-APP')
+        && cle(m.product_id[1]) === cle(produit)
+        // Deux chiffres proches ne sont pas le même travail : on tolère
+        // l'arrondi d'Odoo, rien de plus.
+        && Math.abs((Number(m.product_qty) || 0) - qty) <= Math.max(0.01, qty * 0.001))
+      if (!trouve) return res.status(200).json({ trouve: null })
+      return res.status(200).json({ trouve: { name: trouve.name, qty: trouve.product_qty } })
+    }
+
     if (req.query.mode === 'stocks-negatifs') {
       const uid = await odooAuth()
       // Chaque écran ne montre QUE ses articles (demande de Layla, 2026-09-09) :

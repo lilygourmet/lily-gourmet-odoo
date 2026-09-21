@@ -5,8 +5,9 @@ import { countConversationBadges, countDevisInternetNonTraites } from './convers
 import { countModificationsATraiter } from './modifications'
 import { countLivraisonsARelancer } from './deliveries'
 import { compterCheckCd } from './checkCd'
-import { canCheckCd, canValiderAnnexe, isAdmin } from './auth'
+import { canCheckCd, canValiderAnnexe, isAdmin, canDeclarer, canVoirDonne } from './auth'
 import { loadAFinir } from './miseEnForme'
+import { feuillesDuJour, aDeclarer, aDonner, enRetour } from './feuilles'
 import { loadEnAttentePour, lieuxDe } from './transfertsStock'
 import { loadFabProdDepuis, depuisJours } from './fabricationProd'
 import { loadManques, loadFaits, loadEtats } from './fabrication'
@@ -39,6 +40,20 @@ export function useNavBadges(user, activeView = '') {
         // vérifiés. Seulement pour qui en a la charge — la lecture passe par
         // Odoo, inutile de la faire tourner pour tout le monde.
         canCheckCd(user) ? compterCheckCd().then(n => set('check-cd', n)).catch(() => {}) : Promise.resolve(),
+        // ⚠️ LES DEUX ONGLETS DE FOURNÉE N'AVAIENT AUCUNE PASTILLE (Layla,
+        // 2026-09-21). Relevé ce jour-là : 11 déclarations dues, la plus
+        // vieille depuis 7 h 42, et 4 demandes qui attendaient l'économe
+        // depuis 4 h — sans que rien ne le dise dans la barre. L'économe ne
+        // savait pas qu'on l'attendait ; le pâtissier ignorait sa dette.
+        //
+        // ⚠️ UNE SEULE LECTURE POUR LES DEUX : les feuilles du jour viennent
+        // de notre base (rapide), et les deux chiffres s'en déduisent. Les
+        // demander séparément, c'était doubler l'appel pour rien.
+        (canDeclarer(user) || canVoirDonne(user)) ? feuillesDuJour().then(f => {
+          if (canDeclarer(user)) set('a-declarer', aDeclarer(f).length)
+          // Ce que l'économe doit faire : servir, et reprendre ce qu'on lui rend.
+          if (canVoirDonne(user)) set('donne', aDonner(f).length + enRetour(f).length)
+        }).catch(() => {}) : Promise.resolve(),
         // Ce qui est sorti de la cuve et attend d'être coulé, pipé, découpé.
         // « À finir, c'est un autre onglet avec badge du nombre d'articles »
         // (Layla, 2026-09-20). La lecture passe par Odoo : seulement pour ceux

@@ -63,7 +63,7 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
   const [fini, setFini] = useState(null)
 
   const relire = useCallback(() => {
-    loadAFinir().then(setVracs).catch(e => setErreur(e.message || String(e)))
+    loadAFinir({ frais: true }).then(setVracs).catch(e => setErreur(e.message || String(e)))
   }, [])
 
   useEffect(() => { relire() }, [relire])

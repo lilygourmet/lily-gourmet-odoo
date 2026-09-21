@@ -34,18 +34,33 @@ export default function HistoriqueAnnexe({ histo, onFermer }) {
                 {jour === todayISO() ? "Aujourd'hui" : jourLong(jour)}
                 <span className="font-normal text-ink-mute"> · {lignes.length}</span>
               </div>
-              {lignes.map(l => (
-                <div key={l.id} className="flex items-baseline gap-2.5 py-1.5 border-b border-cream-deep/40 last:border-0">
-                  <span className="text-[11px] text-ink-mute font-mono shrink-0">{heure(l.fait_le)}</span>
-                  <span className="flex-1 min-w-0 text-[12.5px] leading-tight">
-                    {propre(l.article)}
-                    {/* Pour quel gâteau elle a été faite : elle lui est réservée. */}
-                    {l.pour && <span className="text-ink-mute"> · pour {propre(l.pour)}</span>}
-                  </span>
-                  <span className="text-[12px] font-extrabold whitespace-nowrap">{qte(l.qty, l.unite)}</span>
-                  {l.qui && <span className="text-[11px] text-ink-mute whitespace-nowrap">{l.qui.split(' ')[0]}</span>}
-                </div>
-              ))}
+              {lignes.map(l => {
+                // ⚠️ CE QUI A ÉTÉ ANNULÉ DOIT SE VOIR (Layla, 2026-09-21).
+                // Relevé ce jour-là : 23 déclarations sur 7 jours avaient leur
+                // ordre annulé chez Odoo. Elles restaient là, l'air de rien, et
+                // cessaient silencieusement de compter comme « déjà fait » —
+                // l'atelier pouvait refaire le travail sans le savoir.
+                const annule = l.etat === 'cancel'
+                return (
+                  <div key={l.id}
+                    className={`flex items-baseline gap-2.5 py-1.5 border-b border-cream-deep/40 last:border-0
+                      ${annule ? 'opacity-60' : ''}`}>
+                    <span className="text-[11px] text-ink-mute font-mono shrink-0">{heure(l.fait_le)}</span>
+                    <span className="flex-1 min-w-0 text-[12.5px] leading-tight">
+                      <span className={annule ? 'line-through' : ''}>{propre(l.article)}</span>
+                      {/* Pour quel gâteau elle a été faite : elle lui est réservée. */}
+                      {l.pour && <span className="text-ink-mute"> · pour {propre(l.pour)}</span>}
+                      {annule && (
+                        <span className="block text-[11px] font-bold text-danger">ordre annulé — ne compte plus</span>
+                      )}
+                    </span>
+                    <span className={`text-[12px] font-extrabold whitespace-nowrap ${annule ? 'line-through' : ''}`}>
+                      {qte(l.qty, l.unite)}
+                    </span>
+                    {l.qui && <span className="text-[11px] text-ink-mute whitespace-nowrap">{l.qui.split(' ')[0]}</span>}
+                  </div>
+                )
+              })}
             </div>
           ))}
         </div>

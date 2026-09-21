@@ -3,12 +3,13 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
-import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres } from '../lib/fabricationProd'
+import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres, rattacherOrdre } from '../lib/fabricationProd'
 import { quandFait } from '../lib/jourLisible'
 import { loadOrdresAnnexe } from '../lib/fabricationAnnexe'
-import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs, setFait } from '../lib/fabrication'
+import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs, setFait, retrouverOf } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 import { versUnite } from '../lib/unites'
+import { todayISO } from '../lib/dates'
 import { AjoutIngredient } from './ValidationView'
 
 // ====== « À valider Annexe » : la page dédiée ======
@@ -86,6 +87,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     return () => { vivant = false }
   }, [tour])
   const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
+  const [cherche, setCherche] = useState(null)    // la déclaration dont on cherche l'ordre
   const [faites, setFaites] = useState({})        // ordre -> quantité vraiment produite
   // Quand chaque ordre a été marqué fait à l'atelier : jour ET heure
   // (Layla, 2026-09-19). On valide parfois deux jours après la fournée.
@@ -332,6 +334,28 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
 
   // Une déclaration dont l'ordre n'a jamais pu être créé : elle ne mène nulle
   // part. On la retire, sans rien toucher dans Odoo (il n'y a rien à toucher).
+  /**
+   * ⚠️ ON REGARDE AVANT D'ACCUSER (Layla, 2026-09-21). Les ordres du tiramisu
+   * existaient (21702, 21703) : seul leur numéro n'était pas revenu se coller
+   * sur la ligne. L'écran disait « refais-le », et deux ordres de plus sont
+   * nés pour le même travail. Ce bouton va le chercher chez Odoo et le
+   * rattache — sans jamais prendre un ordre déjà rattaché ailleurs.
+   */
+  async function retrouverLOrdre(l) {
+    setCherche(l.name)
+    try {
+      const dejaPris = (lignes || []).map(x => x.name).filter(n => !String(n).startsWith('sans-ordre:'))
+      const t = await retrouverOf({
+        produit: l.article, qty: l.demande, jour: todayISO(), exclure: dejaPris,
+      })
+      if (!t) { toast('Aucun ordre ne correspond chez Odoo. Là, il faut vraiment le refaire.'); return }
+      for (const id of l.ids || []) await rattacherOrdre(id, t.name, false)
+      toast.success(`Retrouvé : ${t.name}`)
+      setLignes(null); setTour(v => v + 1)
+    } catch (e) { toast.error(e.message || String(e)) }
+    finally { setCherche(null) }
+  }
+
   async function retirerDeclaration(l) {
     const ok = await confirmDialog(
       `Retirer la déclaration « ${propre(l.article)} » (${qte(l.demande, l.unite)}) ?\n\n`
@@ -465,14 +489,21 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                     <div className="text-[11.5px] text-ink-mute">
                       {l.toutRecent
                         ? 'Son ordre est en train de partir dans Odoo. Rafraîchis dans quelques secondes.'
-                        : "Pas d'ordre dans Odoo. Rafraîchis ; s'il ne vient pas, refais-le dans Fabrication Annexe."}
+                        : "Son numéro n'est pas revenu. Cherche-le avant de refaire le travail."}
                     </div>
                   </div>
                   <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap bg-[#FFF7E0] text-[#854F0B]">
                     sans ordre
                   </span>
                 </div>
-                <div className="border-t border-line px-3.5 py-2 flex">
+                <div className="border-t border-line px-3.5 py-2 flex gap-2">
+                  {!l.toutRecent && (
+                    <button onClick={() => retrouverLOrdre(l)} disabled={cherche === l.name}
+                      className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-bordeaux
+                                 bg-white text-bordeaux disabled:opacity-50">
+                      {cherche === l.name ? 'je cherche…' : '🔎 retrouver son ordre'}
+                    </button>
+                  )}
                   <button onClick={() => retirerDeclaration(l)}
                     className="ml-auto rounded-lg px-3 py-2 text-[12.5px] font-bold border border-danger bg-white text-danger">
                     retirer cette déclaration

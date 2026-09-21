@@ -6,7 +6,7 @@
 // ============================================================
 
 import { addFabProd, rattacherOrdre, loadFabProdDepuis, loadNoms } from './fabricationProd'
-import { creerOfPrepa } from './fabrication'
+import { creerOfPrepa, loadEtats } from './fabrication'
 import { toast } from './toast'
 import { todayISO } from './dates'
 import { correspond, aplatir } from './recherche'
@@ -189,8 +189,19 @@ export async function loadHistoriqueAnnexe(jours = 7) {
     loadFabProdDepuis(debut.toLocaleDateString('sv-SE'), 'annexe').catch(() => []),
     loadNoms().catch(() => ({})),
   ])
+  // ⚠️ CE QUI A ÉTÉ ANNULÉ DOIT SE VOIR (Layla, 2026-09-21). Relevé ce jour-là :
+  // 23 déclarations sur 7 jours avaient leur ordre annulé. Elles restaient dans
+  // le journal, cessaient silencieusement de compter comme « déjà fait », et
+  // l'atelier pouvait refaire le travail sans le savoir. L'état vient d'Odoo,
+  // en une seule question ; s'il ne répond pas, l'historique s'affiche quand
+  // même, simplement sans les états.
+  const ordres = [...new Set((journal || []).map(l => l.ordre).filter(Boolean))]
+  const etats = ordres.length ? await loadEtats(ordres).catch(() => ({})) : {}
   return (journal || [])
-    .map(l => ({ ...l, jour: l.jour || todayISO(), qui: noms[l.fait_par] || '' }))
+    .map(l => ({
+      ...l, jour: l.jour || todayISO(), qui: noms[l.fait_par] || '',
+      etat: l.ordre ? etats[l.ordre] : undefined,
+    }))
     .sort((a, b) => String(b.fait_le).localeCompare(String(a.fait_le)))
 }
 

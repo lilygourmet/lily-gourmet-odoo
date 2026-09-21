@@ -100,9 +100,9 @@ async function alignerRecettes(sb) {
   if (v !== _versionVue) { _recettes.clear(); _versionVue = v }
 }
 
-function memo(cle, faire) {
+function memo(cle, faire, duree = DUREE_RECETTES) {
   const e = _recettes.get(cle)
-  if (e && Date.now() - e.t < DUREE_RECETTES) return e.v
+  if (e && Date.now() - e.t < duree) return e.v
   const v = faire()
   _recettes.set(cle, { t: Date.now(), v })
   v.catch?.(() => _recettes.delete(cle))    // un échec ne se garde pas
@@ -1213,9 +1213,19 @@ export default async function handler(req, res) {
     }
 
     // Ce qui reste à mettre en forme — l'onglet « À finir ».
+    //
+    // ⚠️ LA PASTILLE NE PAIE PAS LE PRIX FORT. Ce calcul demande six secondes à
+    // froid (stocks, journal, ordres), et la barre le relance à chaque
+    // changement d'écran. On garde donc le résultat une minute POUR ELLE.
+    // L'écran, lui, demande toujours du frais (`&frais=1`) : après un
+    // dispatch, la ligne doit disparaître tout de suite, pas dans une minute.
     if (req.query.afinir) {
       res.setHeader('Cache-Control', 'no-store')
-      return res.status(200).json({ vracs: await aFinir(sb) })
+      const frais = req.query.frais === '1'
+      const vracs = frais
+        ? await aFinir(sb)
+        : await memo('afinir', () => aFinir(sb), 60000)
+      return res.status(200).json({ vracs })
     }
 
     // ============================================================

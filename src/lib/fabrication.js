@@ -115,6 +115,24 @@ export async function loadEtats(ordres) {
   return out
 }
 
+/**
+ * L'ORDRE D'UNE DÉCLARATION ORPHELINE, s'il existe déjà chez Odoo.
+ *
+ * « Pourquoi leur déclaration Odoo n'a pas été créée ? » (Layla, 2026-09-21) —
+ * elle l'était : seul son numéro n'était pas revenu. L'écran conseillait alors
+ * de refaire le travail, et deux ordres de plus naissaient pour rien.
+ */
+export async function retrouverOf({ produit, qty, jour, exclure = [] }) {
+  const r = await fetch('/api/freezer-list?mode=retrouver-of', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ produit, qty, jour, exclure }),
+  })
+  if (!r.ok) throw new Error(`Odoo indisponible (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+  return d.trouve || null
+}
+
 /** Juste les ordres Odoo encore ouverts (rapide : une seule question à Odoo). */
 export async function loadOrdres() {
   const r = await fetch('/api/freezer-list?mode=ordres')
