@@ -246,6 +246,12 @@ async function fetchListForDate(date, uid, includeDone = false) {
 //  • « SM CD*- 20 cm Cakedesign Rose/Bleu », « SM CD*- 27x27 Cakedesign » — les
 //    tailles hors normes, qui se font directement à partir de génoise/crème et
 //    n'ont pas d'étage congelé — Layla les valide à la main.
+// ⚠️ « LG-APP » N'EST PAS UN GÂTEAU (Layla, 2026-09-21 : « └ pour LG-APP …
+// qui a créé ça ? »). C'est la marque que l'app pose sur les ordres qu'elle
+// crée. Affichée telle quelle, elle passait pour le gâteau d'origine.
+const sansMarqueApp = o => String(o || '').split(',').map(x => x.trim())
+  .filter(x => x && !/^lg-app$/i.test(x)).join(', ')
+
 const EST_ETAGE_CD = n => /^\s*\d+\s*cm\s*CD\*/i.test(String(n || ''))
   || /^\s*SM\s*CD\*-\s*\d+\s*cm\s*\(/i.test(String(n || ''))
 
@@ -1765,7 +1771,7 @@ async function manquesDesOrdres(uid, names) {
     return {
       name: m.name, produit: (Array.isArray(m.product_id) ? m.product_id[1] : ''),
       qty: m.product_qty, unite: (Array.isArray(m.product_uom_id) ? m.product_uom_id[1] : 'u'),
-      etat: m.state, pour: m.origin || '', dispo: m.components_availability || '',
+      etat: m.state, pour: sansMarqueApp(m.origin), dispo: m.components_availability || '',
       quand: m.date_planned_start || '',
       lieu: Array.isArray(m.location_src_id) ? m.location_src_id[1] : '',
       lignes,                                   // toute la recette, pour noter les consommations
@@ -2048,10 +2054,6 @@ async function fetchFabrication(uid, jours) {
       ;(reservesPar[nomOrdre] ||= {})[nomProd] = (reservesPar[nomOrdre][nomProd] || 0) + q
     }
   }
-
-  // La marque de l'app, retirée de ce qui s'affiche comme une origine.
-  const sansMarqueApp = o => String(o || '').split(',').map(x => x.trim())
-    .filter(x => x && !/^lg-app$/i.test(x)).join(', ')
 
   const ordres = [...mos, ...finis].map(m => ({
     name: m.name, id: m.id, produit: nom(m), qty: m.product_qty, unite: uom(m),

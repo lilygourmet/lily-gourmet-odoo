@@ -3,7 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
-import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres, rattacherOrdre } from '../lib/fabricationProd'
+import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres, rattacherOrdre, loadNoms } from '../lib/fabricationProd'
 import { quandFait } from '../lib/jourLisible'
 import { loadOrdresAnnexe } from '../lib/fabricationAnnexe'
 import { feuillesDuJour } from '../lib/feuilles'
@@ -41,9 +41,11 @@ const enClair = m => ({
 }[m] || m)
 const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 // A l'atelier on ne pese pas 1 234,56 g : les quantites s'affichent entieres.
+// ⚠️ L'UNITÉ SE DIT DANS LES MOTS DE L'ATELIER (Layla, 2026-09-21 :
+// « u / 23 Units »). « Units » est le mot d'Odoo ; sur la ligne on lit « u ».
 const qte = (q, u) => (norm(u) === 'kg'
   ? `${nb(Math.round(q * 1000))} g`
-  : `${nb(Math.round(q))} ${norm(u) === 'g' ? 'g' : u}`)
+  : `${nb(Math.round(q))} ${norm(u)}`)
 // ⚠️ TOUT PARLE EN GRAMMES, MÊME CE QUI VIENT EN KILOS (Layla, 2026-09-21 :
 // « tous les ingrédients article dans l'app parlent en gr, même s'ils viennent
 // en kilo »). Ces deux-là servent la case qu'on retape : elle affichait
@@ -108,6 +110,10 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   // Quand chaque ordre a été marqué fait à l'atelier : jour ET heure
   // (Layla, 2026-09-19). On valide parfois deux jours après la fournée.
   const [quandFaits, setQuandFaits] = useState({})
+  // ⚠️ QUI A DÉCLARÉ (Layla, 2026-09-21 : « qui a créé ça ? »). L'écran disait
+  // l'heure et l'ordre, jamais la main. Sans elle, une fournée douteuse ne se
+  // vérifie auprès de personne.
+  const [noms, setNoms] = useState({})
   const [notes, setNotes] = useState({})          // { ordre: { idLigne: quantité } }
   const [ajouts, setAjouts] = useState({})        // { ordre: [ingrédients ajoutés à la main] }
 
@@ -185,7 +191,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
             if (!parOrdre.has(encoreLa.name)) {
               // `pour` : le gâteau pour lequel la préparation a été faite. Il
               // est réservé à lui, l'écran le dit (Layla, 2026-09-10).
-              parOrdre.set(encoreLa.name, { name: encoreLa.name, article: d.article, pour: d.pour || null, prevu: encoreLa.qty, declare: 0, demande: encoreLa.qty, etat: encoreLa.state, unite: encoreLa.unite || '' })
+              parOrdre.set(encoreLa.name, { name: encoreLa.name, article: d.article, pour: d.pour || null, par: d.fait_par || null, faitLe: d.fait_le || null, prevu: encoreLa.qty, declare: 0, demande: encoreLa.qty, etat: encoreLa.state, unite: encoreLa.unite || '' })
             }
             const e = parOrdre.get(encoreLa.name)
             // ⚠️ DEUX UNITÉS SE CROISENT ICI. Le journal compte dans l'unité de
@@ -203,7 +209,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           // ordres ou qu'il lie à des ordres dans Odoo : l'app crée ses propres
           // ordres » — Layla, le 2026-09-04. Une déclaration sans ordre reste
           // sans ordre, et se voit comme telle.
-          const p = sans.get(d.article) || { article: d.article, pour: d.pour || null, qty: 0, unite: d.unite, ids: [], quand: 0 }
+          const p = sans.get(d.article) || { article: d.article, pour: d.pour || null, par: d.fait_par || null, faitLe: d.fait_le || null, qty: 0, unite: d.unite, ids: [], quand: 0 }
           p.qty += Number(d.qty) || 0
           p.ids.push(d.id)
           p.quand = Math.max(p.quand, new Date(d.fait_le || 0).getTime() || 0)
@@ -211,7 +217,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         }
         const base = [...parOrdre.values()]
         const orphelins = [...sans.values()].map(p => ({
-          name: 'sans-ordre:' + p.article, article: p.article, pour: p.pour, sansOrdre: true, ids: p.ids,
+          name: 'sans-ordre:' + p.article, article: p.article, pour: p.pour, par: p.par, faitLe: p.faitLe, sansOrdre: true, ids: p.ids,
           // « tout juste déclaré » : calculé ICI, au chargement, pas au rendu.
           toutRecent: Date.now() - p.quand < 120000,
           demande: Math.round(p.qty * 100) / 100, unite: p.unite, manques: [], lignes: [],
@@ -244,6 +250,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         // Les dates de déclaration, pour les afficher (la validation les relit
         // de son côté : deux lectures, mais c'est le même carnet et c'est peu).
         datesDesOrdres(out.map(x => x.name)).then(d => { if (vivant) setQuandFaits(d || {}) }).catch(() => { })
+        loadNoms().then(n => { if (vivant) setNoms(n || {}) }).catch(() => { })
         // On garde ce qui a déjà été tapé (plafonné à la demande, qui a pu
         // baisser dans Odoo) et on ne remplit par la recette que le reste.
         const vivants = new Set(out.map(x => x.name))
@@ -332,31 +339,57 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
    * Les familles les plus fournies d'abord : c'est là qu'est le travail.
    */
   /**
-   * De quel papier vient cet article, et donc de quelle cascade.
+   * De quel papier vient cette FOURNÉE — pas cet article — et donc de quelle
+   * cascade.
    *
-   * ⚠️ Un même article peut avoir été imprimé dans DEUX liasses le même jour
-   * (deux gâteaux qui réclament la même crème). On prend d'abord celle qui a
-   * été DÉCLARÉE — c'est le travail qu'on valide — puis la plus récente.
+   * ⚠️ VÉCU LE 2026-09-21 : « cette mousse doit être avec gianduja 10 pers ? »
+   * Non. Deux mousses gianduja le même jour — 6 228 g à 13h56 pour le 10 pers,
+   * 6 120 g à 20h08 pour les indiv, cette dernière déclarée SANS papier. En
+   * cherchant le papier par le seul NOM de l'article, l'écran prêtait à la
+   * fournée du soir la liasse de l'après-midi, et la rangeait donc sous le
+   * mauvais gâteau. Une fournée sans papier doit rester sans cascade : c'est
+   * moins joli, mais c'est vrai.
    */
   const cascadeDe = useMemo(() => {
-    const par = new Map()
-    const rang = f => (f.declare_le ? 2 : 1)
+    // Les papiers du jour, par article : les DÉCLARÉS d'abord (dans l'ordre où
+    // ils l'ont été), puis ceux qui attendent encore, par heure d'impression.
+    const papiers = new Map()
     for (const f of feuilles || []) {
       if (!f.liasse) continue
-      const vu = par.get(f.produit)
-      const mieux = !vu || rang(f) > rang(vu.f)
-        || (rang(f) === rang(vu.f) && String(f.imprime_le) > String(vu.f.imprime_le))
-      if (mieux) {
-        par.set(f.produit, {
-          f,
+      if (!papiers.has(f.produit)) papiers.set(f.produit, [])
+      papiers.get(f.produit).push(f)
+    }
+    for (const liste of papiers.values()) {
+      liste.sort((a, b) => (b.declare_le ? 1 : 0) - (a.declare_le ? 1 : 0)
+        || String(a.declare_le || a.imprime_le).localeCompare(String(b.declare_le || b.imprime_le)))
+    }
+    // Les déclarations du même article, dans l'ordre des heures.
+    const faites = new Map()
+    for (const l of lignes || []) {
+      if (!faites.has(l.article)) faites.set(l.article, [])
+      faites.get(l.article).push(l)
+    }
+    for (const liste of faites.values()) {
+      liste.sort((a, b) => String(a.faitLe || '').localeCompare(String(b.faitLe || '')))
+    }
+    // Et on les APPARIE une pour une. La première fournée prend le premier
+    // papier, la deuxième le deuxième — et s'il n'y a qu'un papier pour deux
+    // fournées, la seconde reste sans cascade, ce qui est la vérité.
+    const par = new Map()
+    for (const [article, liste] of faites) {
+      const dispo = papiers.get(article) || []
+      liste.forEach((l, i) => {
+        const f = dispo[i]
+        if (!f) return
+        par.set(l.name, {
           liasse: f.liasse,
           // La tête de la cascade : le gâteau qu'on est parti faire.
           tete: (f.chemin || [])[0] || f.pour || f.produit,
         })
-      }
+      })
     }
     return par
-  }, [feuilles])
+  }, [feuilles, lignes])
 
   const groupes = useMemo(() => {
     const par = new Map()
@@ -364,7 +397,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
       // La cascade imprimée d'abord : c'est elle qui montre les liaisons.
       // Sans papier (déclaré à la main, ou d'un autre jour), on retombe sur ce
       // POUR QUOI la fournée a été faite, puis sur l'article lui-même.
-      const c = cascadeDe.get(l.article)
+      const c = cascadeDe.get(l.name)
       const cle = c ? c.liasse : (l.pour || l.article)
       const nom = c ? c.tete : (l.pour || l.article)
       if (!par.has(cle)) par.set(cle, { cle, nom, lignes: [] })
@@ -731,6 +764,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                 <span className="text-[11px] text-ink-mute font-mono">
                   {l.name}
                   {quandFaits[l.name] ? ` · fait ${quandFait(quandFaits[l.name])}` : ''}
+                  {noms[l.par] ? ` · par ${noms[l.par]}` : ''}
                   {l.quand ? ` · prévu le ${new Date(String(l.quand).replace(' ', 'T') + 'Z')
     .toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}` : ''}
                 </span>
