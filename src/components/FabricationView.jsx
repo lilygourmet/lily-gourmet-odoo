@@ -30,10 +30,24 @@ import { supabase } from '../lib/supabase'
 // −61 kg de chocolat au 2026-09-08), faute que le labo enregistre ce qu'il
 // fabrique. Elle reste « jamais bloquante » (voir `toujoursLa`) le temps que ce
 // retard se résorbe.
-// Le seul article qui se lance À LA DEMANDE : aucun gâteau ne le réclame, il
-// n'apparaîtrait donc dans aucune liste calculée. Nom EXACT d'Odoo — c'est par
-// lui que le serveur le retrouve. Sa recette en sort 1 000 g, il se compte en g.
-const ARTICLE_FINITION = 'SM. Creme au beurre nature finition'
+// LES ARTICLES QUI SE LANCENT À LA DEMANDE : aucun gâteau ne les réclame, ils
+// n'apparaîtraient donc dans aucune liste calculée. Layla les lance quand elle
+// veut (2026-09-09), et en a ajouté un second le 2026-09-21 (« ajouter à faire
+// à la demande dans fabrications CD : SM. Amandes Caramelisees Finition »).
+//
+// ⚠️ LE NOM EXACT D'ODOO — c'est par lui que le serveur retrouve l'article et
+// sa recette. Une lettre d'écart, et l'ordre ne part pas.
+// ⚠️ Ils se comptent en GRAMMES : leur recette en sort 1 000 g, mais on envoie
+// exactement ce qui est tapé.
+const A_LA_DEMANDE = [
+  // ⚠️ La casse EXACTE d'Odoo. Elle était fausse ici depuis le début
+  // (« beurre nature » au lieu de « Beurre Nature ») : ça marchait par le
+  // rattrapage du serveur, au prix d'un aller-retour Odoo de plus à chaque
+  // envoi. Vérifié le 2026-09-21 : aucune déclaration enregistrée sous
+  // l'ancienne écriture, donc rien à recoller.
+  { produit: 'SM. Creme au Beurre Nature Finition', titre: 'Crème au beurre nature finition' },
+  { produit: 'SM. Amandes Caramelisees Finition', titre: 'Amandes caramélisées finition' },
+]
 const BASES = [/cr[eè]me au beurre nature/i, /craquant/i, /sirop/i, /amandes\s*caram/i, /genoise/i]
 // Bases ajoutées par Layla depuis l'écran, en plus de celles reconnues au nom.
 // Variable de module : les petits composants d'affichage s'en servent aussi.
@@ -522,7 +536,9 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   const [noms, setNoms] = useState({})          // { idUtilisateur : « Prénom Nom » }
   // Combien de grammes de crème au beurre nature finition on lance. La recette
   // Odoo en sort 1 000 g : c'est la proposition de départ, elle se corrige.
-  const [grammesFinition, setGrammesFinition] = useState(1000)
+  // Une quantité par article à la demande, 1 000 g d'avance (une recette).
+  const [grammesDemande, setGrammesDemande] = useState(
+    () => Object.fromEntries(A_LA_DEMANDE.map(a => [a.produit, 1000])))
 
   useEffect(() => {
     loadBasesChoisies()
@@ -1608,17 +1624,16 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
   }
 
   /**
-   * La crème au beurre nature finition se fait À LA DEMANDE : aucun gâteau ne
-   * la réclame, elle n'apparaît donc dans aucune des listes calculées. Layla la
-   * lance quand elle veut (2026-09-09). Elle se compte en GRAMMES ; sa recette
+   * Un article À LA DEMANDE : aucun gâteau ne le réclame, il n'apparaît donc
+   * dans aucune des listes calculées. Il se compte en GRAMMES ; sa recette
    * Odoo en sort 1 000 g, mais on envoie exactement ce qui est tapé.
    * L'ordre est créé dans Odoo PUIS déclaré fait : il part droit dans
    * « À valider », comme une tournée de base.
    */
-  const declarerFinition = async () => {
-    const q = Math.round(Number(grammesFinition) || 0)
+  const declarerFinition = async produit => {
+    const q = Math.round(Number(grammesDemande[produit]) || 0)
     if (!(q > 0)) { toast.error('Mets une quantité en grammes'); return }
-    const cree = await creerOfPrepa(ARTICLE_FINITION, q, user?.id, [], 'g')
+    const cree = await creerOfPrepa(produit, q, user?.id, [], 'g')
     if (cree && cree.test) { toast.success('Mode test : aucun ordre créé dans Odoo'); return }
     if (!cree || !cree.name || cree.error) {
       toast.error('Odoo : ' + ((cree && cree.error) || 'ordre non créé'))
@@ -1630,14 +1645,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     setData(d => (d ? {
       ...d,
       ordres: [...(d.ordres || []), {
-        name: cree.name, produit: ARTICLE_FINITION, qty: q, unite: 'g',
+        name: cree.name, produit, qty: q, unite: 'g',
         etat: 'confirmed', origine: 'LG-APP',
         quand: new Date().toISOString().slice(0, 19).replace('T', ' '),
       }],
     } : d))
     // « g » explicite : cet article n'a pas de recette dans l'écran, l'étiquette
     // prendrait sinon des kilos pour des grammes.
-    return marquerOrdre(cree.name, ARTICLE_FINITION, q, 'g')
+    return marquerOrdre(cree.name, produit, q, 'g')
   }
 
   /**
@@ -1762,19 +1777,22 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                   cette crème, elle se lance quand on veut. L'ordre est créé dans
                   Odoo et part droit dans « À valider ». */}
               <Titre n="1">À faire à la demande</Titre>
-              <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1.5 sm:gap-3 border border-line rounded-xl px-2 sm:px-3.5 py-2.5 sm:py-3 mb-1.5 bg-white">
-                <span className="basis-full sm:basis-auto flex-1 min-w-0">
-                  <span className="text-[14.5px] sm:text-[17px] font-bold">Crème au beurre nature finition</span>
-                  <span className="block text-[11px] text-ink-mute">une recette en sort 1 000 g</span>
-                </span>
-                <input type="number" min="0" step="50" inputMode="numeric"
-                  value={grammesFinition}
-                  onChange={e => setGrammesFinition(e.target.value)}
-                  aria-label="grammes de crème au beurre nature finition"
-                  className="w-[92px] text-right text-[15px] font-bold border border-line rounded-lg px-2 py-1.5" />
-                <span className="text-[12px] text-ink-mute">g</span>
-                <BoutonFait fait={false} onClick={declarerFinition} />
-              </div>
+              {A_LA_DEMANDE.map(a => (
+                <div key={a.produit}
+                  className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1.5 sm:gap-3 border border-line rounded-xl px-2 sm:px-3.5 py-2.5 sm:py-3 mb-1.5 bg-white">
+                  <span className="basis-full sm:basis-auto flex-1 min-w-0">
+                    <span className="text-[14.5px] sm:text-[17px] font-bold">{a.titre}</span>
+                    <span className="block text-[11px] text-ink-mute">une recette en sort 1 000 g</span>
+                  </span>
+                  <input type="number" min="0" step="50" inputMode="numeric"
+                    value={grammesDemande[a.produit] ?? 1000}
+                    onChange={e => setGrammesDemande(g => ({ ...g, [a.produit]: e.target.value }))}
+                    aria-label={`grammes de ${a.titre.toLowerCase()}`}
+                    className="w-[92px] text-right text-[15px] font-bold border border-line rounded-lg px-2 py-1.5" />
+                  <span className="text-[12px] text-ink-mute">g</span>
+                  <BoutonFait fait={false} onClick={() => declarerFinition(a.produit)} />
+                </div>
+              ))}
 
               <Titre n="2">Bases à préparer</Titre>
               {/* d'où vient le calcul : sinon on se demande pourquoi le craquant est là */}
