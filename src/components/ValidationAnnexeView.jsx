@@ -6,6 +6,7 @@ import { confirmDialog } from '../lib/confirmDialog'
 import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres, rattacherOrdre } from '../lib/fabricationProd'
 import { quandFait } from '../lib/jourLisible'
 import { loadOrdresAnnexe } from '../lib/fabricationAnnexe'
+import { feuillesDuJour } from '../lib/feuilles'
 import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs, setFait, retrouverOf } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 import { versUnite } from '../lib/unites'
@@ -96,6 +97,11 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     return () => { vivant = false }
   }, [tour])
   const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
+  // ⚠️ LES FEUILLES DU JOUR, pour retrouver la CASCADE IMPRIMÉE (Layla,
+  // 2026-09-21 : « dans valider, c'est regroupé par cascade imprimée, que je
+  // trouve les liaisons »). Chaque papier porte le numéro de sa liasse : tout
+  // ce qui est sorti de l'imprimante ensemble se retrouve ensemble ici.
+  const [feuilles, setFeuilles] = useState(null)
 
   const [cherche, setCherche] = useState(null)    // la déclaration dont on cherche l'ordre
   const [faites, setFaites] = useState({})        // ordre -> quantité vraiment produite
@@ -325,16 +331,48 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
    *
    * Les familles les plus fournies d'abord : c'est là qu'est le travail.
    */
+  /**
+   * De quel papier vient cet article, et donc de quelle cascade.
+   *
+   * ⚠️ Un même article peut avoir été imprimé dans DEUX liasses le même jour
+   * (deux gâteaux qui réclament la même crème). On prend d'abord celle qui a
+   * été DÉCLARÉE — c'est le travail qu'on valide — puis la plus récente.
+   */
+  const cascadeDe = useMemo(() => {
+    const par = new Map()
+    const rang = f => (f.declare_le ? 2 : 1)
+    for (const f of feuilles || []) {
+      if (!f.liasse) continue
+      const vu = par.get(f.produit)
+      const mieux = !vu || rang(f) > rang(vu.f)
+        || (rang(f) === rang(vu.f) && String(f.imprime_le) > String(vu.f.imprime_le))
+      if (mieux) {
+        par.set(f.produit, {
+          f,
+          liasse: f.liasse,
+          // La tête de la cascade : le gâteau qu'on est parti faire.
+          tete: (f.chemin || [])[0] || f.pour || f.produit,
+        })
+      }
+    }
+    return par
+  }, [feuilles])
+
   const groupes = useMemo(() => {
     const par = new Map()
     for (const l of lignes || []) {
-      const nom = l.pour || l.article
-      if (!par.has(nom)) par.set(nom, { nom, lignes: [] })
-      par.get(nom).lignes.push(l)
+      // La cascade imprimée d'abord : c'est elle qui montre les liaisons.
+      // Sans papier (déclaré à la main, ou d'un autre jour), on retombe sur ce
+      // POUR QUOI la fournée a été faite, puis sur l'article lui-même.
+      const c = cascadeDe.get(l.article)
+      const cle = c ? c.liasse : (l.pour || l.article)
+      const nom = c ? c.tete : (l.pour || l.article)
+      if (!par.has(cle)) par.set(cle, { cle, nom, lignes: [] })
+      par.get(cle).lignes.push(l)
     }
     return [...par.values()].sort((a, b) =>
       b.lignes.length - a.lignes.length || a.nom.localeCompare(b.nom, 'fr'))
-  }, [lignes])
+  }, [lignes, cascadeDe])
 
   /**
    * LE MÊME ARTICLE DÉCLARÉ PLUSIEURS FOIS AUJOURD'HUI.
@@ -372,6 +410,15 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     const part = l.demande > 0 ? faite / l.demande : 1
     return Math.round(c.besoin * part * 100) / 100
   }
+
+  useEffect(() => {
+    let vivant = true
+    // Lecture de NOTRE base, pas d'Odoo : elle ne coûte presque rien.
+    feuillesDuJour()
+      .then(f => { if (vivant) setFeuilles(f) })
+      .catch(() => setFeuilles([]))
+    return () => { vivant = false }
+  }, [tour])
 
   const poser = (n, v, max) =>
     setFaites(f => ({ ...f, [n]: Math.max(0, Math.min(max, Number(v) || 0)) }))
@@ -545,7 +592,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
         )}
 
         {lignes && !resultats && !envoi && groupes.map(g => (
-          <section key={g.nom} className="mb-3">
+          <section key={g.cle} className="mb-3">
             {/* Un seul gâteau ? Pas de titre : il n'apprend rien. */}
             {groupes.length > 1 && (
               <div className="flex items-center gap-2 mb-1.5 mt-1">
