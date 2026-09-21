@@ -169,7 +169,24 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // n'enregistre aucune feuille : sinon 2 kg donnés + 2 kg réimprimés
     // auraient fait croire à 4 kg à fabriquer.
     const aPoser = avecJeton.filter(f => Number(f.qty) > 0)
-    if (aPoser.length) poserFeuilles(aPoser, user?.id)
+    // ⚠️ LE PAPIER COMPTE TOUT DE SUITE (Layla, 2026-09-21 : « j'ai imprimé et
+    // ça montre toujours : il n'y a pas de papier pour ça »). Depuis que la
+    // déclaration exige une feuille ouverte, attendre la prochaine lecture du
+    // serveur — qui n'arrivait qu'au rechargement de l'écran — laissait le
+    // pâtissier bloqué DEVANT son papier. On pose donc les feuilles dans la
+    // liste locale à la seconde où elles partent, et la vraie lecture, juste
+    // derrière, les remplace par celles du serveur.
+    //
+    // ⚠️ ET ON NE RELIT PAS LE SERVEUR DANS LA FOULÉE : la pose part sans qu'on
+    // l'attende (« le suivi peut manquer ; l'impression, non »). Une relecture
+    // lancée ici reviendrait souvent AVANT que la ligne soit écrite, et
+    // effacerait le papier qu'on vient de poser — donc rebloquerait le
+    // pâtissier, exactement le bug qu'on répare. Le prochain rechargement de
+    // l'écran, lui, rendra les vraies lignes.
+    if (aPoser.length) {
+      const posees = poserFeuilles(aPoser, user?.id)
+      setFeuillesJour(l => [...(l || []), ...posees])
+    }
     setFeuillesPretes(sortie ? quoi : avecJeton)
     setSortiePrete(sortie)
     setTirage(t => t + 1)

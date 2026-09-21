@@ -58,36 +58,51 @@ export function imageQr(id, don = false) {
  */
 export function poserFeuilles(feuilles, userId) {
   const utiles = (feuilles || []).filter(f => f.feuilleId)
-  if (!utiles.length) return
+  if (!utiles.length) return []
   // ⚠️ TOUTES LES FEUILLES D'UNE MÊME IMPRESSION PORTENT LE MÊME NUMÉRO. Il
   // n'engage RIEN : l'économe scanne feuille par feuille, sinon on écrirait
   // qu'il a donné une matière qu'il n'a pas sortie (Layla, 2026-09-19). Ce
   // numéro sert seulement à lui dire ce qui l'attend encore pour ce gâteau.
   const liasse = nouvelId()
+  // ⚠️ ON REND LES FEUILLES TELLES QUE LE SERVEUR LES RELIRA (Layla,
+  // 2026-09-21 : « j'ai imprimé et ça montre toujours : il n'y a pas de papier
+  // pour ça »). Depuis que le papier commande la déclaration, l'écran ne peut
+  // plus attendre l'aller-retour réseau pour savoir qu'il existe : il pose ces
+  // lignes-là tout de suite, et la vraie lecture les remplacera.
+  const posees = utiles.map(f => ({
+    id: f.feuilleId,
+    jour: todayISO(),
+    imprime_le: new Date().toISOString(),
+    imprime_par: userId || null,
+    liasse,
+    produit: f.produit,
+    libelle: f.libelle || null,
+    unite: f.unite || null,
+    qty_prevue: Number(f.qty) || null,
+    pour: (f.chemin || [])[0] || null,
+    // Du gâteau jusqu'à cette recette : c'est par là que le scan la rouvrira.
+    chemin: f.chemin || null,
+    // ⚠️ RIEN À ALLER CHERCHER = RIEN À ATTENDRE (Layla, 2026-09-19 : « si
+    // une cascade est imprimée et qu'elle n'a pas de MP, elle doit aller
+    // directement dans À déclarer »). Une fournée dont tous les composants
+    // sont déjà au frigo ne passe pas par l'économe — sans ça, elle serait
+    // restée coincée à « pas encore donné » POUR TOUJOURS, et n'aurait
+    // jamais été réclamée.
+    sans_economat: !aBesoinDeLEconomat(f),
+  }))
   const corps = JSON.stringify({
     userId: userId || null,
     liasse,
-    feuilles: utiles.map(f => ({
-      id: f.feuilleId,
-      produit: f.produit,
-      libelle: f.libelle || null,
-      unite: f.unite || null,
-      qty: f.qty,
-      pour: (f.chemin || [])[0] || null,
-      // Du gâteau jusqu'à cette recette : c'est par là que le scan la rouvrira.
-      chemin: f.chemin || null,
-      // ⚠️ RIEN À ALLER CHERCHER = RIEN À ATTENDRE (Layla, 2026-09-19 : « si
-      // une cascade est imprimée et qu'elle n'a pas de MP, elle doit aller
-      // directement dans À déclarer »). Une fournée dont tous les composants
-      // sont déjà au frigo ne passe pas par l'économe — sans ça, elle serait
-      // restée coincée à « pas encore donné » POUR TOUJOURS, et n'aurait
-      // jamais été réclamée.
-      sansEconomat: !aBesoinDeLEconomat(f),
+    feuilles: posees.map(l => ({
+      id: l.id, produit: l.produit, libelle: l.libelle, unite: l.unite,
+      qty: l.qty_prevue, pour: l.pour, chemin: l.chemin,
+      sansEconomat: l.sans_economat,
     })),
   })
   fetch('/api/fab-annexe?feuilles=imprimees', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps,
   }).catch(() => { /* le suivi peut manquer ; l'impression, non */ })
+  return posees
 }
 
 /**

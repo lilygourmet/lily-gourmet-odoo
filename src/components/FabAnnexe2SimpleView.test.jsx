@@ -104,6 +104,56 @@ const ouvrirLaFiche = async () => {
 }
 
 // ============================================================
+// IMPRIMER PUIS DÉCLARER, SANS RECHARGER L'ÉCRAN.
+//
+// « J'ai imprimé et ça montre toujours : il n'y a pas de papier pour ça »
+// (Layla, 2026-09-21). Depuis que la déclaration exige une feuille ouverte,
+// l'écran ne pouvait plus attendre la prochaine lecture du serveur — qui
+// n'arrive qu'au rechargement : le pâtissier restait bloqué DEVANT son papier.
+// ============================================================
+describe('imprimer débloque tout de suite', () => {
+  it('le cadre rouge part à l’instant où la feuille est lancée', async () => {
+    PRODUITS_IMPRIMES = []                       // rien d'imprimé au départ
+    await ouvrirLaFiche()
+    expect(screen.getByText('Il n’y a pas de papier pour ça')).toBeTruthy()
+
+    fireEvent.click(screen.getByText('🖨 Imprimer d’abord'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+
+    // ⚠️ SANS RIEN RECHARGER : le serveur n'a pas encore répondu, et c'est
+    // justement le cas qu'on répare.
+    await waitFor(() => expect(screen.queryByText('Il n’y a pas de papier pour ça')).toBeNull())
+  })
+
+  // ⚠️ ET LE VERROU SUIVANT PREND LE RELAIS, dans le bon ordre : le sirop
+  // réclame du sucre à l'économe. Imprimer ouvre la porte du papier, pas celle
+  // de la réserve — « si pour une recette on n'a pas donné d'ingrédient, il ne
+  // peut pas non plus marquer comme fait » (Layla, 2026-09-20).
+  it('et c’est l’économe qui devient le verrou suivant', async () => {
+    PRODUITS_IMPRIMES = []
+    await ouvrirLaFiche()
+    fireEvent.click(screen.getByText('🖨 Imprimer d’abord'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+    await waitFor(() => expect(screen.queryByText('Il n’y a pas de papier pour ça')).toBeNull())
+    expect(screen.getByText('L’économe ne t’a rien donné')).toBeTruthy()
+    fireEvent.click(screen.getByText("C'est fait"))
+    expect(envoyerAValider).not.toHaveBeenCalled()
+  })
+
+  // Une fournée qui n'a rien à aller chercher (tout est déjà au frigo) va
+  // jusqu'au bout sans quitter l'écran.
+  it('et une fournée sans économat part jusqu’à Odoo', async () => {
+    PRODUITS_IMPRIMES = [{ produit: 'SM. sirop Imbibage production KG', qty: 5.55 }]
+    await ouvrirLaFiche()
+    expect(screen.queryByText('Il n’y a pas de papier pour ça')).toBeNull()
+    fireEvent.click(screen.getByText("C'est fait"))
+    await waitFor(() => expect(screen.getByText('Il en est sorti combien ?')).toBeTruthy())
+    fireEvent.click(screen.getByText("C'est bon"))
+    await waitFor(() => expect(envoyerAValider).toHaveBeenCalled())
+  })
+})
+
+// ============================================================
 // ARRIVER PAR LE QR : la fiche doit s'OUVRIR.
 //
 // « Non, ça n'emmène toujours pas vers l'article. Ça dit que ça le fait mais ça
