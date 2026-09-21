@@ -1781,9 +1781,14 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
               <p className="text-[12px] text-ink-mute -mt-1 mb-2">pour tous les gâteaux en attente</p>
               {bases.length === 0 && <p className="text-center text-ink-mute text-[14px] py-6">Rien à préparer en base.</p>}
               {bases.map(b => {
-                // Rien à préparer quand il en reste assez : on n'ouvre pas la
-                // recette d'un article déjà en stock (demande de Layla).
-                const ouvrable = !!recettes[b.produit] && b.manque > 0.001
+                // ⚠️ ON PEUT EN FAIRE D'AVANCE, MÊME QUAND IL EN RESTE (Layla,
+                // 2026-09-21 : « je voudrais pouvoir ajouter à mon aise »).
+                // La ligne verte se fermait complètement : ni recette à ouvrir,
+                // ni bouton — impossible d'en refaire pour prendre de l'avance.
+                // Elle reste verte (il n'y a rien à faire), mais elle s'ouvre.
+                const ouvrable = !!recettes[b.produit]
+                // Une tournée par défaut quand rien n'est demandé.
+                const combienDavance = lots[b.produit] ?? Math.max(1, b.n || 1)
                 return (
                 <div key={b.produit}>
                   {/* Toute la carte ouvre la recette : viser le petit bouton « recette »
@@ -1796,7 +1801,24 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
                       <span className="text-[14.5px] sm:text-[17px] font-bold">{propre(b.produit)}</span>
                     </span>
                     {b.manque <= 0.001 ? (
-                      <span className="text-[13px] font-bold text-ok">en stock ({qteLisible(b.stock, b.unite)})</span>
+                      <>
+                        <span className="text-[13px] font-bold text-ok">en stock ({qteLisible(b.stock, b.unite)})</span>
+                        {/* D'avance : le compteur part à 1 et le bouton dit
+                            simplement « fait », comme partout ailleurs. */}
+                        <span className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 ml-auto"
+                          onClick={e => e.stopPropagation()}>
+                          <button onClick={() => setLots(l => ({ ...l, [b.produit]: Math.max(1, combienDavance - 1) }))}
+                            aria-label={`Moins de ${propre(b.produit)}`}
+                            className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">−</button>
+                          <b className="min-w-[16px] text-center text-[15px]">{combienDavance}</b>
+                          <button onClick={() => setLots(l => ({ ...l, [b.produit]: combienDavance + 1 }))}
+                            aria-label={`Plus de ${propre(b.produit)}`}
+                            className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg border border-line bg-white text-[15px] font-bold leading-none">+</button>
+                        </span>
+                        <BoutonFait fait={false} sansNomenclature={sansRecette(b.produit, recettes)}
+                          bloque={bloquants(b.produit, (tailleTournee(recettes, b.produit)?.q || 0) * combienDavance)}
+                          onClick={() => declarerBase(b, combienDavance)} />
+                      </>
                     ) : (
                       <>
                         <span className="text-[10.5px] sm:text-[11.5px] text-ink-mute text-right leading-tight">
