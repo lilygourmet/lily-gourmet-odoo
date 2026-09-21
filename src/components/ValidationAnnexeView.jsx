@@ -218,7 +218,19 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           for (const d of await loadManques(aLire)) parNom.set(d.name, d)
           if (!vivant) return
         }
-        const out = [...base.map(b => ({ ...b, ...(parNom.get(b.name) || { manques: [], lignes: [] }) })), ...orphelins]
+        // ⚠️ LE « POUR » DU JOURNAL GAGNE (Layla, 2026-09-21 : « la mousse est
+        // liée à quel article dans validation ? »). Odoo, lui, ne connaît que
+        // l'origine de l'ordre — souvent rien, ou sa propre marque. La
+        // déclaration, elle, sait pour QUEL gâteau la fournée a été faite :
+        // c'est ce lien-là qu'on cherche, et c'est aussi lui qui range l'écran
+        // par famille. L'écrasement le perdait en silence.
+        const out = [
+          ...base.map(b => {
+            const odoo = parNom.get(b.name) || { manques: [], lignes: [] }
+            return { ...b, ...odoo, pour: b.pour || odoo.pour || null }
+          }),
+          ...orphelins,
+        ]
         setLignes(out)
         // ⚠️ RIEN N'EST COCHÉ D'AVANCE — même règle qu'« À valider CD- » :
         // « tout est décoché. et je coche comme je veux » (Layla, 2026-09-19).

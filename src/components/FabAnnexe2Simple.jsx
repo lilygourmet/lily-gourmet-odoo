@@ -497,6 +497,33 @@ export function Fiche({ noeud, quantite, onQuantite, cuites, onCuites, faits, on
             ? 'à faire' : `${uniteAffichee(noeud.unite)} à faire`}
         </div>
       )}
+      {/* ⚠️ CE QUI EXISTE DÉJÀ, ÉCRIT AVANT LE BOUTON (Layla, 2026-09-21 :
+          « des fois il va oublier de savoir s'il a déjà déclaré », et
+          « imagine, c'est un article qui n'a pas besoin de matière première et
+          qui est déjà en stock, comment gérer ça ? »).
+          Pour un article qui ne demande rien à l'économe et qui dort en stock,
+          RIEN ne prouve qu'il a été refait : ni matière sortie, ni papier
+          donné. Le seul garde-fou honnête est de mettre les deux chiffres sous
+          les yeux avant le geste — ce qui est déjà là, et ce qui a déjà été
+          déclaré aujourd'hui, avec l'heure. La question posée au clic ne
+          suffit pas : on y répond sans la lire. */}
+      {(noeud.stock > 0 || noeud.dejaFait > 0) && (
+        <div className="print:hidden text-center text-[14px] mt-2 leading-snug">
+          {noeud.stock > 0 && (
+            <span className="font-bold text-success">
+              il y en a déjà {qte(noeud.stock, noeud.unite)} en stock
+            </span>
+          )}
+          {noeud.dejaFait > 0 && (
+            <span className="block font-bold text-bordeaux">
+              déjà déclaré aujourd’hui : {qte(noeud.dejaFait, noeud.unite)}
+              {noeud.dejaFaitLe
+                ? ` à ${new Date(noeud.dejaFaitLe).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+                : ''}
+            </span>
+          )}
+        </div>
+      )}
       {decoupe && <EnPlaques noeud={noeud} decoupe={decoupe} cuites={cuites} onCuites={onCuites} />}
       {/* Rien à cuire : c'est déjà au frigo. On le DIT, au lieu de laisser un
           zéro tout seul — et rien ne sera déclaré comme fabriqué.

@@ -815,8 +815,11 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         : null
       const ok = await confirmDialog(
         `« ${propre(noeud.libelle || noeud.produit)} » a déjà été déclaré aujourd’hui`
-        + ` : ${qte(noeud.dejaFait, noeud.unite)}${quand ? ` à ${quand}` : ''}.\n\n`
-        + 'Tu en as vraiment fait une deuxième ?',
+        + ` : ${qte(noeud.dejaFait, noeud.unite)}${quand ? ` à ${quand}` : ''}.\n`
+        // ⚠️ Et ce qu'il y a EN STOCK : pour un article qui ne demande rien à
+        // l'économe, c'est le seul chiffre qui puisse faire hésiter.
+        + (noeud.stock > 0 ? `Il y en a ${qte(noeud.stock, noeud.unite)} en stock.\n` : '')
+        + '\nTu en as vraiment fait une deuxième ?',
         { confirmLabel: 'Oui, une deuxième' })
       if (!ok) return
     }
