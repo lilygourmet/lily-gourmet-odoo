@@ -24,6 +24,7 @@ export const PERMS = [
   { key: 'perm_define_gm', group: 'Production & Calendrier', label: 'Définir les détails GM', desc: 'Réglage avancé GM (à clarifier).' },
   { key: 'perm_transfert_annexe', group: 'Production & Calendrier', label: 'Transferts — atelier Prod annexe', desc: 'Travaille à l\'annexe : ENVOIE vers la boutique et RÉCEPTIONNE ce qui vient de la boutique.' },
   { key: 'perm_transfert_boutique', group: 'Production & Calendrier', label: 'Transferts — atelier Prod boutique', desc: 'Travaille à la boutique : ENVOIE vers l\'annexe et RÉCEPTIONNE ce qui vient de l\'annexe.' },
+  { key: 'perm_declarer', group: 'Production & Calendrier', label: '\u00c0 d\u00e9clarer', desc: 'Onglet \u00ab \u00c0 d\u00e9clarer \u00bb seul : dire ce qu\'on a fabriqu\u00e9, sans le reste de Fabrication Annexe 2. Qui a Fabrication Annexe 2 l\'a d\u00e9j\u00e0.' },
   { key: 'perm_transfert_produits', group: 'Production & Calendrier', label: 'Transferts Produits (SM)', desc: 'Accès à l\'onglet Transferts Produits (semi-finis). Demande aussi un atelier ci-dessus.' },
   { key: 'perm_inventaire', group: 'Production & Calendrier', label: 'Inventaire annexe', desc: 'Compter le stock de l\'annexe : saisir les quantités réelles, article par article.' },
   { key: 'perm_minmax_cd', group: 'Production & Calendrier', label: 'Mini / maxi CD', desc: 'Régler les mini/maxi du cake design. ⚠️ Sensible : changer un mini change ce que l\'atelier fabriquera demain.' },

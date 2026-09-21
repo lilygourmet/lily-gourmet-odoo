@@ -13,6 +13,7 @@ import {
   canSeeTransferts, canSeeTransfertsProduits, canSeeFactureOcp,
   canStockProdVitrine, canStockProdAnnexe, canSeeInventaire,
   canSeeMinMaxCd, canSeeMinMaxAnnexe,
+  canDeclarer,
 } from './auth'
 
 const TAB_DEFS = [
@@ -27,7 +28,9 @@ const TAB_DEFS = [
   { view: 'fabrication-glacage', emoji: '🍥', label: 'Fabrication Glaçage', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_glacage) },
   { view: 'fabrication-pate-sucre', emoji: '🎂', label: 'Fabrication Pâte à sucre', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_pate_sucre) },
   { view: 'fabrication-annexe-2', emoji: '🥧', label: 'Fabrication Annexe 2', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_annexe) },
-  { view: 'a-declarer',          emoji: '✍️', label: 'À déclarer',           can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_annexe) },
+  // Sa propre permission : déclarer ce qu'on a fait n'oblige plus à ouvrir
+  // tout Fabrication Annexe 2. (Layla, 2026-09-21.)
+  { view: 'a-declarer',          emoji: '✍️', label: 'À déclarer',           can: u => !isLivreur(u) && canDeclarer(u) },
   // « À finir, c'est un autre onglet avec badge du nombre d'articles »
   // (Layla, 2026-09-20) : ce qui est sorti de la cuve et attend d'être coulé,
   // pipé, découpé.
