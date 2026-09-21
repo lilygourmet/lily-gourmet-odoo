@@ -6,6 +6,7 @@ import { confirmDialog } from '../lib/confirmDialog'
 import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres, rattacherOrdre } from '../lib/fabricationProd'
 import { quandFait } from '../lib/jourLisible'
 import { loadOrdresAnnexe } from '../lib/fabricationAnnexe'
+import { loadToutFabAnnexe } from '../lib/fabAnnexe'
 import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs, setFait, retrouverOf } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 import { versUnite } from '../lib/unites'
@@ -95,6 +96,11 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     return () => { vivant = false }
   }, [tour])
   const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
+  // ⚠️ RANGÉ PAR GÂTEAU MÈRE (Layla, 2026-09-21 : « trie les articles par
+  // catégorie mère »). Vingt ordres à la suite, c'est une liste où l'on ne
+  // retrouve rien ; sous leur gâteau, on valide une famille d'un coup. Le
+  // rattachement vient du catalogue de l'annexe, comme dans les autres écrans.
+  const [gateaux, setGateaux] = useState(null)
   const [cherche, setCherche] = useState(null)    // la déclaration dont on cherche l'ordre
   const [faites, setFaites] = useState({})        // ordre -> quantité vraiment produite
   // Quand chaque ordre a été marqué fait à l'atelier : jour ET heure
@@ -297,6 +303,23 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     return sortie
   }
 
+  /**
+   * Les lignes rangées sous leur gâteau, dans l'ordre où elles arrivaient.
+   * « Le reste » ferme la marche : ce qui ne remonte à aucun gâteau vendu.
+   */
+  const groupes = useMemo(() => {
+    const par = new Map()
+    for (const l of lignes || []) {
+      const nom = (gateaux && gateaux[l.article]) || 'Le reste'
+      if (!par.has(nom)) par.set(nom, { nom, lignes: [] })
+      par.get(nom).lignes.push(l)
+    }
+    return [...par.values()].sort((a, b) =>
+      (a.nom === 'Le reste') - (b.nom === 'Le reste')
+      || b.lignes.length - a.lignes.length
+      || a.nom.localeCompare(b.nom, 'fr'))
+  }, [lignes, gateaux])
+
   const prets = choisis.filter(l => !l.manques.length && !l.sansOrdre)
   const bloques = choisis.filter(l => l.manques.length && !l.sansOrdre)
   const manquesCumules = [...new Map(bloques.flatMap(l => l.manques).map(m => [m.produit, m])).values()]
@@ -310,6 +333,18 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     const part = l.demande > 0 ? faite / l.demande : 1
     return Math.round(c.besoin * part * 100) / 100
   }
+
+  useEffect(() => {
+    let vivant = true
+    loadToutFabAnnexe()
+      .then(t => {
+        if (!vivant) return
+        setGateaux(Object.fromEntries((t || []).map(a => [a.produit, (a.pour || [])[0] || null])))
+      })
+      // Odoo lent ou coupé : la liste s'affiche sans être rangée, c'est tout.
+      .catch(() => setGateaux({}))
+    return () => { vivant = false }
+  }, [])
 
   const poser = (n, v, max) =>
     setFaites(f => ({ ...f, [n]: Math.max(0, Math.min(max, Number(v) || 0)) }))
@@ -378,7 +413,12 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   }
 
   async function lancer(forcer) {
-    const cibles = rangerParDependance(forcer ? bloques : prets).map(l => l.name)
+    // ⚠️ FORCER PREND TOUTE LA SÉLECTION (Layla, 2026-09-21 : « forcer, plus
+    // inclure les valider sélection »). Avant, il ne partait qu'avec les
+    // bloqués : sur cinq lignes cochées dont trois prêtes, il fallait appuyer
+    // DEUX fois — forcer, puis valider — pour une seule intention. Les prêtes
+    // passent de toute façon sans rien forcer.
+    const cibles = rangerParDependance(forcer ? [...prets, ...bloques] : prets).map(l => l.name)
     if (!cibles.length || envoi) return
     setEnvoi(true)
     const produits = {}
@@ -477,7 +517,26 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           </div>
         )}
 
-        {lignes && !resultats && !envoi && lignes.map(l => {
+        {lignes && !resultats && !envoi && groupes.map(g => (
+          <section key={g.nom} className="mb-3">
+            {/* Un seul gâteau ? Pas de titre : il n'apprend rien. */}
+            {groupes.length > 1 && (
+              <div className="flex items-center gap-2 mb-1.5 mt-1">
+                <span className="text-[13.5px] font-extrabold">{propre(g.nom)}</span>
+                <span className="text-[11.5px] text-ink-mute tabular-nums">{g.lignes.length}</span>
+                <span className="flex-1 border-t border-line" />
+                <button
+                  onClick={() => setSel(v => {
+                    const siens = g.lignes.map(x => x.name)
+                    const tout = siens.every(n => v.includes(n))
+                    return tout ? v.filter(n => !siens.includes(n)) : [...new Set([...v, ...siens])]
+                  })}
+                  className="text-[11.5px] font-bold text-bordeaux">
+                  tout cocher
+                </button>
+              </div>
+            )}
+            {g.lignes.map(l => {
           // Déclaré, mais aucun ordre ouvert dans Odoo. L'ordre se crée au moment
           // du « c'est fait » dans Fabrication Annexe, jamais ici : cet écran
           // valide, il ne lance pas de fabrication. On le signale quand même —
@@ -524,41 +583,50 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           const on = sel.includes(l.name)
           const faite = faites[l.name] ?? l.demande
           const reste = Math.max(0, l.demande - faite)
+          // ⚠️ DEUX LIGNES, UN SEUL BOUTON (Layla, 2026-09-21 : « trop de
+          // boutons, trop d'écriture, c'est long »). La carte en faisait cinq :
+          // titre, numéro, fait le, prévu le, pastille — puis une rangée pour
+          // « refuser » et une autre pour « consommé ». Rien n'a changé dans le
+          // fonctionnement : le liseré de gauche dit ce que disait la pastille,
+          // la croix fait ce que faisait le bouton rouge, et la pastille
+          // « consommé » ouvre le même repli.
           return (
-            <div key={l.name} className={'border border-line rounded-xl mb-2 overflow-hidden border-l-4 ' +
+            <div key={l.name} className={'border border-line rounded-xl mb-1.5 overflow-hidden border-l-4 ' +
               (l.manques.length ? 'border-l-[#d9a441]' : 'border-l-[#7ba05b]')}>
-              <div className="flex items-center gap-3 px-3.5 py-3 bg-white">
+              <div className="flex items-center gap-2.5 px-3 py-2.5 bg-white">
                 <input type="checkbox" checked={on} className="w-6 h-6 accent-[#993556] flex-shrink-0"
+                  aria-label={propre(l.article)}
                   onChange={e => setSel(v => (e.target.checked ? [...v, l.name] : v.filter(x => x !== l.name)))} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[16px] font-bold">{propre(l.article)} — {qte(l.demande, l.unite)}</div>
+                  <div className="text-[15.5px] font-bold leading-tight">{propre(l.article)}</div>
                   <PourQui pour={l.pour} />
-                  <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.lieu ? ' · ' + l.lieu : ''}</div>
-                  {/* Quand l'atelier l'a marqué fait — jour ET heure. À ne pas
-                      confondre avec « prévu le », qui vient d'Odoo. */}
-                  {quandFaits[l.name] && (
-                    <div className="text-[11.5px] text-ok">fait le {quandFait(quandFaits[l.name])}</div>
-                  )}
-                  {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > new Date().toISOString().slice(0, 10) ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
-                    prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
-                  </div>}
                 </div>
-                <span className={'text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ' +
-                  (l.manques.length ? 'bg-[#FFF7E0] text-[#854F0B]' : 'bg-[#EAF3DE] text-ok')}>
-                  {l.manques.length ? 'il manque' : 'prêt'}
+                {/* Le seul chiffre qu'on touche : sous le pouce, pas trois
+                    rangées plus bas. */}
+                <input type="number" min="0" max={Math.round(enG(l.demande, l.unite))} step="any"
+                  inputMode="decimal"
+                  aria-label={`Produit de ${propre(l.article)}`}
+                  value={Math.round(enG(faite, l.unite) * 100) / 100}
+                  onChange={e => poser(l.name, deG(e.target.value, l.unite), l.demande)}
+                  className="w-[86px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
+                <span className="text-[11.5px] text-ink-mute whitespace-nowrap">
+                  {motUnite(l.unite)} / {qte(l.demande, l.unite)}
                 </span>
+                <button onClick={() => annuler(l)} title="Refuser · annuler l'ordre"
+                  aria-label={`Refuser ${propre(l.article)}`}
+                  className="text-ink-mute text-[16px] px-1 leading-none">✕</button>
               </div>
+
+              {/* Ce qui manque, en une ligne par ingrédient. */}
               {l.manques.length > 0 && (
-                <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 text-[12.5px]">
+                <div className="px-3 pb-2 pl-[44px] text-[12.5px] text-[#854F0B]">
                   {l.manques.map((m, i) => {
                     const four = producteurDe.get(cleArticle(m.produit))
                     return (
                       <div key={i}>
-                        • <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}
+                        il manque <b className="text-ink">{qte(m.manque, m.unite)}</b> de {propre(m.produit)}
                         {four && four !== l.name && (
-                          <span className="block text-[11px] text-[#3d6f8e] ml-3">
-                            attend la validation de <b className="font-mono">{four}</b> — juste au-dessus dans cette liste
-                          </span>
+                          <span className="text-[#3d6f8e]"> · attend <b className="font-mono">{four}</b></span>
                         )}
                       </div>
                     )
@@ -566,47 +634,31 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                 </div>
               )}
 
-              {/* Ce qui a vraiment été produit : l'ordre est clôturé là-dessus */}
-              <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 flex items-center gap-2.5">
-                <span className="flex-1 text-[12.5px] text-ink-soft">
-                  produit sur {qte(l.demande, l.unite)}
-                  {l.prevu !== undefined && l.declare > 0 && Math.abs(l.prevu - l.declare) > 0.01 && (
-                    <span className="block text-[10.5px] text-ink-mute">
-                      déclaré à l'annexe · Odoo en avait programmé {nb(l.prevu)}
-                    </span>
-                  )}
+              {reste > 0 && (
+                <div className="px-3 pb-2 pl-[44px] text-[11.5px] font-bold text-[#854F0B]">
+                  {qte(reste, l.unite)} non fait{reste > 1 ? 's' : ''}
+                </div>
+              )}
+
+              {/* La ligne grise : tout ce qui ne se touche pas. */}
+              <div className="px-3 pb-2 pl-[44px] flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] text-ink-mute font-mono">
+                  {l.name}
+                  {quandFaits[l.name] ? ` · fait ${quandFait(quandFaits[l.name])}` : ''}
+                  {l.quand ? ` · prévu le ${new Date(String(l.quand).replace(' ', 'T') + 'Z')
+    .toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}` : ''}
                 </span>
-                <input type="number" min="0" max={Math.round(enG(l.demande, l.unite))} step="any"
-                  inputMode="decimal"
-                  aria-label={`Produit de ${propre(l.article)}`}
-                  value={Math.round(enG(faite, l.unite) * 100) / 100}
-                  onChange={e => poser(l.name, deG(e.target.value, l.unite), l.demande)}
-                  className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
-                <span className="text-[12px] text-ink-mute w-[22px]">{motUnite(l.unite)}</span>
-                {reste > 0 && (
-                  <span className="text-[11.5px] font-bold text-[#854F0B] whitespace-nowrap">
-                    {qte(reste, l.unite)} non fait{reste > 1 ? 's' : ''}
-                  </span>
+                {(l.lignes || []).length > 0 && (
+                  <button onClick={() => setOuvert(ouvert === l.name ? null : l.name)}
+                    className="ml-auto text-[11.5px] font-bold text-bordeaux border border-line
+                               rounded-full px-2.5 py-0.5 bg-cream">
+                    {ouvert === l.name ? '▾' : '▸'} consommé
+                  </button>
                 )}
               </div>
 
-              {/* Refuser la production : visible tout de suite. Le bouton était
-                  caché dans le repli « noter ce qui a été consommé », et
-                  n'existait même pas pour un ordre sans ingrédient listé. */}
-              <div className="border-t border-line px-3.5 py-2 flex">
-                <button onClick={() => annuler(l)}
-                  className="ml-auto rounded-lg px-3 py-2 text-[12.5px] font-bold border border-danger bg-white text-danger">
-                  refuser · annuler l'ordre
-                </button>
-              </div>
-
-              {/* Noter ce qui a vraiment été consommé, avant de valider */}
               {(l.lignes || []).length > 0 && (
-                <div className="border-t border-line">
-                  <button onClick={() => setOuvert(ouvert === l.name ? null : l.name)}
-                    className="w-full text-left px-3.5 py-2 text-[12.5px] text-bordeaux font-semibold">
-                    {ouvert === l.name ? '▾' : '▸'} noter ce qui a été consommé
-                  </button>
+                <div>
                   {ouvert === l.name && (
                     <div className="px-3.5 pb-3">
                       <p className="text-[12px] text-ink-mute mb-2">
@@ -685,6 +737,8 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
             </div>
           )
         })}
+          </section>
+        ))}
 
         {lignes && lignes.length > 0 && !resultats && !envoi && (
           <>
@@ -700,7 +754,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
               <button onClick={() => setConfirmer(true)} disabled={!bloques.length}
                 className={'rounded-2xl py-3.5 px-4 text-[13.5px] font-bold border bg-white ' +
                   (bloques.length ? 'border-danger text-danger' : 'border-line text-ink-mute')}>
-                Forcer la sélection{bloques.length ? ` (${bloques.length})` : ''}
+                Tout forcer{choisis.length ? ` (${prets.length + bloques.length})` : ''}
               </button>
             </div>
             <p className="text-[11.5px] text-ink-mute text-center mt-3">
@@ -744,7 +798,12 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
           onPointerDown={e => { if (e.target === e.currentTarget) setConfirmer(false) }}>
           <div className="bg-white rounded-2xl p-4 max-w-[420px]">
             <b className="text-[16px]">Forcer la validation ?</b>
-            <p className="text-[13px] text-ink-soft mt-1 mb-2">Odoo enregistrera la fabrication même si le stock ne suit pas. Il manque :</p>
+            <p className="text-[13px] text-ink-soft mt-1 mb-2">
+              {prets.length > 0 && (
+                <>Les <b>{prets.length}</b> prêtes partent aussi. </>
+              )}
+              Odoo enregistrera la fabrication même si le stock ne suit pas. Il manque :
+            </p>
             {manquesCumules.map((m, i) => (
               <div key={i} className="text-[13.5px]">• <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}</div>
             ))}
