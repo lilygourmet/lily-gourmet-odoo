@@ -677,9 +677,15 @@ describe('quand une pièce en prend moins d’une', () => {
   })
 })
 
-// ====== La règle d'atelier : la masse gélatine ======
-// Odoo compte la POUDRE, l'atelier pèse la MASSE (1 de poudre pour 6 d'eau).
-// Sans cette règle, on pèse SEPT FOIS trop peu — et la mousse ne prend pas.
+// ====== La règle d'atelier : plus rien à convertir ======
+// Odoo comptait la POUDRE, l'atelier pesait la MASSE (1 de poudre pour 6
+// d'eau) : l'écran renommait et multipliait par sept.
+//
+// « x7 plus besoin, parce que les recettes ont changé dans fabrication annexe.
+// Maintenant l'article s'appelle masse gélatine et non gélatine en poudre »
+// (Layla, 2026-09-21). Vérifié : 55 recettes utilisent « SM. Masse Gélatine »,
+// et la seule recette vivante qui nomme encore la poudre est la masse
+// elle-même. Ces tests gardent donc l'INVERSE : ce qui est écrit se pèse.
 
 describe('la masse gélatine', () => {
   const glacage = {
@@ -691,12 +697,12 @@ describe('la masse gélatine', () => {
     ],
   }
 
-  it('s’appelle « Masse gélatine » et vaut sept fois la poudre', () => {
+  it('se pèse telle qu’Odoo la compte — plus de ×7', () => {
     render(<Fiche noeud={glacage} quantite={5458} onQuantite={() => {}}
       faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
-    expect(screen.getByText('Masse gélatine')).toBeTruthy()
-    expect(screen.getByText('560 g')).toBeTruthy()          // 80 × 7
-    expect(screen.queryByText(/Gelatine en poudre/)).toBeNull()
+    expect(screen.getByText('Gelatine en poudre')).toBeTruthy()
+    expect(screen.getByText('80 g')).toBeTruthy()
+    expect(screen.queryByText('Masse gélatine')).toBeNull()
   })
 
   it('ne touche à rien d’autre', () => {
@@ -705,7 +711,7 @@ describe('la masse gélatine', () => {
     expect(screen.getByText(/1.200 g/)).toBeTruthy()
   })
 
-  it('vaut aussi dans la pesée du montage', () => {
+  it('ne se convertit pas non plus dans la pesée du montage', () => {
     const gateau = {
       produit: 'SM- Royal Chocolat 15 cm', libelle: 'Royal Chocolat 15 cm', unite: 'u',
       tourneeTaille: 13, pourQuantite: 13, recette: [],
@@ -715,7 +721,7 @@ describe('la masse gélatine', () => {
       ],
     }
     render(<PourUn noeud={gateau} quantite={13} />)
-    expect(screen.getByText('7 g')).toBeTruthy()             // 13 × 7 / 13
+    expect(screen.getByText('1 g')).toBeTruthy()             // 13 / 13, sans ×7
   })
 })
 
@@ -815,14 +821,14 @@ describe('la quantité figée', () => {
     expect(screen.getByText('Mousse')).toBeTruthy()
     expect(screen.getByText(/ne bouge pas/)).toBeTruthy()
     expect(screen.getByText(/4.470 g/)).toBeTruthy()
-    // La règle d'atelier vaut aussi dans la cuve : 90 g de poudre = 630 g pesés.
-    expect(screen.getByText('630 g')).toBeTruthy()
+    // Plus de conversion dans la cuve non plus : 90 g écrits, 90 g pesés.
+    expect(screen.getByText('90 g')).toBeTruthy()
   })
 
   it('ses ingrédients ne sont PAS répétés dans la liste du dessus', () => {
     render(<Fiche noeud={royal} quantite={13} onQuantite={() => {}}
       faits={[]} onOuvrir={() => {}} onFait={() => {}} />)
-    expect(screen.getAllByText('Masse gélatine').length).toBe(1)
+    expect(screen.getAllByText('Gelatine en poudre').length).toBe(1)
   })
 })
 

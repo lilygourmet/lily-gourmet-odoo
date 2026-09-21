@@ -90,9 +90,21 @@ export const propre = nom => String(nom || '')
  * et futures (règle de Layla). Un autre ingrédient de ce genre = une ligne à
  * ajouter ici.
  */
-const REGLES_ATELIER = [
-  { quand: /gelatine en poudre/i, nom: 'Masse gélatine', facteur: 7 },
-]
+//
+// ⚠️ LA LISTE EST VIDE DEPUIS LE 2026-09-21, et c'est une bonne nouvelle :
+// « x7 plus besoin, parce que les recettes ont changé dans fabrication annexe.
+// Maintenant l'article s'appelle masse gélatine et non gélatine en poudre »
+// (Layla). Odoo compte désormais ce que l'atelier pèse — il n'y a plus d'écart
+// à rattraper.
+//
+// Vérifié avant de la vider : 55 recettes utilisent « SM. Masse Gélatine », et
+// des 10 qui nomment encore la poudre, une SEULE est vivante au catalogue de
+// l'annexe — la masse elle-même, où la règle n'avait justement rien à faire.
+// Les neuf autres sont des articles morts (bûches, doublons, essais).
+//
+// Le mécanisme reste : un ingrédient qu'on pèse autrement qu'Odoo ne le compte,
+// c'est une ligne à ajouter ici.
+const REGLES_ATELIER = []
 
 const aplati = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
   .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
