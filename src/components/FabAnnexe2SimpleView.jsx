@@ -450,6 +450,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       if (decoupe && nbCuites > 0) {
         const r = await envoyerUn(decoupe.enfant, tete, nbCuites)
         if (r?.erreur) toast(`Odoo a refusé les plaques : ${r.erreur}`)
+        // ⚠️ ET SA FEUILLE S'ÉTEINT AUSSI (Layla, 2026-09-21, en cherchant à qui
+        // servait une cuve de mousse). La plaque part en même temps que ce
+        // qu'on en coupe : elle était bien déclarée chez Odoo, mais son papier
+        // restait ouvert pour toujours — donc toujours « à déclarer », et le
+        // chiffre du gâteau restait figé dessus. Vécu le jour même : le biscuit
+        // gianduja déclaré DEUX fois, sa feuille toujours en attente.
+        else eteindreFeuille(decoupe.enfant.produit, nbCuites)
       }
       // ⚠️ Le PRESSAGE aussi part AVANT : l'ordre du gâteau consomme les
       // bases, et une base qui n'existe pas laisserait le sablé crispy
@@ -458,6 +465,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
       if (presse) {
         const r0 = await envoyerUn(presse, tete, pressees)
         if (r0?.erreur) toast(`Odoo a refusé ${propre(presse.produit)} : ${r0.erreur}`)
+        // Même raison que la plaque juste au-dessus : le pressage part avec le
+        // gâteau, sa feuille doit partir avec lui.
+        else eteindreFeuille(presse.produit, pressees)
       }
       // ⚠️ D'AUTRES TAILLES montées avec la même cuve : chacune doit porter SA
       // part de crème, pas la cuve entière. Le serveur calcule les parts ; on
