@@ -6,7 +6,6 @@ import { confirmDialog } from '../lib/confirmDialog'
 import { loadFabProdDepuis, depuisJours, delFabProd, datesDesOrdres, rattacherOrdre } from '../lib/fabricationProd'
 import { quandFait } from '../lib/jourLisible'
 import { loadOrdresAnnexe } from '../lib/fabricationAnnexe'
-import { loadToutFabAnnexe } from '../lib/fabAnnexe'
 import { loadManques, validerDansOdoo, annulerOrdre, loadSaisies, saveSaisies, loadStocksNegatifs, setFait, retrouverOf } from '../lib/fabrication'
 import { canValiderAnnexe } from '../lib/auth'
 import { versUnite } from '../lib/unites'
@@ -96,11 +95,7 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     return () => { vivant = false }
   }, [tour])
   const [ouvert, setOuvert] = useState(null)      // l'ordre dont on note les consommations
-  // ⚠️ RANGÉ PAR GÂTEAU MÈRE (Layla, 2026-09-21 : « trie les articles par
-  // catégorie mère »). Vingt ordres à la suite, c'est une liste où l'on ne
-  // retrouve rien ; sous leur gâteau, on valide une famille d'un coup. Le
-  // rattachement vient du catalogue de l'annexe, comme dans les autres écrans.
-  const [gateaux, setGateaux] = useState(null)
+
   const [cherche, setCherche] = useState(null)    // la déclaration dont on cherche l'ordre
   const [faites, setFaites] = useState({})        // ordre -> quantité vraiment produite
   // Quand chaque ordre a été marqué fait à l'atelier : jour ET heure
@@ -304,21 +299,29 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
   }
 
   /**
-   * Les lignes rangées sous leur gâteau, dans l'ordre où elles arrivaient.
-   * « Le reste » ferme la marche : ce qui ne remonte à aucun gâteau vendu.
+   * LES LIGNES RANGÉES PAR FAMILLE DE DÉCLARATION (Layla, 2026-09-21).
+   *
+   * La famille, c'est ce POUR QUOI la fournée a été déclarée : la crème, la
+   * génoise et le cadre citron partent ensemble parce qu'ils ont été faits
+   * ensemble. Le gâteau lui-même n'a pas de « pour » — il EST la famille, et
+   * se range donc sous son propre nom, avec tout ce qu'il a réclamé.
+   *
+   * ⚠️ Ça ne demande rien à Odoo : le lien est déjà dans la déclaration. J'étais
+   * d'abord passé par le catalogue (le gâteau vendu de l'article) — une lecture
+   * de plus, et un rangement qui ne disait pas ce qui avait été fait ensemble.
+   *
+   * Les familles les plus fournies d'abord : c'est là qu'est le travail.
    */
   const groupes = useMemo(() => {
     const par = new Map()
     for (const l of lignes || []) {
-      const nom = (gateaux && gateaux[l.article]) || 'Le reste'
+      const nom = l.pour || l.article
       if (!par.has(nom)) par.set(nom, { nom, lignes: [] })
       par.get(nom).lignes.push(l)
     }
     return [...par.values()].sort((a, b) =>
-      (a.nom === 'Le reste') - (b.nom === 'Le reste')
-      || b.lignes.length - a.lignes.length
-      || a.nom.localeCompare(b.nom, 'fr'))
-  }, [lignes, gateaux])
+      b.lignes.length - a.lignes.length || a.nom.localeCompare(b.nom, 'fr'))
+  }, [lignes])
 
   const prets = choisis.filter(l => !l.manques.length && !l.sansOrdre)
   const bloques = choisis.filter(l => l.manques.length && !l.sansOrdre)
@@ -333,18 +336,6 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     const part = l.demande > 0 ? faite / l.demande : 1
     return Math.round(c.besoin * part * 100) / 100
   }
-
-  useEffect(() => {
-    let vivant = true
-    loadToutFabAnnexe()
-      .then(t => {
-        if (!vivant) return
-        setGateaux(Object.fromEntries((t || []).map(a => [a.produit, (a.pour || [])[0] || null])))
-      })
-      // Odoo lent ou coupé : la liste s'affiche sans être rangée, c'est tout.
-      .catch(() => setGateaux({}))
-    return () => { vivant = false }
-  }, [])
 
   const poser = (n, v, max) =>
     setFaites(f => ({ ...f, [n]: Math.max(0, Math.min(max, Number(v) || 0)) }))
