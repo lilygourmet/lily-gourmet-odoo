@@ -107,8 +107,11 @@ export function eteindreFeuille(produit, qty, fabricationId = null) {
 }
 
 /** Les feuilles du jour — l'écran de l'économe et celui des pâtissiers. */
-export async function feuillesDuJour() {
-  const r = await fetch('/api/fab-annexe?feuilles=jour&cb=' + Date.now())
+export async function feuillesDuJour({ demandes = false } = {}) {
+  // `demandes` : ce que l'économe doit vraiment sortir pour chaque feuille qui
+  // l'attend. Ça passe par les recettes d'Odoo — seul son écran le demande.
+  const r = await fetch('/api/fab-annexe?feuilles=jour'
+    + (demandes ? '&demandes=1' : '') + '&cb=' + Date.now())
   const j = await r.json()
   if (j?.error) throw new Error(j.error)
   return j.feuilles || []

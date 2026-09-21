@@ -1146,6 +1146,37 @@ async function aFinir(sb) {
 
 const estKgOdoo = u => /^kg$/i.test(String(u || '').trim())
 
+/**
+ * CE QUE L'ÉCONOME DOIT VRAIMENT SORTIR POUR CETTE FEUILLE.
+ *
+ * « La masse gélatine n'est pas dans donné » (Layla, 2026-09-21) : sa ligne
+ * lui réclamait « Masse gélatine 1 440 g », une PRÉPARATION qu'il ne peut pas
+ * sortir — sa réserve contient de la gélatine en POUDRE. Le papier, lui, porte
+ * la bonne liste depuis toujours ; son écran, non.
+ *
+ * Même règle que le papier (`aDemander`) : ce qui ne se fabrique pas, et
+ * jamais l'eau du robinet — elle sort du mur.
+ */
+async function demandeEconomat(cache, produit, qty, achetes) {
+  const p = await produitParNom(cache, produit)
+  const bom = p && await bomDe(cache, p)
+  if (!bom) return []
+  const base = versUnite(bom.product_qty || 1, bom.product_uom_id?.[1], p.uom_id?.[1]) || 1
+  const facteur = (Number(qty) || 0) / base
+  const out = []
+  for (const l of lignesPour(bom, p)) {
+    const nom = sansRef(l.product_id[1])
+    if (/eau\s*(du\s*)?robinet/i.test(nom)) continue
+    const c = await produitParNom(cache, nom)
+    if (!c) continue
+    // Une préparation a sa PROPRE feuille dans la liasse : on ne la demande pas.
+    if (!achetes.has(nom) && await bomDe(cache, c)) continue
+    const q = versUnite(l.product_qty, l.product_uom_id[1], c.uom_id[1]) * facteur
+    if (q > 0) out.push({ produit: nom, qty: Math.round(q * 1000) / 1000, unite: uniteDe(c) })
+  }
+  return out
+}
+
 async function photoDe(nom) {
   const t = await sr('product.product', [['name', '=', nom]], ['image_256', 'image_512'], { limit: 1 })
   return t[0]?.image_256 || t[0]?.image_512 || null
@@ -1257,7 +1288,25 @@ export default async function handler(req, res) {
         const { data, error } = await sb.from('annexe_feuilles').select(F)
           .gte('jour', bord).order('imprime_le', { ascending: false }).limit(1000)
         if (error) return res.status(200).json({ error: error.message })
-        return res.status(200).json({ feuilles: data || [] })
+        const feuilles = data || []
+
+        // ⚠️ SEULEMENT SI ON LE DEMANDE (`&demandes=1`), et seulement pour ce
+        // qui attend encore l'économe. Cette lecture passe par les recettes
+        // d'Odoo : la faire à chaque appel ralentirait la pastille et les deux
+        // écrans, qui n'en ont pas besoin.
+        if (req.query.demandes === '1') {
+          const { data: cat } = await sb.from('fab_annexe_articles').select('produit, achete')
+          const achetes = new Set((cat || []).filter(a => a.achete).map(a => a.produit))
+          const cache = creerCache()
+          const attendent = feuilles.filter(f =>
+            !f.donne_le && !f.sans_economat && !f.declare_le && !f.pas_faite_le && !f.retour_le)
+          for (const f of attendent) {
+            try {
+              f.demande = await demandeEconomat(cache, f.produit, f.qty_prevue, achetes)
+            } catch { /* recette illisible : la ligne garde juste son nom */ }
+          }
+        }
+        return res.status(200).json({ feuilles })
       }
 
       // ⚠️ LA MÊME FOURNÉE NE SE DÉCLARE PAS DEUX FOIS. L'écran « c'est fait »

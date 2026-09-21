@@ -29,7 +29,7 @@ import Skeleton from './Skeleton'
 import { PhotoFeuille, GrosseQuantite, Bande, Rien, TeteCascade, Quand } from './FeuilleVisuel'
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
-import { propre } from '../lib/ecranSimple'
+import { propre, qte } from '../lib/ecranSimple'
 import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu, parCascade, donneEtSolde } from '../lib/feuilles'
 
 /**
@@ -67,6 +67,15 @@ function Ligne({ f, bord, couleur, quoi, busy, onAgir }) {
               l'historique daterait tout du moment où la marchandise est
               sortie. */}
           <Quand {...dernierGeste(f)} />
+          {/* CE QU'IL SORT DE SA RÉSERVE. Le nom de la ligne est celui de la
+              PRÉPARATION — « masse gélatine » — mais ce qu'il tend, c'est sa
+              matière première. Sans ça, il cherche dans sa réserve quelque
+              chose qui n'y est pas. */}
+          {!!(f.demande || []).length && (
+            <span className="block text-[12px] text-ink-soft mt-0.5">
+              {f.demande.map(d => `${qte(d.qty, d.unite)} de ${propre(d.produit)}`).join(' · ')}
+            </span>
+          )}
         </span>
       </span>
       {!!onAgir && (
@@ -128,7 +137,13 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
   const [histoOuvert, setHistoOuvert] = useState(false)
 
   const relire = useCallback(() => {
-    feuillesDuJour().then(setFeuilles).catch(e => setErreur(e.message || String(e)))
+    // ⚠️ AVEC CE QU'IL DOIT SORTIR (Layla, 2026-09-21 : « la masse gélatine
+    // n'est pas dans donné »). Sa ligne lui réclamait une PRÉPARATION qu'il ne
+    // peut pas sortir : sa réserve contient de la gélatine en poudre, pas de
+    // la masse. Le papier portait la bonne liste depuis toujours ; son écran,
+    // non.
+    feuillesDuJour({ demandes: true })
+      .then(setFeuilles).catch(e => setErreur(e.message || String(e)))
   }, [])
 
   useEffect(() => {

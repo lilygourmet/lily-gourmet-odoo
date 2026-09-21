@@ -194,6 +194,18 @@ describe('« Donné », l’écran de l’économe', () => {
     expect(screen.queryByText(/c’est le pâtissier qui rend/)).toBeNull()
   })
 
+  // ⚠️ « La masse gélatine n'est pas dans donné » (Layla, 2026-09-21) : la
+  // ligne lui réclamait une PRÉPARATION qu'il ne peut pas sortir — sa réserve
+  // contient de la gélatine en poudre, pas de la masse.
+  it('dit ce qu’il doit sortir, pas seulement le nom de la préparation', async () => {
+    lues = [{ ...attendue, produit: 'SM. Masse Gélatine', libelle: 'Masse gélatine',
+      qty_prevue: 1440, unite: 'kg',
+      demande: [{ produit: 'MP- Gelatine en poudre', qty: 206, unite: 'g' }] }]
+    render(<DonneView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText('Masse gélatine')
+    expect(screen.getByText(/206 g de Gelatine en poudre/)).toBeTruthy()
+  })
+
   it('« Donné » sert la fournée, « Repris » la récupère', async () => {
     lues = [attendue, rendue]
     render(<DonneView user={{ id: 'u1' }} onNavigate={() => {}} />)
