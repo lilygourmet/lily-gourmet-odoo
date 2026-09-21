@@ -11,7 +11,7 @@
 // « Fabrication Annexe 2 » continue de voir « À déclarer ».
 // ============================================================
 import { describe, it, expect } from 'vitest'
-import { canDeclarer } from './auth'
+import { canDeclarer, canVoirDonne, sansColonneAbsente } from './auth'
 import { navTabsForUser } from './navTabs'
 import { PERMS } from './permsList'
 
@@ -65,5 +65,61 @@ describe('⚠️ le piège : la permission doit être dans permsList', () => {
     expect(p, 'perm_declarer doit être dans permsList.js').toBeTruthy()
     expect(p.label).toBe('À déclarer')
     expect(p.desc.length).toBeGreaterThan(20)
+  })
+})
+
+describe('la permission « Donné »', () => {
+  it('celui qui a la nouvelle permission', () => {
+    expect(canVoirDonne({ perm_donne: true })).toBe(true)
+  })
+
+  it('⚠️ celui qui avait l’Économat la garde', () => {
+    expect(canVoirDonne({ economat_profil: 'cuisine' })).toBe(true)
+    expect(canVoirDonne({ perm_econome: true })).toBe(true)
+  })
+
+  it('personne d’autre', () => {
+    expect(canVoirDonne({ perm_caisse: true })).toBe(false)
+    expect(canVoirDonne(null)).toBe(false)
+  })
+
+  it('l’onglet suit, et jamais pour un livreur', () => {
+    const voitDonne = u => navTabsForUser(u).some(t => t.view === 'donne')
+    expect(voitDonne({ perm_donne: true })).toBe(true)
+    expect(voitDonne({ perm_econome: true })).toBe(true)
+    expect(voitDonne({ perm_caisse: true })).toBe(false)
+    expect(voitDonne({ role: 'livreur', perm_donne: true })).toBe(false)
+  })
+
+  it('⚠️ elle est dans permsList (le piège habituel)', () => {
+    const p = PERMS.find(x => x.key === 'perm_donne')
+    expect(p, 'perm_donne doit être dans permsList.js').toBeTruthy()
+    expect(p.label).toBe('Donné')
+  })
+})
+
+describe('⚠️ LE FILET : une colonne manquante ne doit en coûter QU’UNE', () => {
+  // C'est ce filet qui, mal écrit, a fait perdre tous les accès à tout le
+  // monde le 2026-09-21. Il retirait 22 permissions parce qu'une manquait.
+  const SELECT = 'id, username, perm_caisse, perm_devis, perm_donne, employe_id'
+
+  it('elle retire la colonne que Postgres nomme, et elle seule', () => {
+    expect(sansColonneAbsente(SELECT, 'column profiles.perm_donne does not exist'))
+      .toBe('id, username, perm_caisse, perm_devis, employe_id')
+  })
+
+  it('⚠️ les autres permissions restent TOUTES', () => {
+    const r = sansColonneAbsente(SELECT, 'column profiles.perm_donne does not exist')
+    expect(r).toContain('perm_caisse')
+    expect(r).toContain('perm_devis')
+  })
+
+  it('une erreur qui ne nomme pas de colonne : on ne touche à rien', () => {
+    expect(sansColonneAbsente(SELECT, 'JWT expired')).toBe(null)
+    expect(sansColonneAbsente(SELECT, '')).toBe(null)
+  })
+
+  it('une colonne qui n’est pas dans le SELECT : rien à retirer', () => {
+    expect(sansColonneAbsente(SELECT, 'column profiles.perm_autre does not exist')).toBe(null)
   })
 })

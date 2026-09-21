@@ -57,18 +57,57 @@ export function getCurrentUser() {
   }
 }
 
+/**
+ * LA COLONNE QUE POSTGRES REFUSE, ET ELLE SEULE.
+ *
+ * Postgres nomme la colonne manquante dans son message : « column
+ * profiles.perm_donne does not exist ». On la retire du SELECT et on relit.
+ *
+ * ⚠️ ELLE SEULE. L'ancienne version retirait d'un bloc les 22 permissions
+ * récentes dès qu'UNE manquait. Le 2026-09-21, avoir ajouté `perm_declarer` au
+ * SELECT avant de lancer le SQL a fait perdre à TOUT LE MONDE : Devis,
+ * Commande, Photoshop, Fabrication Annexe, Transferts, Achats, Supports…
+ * Les données n'avaient pas bougé — c'était une panne de lecture.
+ * (Layla : « tout le monde a perdu tous les accès ».)
+ *
+ * Rend le SELECT sans elle, ou null s'il n'y a rien à retirer.
+ */
+export function sansColonneAbsente(select, message) {
+  const m = /column\s+\S*?\.?"?([a-z0-9_]+)"?\s+does not exist/i.exec(String(message || ''))
+  const colonne = m && m[1]
+  if (!colonne) return null
+  const restantes = String(select).split(', ').filter(c => c.trim() !== colonne)
+  return restantes.length === String(select).split(', ').length ? null : restantes.join(', ')
+}
+
 // Recharge le user depuis Supabase (permissions a jour si admin les a modifiees)
 // Retourne le user frais OU null si l'utilisateur a ete desactive/supprime
 export async function loadFreshUser(userId) {
   if (!userId) return null
-  const SELECT = 'id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_etiquettes_boites, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_modification, livreur_defaut, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_wati_info, perm_commande, perm_photoshop, perm_valider_of, perm_valider_annexe, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod, perm_fabrication_annexe, perm_ai_tools, perm_stock_poly, perm_besoins_achat, perm_achat, perm_supports, perm_simu_gateaux, perm_transfert_annexe, perm_transfert_boutique, perm_transfert_produits, perm_facture_ocp, perm_check_cd, perm_inventaire, perm_minmax_cd, perm_minmax_annexe, perm_declarer, employe_id, last_visited_conversations, navbar_config'
+  const SELECT = 'id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_etiquettes_boites, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_modification, livreur_defaut, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_wati_info, perm_commande, perm_photoshop, perm_valider_of, perm_valider_annexe, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod, perm_fabrication_annexe, perm_ai_tools, perm_stock_poly, perm_besoins_achat, perm_achat, perm_supports, perm_simu_gateaux, perm_transfert_annexe, perm_transfert_boutique, perm_transfert_produits, perm_facture_ocp, perm_check_cd, perm_inventaire, perm_minmax_cd, perm_minmax_annexe, perm_declarer, perm_donne, employe_id, last_visited_conversations, navbar_config'
   try {
     let { data, error } = await supabase
       .from('profiles').select(SELECT).eq('id', userId).maybeSingle()
-    // Repli si une colonne perm récente n'existe pas encore (SQL pas lancé) → on ne déconnecte personne.
-    if (error && /perm_devis|perm_wati_info|perm_commande|perm_photoshop|perm_cake_vision_edit|perm_ai_tools|perm_stock_poly|perm_besoins_achat|perm_achat|perm_supports|perm_simu_gateaux|perm_transfert_annexe|perm_transfert_boutique|perm_transfert_produits|perm_facture_ocp|perm_etiquettes_boites|perm_fabrication_prod|perm_fabrication_annexe|perm_check_cd|perm_inventaire|perm_minmax_cd|perm_minmax_annexe|perm_valider_annexe|perm_declarer/.test(error.message || '')) {
+    // ⚠️ REPLI : une colonne perm récente peut ne pas exister encore (SQL pas
+    // lancé). On relit alors SANS ELLE — et sans elle SEULEMENT.
+    //
+    // L'ancienne version retirait d'un bloc les 22 permissions récentes dès
+    // qu'UNE SEULE manquait. Le 2026-09-21, avoir ajouté `perm_declarer` au
+    // SELECT avant de lancer le SQL a donc fait perdre à TOUT LE MONDE : Devis,
+    // Commande, Photoshop, Fabrication Annexe, Transferts, Achats, Supports…
+    // Les données n'avaient pas bougé : c'était une panne de lecture.
+    // (Layla : « tout le monde a perdu tous les accès ».)
+    //
+    // Postgres nomme la colonne fautive dans son message ; on ne retire qu'elle,
+    // et on recommence tant qu'il en nomme une autre — au plus 10 fois.
+    let sel = SELECT
+    for (let essai = 0; error && essai < 10; essai++) {
+      const reduit = sansColonneAbsente(sel, error.message)
+      if (reduit === null) break
+      console.warn('[loadFreshUser] colonne absente, on lit sans elle')
+      sel = reduit
       ;({ data, error } = await supabase
-        .from('profiles').select(SELECT.replace('perm_devis, ', '').replace('perm_wati_info, ', '').replace('perm_commande, ', '').replace('perm_photoshop, ', '').replace('perm_cake_vision_edit, ', '').replace('perm_ai_tools, ', '').replace('perm_stock_poly, ', '').replace('perm_besoins_achat, ', '').replace('perm_achat, ', '').replace('perm_supports, ', '').replace('perm_simu_gateaux, ', '').replace('perm_transfert_annexe, ', '').replace('perm_transfert_boutique, ', '').replace('perm_transfert_produits, ', '').replace('perm_facture_ocp, ', '').replace('perm_etiquettes_boites, ', '').replace('perm_fabrication_prod, ', '').replace('perm_fabrication_annexe, ', '').replace('perm_check_cd, ', '').replace('perm_minmax_cd, ', '').replace('perm_minmax_annexe, ', '').replace('perm_declarer, ', '')).eq('id', userId).maybeSingle())
+        .from('profiles').select(sel).eq('id', userId).maybeSingle())
     }
     if (error) {
       console.warn('[loadFreshUser]', error.message)
@@ -304,6 +343,20 @@ export function canSeeFactureOcp(user) {
  * ⚠️ Qui a déjà Fabrication Annexe 2 garde la déclaration : on n'enlève rien
  * à personne en ajoutant cette permission.
  */
+/**
+ * L'onglet « Donné » (Économat), à lui seul.
+ *
+ * « Crée aussi une permission pour Donné » (Layla, 2026-09-21). Jusqu'ici il
+ * fallait un profil d'économat pour le voir.
+ *
+ * ⚠️ Personne ne perd rien : qui avait l'Économat garde l'onglet.
+ */
+export function canVoirDonne(user) {
+  if (!user) return false
+  return user.role === 'admin' || user.perm_donne === true
+    || !!user.economat_profil || user.perm_econome === true
+}
+
 export function canDeclarer(user) {
   if (!user) return false
   return user.role === 'admin' || user.perm_declarer === true
