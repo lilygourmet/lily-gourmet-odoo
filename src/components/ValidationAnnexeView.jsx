@@ -43,6 +43,14 @@ const norm = u => String(u || '').toLowerCase().replace(/^units?$/, 'u')
 const qte = (q, u) => (norm(u) === 'kg'
   ? `${nb(Math.round(q * 1000))} g`
   : `${nb(Math.round(q))} ${norm(u) === 'g' ? 'g' : u}`)
+// ⚠️ TOUT PARLE EN GRAMMES, MÊME CE QUI VIENT EN KILOS (Layla, 2026-09-21 :
+// « tous les ingrédients article dans l'app parlent en gr, même s'ils viennent
+// en kilo »). Ces deux-là servent la case qu'on retape : elle affichait
+// « produit sur 1,4 » — 1,4 quoi ? — juste sous un titre qui disait 1 400 g.
+const enG = (q, u) => (norm(u) === 'kg' ? (Number(q) || 0) * 1000 : (Number(q) || 0))
+const deG = (q, u) => (norm(u) === 'kg' ? (Number(q) || 0) / 1000 : (Number(q) || 0))
+// Le mot affiché à côté de la case : un kilo se dit en grammes.
+const motUnite = u => (norm(u) === 'kg' ? 'g' : (norm(u) === 'g' ? 'g' : u))
 // Les articles de l'annexe portent d'autres préfixes que ceux du cake design.
 const propre = n => String(n || '')
   .replace(/^(E-|V-|MI-|N-|SM[.\- ]?|Sm[.\- ]?|SMT?[.\- ]?)\s*/i, '')
@@ -561,18 +569,24 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
               {/* Ce qui a vraiment été produit : l'ordre est clôturé là-dessus */}
               <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 flex items-center gap-2.5">
                 <span className="flex-1 text-[12.5px] text-ink-soft">
-                  produit sur {nb(l.demande)}
+                  produit sur {qte(l.demande, l.unite)}
                   {l.prevu !== undefined && l.declare > 0 && Math.abs(l.prevu - l.declare) > 0.01 && (
                     <span className="block text-[10.5px] text-ink-mute">
                       déclaré à l'annexe · Odoo en avait programmé {nb(l.prevu)}
                     </span>
                   )}
                 </span>
-                <input type="number" min="0" max={l.demande} step="any" inputMode="decimal" value={faite}
-                  onChange={e => poser(l.name, e.target.value, l.demande)}
+                <input type="number" min="0" max={Math.round(enG(l.demande, l.unite))} step="any"
+                  inputMode="decimal"
+                  aria-label={`Produit de ${propre(l.article)}`}
+                  value={Math.round(enG(faite, l.unite) * 100) / 100}
+                  onChange={e => poser(l.name, deG(e.target.value, l.unite), l.demande)}
                   className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
+                <span className="text-[12px] text-ink-mute w-[22px]">{motUnite(l.unite)}</span>
                 {reste > 0 && (
-                  <span className="text-[11.5px] font-bold text-[#854F0B] whitespace-nowrap">{nb(reste)} non fait{reste > 1 ? 's' : ''}</span>
+                  <span className="text-[11.5px] font-bold text-[#854F0B] whitespace-nowrap">
+                    {qte(reste, l.unite)} non fait{reste > 1 ? 's' : ''}
+                  </span>
                 )}
               </div>
 
@@ -604,17 +618,26 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
                           <span className="flex-1 text-[13.5px] min-w-0">
                             {propre(c.produit)}
                             <span className="block text-[11px] text-ink-mute">
-                              recette : {nb(c.besoin)} {c.unite}
+                              {/* ⚠️ En grammes ici aussi : un ingrédient qui
+                                  vient en kilos s'écrivait « 0,2 kg » au milieu
+                                  de voisins en grammes. */}
+                              recette : {qte(c.besoin, c.unite)}
                               {faite !== l.demande && (notes[l.name] || {})[c.id] === undefined
-                                && ' · ajusté pour ' + nb(faite)}
+                                && ' · ajusté pour ' + qte(faite, l.unite)}
                             </span>
                           </span>
-                          <input type="number" min="0" step="any" inputMode="decimal" value={aConsommer(l, c)}
+                          <input type="number" min="0" step="any" inputMode="decimal"
+                            aria-label={`Consommé de ${propre(c.produit)}`}
+                            value={Math.round(enG(aConsommer(l, c), c.unite) * 100) / 100}
                             onChange={e => setNotes(n => ({
-                              ...n, [l.name]: { ...(n[l.name] || {}), [c.id]: e.target.value },
+                              ...n,
+                              [l.name]: {
+                                ...(n[l.name] || {}),
+                                [c.id]: e.target.value === '' ? '' : deG(e.target.value, c.unite),
+                              },
                             }))}
                             className="w-[92px] text-right text-[14px] font-bold border border-line rounded-lg px-2 py-1.5" />
-                          <span className="text-[12px] text-ink-mute w-[26px]">{c.unite}</span>
+                          <span className="text-[12px] text-ink-mute w-[26px]">{motUnite(c.unite)}</span>
                         </div>
                       ))}
 
