@@ -522,8 +522,21 @@ export async function syncWithOdoo() {
   for (const a of now) {
     const p = byId.get(a.odoo_product_id)
     if (!p) continue
+    // ⚠️ LA SYNCHRO N'EFFACE PLUS LES PHOTOS MAISON (Layla, 2026-09-21 : « on
+    // ne voit plus les photos dans économat »). Elle écrivait
+    // `photo_url: p.image_url || null` : pour les 365 articles dont Odoo n'a
+    // AUCUNE image — c'est le cas de presque tout l'économat — elle remplaçait
+    // la photo déposée à la main par du vide. Un seul appui sur
+    // « synchroniser » a effacé 202 photos, et les fichiers sont restés
+    // orphelins dans le stockage (voir `scripts/economat-photos-perdues.mjs`,
+    // qui les a rebranchées par leur nom).
+    //
+    // Odoo complète, il n'efface pas : on ne touche à la photo que s'il en a
+    // vraiment une.
+    const maj = { name: p.name, unit: p.unit || null, odoo_name: p.odoo_name }
+    if (p.image_url) maj.photo_url = p.image_url
     const { error: e } = await supabase.from('economat_articles')
-      .update({ name: p.name, unit: p.unit || null, photo_url: p.image_url || null, odoo_name: p.odoo_name }).eq('id', a.id)
+      .update(maj).eq('id', a.id)
     if (!e) updated++
   }
 

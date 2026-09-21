@@ -30,7 +30,7 @@ import { setMiseEnForme } from '../lib/miseEnForme'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis,
-  quantitesImposees, attendLeDon } from '../lib/feuilles'
+  quantitesImposees, attendLeDon, feuilleOuverte } from '../lib/feuilles'
 import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
@@ -928,9 +928,18 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                 } : undefined}
               // Les chiffres du papier, pour les composants aussi.
               imposees={quantitesImposees(feuillesJour)}
-              noteVerrou={ingredientsSortis(feuillesJour, noeud.produit)
-                ? 'C’est le chiffre de la feuille imprimée : la recette et les pesées en dépendent. Pour le changer, rends la marchandise à l’économe, ou réimprime.'
-                : undefined}
+              // ⚠️ ET LE NOTE DIT QUAND (Layla, 2026-09-21 : « ce n'est pas
+              // imprimé, pourquoi c'est figé ? » — elle regardait un flan
+              // imprimé le matin même à 9 h 56 par quelqu'un d'autre). Sans
+              // l'heure, la phrase a l'air fausse et le verrou, arbitraire.
+              noteVerrou={(() => {
+                const f = feuilleOuverte(feuillesJour, noeud.produit)
+                if (!f) return undefined
+                const h = f.imprime_le
+                  ? new Date(f.imprime_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                  : null
+                return `C’est le chiffre de la feuille imprimée${h ? ` à ${h}` : ''} : la recette et les pesées en dépendent. Pour le changer, rends la marchandise à l’économe, ou réimprime.`
+              })()}
               onOuvrir={p => { figer(q); setChemin([...chemin, p]) }}
               onFait={gesteFait}
               // ⚠️ ARRIVÉ PAR LE QR : c'est la FICHE qui appuie, parce qu'elle
