@@ -1803,6 +1803,11 @@ export default async function handler(req, res) {
         photo: a.photo || gateauDe(a.produit) || a.produit,
         unite: uniteDe(p),
         stock, mini: a.mini, maxi: a.maxi, tournee: fournee,
+        // ⚠️ QUAND LA DERNIÈRE FOURNÉE A ÉTÉ DÉCLARÉE. La fiche s'en sert pour
+        // demander « tu en as fait une deuxième ? » (Layla, 2026-09-21 : « j'ai
+        // peur que le pâtissier fasse que cliquer sans réfléchir »). La liste
+        // l'avait déjà ; la fiche, non.
+        dejaFaitLe: declare.quand?.[a.produit] || null,
         // Posés juste au-dessus, et seulement pour une découpe.
         ...(a.tourneeTaille ? { tourneeTaille: a.tourneeTaille, recette: a.recette } : {}),
         dejaFait, reste, urgence: urgence(a, stock, dejaFait),

@@ -32,6 +32,7 @@ import { propre, qte } from '../lib/ecranSimple'
 import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis,
   quantitesImposees, attendLeDon, feuilleOuverte, complementsAImprimer } from '../lib/feuilles'
 import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
+import { confirmDialog } from '../lib/confirmDialog'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
 import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock } from '../lib/feuillesAImprimer'
@@ -791,7 +792,25 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * rien du tout. Ouvrir l'écran de sortie à la main par-dessus, c'était
    * perdre ces règles-là pour tous ceux qui arrivent par le scan.
    */
-  const gesteFait = () => {
+  const gesteFait = async () => {
+    // ⚠️ DEUXIÈME FOURNÉE DU JOUR : ON DEMANDE (Layla, 2026-09-21 : « j'ai deux
+    // mousses, comment je sais si ça a été cliqué par erreur ? j'ai peur que le
+    // pâtissier fasse que cliquer sans réfléchir »). Vécu le jour même : les
+    // biscuits gianduja déclarés deux fois à 43 minutes d'intervalle, par deux
+    // personnes. Une vraie deuxième cuve existe aussi — on ne bloque donc pas,
+    // on fait dire oui.
+    if ((Number(noeud.dejaFait) || 0) > 0) {
+      const quand = noeud.dejaFaitLe
+        ? new Date(noeud.dejaFaitLe).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        : null
+      const ok = await confirmDialog(
+        `« ${propre(noeud.libelle || noeud.produit)} » a déjà été déclaré aujourd’hui`
+        + ` : ${qte(noeud.dejaFait, noeud.unite)}${quand ? ` à ${quand}` : ''}.\n\n`
+        + 'Tu en as vraiment fait une deuxième ?',
+        { confirmLabel: 'Oui, une deuxième' })
+      if (!ok) return
+    }
+
     // Une DÉCOUPE : si on a cuit quelque chose, on demande combien
     // il en est vraiment sorti — « il faudrait qu'il demande
     // combien il en a fait de ce sablé crispy » (Layla,

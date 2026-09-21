@@ -49,8 +49,9 @@ const qte = (q, u) => (norm(u) === 'kg'
 // « produit sur 1,4 » — 1,4 quoi ? — juste sous un titre qui disait 1 400 g.
 const enG = (q, u) => (norm(u) === 'kg' ? (Number(q) || 0) * 1000 : (Number(q) || 0))
 const deG = (q, u) => (norm(u) === 'kg' ? (Number(q) || 0) / 1000 : (Number(q) || 0))
-// Le mot affiché à côté de la case : un kilo se dit en grammes.
-const motUnite = u => (norm(u) === 'kg' ? 'g' : (norm(u) === 'g' ? 'g' : u))
+// Le mot affiché à côté de la case : un kilo se dit en grammes, et « Units »
+// se dit « u » — c'est le mot d'Odoo, pas celui de l'atelier.
+const motUnite = u => (norm(u) === 'kg' ? 'g' : norm(u))
 // Les articles de l'annexe portent d'autres préfixes que ceux du cake design.
 const propre = n => String(n || '')
   .replace(/^(E-|V-|MI-|N-|SM[.\- ]?|Sm[.\- ]?|SMT?[.\- ]?)\s*/i, '')
@@ -321,6 +322,29 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
     }
     return [...par.values()].sort((a, b) =>
       b.lignes.length - a.lignes.length || a.nom.localeCompare(b.nom, 'fr'))
+  }, [lignes])
+
+  /**
+   * LE MÊME ARTICLE DÉCLARÉ PLUSIEURS FOIS AUJOURD'HUI.
+   *
+   * « J'ai deux mousses. Comment je sais si ça a été cliqué par erreur ? J'ai
+   * peur que le pâtissier fasse que cliquer sans réfléchir » (Layla,
+   * 2026-09-21). Et elle avait raison de demander : le même jour, les biscuits
+   * gianduja ont été déclarés deux fois à 43 minutes d'intervalle, par deux
+   * personnes — pendant que les deux mousses, elles, étaient séparées de six
+   * heures et de quantités différentes, donc bien réelles.
+   *
+   * L'écran ne tranche pas à sa place : il MONTRE que l'article revient, avec
+   * les heures. C'est elle qui sait si l'atelier a vraiment fait deux cuves.
+   */
+  const revientPlusieursFois = useMemo(() => {
+    const par = new Map()
+    for (const l of lignes || []) {
+      const k = cleArticle(l.article)
+      if (!par.has(k)) par.set(k, [])
+      par.get(k).push(l)
+    }
+    return new Map([...par].filter(([, v]) => v.length > 1))
   }, [lignes])
 
   const prets = choisis.filter(l => !l.manques.length && !l.sansOrdre)
@@ -628,6 +652,18 @@ export default function ValidationAnnexeView({ user, onLogout, onNavigate, activ
               {reste > 0 && (
                 <div className="px-3 pb-2 pl-[44px] text-[11.5px] font-bold text-[#854F0B]">
                   {qte(reste, l.unite)} non fait{reste > 1 ? 's' : ''}
+                </div>
+              )}
+
+              {/* ⚠️ Deux fois le même article dans la journée : on le DIT, avec
+                  les heures et les quantités. À elle de savoir si l'atelier a
+                  vraiment fait deux cuves — l'app ne devine pas à sa place. */}
+              {(revientPlusieursFois.get(cleArticle(l.article)) || []).length > 1 && (
+                <div className="px-3 pb-2 pl-[44px] text-[11.5px] text-[#854F0B]">
+                  ⚠️ déclaré {revientPlusieursFois.get(cleArticle(l.article)).length} fois aujourd’hui —{' '}
+                  {revientPlusieursFois.get(cleArticle(l.article))
+                    .map(x => `${quandFaits[x.name] ? quandFait(quandFaits[x.name]).replace(/^.*à /, '') : '?'} (${qte(x.demande, x.unite)})`)
+                    .join(' · ')}
                 </div>
               )}
 

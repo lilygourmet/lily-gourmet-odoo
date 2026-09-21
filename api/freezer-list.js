@@ -2049,6 +2049,10 @@ async function fetchFabrication(uid, jours) {
     }
   }
 
+  // La marque de l'app, retirée de ce qui s'affiche comme une origine.
+  const sansMarqueApp = o => String(o || '').split(',').map(x => x.trim())
+    .filter(x => x && !/^lg-app$/i.test(x)).join(', ')
+
   const ordres = [...mos, ...finis].map(m => ({
     name: m.name, id: m.id, produit: nom(m), qty: m.product_qty, unite: uom(m),
     etat: m.state, dispo: m.components_availability || '',
@@ -2056,7 +2060,12 @@ async function fetchFabrication(uid, jours) {
     // la date sert à ranger l'historique des fabrications jour par jour
     quand: m.date_planned_start || '',
     reserves: reservesPar[m.name] || {},
-    pour: origines(m).filter(o => parNom.has(o)).join(', ') || (m.origin || ''),
+    // ⚠️ « LG-APP » N'EST PAS UN GÂTEAU (Layla, 2026-09-21 : « └ pour
+    // LG-APP »). C'est la marque que l'app pose sur les ordres qu'elle crée.
+    // Faute de mieux, elle s'affichait comme le gâteau pour lequel la fournée
+    // avait été faite — et, depuis le rangement par famille, elle en devenait
+    // même un titre de section.
+    pour: origines(m).filter(o => parNom.has(o)).join(', ') || sansMarqueApp(m.origin),
   }))
   // Les autres ordres WHLVP ouverts (pâte à sucre…) : ils ne s'appellent pas
   // « CD* » mais ce qu'ils produisent compte aussi dans le stock que l'app tient
