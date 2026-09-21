@@ -160,6 +160,27 @@ describe('« À déclarer », pour des mains farineuses', () => {
   })
 })
 
+// ⚠️ « Je veux rajouter dans une quantité d'article déjà donné » (Layla,
+// 2026-09-21). L'économe ne voit QUE le complément dans sa liste — c'est le
+// papier qu'on lui tend — pendant que la fiche, elle, compte le total.
+describe('un complément, quand une partie est déjà donnée', () => {
+  const donnee2k = { ...donnee, id: 'g1', produit: 'SM. Creme Citron', libelle: 'Crème citron',
+    qty_prevue: 2000, donne_le: ilYA(60) }
+  const complement500 = { ...donnee, id: 'g2', produit: 'SM. Creme Citron', libelle: 'Crème citron',
+    qty_prevue: 500, donne_le: null, imprime_le: ilYA(2) }
+
+  it('l’économe ne se voit réclamer que les 500 g', async () => {
+    lues = [donnee2k, complement500]
+    render(<DonneView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText('À donner')
+    // Le complément l'attend…
+    expect(screen.getByText(/^500$/)).toBeTruthy()
+    // …et les 2 kg déjà sortis sont ailleurs, dans « Déjà donné ».
+    expect(screen.getByText('Déjà donné')).toBeTruthy()
+    expect(screen.getByText(/^2[\u202f\u00a0 ]000$/)).toBeTruthy()
+  })
+})
+
 describe('« Donné », l’écran de l’économe', () => {
   it('range en trois bandes, avec un compteur chacune', async () => {
     lues = [attendue, donnee, rendue]

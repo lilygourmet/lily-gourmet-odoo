@@ -30,7 +30,7 @@ import { setMiseEnForme } from '../lib/miseEnForme'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis,
-  quantitesImposees, attendLeDon, feuilleOuverte } from '../lib/feuilles'
+  quantitesImposees, attendLeDon, feuilleOuverte, complementsAImprimer } from '../lib/feuilles'
 import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
@@ -156,8 +156,19 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // serveur — l'aperçu d'impression est déjà assez long comme ça. On pose
     // les feuilles côté serveur DERRIÈRE, sans bloquer. Réseau coupé : on perd
     // le suivi, jamais l'impression.
-    const avecJeton = (quoi || []).map(f => ({ ...f, feuilleId: nouvelId() }))
-    if (avecJeton.length) poserFeuilles(avecJeton, user?.id)
+    // ⚠️ CE QUI EST DÉJÀ SORTI NE SE REDEMANDE PAS (Layla, 2026-09-21 : « je
+    // veux rajouter dans une quantité d'article déjà donné » — et, sur ce que
+    // doit dire le nouveau papier : « seulement le complément »). L'économe a
+    // servi 2 kg, on en veut 2,5 : son papier ne réclame que 500 g. Lui
+    // redemander 2,5 kg, c'était risquer qu'il en ressorte 2,5 de plus.
+    const ajustees = sortie ? (quoi || []) : complementsAImprimer(quoi || [], feuillesJour)
+    const avecJeton = ajustees.map(f => ({ ...f, feuilleId: nouvelId() }))
+    // ⚠️ RIEN À AJOUTER = PAS DE NOUVELLE DETTE. Réimprimer la même quantité
+    // sort bien le papier (on peut vouloir la recette sous les yeux), mais
+    // n'enregistre aucune feuille : sinon 2 kg donnés + 2 kg réimprimés
+    // auraient fait croire à 4 kg à fabriquer.
+    const aPoser = avecJeton.filter(f => Number(f.qty) > 0)
+    if (aPoser.length) poserFeuilles(aPoser, user?.id)
     setFeuillesPretes(sortie ? quoi : avecJeton)
     setSortiePrete(sortie)
     setTirage(t => t + 1)
@@ -709,8 +720,17 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   const prevuTete = prevus[chemin[0]]?.q
   // ⚠️ ET C'EST LE CHIFFRE DU PAPIER QUI S'IMPOSE, en dernier : un verrou qui
   // fige le mauvais nombre ne sert à rien. L'économe a servi pour CE nombre-là.
-  const choisies = { ...(prevuTete !== undefined ? { [chemin[0]]: prevuTete } : {}),
-    ...quantites, ...quantitesImposees(feuillesJour) }
+  // ⚠️ LE PAPIER EST UN PLANCHER, PAS UN PLAFOND (Layla, 2026-09-21 : « je veux
+  // rajouter dans une quantité d'article déjà donné »). Il s'imposait en
+  // dernier, donc un chiffre plus grand tapé dans le panneau d'impression était
+  // écrasé par l'ancien : impossible d'en demander plus, même en réimprimant.
+  // On ne peut toujours pas descendre SOUS ce qui est sorti — ça, ça se règle
+  // en rendant la marchandise.
+  const imposees = quantitesImposees(feuillesJour)
+  const choisies = { ...(prevuTete !== undefined ? { [chemin[0]]: prevuTete } : {}), ...quantites }
+  for (const [p, v] of Object.entries(imposees)) {
+    choisies[p] = Math.max(v, Number(choisies[p]) || 0)
+  }
   const { tete, noeud } = noeudDuChemin(brut, chemin, choisies)
   // ⚠️ ON NE JETTE PAS TOUT LE CHEMIN (Layla, 2026-09-20 : « ça n'emmène
   // toujours pas vers l'article, ça dit que ça le fait mais ça ne le fait
@@ -927,7 +947,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                   setQuantites(x => { const n = { ...x }; delete n[noeud.produit]; return n })
                 } : undefined}
               // Les chiffres du papier, pour les composants aussi.
-              imposees={quantitesImposees(feuillesJour)}
+              imposees={imposees}
               // ⚠️ ET LE NOTE DIT QUAND (Layla, 2026-09-21 : « ce n'est pas
               // imprimé, pourquoi c'est figé ? » — elle regardait un flan
               // imprimé le matin même à 9 h 56 par quelqu'un d'autre). Sans

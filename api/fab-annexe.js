@@ -1308,11 +1308,18 @@ export default async function handler(req, res) {
         // ⚠️ Mais SEULEMENT la même fournée : même article, même jour, ET même
         // gâteau. La crème du 20 cm et celle du 23 cm sont deux vrais travaux,
         // imprimés séparément — les confondre effacerait une dette réelle.
+        //
+        // ⚠️ MAIS JAMAIS UNE FEUILLE DÉJÀ SERVIE (Layla, 2026-09-21 : « je veux
+        // rajouter dans une quantité d'article déjà donné »). La marchandise
+        // est sortie de la réserve : fermer son papier, c'est effacer la trace
+        // de ce qui a été donné, et le compte de la fiche repartait du seul
+        // complément. Les deux papiers cohabitent, et la fiche les additionne.
         const remplacee = { pas_faite_le: new Date().toISOString(), motif: 'remplacee' }
         for (const l of lignes) {
           let q = sb.from('annexe_feuilles').update(remplacee)
             .eq('produit', l.produit).eq('jour', new Date().toLocaleDateString('sv-SE'))
             .neq('id', l.id).is('declare_le', null).is('pas_faite_le', null)
+            .is('donne_le', null)
           q = l.pour ? q.eq('pour', l.pour) : q.is('pour', null)
           await q
         }

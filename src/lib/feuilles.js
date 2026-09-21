@@ -337,10 +337,60 @@ export function quantitesImposees(feuilles) {
   const out = {}
   for (const f of feuilles || []) {
     if (!f.retour_le && !f.declare_le && !f.pas_faite_le && Number(f.qty_prevue) > 0) {
-      out[f.produit] = Number(f.qty_prevue)
+      // ⚠️ ON ADDITIONNE (Layla, 2026-09-21 : « je veux rajouter dans une
+      // quantité d'article déjà donné »). Le complément sort sur SON papier —
+      // l'économe ne ressort que les 500 g qui manquent — mais la fiche, elle,
+      // doit compter les 2 500 g : c'est ce qui sera fabriqué. Avant, le
+      // dernier papier écrasait le premier et 2 kg disparaissaient du compte.
+      out[f.produit] = (out[f.produit] || 0) + Number(f.qty_prevue)
     }
   }
   return out
+}
+
+/**
+ * CE QUI EST DÉJÀ SORTI DE LA RÉSERVE pour cet article, et qu'on ne redemande
+ * donc pas.
+ *
+ * On ne compte que ce que l'économe a VRAIMENT donné : une feuille qui attend
+ * encore sa matière sera servie, elle, et son papier tient toujours.
+ */
+export function dejaSorti(feuilles) {
+  const out = {}
+  for (const f of feuilles || []) {
+    if (f.donne_le && !f.retour_le && !f.declare_le && !f.pas_faite_le && Number(f.qty_prevue) > 0) {
+      out[f.produit] = (out[f.produit] || 0) + Number(f.qty_prevue)
+    }
+  }
+  return out
+}
+
+/**
+ * LE COMPLÉMENT À DEMANDER, quand une partie est déjà sortie.
+ *
+ * « Je veux rajouter dans une quantité d'article déjà donné » (Layla,
+ * 2026-09-21) — et, sur ce que doit dire le nouveau papier : « seulement le
+ * complément : 500 g ».
+ *
+ * L'économe a sorti 2 kg, on en veut 2,5 : son papier ne réclame que 500 g.
+ * Lui demander 2,5 kg, c'était risquer qu'il en ressorte 2,5 de plus.
+ *
+ * ⚠️ RIEN À AJOUTER = PAS DE PAPIER ENREGISTRÉ. Réimprimer la même quantité
+ * sort bien la feuille (on peut vouloir le papier), mais elle ne crée aucune
+ * nouvelle dette : sans ça, 2 kg déjà donnés + 2 kg réimprimés auraient fait
+ * croire à 4 kg à fabriquer.
+ */
+export function complementsAImprimer(aImprimer, feuilles) {
+  const sorti = dejaSorti(feuilles)
+  return (aImprimer || []).map(f => {
+    const deja = sorti[f.produit] || 0
+    if (!(deja > 0)) return f
+    // ⚠️ Jamais moins que rien : une demande négative n'existe pas. Vouloir
+    // MOINS que ce qui est déjà sorti se règle en rendant la marchandise,
+    // pas en imprimant un papier à −800 g.
+    const reste = Math.max(0, Math.round(((Number(f.qty) || 0) - deja) * 1000) / 1000)
+    return { ...f, qty: reste, complementDe: deja }
+  })
 }
 
 /** Ce que l'économe n'a pas encore donné — et lui seul peut le débloquer. */
