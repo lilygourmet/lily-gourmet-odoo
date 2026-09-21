@@ -1,7 +1,7 @@
 // Toutes les queries Supabase isolées pour le module Caisse
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
-import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI } from './releveDoublons'
+import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI, libelleDesLignes } from './releveDoublons'
 import { reconcileEnvelopes, nomAutreCliente, nomDansLibelle, setPayeursConnus, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
 import { loadPayeursConnus } from './conversations'
 export { ECART_MINI }
@@ -613,7 +613,7 @@ export async function attachReleveLines(env, lines) {
   // séparées par «  |  » (même séparateur que les lignes « à confirmer »).
   const libelle = ordered.length === 1
     ? `${ordered[0].ligne_date} · ${ordered[0].label}`.slice(0, 220)
-    : ordered.map(l => `${l.ligne_date} · ${l.label}`.slice(0, 70)).join('  |  ').slice(0, 300)
+    : libelleDesLignes(ordered.map(l => `${l.ligne_date} · ${l.label}`))
   await setEnveloppeReleve(env.id, {
     // Preuve déjà déposée (photo du bordereau) : on la garde. Le rapprochement s'ajoute
     // à la preuve, il ne la remplace pas.
@@ -749,7 +749,7 @@ export async function relancerRapprochement({ annulerFaux = true } = {}) {
   const envs = toutes.filter(e => e.releve_status !== 'trouve' && !(e.proof_url && !e.releve_status))
   const { results } = reconcileEnvelopes(envs, txns, { recompute: false })
 
-  let trouve = 0, aConfirmer = 0
+  let trouve = 0, aConfirmer = 0, remisesEnAttente = 0
   for (const r of results) {
     if (r.status === 'trouve' && r.line) {
       await setEnveloppeReleve(r.env.id, {
@@ -765,13 +765,20 @@ export async function relancerRapprochement({ annulerFaux = true } = {}) {
     } else if (r.status === 'a_confirmer' && r.candidates?.length) {
       await setEnveloppeReleve(r.env.id, {
         status: 'a_confirmer',
-        libelle: r.candidates.map(c => `${c.dateIso} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300),
+        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`)),
         candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
       })
       aConfirmer++
+    } else if (r.status === 'absent' && r.env.releve_status === 'a_confirmer') {
+      // Plus aucune ligne possible : une autre caisse a pris celles qu'on lui proposait.
+      // Sans ça la caisse gardait « à confirmer » et sa liste morte POUR TOUJOURS — le
+      // bouton « Confirmer » n'avait alors plus rien à proposer. Vécu : FUNDAYS VOYAGES,
+      // 1 000 dh. On ne recrée aucune ligne : une caisse « à confirmer » n'en retenait pas.
+      await clearEnveloppeReleve(r.env.id, { recreerLigne: false })
+      remisesEnAttente++
     }
   }
-  return { trouve, a_confirmer: aConfirmer, lignes: txns.length, annules }
+  return { trouve, a_confirmer: aConfirmer, en_attente: remisesEnAttente, lignes: txns.length, annules }
 }
 
 // Pourquoi les virements d'un mois ne se rapprochent-ils PAS ? Dit, caisse par caisse, ce
@@ -942,7 +949,7 @@ export async function refaireMois(year, month, { simulation = true } = {}) {
     } else if (r.status === 'a_confirmer' && r.candidates?.length) {
       await setEnveloppeReleve(r.env.id, {
         status: 'a_confirmer',
-        libelle: r.candidates.map(c => `${c.dateIso} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300),
+        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`)),
         candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
       })
     }
@@ -1083,7 +1090,11 @@ export async function annulerRapprochementsFaux(simulation = false) {
 
 // Annule un rapprochement : remet l'enveloppe à zéro ET libère la ligne du relevé
 // (elle retourne dans « non liés » et redevient suggérable).
-export async function clearEnveloppeReleve(envId) {
+//
+// recreerLigne : sur une caisse « à confirmer », le libellé ne liste que des lignes
+// PROPOSÉES — la caisse n'en a jamais retenu aucune. Recréer un dépôt à partir de là
+// inventerait de l'argent que la banque n'a pas reçu : l'appelant passe alors false.
+export async function clearEnveloppeReleve(envId, { recreerLigne = true } = {}) {
   const { data: env } = await supabase.from('caisse_enveloppes')
     .select('amount_cash, note_proof, proof_url, payment_method').eq('id', envId).single()
 
@@ -1098,7 +1109,7 @@ export async function clearEnveloppeReleve(envId) {
   // Le « 🔗 2 virements = 1 ligne » est exclu : la ligne vaut la somme des DEUX caisses,
   // la recréer au montant de celle-ci inventerait un dépôt qui n'existe pas au relevé.
   const np = env?.note_proof || ''
-  if (!liberees?.length && np.includes(' · ') && !np.includes(' | ') && !np.includes('🔗') && np !== 'Confirmé manuellement') {
+  if (recreerLigne && !liberees?.length && np.includes(' · ') && !np.includes(' | ') && !np.includes('🔗') && np !== 'Confirmé manuellement') {
     const sep = np.indexOf(' · ')
     const d = np.slice(0, sep)
     const label = np.slice(sep + 3)

@@ -284,7 +284,8 @@ function BanqueSection({ user }) {
           + r.annules.slice(0, 10).map(a => `• ${a.client} (${a.date}) ← « ${a.label.slice(0, 45)} »`).join('\n')
           + (r.annules.length > 10 ? `\n… et ${r.annules.length - 10} autre(s)` : '')
         : ''
-      alert(`Rapprochement relancé sur ${r.lignes} ligne(s) libres :\n✓ ${r.trouve} rapprochée(s)\n⏳ ${r.a_confirmer} à confirmer${faux}`)
+      const rendues = r.en_attente ? `\n⬜ ${r.en_attente} remise(s) en attente (plus aucune ligne possible)` : ''
+      alert(`Rapprochement relancé sur ${r.lignes} ligne(s) libres :\n✓ ${r.trouve} rapprochée(s)\n⏳ ${r.a_confirmer} à confirmer${rendues}${faux}`)
     } catch (e) { alert('Erreur : ' + (e?.message || e)) }
     setRelance(false)
   }
