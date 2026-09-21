@@ -728,12 +728,12 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite, imposee
         // ce n'est pas un manque. (Layla, 2026-09-12.)
         const presque = presqueLa(c)
         const manque = !c.pese && !c.ok && !fait && c.fabrique && !aPresser && !presque
-        const nom = nomAtelier(c.produit)
+        const nom = nomAtelier(c.produit, noeud.produit)
         // Le chiffre du papier quand il existe — voir l'en-tête de ce composant.
         const impose = c.fabrique ? imposees?.[c.produit] : null
         const combien = impose > 0
           ? qte(impose, c.unite)
-          : qte(c.besoin * facteurAtelier(c.produit), c.unite)
+          : qte(c.besoin * facteurAtelier(c.produit, noeud.produit), c.unite)
         return (
           <div key={c.produit + i}
             className="flex items-center gap-2 py-3 border-t border-cream-deep">
@@ -796,7 +796,7 @@ function Ingredients({ noeud, quantite, dejaFaits, onOuvrir, onQuantite, imposee
           onValider={v => {
             onQuantite(quantitePourDose({
               quantite, besoin: dose.besoin, saisi: v, unite: dose.unite,
-              facteur: facteurAtelier(dose.produit), enPieces,
+              facteur: facteurAtelier(dose.produit, noeud.produit), enPieces,
             }))
             setDose(null)
           }} />
@@ -835,8 +835,8 @@ export function QuantiteFigee({ noeud, quantite, onQuantite, fige }) {
         </div>
       </div>
       {figes.map((c, i) => {
-        const nom = nomAtelier(c.produit)
-        const combien = qte(c.besoin * facteurAtelier(c.produit), c.unite)
+        const nom = nomAtelier(c.produit, noeud.produit)
+        const combien = qte(c.besoin * facteurAtelier(c.produit, noeud.produit), c.unite)
         return (
           <div key={c.produit + i}
             className="flex items-baseline gap-3 px-4 py-2.5 border-t border-cream-deep/40 print:py-0.5">
@@ -864,7 +864,7 @@ export function QuantiteFigee({ noeud, quantite, onQuantite, fige }) {
           onValider={v => {
             onQuantite(quantitePourDose({
               quantite, besoin: dose.besoin, saisi: v, unite: dose.unite,
-              facteur: facteurAtelier(dose.produit), enPieces,
+              facteur: facteurAtelier(dose.produit, noeud.produit), enPieces,
             }))
             setDose(null)
           }} />
@@ -927,15 +927,15 @@ export function PourUn({ noeud, quantite }) {
   let melange = null
   for (const c of liste.filter(x => !(x.fige && !x.fabrique))) {
     const nomMelange = melangeDe(noeud.produit, c.produit)
-    const g = nomMelange && enGrammes(c.besoin * facteurAtelier(c.produit), c.unite)
+    const g = nomMelange && enGrammes(c.besoin * facteurAtelier(c.produit, noeud.produit), c.unite)
     if (nomMelange && g !== null) {
       melange = melange || { nom: nomMelange, g: 0, rang: lignes.length }
       melange.g += g
       continue
     }
     lignes.push({
-      nom: motDeLAtelier(nomAtelier(c.produit)),
-      valeur: parPiece(c.besoin * facteurAtelier(c.produit) / quantite, c.unite),
+      nom: motDeLAtelier(nomAtelier(c.produit, noeud.produit)),
+      valeur: parPiece(c.besoin * facteurAtelier(c.produit, noeud.produit) / quantite, c.unite),
     })
   }
   if (melange) {

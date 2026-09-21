@@ -94,13 +94,30 @@ const REGLES_ATELIER = [
   { quand: /gelatine en poudre/i, nom: 'Masse gélatine', facteur: 7 },
 ]
 
-const regleAtelier = nom => REGLES_ATELIER.find(r => r.quand.test(String(nom || '')))
+const aplati = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+/**
+ * ⚠️ LA RÈGLE NE S'APPLIQUE PAS À CE QU'ON EST EN TRAIN DE FAIRE.
+ *
+ * « Est-ce que la masse gélatine a été demandée pour bloquer ? » (Layla,
+ * 2026-09-21) — elle regardait la fiche de « SM. Masse Gélatine », qui
+ * réclamait parmi ses ingrédients… 1 000 g de masse gélatine. C'est la règle
+ * du ×7 qui se mordait la queue : la poudre y devient « masse gélatine », or
+ * ici la masse, c'est justement ce qu'on fabrique. Sur SA fiche, on pèse donc
+ * la poudre, comme Odoo la compte.
+ */
+const regleAtelier = (nom, dans) => {
+  const r = REGLES_ATELIER.find(x => x.quand.test(String(nom || '')))
+  if (!r) return null
+  return dans && aplati(dans).includes(aplati(r.nom)) ? null : r
+}
 
 /** Le nom sous lequel l'atelier connaît l'ingrédient. */
-export const nomAtelier = nom => regleAtelier(nom)?.nom || propre(nom)
+export const nomAtelier = (nom, dans) => regleAtelier(nom, dans)?.nom || propre(nom)
 
 /** Par combien multiplier ce qu'Odoo compte pour obtenir ce qu'on pèse. */
-export const facteurAtelier = nom => regleAtelier(nom)?.facteur || 1
+export const facteurAtelier = (nom, dans) => regleAtelier(nom, dans)?.facteur || 1
 
 /**
  * LES MÉLANGES : ce que le pâtissier fait en UN seul geste avant de monter.
