@@ -13,7 +13,7 @@
 import { Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { qte, propre, nb, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
-import { assezEnStock, aDemander, aBesoinDeLEconomat, teteDe, tetesDe } from '../lib/feuillesAImprimer'
+import { assezEnStock, aDemander, aBesoinDeLEconomat, teteDe } from '../lib/feuillesAImprimer'
 import { imageQr } from '../lib/feuilles'
 
 /**
@@ -25,14 +25,16 @@ import { imageQr } from '../lib/feuilles'
  * main se fige, et le ↺ le rend à l'app. Aucune règle en double.
  */
 export function ChoixImpression({
-  feuilles, mode, onMode, coches, onCoche, tapes, onQuantite, onRendre,
+  feuilles, coches, onCoche, tapes, onQuantite, onRendre,
   onImprimer, onFermer, sous,
 }) {
-  const seule = mode === 'seule'
-  // ⚠️ Les têtes, ce sont les gâteaux eux-mêmes — un seul depuis une fiche,
-  // plusieurs quand on en a coché à l'accueil (voir `tetesDe`).
-  const visibles = seule ? tetesDe(feuilles) : feuilles
-  const combien = seule ? visibles.length : feuilles.filter(f => coches[f.produit]).length
+  // ⚠️ PLUS DE CHOIX ENTRE « LA FICHE » ET « LA CASCADE » (Layla, 2026-09-21 :
+  // « dans imprimer, laisse que l'option imprimer la cascade — à partir de la
+  // cascade on imprime une page »). Le bouton du haut faisait croire à deux
+  // impressions différentes, alors que la cascade CONTIENT déjà la fiche : il
+  // suffit de décocher le reste. Une décision de moins avant d'imprimer.
+  const visibles = feuilles
+  const combien = feuilles.filter(f => coches[f.produit]).length
   // La tête est la DERNIÈRE feuille : c'est elle qui donne la profondeur.
   const profondeurDe = f => Math.max(0, f.chemin.length - 1)
 
@@ -48,29 +50,10 @@ export function ChoixImpression({
             className="ml-auto bg-cream-warm rounded-lg px-3 py-1.5 text-[12.5px]">fermer</button>
         </div>
 
-        {/* ⚠️ LES DEUX FAÇONS N'EXISTENT QUE DEPUIS UNE FICHE. Quand le panneau
-            s'ouvre depuis plusieurs gâteaux cochés, il n'y a rien à choisir :
-            c'est leur fournée entière ou rien. */}
-        {!!onMode && (
-        <div className="px-4 pt-3 flex-shrink-0">
-          <div className="grid grid-cols-2 gap-1.5 bg-cream-deep rounded-2xl p-1">
-            {[['seule', tetesDe(feuilles).length > 1 ? 'Juste les fiches' : 'Juste cette fiche',
-              tetesDe(feuilles).length > 1 ? 'les gâteaux seuls' : 'cette recette seule'],
-              ['tout', 'Tout ce qui manque', 'la cascade entière']].map(([k, t, s]) => (
-              <button key={k} onClick={() => onMode(k)} aria-pressed={mode === k}
-                className={`rounded-xl py-2.5 px-2 text-[13.5px] font-bold leading-tight
-                  ${mode === k ? 'bg-cream-warm text-bordeaux shadow-sm' : 'text-ink-mute'}`}>
-                {t}<span className="block font-normal text-[11.5px] opacity-80">{s}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        )}
-
         <div className="px-4 py-3 flex-1 overflow-y-auto overscroll-contain">
           {visibles.map(f => {
-            const on = seule || !!coches[f.produit]
-            const p = seule ? 0 : profondeurDe(f)
+            const on = !!coches[f.produit]
+            const p = profondeurDe(f)
             const tape = f.produit in tapes
             // ⚠️ IL Y EN A DÉJÀ ASSEZ : rien à faire, donc rien à imprimer.
             // « ce qui est déjà en stock s'écrit en vert et non cliqué »
@@ -83,7 +66,7 @@ export function ChoixImpression({
               <div key={f.produit}
                 className="flex items-center gap-2.5 py-2 border-t border-cream-deep first:border-0"
                 style={{ paddingLeft: p * 18 }}>
-                <button type="button" role="checkbox" aria-checked={on} disabled={seule}
+                <button type="button" role="checkbox" aria-checked={on}
                   aria-label={propre(f.libelle)}
                   onClick={() => onCoche(f.produit, !on)}
                   className={`w-5 h-5 rounded-md border-2 shrink-0 grid place-items-center

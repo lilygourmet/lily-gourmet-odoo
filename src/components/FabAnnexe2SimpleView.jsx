@@ -34,7 +34,7 @@ import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSo
 import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
 import { todayISO } from '../lib/dates'
 import { prevusGardes, poserPrevu, figerPrevu, oublierPrevu } from '../lib/prevu'
-import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock, tetesDe } from '../lib/feuillesAImprimer'
+import { feuillesAImprimer, feuillesDePlusieurs, cocheesParDefaut, cochablesAvec, assezEnStock } from '../lib/feuillesAImprimer'
 
 /**
  * La photo d'une préparation : celle de SON GÂTEAU (E-, MI-, V-), pas la
@@ -597,26 +597,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
           {imprAssemble && (
             <ChoixImpression
               feuilles={feuillesChoisies}
-              // ⚠️ LE CHOIX EXISTE AUSSI ICI (Layla, 2026-09-20 : « dans
-              // imprimer, ça donne maintenant toujours imprimer la cascade,
-              // pas juste la page même »). Ce panneau sortait tout, sans rien
-              // demander — alors que celui des fiches propose les deux depuis
-              // le début. Il s'ouvre sur la cascade, parce qu'on vient d'en
-              // cocher plusieurs : c'est pour ça qu'on est là.
-              mode={imprAssemble.mode || 'tout'}
-              onMode={m => setImprAssemble(x => ({ ...x, mode: m }))}
               coches={cochesAssemble}
               tapes={quantites}
               sous={`pour ${choisis.length} gâteau${choisis.length > 1 ? 'x' : ''}`}
               onCoche={(p, v) => setImprAssemble(x => ({ ...x, choix: { ...(x.choix || {}), [p]: v } }))}
               onQuantite={(p, v) => poser(p, v)}
               onRendre={p => setQuantites(x => { const n = { ...x }; delete n[p]; return n })}
-              onImprimer={() => {
-                const quoi = imprAssemble.mode === 'seule'
-                  ? tetesDe(feuillesChoisies) : aImprimerAssemble
-                setImprAssemble(null)
-                lancer(quoi)
-              }}
+              onImprimer={() => { setImprAssemble(null); lancer(aImprimerAssemble) }}
               onFermer={() => setImprAssemble(null)} />
           )}
           {(feuillesPretes || sortiePrete) && (
@@ -763,16 +750,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
    * une fois la liasse peinte, panneau refermé compris (voir plus haut).
    */
   const lancerImpression = () => {
-    // ⚠️ LES DEUX FAÇONS SORTENT LA MÊME FEUILLE. « quand j'imprime juste cette
-    // fiche ça doit sortir de la même manière que la cascade » (Layla,
-    // 2026-09-16). « Juste cette fiche » n'imprime donc plus l'écran tel quel :
-    // elle imprime la feuille de la cascade, celle de l'article qu'on regarde
-    // — avec sa demande à l'économat et son tableau à remplir, comme les autres.
-    // La tête est la PREMIÈRE de la liste, c'est elle qu'on a sous les yeux —
-    // elle l'était en dernier avant que le parent passe devant (voir `teteDe`).
-    const quoi = impr?.mode === 'seule' ? tetesDe(feuilles) : aImprimer
+    // ⚠️ UNE SEULE FAÇON D'IMPRIMER (Layla, 2026-09-21 : « laisse que l'option
+    // imprimer la cascade — à partir de la cascade on imprime une page »). Le
+    // choix « juste cette fiche » faisait croire à deux impressions
+    // différentes, alors que la cascade CONTIENT déjà la fiche : pour n'avoir
+    // qu'une page, on décoche le reste.
     setImpr(null)
-    lancer(quoi)
+    lancer(aImprimer)
   }
   const decoupe = decoupeDe(noeud)
   // L'étape de mise en forme qu'on confirmera en validant — la base de flan.
@@ -823,7 +807,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         <div className="flex items-start justify-between gap-3 print:hidden">
           <Fil chemin={chemin} onRetour={() => { figer(q); setSortie(null); setChemin(chemin.slice(0, -1)) }} />
           {sortie === null && (
-            <button onClick={() => setImpr({ mode: 'seule', choix: {} })}
+            <button onClick={() => setImpr({ choix: {} })}
               className="shrink-0 rounded-xl border border-cream-deep bg-cream-warm px-3 py-2
                          text-[13px] font-bold text-ink-soft">
               🖨 Imprimer
@@ -833,8 +817,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         {confirme && <Confirmation {...confirme} />}
         {impr && (
           <ChoixImpression
-            feuilles={feuilles} mode={impr.mode} coches={coches} tapes={quantites}
-            onMode={m => setImpr(x => ({ ...x, mode: m }))}
+            feuilles={feuilles} coches={coches} tapes={quantites}
             onCoche={(p, v) => setImpr(x => ({ ...x, choix: { ...(x.choix || {}), [p]: v } }))}
             onQuantite={(p, v) => poser(p, v)}
             onRendre={p => setQuantites(x => { const n = { ...x }; delete n[p]; return n })}

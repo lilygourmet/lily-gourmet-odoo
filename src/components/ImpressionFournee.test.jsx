@@ -45,8 +45,8 @@ const coches = { 'SM. Creme Citron Production': true,
   'SM. Sirop Imbibage Production KG': false, 'SM- 20 cm Vitrine (Citron)': true }
 
 const poser = (extra = {}) => render(
-  <ChoixImpression feuilles={feuilles} mode="tout" coches={coches} tapes={{}}
-    onMode={() => {}} onCoche={() => {}} onQuantite={() => {}} onRendre={() => {}}
+  <ChoixImpression feuilles={feuilles} coches={coches} tapes={{}}
+    onCoche={() => {}} onQuantite={() => {}} onRendre={() => {}}
     onImprimer={() => {}} onFermer={() => {}} {...extra} />)
 
 const nomDe = t => [...document.querySelectorAll('span')].find(e => e.textContent === t)
@@ -84,37 +84,29 @@ describe('le panneau « Tu imprimes quoi ? »', () => {
     expect(screen.getByText('Imprimer 2 feuilles')).toBeTruthy()
   })
 
-  // ⚠️ LA GARDE DU BUG DU 16/09 : « juste cette fiche » doit sortir LE GÂTEAU,
-  // celui qu'on a sous les yeux — pas l'ingrédient du fond de la cascade.
-  it('« juste cette fiche » garde LE GÂTEAU, et lui seul', () => {
-    poser({ mode: 'seule' })
-    expect(screen.getByText('Imprimer 1 feuille')).toBeTruthy()
-    expect(screen.getByLabelText('Vitrine citron · 20 cm').disabled).toBe(true)
-    expect(screen.queryByLabelText('Creme Citron Production')).toBeNull()
-    expect(screen.queryByLabelText('Sirop Imbibage Production KG')).toBeNull()
+  // ⚠️ PLUS DE CHOIX ENTRE DEUX FAÇONS (Layla, 2026-09-21 : « laisse que
+  // l'option imprimer la cascade — à partir de la cascade on imprime une
+  // page »). Le bouton du haut faisait croire à deux impressions différentes,
+  // alors que la cascade CONTIENT déjà la fiche : une page, c'est décocher le
+  // reste.
+  it('montre toute la cascade, sans façon à choisir', () => {
+    poser()
+    expect(screen.queryByText('Juste cette fiche')).toBeNull()
+    expect(screen.queryByText('Juste les fiches')).toBeNull()
+    expect(screen.queryByText('Tout ce qui manque')).toBeNull()
+    // Le gâteau ET ses composants sont là, chacun décochable.
+    expect(screen.getByLabelText('Vitrine citron · 20 cm')).toBeTruthy()
+    expect(screen.getByLabelText('Creme Citron Production')).toBeTruthy()
+    expect(screen.getByLabelText('Sirop Imbibage Production KG')).toBeTruthy()
   })
 
-  // ⚠️ Le panneau de l'ACCUEIL (plusieurs gâteaux cochés) n'offrait aucun
-  // choix : « dans imprimer, ça donne maintenant toujours imprimer la cascade,
-  // pas juste la page même » (Layla, 2026-09-20). « Juste les fiches » doit y
-  // sortir LES GÂTEAUX, pas un seul.
-  it('« juste les fiches » garde TOUTES les têtes, pas la première', () => {
-    const deuxGateaux = [
-      ...feuilles,
-      { produit: 'SM- 23 cm Vitrine (Fraise)', libelle: 'Vitrine fraise · 23 cm',
-        unite: 'u', stock: 0, besoin: 12, manque: 12, qty: 12,
-        chemin: ['SM- 23 cm Vitrine (Fraise)'], pour: [], ingredients: [] },
-    ]
-    render(<ChoixImpression feuilles={deuxGateaux} mode="seule" coches={coches} tapes={{}}
-      onMode={() => {}} onCoche={() => {}} onQuantite={() => {}} onRendre={() => {}}
-      onImprimer={() => {}} onFermer={() => {}} />)
-    expect(screen.getByLabelText('Vitrine citron · 20 cm')).toBeTruthy()
-    expect(screen.getByLabelText('Vitrine fraise · 23 cm')).toBeTruthy()
-    // Et pas les composants : ce sont bien les gâteaux seuls.
-    expect(screen.queryByLabelText('Creme Citron Production')).toBeNull()
-    expect(screen.getByText('Imprimer 2 feuilles')).toBeTruthy()
-    // Le mot change au pluriel : ce ne sont plus « cette fiche » mais les deux.
-    expect(screen.getByText('Juste les fiches')).toBeTruthy()
+  it('tout est décochable — même le gâteau qu’on regarde', () => {
+    const onCoche = vi.fn()
+    poser({ onCoche })
+    const g = screen.getByLabelText('Vitrine citron · 20 cm')
+    expect(g.disabled).toBe(false)
+    fireEvent.click(g)
+    expect(onCoche).toHaveBeenCalledWith('SM- 20 cm Vitrine (Citron)', false)
   })
 
   it('le ↺ ne se montre que sur un chiffre tapé à la main', () => {
@@ -134,11 +126,12 @@ describe('le panneau « Tu imprimes quoi ? »', () => {
 // l'accueil, par paquets, et n'appartient à aucune recette. Le panneau, lui,
 // n'a que ses deux façons d'imprimer une fournée.
 describe('les façons d’imprimer', () => {
-  it('il y en a deux, et pas une de plus', () => {
+  it('il n’y en a plus qu’une : la cascade', () => {
     poser()
-    expect(screen.getByText('Juste cette fiche')).toBeTruthy()
-    expect(screen.getByText('Tout ce qui manque')).toBeTruthy()
+    expect(screen.getByText('🖨 Tu imprimes quoi ?')).toBeTruthy()
     expect(screen.queryByText('Sortie de stock')).toBeNull()
+    // Rien à choisir d'abord : on coche, et on imprime.
+    expect(screen.getByText('Imprimer 2 feuilles')).toBeTruthy()
   })
 })
 

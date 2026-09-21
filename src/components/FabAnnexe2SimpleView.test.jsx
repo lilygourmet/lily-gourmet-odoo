@@ -273,22 +273,29 @@ describe('l’impression de la fiche', () => {
 // (Layla, 2026-09-14).
 // ============================================================
 describe('le bouton imprimer', () => {
-  it('ouvre le choix au lieu d’imprimer tout de suite', async () => {
+  it('ouvre la cascade à cocher, au lieu d’imprimer tout de suite', async () => {
     const print = vi.fn()
     window.print = print
     await ouvrirLaFiche()
     fireEvent.click(screen.getByText('🖨 Imprimer'))
     await waitFor(() => expect(screen.getByText('🖨 Tu imprimes quoi ?')).toBeTruthy())
-    expect(screen.getByText('Juste cette fiche')).toBeTruthy()
-    expect(screen.getByText('Tout ce qui manque')).toBeTruthy()
+    // ⚠️ PLUS DE CHOIX ENTRE DEUX FAÇONS (Layla, 2026-09-21 : « laisse que
+    // l'option imprimer la cascade — à partir de la cascade on imprime une
+    // page »). Le bouton du haut faisait croire à deux impressions
+    // différentes, alors que la cascade contient déjà la fiche.
+    expect(screen.queryByText('Juste cette fiche')).toBeNull()
+    expect(screen.queryByText('Tout ce qui manque')).toBeNull()
     expect(print).not.toHaveBeenCalled()
   })
 
-  it('« juste cette fiche » n’envoie qu’une feuille', async () => {
+  it('une seule page ? on décoche le reste', async () => {
     window.print = vi.fn()
     await ouvrirLaFiche()
     fireEvent.click(screen.getByText('🖨 Imprimer'))
-    await waitFor(() => expect(screen.getByText('Imprimer 1 feuille')).toBeTruthy())
+    const ligne = await screen.findByLabelText('Sirop imbibage')
+    expect(ligne.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(ligne)
+    await waitFor(() => expect(ligne.getAttribute('aria-checked')).toBe('false'))
   })
 
   it('la quantité se corrige AVANT d’imprimer, en grammes', async () => {
@@ -312,7 +319,7 @@ describe('le panneau « tout ce qui manque »', () => {
     window.print = vi.fn()
     await ouvrirLaFiche()
     fireEvent.click(screen.getByText('🖨 Imprimer'))
-    fireEvent.click(await screen.findByText('Tout ce qui manque'))
+    await screen.findByText('🖨 Tu imprimes quoi ?')
     // Le sirop a 1,2 kg en stock pour une fournée de 5,55 : il en manque,
     // donc il reste coché et n'est PAS vert.
     const ligne = screen.getByLabelText('Sirop imbibage')
@@ -469,22 +476,17 @@ describe('rien ne part avant que la liasse soit posée', () => {
 // « quand j'imprime juste cette fiche ça doit sortir de la même manière que la
 // cascade » (Layla, 2026-09-16) : plus d'écran recopié tel quel, la même
 // feuille que les autres — avec son tableau à remplir.
-describe('« juste cette fiche »', () => {
-  // ⚠️ GARDE : « dans imprimer, ça donne maintenant toujours imprimer la
-  // cascade, pas juste la page même » (Layla, 2026-09-20). Depuis une FICHE,
-  // le choix doit exister, et s'ouvrir sur « juste cette fiche ».
-  it('le panneau s’ouvre sur « juste cette fiche », pas sur la cascade', async () => {
+describe('une seule page', () => {
+  // ⚠️ GARDE : « laisse que l'option imprimer la cascade — à partir de la
+  // cascade on imprime une page » (Layla, 2026-09-21). Le panneau s'ouvre
+  // donc sur la cascade, et une seule page s'obtient en décochant le reste.
+  it('le panneau s’ouvre sur la cascade, sans rien demander d’autre', async () => {
     window.print = vi.fn()
     await ouvrirLaFiche()
     fireEvent.click(screen.getByText('🖨 Imprimer'))
     await screen.findByText('🖨 Tu imprimes quoi ?')
-    // Les deux façons sont proposées…
-    expect(screen.getByText('Juste cette fiche')).toBeTruthy()
-    expect(screen.getByText('Tout ce qui manque')).toBeTruthy()
-    // …et c'est « juste cette fiche » qui est choisie d'avance.
-    expect(screen.getByText('Juste cette fiche').closest('button')
-      .getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByText('Imprimer 1 feuille')).toBeTruthy()
+    expect(screen.queryByText('Juste cette fiche')).toBeNull()
+    expect(screen.queryByText('Tout ce qui manque')).toBeNull()
   })
 
   it('sort la feuille de la cascade, pas l’écran', async () => {
