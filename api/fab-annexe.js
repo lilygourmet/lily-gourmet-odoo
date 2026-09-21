@@ -1698,6 +1698,37 @@ export default async function handler(req, res) {
       // article et qu'on ne l'a jamais cochée. (Layla, 2026-09-10 : « branche-la
       // à tous les articles avec des mousses ».)
       const aUneCuve = (a.figes || []).length > 0 || composants.some(c => c.fige)
+
+      // ⚠️ UNE DÉCOUPE OUVERTE SEULE RESTE UNE DÉCOUPE (Layla, 2026-09-21 :
+      // « biscuit à la cuillère en stock, je veux le couper en 10 pers,
+      // comment faire ? » — puis « je ne le vois pas »).
+      //
+      // `decoupeDe` réclame deux choses que seuls les COMPOSANTS recevaient :
+      // ce qu'une tournée sort (`tourneeTaille`) et la ligne de recette. En
+      // descendant depuis le tiramisu, l'écran proposait bien « combien de
+      // plaques cuites » puis « à couper » par paliers ; en ouvrant le même
+      // article depuis « Déclarer », on tombait sur une fiche ordinaire — et il
+      // n'y avait AUCUN moyen de couper une plaque déjà au congélateur.
+      //
+      // ⚠️ On ne pose la recette QUE si elle tient en une ligne — le cas de la
+      // découpe. Sinon l'écran afficherait deux fois les matières premières :
+      // une fois en composants, une fois en « à peser ».
+      const lignesFiche = bomFiche ? lignesPour(bomFiche, p) : []
+      if (lignesFiche.length === 1) {
+        const l0 = lignesFiche[0]
+        const c0 = await produitParNom(cache, sansRef(l0.product_id[1]))
+        if (c0) {
+          const parRecette = versUnite(bomFiche.product_qty || 1,
+            bomFiche.product_uom_id?.[1], p.uom_id?.[1]) || 1
+          a.tourneeTaille = lots[a.produit] || parRecette
+          a.recette = [{
+            produit: sansRef(l0.product_id[1]),
+            qty: versUnite(l0.product_qty, l0.product_uom_id[1], c0.uom_id[1]),
+            unite: uniteDe(c0),
+          }]
+        }
+      }
+
       articles.push({
         produit: a.produit,
         libelle: a.libelle || a.produit,
@@ -1706,6 +1737,8 @@ export default async function handler(req, res) {
         photo: a.photo || gateauDe(a.produit) || a.produit,
         unite: uniteDe(p),
         stock, mini: a.mini, maxi: a.maxi, tournee: fournee,
+        // Posés juste au-dessus, et seulement pour une découpe.
+        ...(a.tourneeTaille ? { tourneeTaille: a.tourneeTaille, recette: a.recette } : {}),
         dejaFait, reste, urgence: urgence(a, stock, dejaFait),
         etat: stock <= 0 ? 'rupture' : 'refaire',
         figes: a.figes || [],

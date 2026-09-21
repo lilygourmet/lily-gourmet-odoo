@@ -193,3 +193,54 @@ describe('la recherche de « Déclarer »', () => {
     expect(cases.length).toBe(1)         // mais une seule case à l'écran
   })
 })
+
+// ============================================================
+// LA DÉCOUPE OUVERTE SEULE, depuis « Déclarer ».
+//
+// « Biscuit à la cuillère en stock, je veux le couper en 10 pers, comment
+// faire ? » — puis « je ne le vois pas » (Layla, 2026-09-21).
+//
+// En DESCENDANT depuis le tiramisu, l'écran proposait bien « combien de
+// plaques cuites » puis « à couper » par paliers. En ouvrant le MÊME article
+// depuis « Déclarer », on tombait sur une fiche ordinaire : le serveur ne
+// donnait `tourneeTaille` et la ligne de recette qu'aux COMPOSANTS. Il n'y
+// avait donc aucun moyen de couper une plaque déjà au congélateur.
+// ============================================================
+describe('une découpe ouverte seule', () => {
+  // Ce que le serveur renvoie maintenant pour « SM. Biscuit a la Cuillere
+  // 10 pers » demandé tout seul (relevé en production le 2026-09-21).
+  const dixPersSeul = {
+    produit: 'SM. Biscuit a la Cuillere 10 pers', unite: 'u',
+    stock: 6, tournee: 6, tourneeTaille: 6,
+    recette: [{ produit: 'SM. Biscuit a la Cuillere (Plaque)', qty: 1, unite: 'u' }],
+    composants: [{ produit: 'SM. Biscuit a la Cuillere (Plaque)', unite: 'u',
+      besoin: 1, stock: 4, dejaFait: 0, fabrique: true, ok: true, entier: true }],
+  }
+
+  it('est reconnue comme une découpe, avec son compte par plaque', () => {
+    const d = decoupeDe(dixPersSeul)
+    expect(d).toBeTruthy()
+    expect(d.enfant.produit).toBe('SM. Biscuit a la Cuillere (Plaque)')
+    expect(d.parPiece).toBe(6)
+  })
+
+  // ⚠️ Le cas qu'elle décrit : les plaques sont DÉJÀ faites, au congélateur.
+  // On ne cuit rien aujourd'hui, on coupe seulement.
+  it('laisse couper ce qui est au congélateur sans rien cuire', () => {
+    expect(partageDecoupe({ cuites: 0, coupes: 24, parPiece: 6, stock: 4 }))
+      .toMatchObject({ utilisees: 4, manque: 0 })
+  })
+
+  it('mais jamais plus que ce qu’il y a de plaques', () => {
+    expect(partageDecoupe({ cuites: 0, coupes: 30, parPiece: 6, stock: 4 }).manque)
+      .toBeGreaterThan(0)
+  })
+
+  // ⚠️ ET ON NE POSE LA RECETTE QUE POUR UNE DÉCOUPE : un article à plusieurs
+  // lignes afficherait sinon ses matières premières DEUX fois — une fois en
+  // composants, une fois en « à peser ».
+  it('n’ajoute pas de doublon dans les ingrédients', () => {
+    expect(ingredientsPour(dixPersSeul, 6).map(x => x.produit))
+      .toEqual(['SM. Biscuit a la Cuillere (Plaque)'])
+  })
+})
