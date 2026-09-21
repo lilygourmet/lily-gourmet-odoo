@@ -280,3 +280,14 @@ export function marquerDoublons(lignes, { ecartCertain = 3, ecartProbable = 7, s
     .filter(l => !retirees.has(l.key))
     .map(l => (probables.has(l.key) ? { ...l, doublon_probable: probables.get(l.key) } : l))
 }
+
+// Libellé listant PLUSIEURS lignes du relevé («  |  » entre elles). Le champ tient 300
+// caractères : on les répartit entre les lignes au lieu d'en couper chacune à 70. Vécu :
+// « 2026-07-17 · VIR INST RECU 2324371 706376617404 0072026071770637661740 FARHANE HAJAR »
+// perdait le nom PILE à la coupe — la caisse semblait proposée sur un libellé anonyme, et
+// on croyait à tort que la banque n'avait pas écrit le nom de la cliente.
+export function libelleDesLignes(textes, prefixe = '') {
+  if (!textes.length) return prefixe || null
+  const budget = Math.floor((300 - prefixe.length - 5 * (textes.length - 1)) / textes.length)
+  return (prefixe + textes.map(t => t.slice(0, Math.max(40, budget))).join('  |  ')).slice(0, 300) || null
+}

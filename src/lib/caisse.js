@@ -1,7 +1,7 @@
 // Toutes les queries Supabase isolées pour le module Caisse
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
-import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI } from './releveDoublons'
+import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI, libelleDesLignes } from './releveDoublons'
 import { reconcileEnvelopes, nomAutreCliente, nomDansLibelle, setPayeursConnus, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
 import { loadPayeursConnus } from './conversations'
 export { ECART_MINI }
@@ -613,7 +613,7 @@ export async function attachReleveLines(env, lines) {
   // séparées par «  |  » (même séparateur que les lignes « à confirmer »).
   const libelle = ordered.length === 1
     ? `${ordered[0].ligne_date} · ${ordered[0].label}`.slice(0, 220)
-    : ordered.map(l => `${l.ligne_date} · ${l.label}`.slice(0, 70)).join('  |  ').slice(0, 300)
+    : libelleDesLignes(ordered.map(l => `${l.ligne_date} · ${l.label}`))
   await setEnveloppeReleve(env.id, {
     // Preuve déjà déposée (photo du bordereau) : on la garde. Le rapprochement s'ajoute
     // à la preuve, il ne la remplace pas.
@@ -765,7 +765,7 @@ export async function relancerRapprochement({ annulerFaux = true } = {}) {
     } else if (r.status === 'a_confirmer' && r.candidates?.length) {
       await setEnveloppeReleve(r.env.id, {
         status: 'a_confirmer',
-        libelle: r.candidates.map(c => `${c.dateIso} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300),
+        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`)),
         candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
       })
       aConfirmer++
@@ -942,7 +942,7 @@ export async function refaireMois(year, month, { simulation = true } = {}) {
     } else if (r.status === 'a_confirmer' && r.candidates?.length) {
       await setEnveloppeReleve(r.env.id, {
         status: 'a_confirmer',
-        libelle: r.candidates.map(c => `${c.dateIso} · ${c.label}`.slice(0, 70)).join('  |  ').slice(0, 300),
+        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`)),
         candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
       })
     }
