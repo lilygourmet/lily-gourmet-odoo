@@ -102,7 +102,8 @@ export function prevuParLaRecette(formats, quantites) {
  *     recette au prorata et compterait le vrac deux fois (même règle que
  *     `repartir`, qui pose la cuve entière sur la taille lancée).
  */
-export function dispatchVersOdoo({ vrac, stock, uniteStock, formats, quantites, reste }) {
+export function dispatchVersOdoo({ vrac, stock, uniteStock, formats, quantites, reste,
+  uniteVracArticle = null }) {
   const servis = (formats || [])
     .filter(f => (Number(quantites?.[f.produit]) || 0) > 0)
     .map(f => ({ produit: f.produit, qty: Number(quantites[f.produit]), unite: f.unite,
@@ -117,13 +118,23 @@ export function dispatchVersOdoo({ vrac, stock, uniteStock, formats, quantites, 
   // La recette tombe juste (au gramme près) : rien à imposer à Odoo.
   if (Math.abs(consommeG - prevuG) <= 1) return servis.map(s => ({ ...s, ajustements: null }))
 
+  // ⚠️ LA QUANTITÉ IMPOSÉE PART DANS L'UNITÉ DE L'ARTICLE, jamais dans celle de
+  // la ligne de recette (Layla, 2026-09-21 : « assure-toi que partout pareil »).
+  // C'est le serveur qui convertit, en un seul endroit — voir
+  // `ajustementsEnUniteLigne`. Cet écran-ci convertissait DÉJÀ vers l'unité de
+  // la ligne : la conversion se serait alors faite deux fois, et on aurait
+  // rejoué le facteur mille par l'autre bout.
+  const uniteImposee = uniteVracArticle || s0(servis).uniteVrac
   return servis.map((s, i) => ({
     ...s,
-    ajustements: { [vrac]: i === 0 ? arrondi(enUnite(consommeG, s.uniteVrac)) : 0 },
+    ajustements: { [vrac]: i === 0 ? arrondi(enUnite(consommeG, uniteImposee)) : 0 },
   }))
 }
 
 const arrondi = v => Math.round(v * 1000) / 1000
+// Le repli quand l'écran ne sait pas dire l'unité de l'article : l'unité de la
+// ligne, comme avant. Elles sont identiques dans l'immense majorité des cas.
+const s0 = servis => servis[0] || {}
 
 /**
  * QUI EST COCHÉ « à mettre en forme » — pour l'écran Mini / maxi.

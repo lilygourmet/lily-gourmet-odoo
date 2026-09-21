@@ -901,8 +901,81 @@ const ORIGINE_APP = 'LG-APP'
  * autre écart est laissé tel quel — peser autrement que la recette est le
  * quotidien de l'atelier, ce n'est pas une erreur.
  */
+/**
+ * L'unité dans laquelle Odoo COMPTE chaque ingrédient d'une recette — celle que
+ * l'app utilise quand elle impose une quantité. Une seule lecture pour toute la
+ * recette, mise en cache : elle ne change jamais en cours de journée.
+ */
+async function lecteurUniteArticle(uid, lignes) {
+  const ids = [...new Set((lignes || [])
+    .map(l => (Array.isArray(l.product_id) ? l.product_id[0] : null)).filter(Boolean))]
+  if (!ids.length) return () => null
+  const prods = await memo('uomdesprods:' + ids.join('-'),
+    () => odooCall(uid, 'product.product', 'read', [ids, ['uom_id']]))
+  const par = new Map((prods || []).map(p => [p.id, Array.isArray(p.uom_id) ? p.uom_id[1] : null]))
+  return id => par.get(id) || null
+}
+
+/** Le nom d'un ingrédient, débarrassé de sa référence Odoo — la même règle partout. */
+const cleIngredient = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+
+/**
+ * LES QUANTITÉS IMPOSÉES, REMISES DANS L'UNITÉ DE LA RECETTE.
+ *
+ * ⚠️ DEUX UNITÉS SE CROISENT ICI, ET ON L'A PAYÉ HUIT FOIS (Layla, 2026-09-21 :
+ * « arrête de reproduire cette erreur, ça a été fait plusieurs fois ; assure-toi
+ * que partout pareil »).
+ *
+ * L'app compte un ingrédient dans l'unité de l'ARTICLE — la crème whipping se
+ * compte en kilos : 3,52. Odoo écrit la même chose dans l'unité de la LIGNE de
+ * recette — 3 520 g. Odoo écrit `product_uom_qty` avec l'unité de la LIGNE :
+ * c'est donc elle qui fait foi, et 3,52 partait pour 3,52 GRAMMES.
+ *
+ * Pire : `corrigerFacteurMille` comparait les deux sans convertir, voyait un
+ * rapport de mille, et « corrigeait » la quantité produite en la divisant par
+ * mille. Le garde-fou construit contre le facteur mille le PROVOQUAIT.
+ *
+ * Huit ordres touchés entre le 8 et le 21 septembre — dont cinq validés, donc
+ * mille fois trop peu de matière première consommée :
+ *   21427 / 21428 / 21437 crème citron gingembre — 14 328 g → 14,33
+ *   21481 / 21494 mousse meringue citron — 800 g → 0,80
+ *   21529 crème amande, 21541 crunchy citron passion, 21740 mousse gianduja
+ *
+ * La conversion est faite ICI, une fois, avant tout le reste : le garde-fou,
+ * le contrôle des fournées et les mouvements lisent tous le même nombre.
+ * Unités identiques (le cas courant) : rien ne bouge.
+ */
+export function ajustementsEnUniteLigne(ajustements, lignes, uniteArticleDe) {
+  const entrees = Object.entries(ajustements || {})
+  if (!entrees.length) return ajustements
+  const par = new Map()
+  for (const l of lignes || []) {
+    const id = Array.isArray(l.product_id) ? l.product_id[0] : null
+    const nom = Array.isArray(l.product_id) ? l.product_id[1] : ''
+    const ligne = (Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : null)
+      || (Array.isArray(l.product_uom) ? l.product_uom[1] : null)
+    par.set(cleIngredient(nom), { ligne, article: uniteArticleDe(id) })
+  }
+  const out = {}
+  for (const [nom, v] of entrees) {
+    const u = par.get(cleIngredient(nom))
+    const n = Number(v)
+    if (!u || !u.ligne || !u.article || !Number.isFinite(n)) { out[nom] = v; continue }
+    if (String(u.ligne).trim().toLowerCase() === String(u.article).trim().toLowerCase()) {
+      out[nom] = v
+      continue
+    }
+    const converti = versUnite(n, u.article, u.ligne)
+    // ⚠️ ON NE DEVINE JAMAIS. Une unité que `versUnite` ne sait pas lire (des
+    // pièces, une tournée sans poids) laisse le nombre tel quel : mieux vaut la
+    // règle de trois d'Odoo qu'un chiffre inventé.
+    out[nom] = (converti === null || !Number.isFinite(converti)) ? v : converti
+  }
+  return out
+}
+
 export function corrigerFacteurMille(qty, sortieRecette, lignes, ajustements) {
-  const cle = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const cle = cleIngredient
   const imposes = Object.entries(ajustements || {}).filter(([, v]) => Number(v) > 0)
   if (!imposes.length || !(qty > 0) || !(sortieRecette > 0)) return { qty, corrige: 0 }
   const fois = []
@@ -1215,6 +1288,12 @@ async function creerOfPreparation(uid, nomProduit, qtyKg, parents = [], unite = 
     () => odooSearchRead(uid, 'mrp.bom.line', [['bom_id', '=', bom.id]],
       ['product_id', 'product_qty', 'product_uom_id', 'bom_product_template_attribute_value_ids'],
       { limit: 50 }))
+  // ⚠️ LES QUANTITÉS IMPOSÉES D'ABORD REMISES DANS L'UNITÉ DE LA RECETTE, avant
+  // que QUOI QUE CE SOIT ne les lise (Layla, 2026-09-21 : « assure-toi que
+  // partout pareil »). Le garde-fou, le contrôle des fournées et les mouvements
+  // travaillent ensuite sur le même nombre. Voir `ajustementsEnUniteLigne`.
+  ajustements = ajustementsEnUniteLigne(ajustements, lignesBom,
+    await lecteurUniteArticle(uid, lignesBom))
   const garde = corrigerFacteurMille(qty, bom.product_qty, lignesBom, ajustements)
   // Personne n'a imposé de quantités : `corrigerFacteurMille` n'a rien pu voir.
   // On juge alors la fournée à sa seule taille.
@@ -2569,8 +2648,15 @@ export default async function handler(req, res) {
         const moves = mo.move_raw_ids.length
           ? await odooCall(uid, 'stock.move', 'read', [mo.move_raw_ids, ['product_id', 'product_uom_qty', 'product_uom']])
           : []
-        const cleNom = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
-        const voulu = new Map(mesures.map(([k, v]) => [cleNom(k), Number(v)]))
+        // ⚠️ MÊME CONVENTION QUE `creer-of`, et pour la même raison : ce qu'on
+        // écrit ici part dans le `product_uom` du mouvement, c'est-à-dire
+        // l'unité de la LIGNE de recette. L'app, elle, compte dans l'unité de
+        // l'ARTICLE. Sans cette conversion, 3,52 kg de crème devenaient 3,52 g.
+        // (Layla, 2026-09-21 : « assure-toi que partout pareil ».)
+        const cleNom = cleIngredient
+        const enUnite = ajustementsEnUniteLigne(
+          Object.fromEntries(mesures), moves, await lecteurUniteArticle(uid, moves))
+        const voulu = new Map(Object.entries(enUnite).map(([k, v]) => [cleNom(k), Number(v)]))
         const faits = []
         const ignores = []
         for (const mv of moves) {

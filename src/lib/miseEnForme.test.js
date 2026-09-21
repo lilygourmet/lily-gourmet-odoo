@@ -126,3 +126,42 @@ describe('le dispatch qui part chez Odoo', () => {
     expect(o[0].ajustements).toEqual({ 'SM. Gélée Mangue Ananas Pistache': 0 })
   })
 })
+
+// ============================================================
+// L'UNITÉ DE LA QUANTITÉ IMPOSÉE — une seule convention partout.
+//
+// « Assure-toi que partout pareil » (Layla, 2026-09-21). Cet écran-ci
+// convertissait DÉJÀ vers l'unité de la ligne de recette, alors que tous les
+// autres envoient l'unité de l'article. Depuis que le serveur convertit lui-
+// même, convertir ici aussi aurait rejoué le facteur mille par l'autre bout.
+// ============================================================
+describe('la quantité imposée part dans l’unité de l’article', () => {
+  // Un vrac compté en KILOS chez Odoo, dont la recette s'écrit en GRAMMES.
+  const formats = [
+    { produit: 'SM- Base Tarte CBS 23 cm', unite: 'u', uniteVrac: 'g', parUnite: 190 },
+    { produit: 'SM- Base Tarte CBS 18 cm', unite: 'u', uniteVrac: 'g', parUnite: 116 },
+  ]
+  const commun = {
+    vrac: 'SM. Ganache Gold', stock: 2090, uniteStock: 'g', formats,
+    quantites: { 'SM- Base Tarte CBS 23 cm': 5, 'SM- Base Tarte CBS 18 cm': 5 },
+    reste: 0,
+  }
+
+  it('en kilos quand Odoo compte le vrac en kilos', () => {
+    const o = dispatchVersOdoo({ ...commun, uniteVracArticle: 'kg' })
+    expect(o[0].ajustements['SM. Ganache Gold']).toBeCloseTo(2.09, 6)
+    expect(o[1].ajustements['SM. Ganache Gold']).toBe(0)   // la cuve est déjà passée
+  })
+
+  it('en grammes quand Odoo compte le vrac en grammes', () => {
+    const o = dispatchVersOdoo({ ...commun, uniteVracArticle: 'g' })
+    expect(o[0].ajustements['SM. Ganache Gold']).toBeCloseTo(2090, 6)
+  })
+
+  // Repli : sans l'unité de l'article, on garde celle de la ligne — elles sont
+  // identiques dans l'immense majorité des cas.
+  it('sans l’unité de l’article, on retombe sur celle de la ligne', () => {
+    const o = dispatchVersOdoo(commun)
+    expect(o[0].ajustements['SM. Ganache Gold']).toBeCloseTo(2090, 6)
+  })
+})

@@ -102,6 +102,10 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
     const ordres = dispatchVersOdoo({
       vrac: ouvert.a.produit, stock: ouvert.a.resteG, uniteStock: 'g',
       formats: ouvert.formats, quantites: combien, reste: resteRetenu,
+      // ⚠️ L'unité dans laquelle ODOO COMPTE le vrac : c'est dans celle-là que
+      // la quantité imposée doit partir, le serveur fait le reste (Layla,
+      // 2026-09-21 : « assure-toi que partout pareil »).
+      uniteVracArticle: ouvert.a.unite || null,
     })
     if (!ordres.length) return
     navigator.vibrate?.(15)

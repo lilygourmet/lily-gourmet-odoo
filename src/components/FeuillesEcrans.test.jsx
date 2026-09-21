@@ -17,6 +17,16 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 
 const maintenant = Date.now()
 const ilYA = min => new Date(maintenant - min * 60000).toISOString()
+// ⚠️ MIDI DU JOUR DIT, PAS « IL Y A N HEURES » (vécu le 2026-09-22 à 00 h 06 :
+// « il y a 5 h » tombait la VEILLE, et le test du rangement par jour cassait).
+// L'atelier travaille la nuit ; un test qui ne passe qu'avant minuit ne sert à
+// rien. Pour tout ce qui parle de JOURS, on vise midi.
+const aMidi = (joursAvant = 0) => {
+  const d = new Date()
+  d.setHours(12, 0, 0, 0)
+  d.setDate(d.getDate() - joursAvant)
+  return d.toISOString()
+}
 
 /** Donnée par l'économe il y a 5 h : due, en retard, et rendable. */
 const donnee = {
@@ -141,7 +151,11 @@ describe('« À déclarer », pour des mains farineuses', () => {
   // ⚠️ « Regroupe par date dans À déclarer, pour voir ce qui a aussi été donné
   // par date » (Layla, 2026-09-20). La liste remonte une semaine.
   it('range par jour, le plus récent en haut', async () => {
-    lues = [donnee, veille]
+    // Ancrées à midi : l'heure à laquelle tourne le test ne doit rien changer.
+    lues = [
+      { ...donnee, imprime_le: aMidi(0), donne_le: aMidi(0) },
+      { ...veille, imprime_le: aMidi(1), donne_le: aMidi(1) },
+    ]
     render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
     await screen.findByText('Crème citron')
 

@@ -470,7 +470,7 @@ const estFige = (nom, figes) =>
   // (Trouvé le 2026-09-10.)
   (figes || []).some(f => net(f) === net(nom)) || /\bmousses?\b/i.test(String(nom || ''))
 
-function ajustementsFiges(bom, produit, figes, tournee) {
+function ajustementsFiges(bom, produit, figes, tournee, composants = []) {
   if (!bom) return {}                  // article sans recette : rien à imposer
   // ⚠️ Même conversion que dans `composantsDe` : la recette écrit parfois sa
   // sortie dans une autre unité que celle de l'article. Ces quantités-là
@@ -486,8 +486,24 @@ function ajustementsFiges(bom, produit, figes, tournee) {
     e.lignes += 1
     par.set(nom, e)
   }
-  return Object.fromEntries([...par].map(([nom, e]) =>
-    [nom, Math.round((e.total / e.lignes) * 1000) / 1000]))
+  // ⚠️ ET LA QUANTITÉ SORT DANS L'UNITÉ DE L'ARTICLE, pas dans celle de la
+  // ligne (Layla, 2026-09-21 : « assure-toi que partout pareil »). C'est la
+  // convention de TOUS les chemins qui imposent une quantité : le serveur
+  // reconvertit vers l'unité de la ligne au moment de créer l'ordre, en un seul
+  // endroit (`ajustementsEnUniteLigne` dans `freezer-list.js`). Sortir d'ici en
+  // unité de ligne, c'était faire convertir DEUX FOIS — et rejouer le facteur
+  // mille par l'autre bout.
+  const uniteArticle = new Map((composants || []).map(c => [c.produit, c.unite]))
+  return Object.fromEntries([...par].map(([nom, e]) => {
+    const moyenne = e.total / e.lignes
+    const ua = uniteArticle.get(nom)
+    // Pas d'unité connue, ou la même : rien à convertir.
+    const v = (!ua || String(ua).trim().toLowerCase() === String(e.unite).trim().toLowerCase())
+      ? moyenne
+      : versUnite(moyenne, e.unite, ua)
+    const n = (v === null || !Number.isFinite(v)) ? moyenne : v
+    return [nom, Math.round(n * 1000) / 1000]
+  }))
 }
 
 /**
@@ -822,8 +838,15 @@ export async function repartir(cache, catalogue, lance, quantites, prevu = 0) {
       // ⚠️ Réparti entre les lignes du même produit : Odoo pose la consigne sur
       // chacune, et le total serait sinon compté autant de fois qu'il y a de
       // lignes (le sucre du tiramisu en occupe deux).
-      ajustements[nom] = Math.max(0,
-        Math.round(versUnite(v, uniteArticle[nom], e.unite) / (e.n || 1) * 1000) / 1000)
+      //
+      // ⚠️ ET ON LAISSE LA QUANTITÉ DANS L'UNITÉ DE L'ARTICLE. Elle était
+      // convertie ICI vers l'unité de la ligne, alors que tous les autres
+      // chemins envoyaient l'unité de l'article : deux conventions pour la même
+      // chose. Depuis que `creer-of` convertit lui-même (voir
+      // `ajustementsEnUniteLigne`), convertir ici aussi ferait la conversion
+      // DEUX FOIS. Une seule règle partout (Layla, 2026-09-21 : « assure-toi
+      // que partout pareil »).
+      ajustements[nom] = Math.max(0, Math.round(v / (e.n || 1) * 1000) / 1000)
     }
     const p = await produitParNom(cache, produit)
     out.push({ produit, qty, unite: uniteDe(p), ajustements, lance: produit === lance.produit })
@@ -1823,7 +1846,7 @@ export default async function handler(req, res) {
         etat: stock <= 0 ? 'rupture' : 'refaire',
         figes: a.figes || [],
         figesNom: a.figes_nom || 'Monté sur place',
-        ajustements: ajustementsFiges(bomFiche, p, a.figes || [], fournee),
+        ajustements: ajustementsFiges(bomFiche, p, a.figes || [], fournee, composants),
         // ⚠️ Les tailles d'une même cuve (« d'un 10 pers on finit en 5 pers et
         // en individuels ») ne sont PAS calculées ici : chacune coûte une
         // dizaine d'allers-retours vers Odoo, et l'écran de fin multi-tailles
