@@ -5,6 +5,7 @@ import { toast } from '../lib/toast'
 import { loadMinMax, saveMinMax, loadStockMinMax } from '../lib/fabrication'
 import { canSeeMinMaxCd } from '../lib/auth'
 import { Interrupteur } from './Interrupteur'
+import { parCategorieCd } from '../lib/categoriesCd'
 
 // ====== « Mini / maxi CD » : les seuils que l'APP tient, plus Odoo ======
 // Le 2026-09-08, les 55 règles de réapprovisionnement CD* d'Odoo ont été
@@ -72,6 +73,18 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
   }, [toutes, filtre])
 
   const nbRegles = (toutes || []).filter(l => Number(l.mini) > 0 || Number(l.maxi) > 0).length
+
+  /**
+   * ⚠️ RANGÉ PAR CATÉGORIE (Layla, 2026-09-21 : « regrouper mini/maxi par
+   * catégorie »). L'écran alignait 293 articles à la suite : on cherchait une
+   * crème au beurre entre deux cadres de 40x40. Le rangement lit le TYPE dans
+   * le nom — c'est son choix, et il vaut mieux que la catégorie d'Odoo, qui
+   * range tout ça en quatre paquets dont un « All ».
+   */
+  const groupes = useMemo(() => parCategorieCd(visibles), [visibles])
+  // Repliés par défaut : cinq dossiers se survolent, 293 lignes non. Une
+  // recherche ouvre tout — on vient chercher un nom précis.
+  const [ouverts, setOuverts] = useState(() => new Set())
 
   // On tape dans les cases sans rien envoyer : l'enregistrement se fait en
   // quittant la case, pour ne pas écrire à chaque touche.
@@ -141,7 +154,33 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
               {!filtre && nbRegles > 0 && <> — dont <b>{nbRegles} réglé{nbRegles > 1 ? 's' : ''}</b>, en tête de liste</>}
             </div>
 
-            {visibles.map(brut => {
+            {groupes.map(g => {
+              const ouvert = !!filtre.trim() || ouverts.has(g.cle)
+              const regles = g.articles.filter(a => Number(a.mini) > 0 || Number(a.maxi) > 0).length
+              return (
+                <section key={g.cle} className="mb-2">
+                  <button
+                    onClick={() => setOuverts(s0 => {
+                      const n = new Set(s0)
+                      if (n.has(g.cle)) n.delete(g.cle); else n.add(g.cle)
+                      return n
+                    })}
+                    aria-expanded={ouvert}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-cream-warm
+                               border border-line text-left active:bg-cream-deep transition">
+                    <span className="text-[20px] leading-none" aria-hidden="true">{g.emoji}</span>
+                    <span className="text-[15px] font-extrabold">{g.nom}</span>
+                    {regles > 0 && (
+                      <span className="rounded-full bg-[#EAF3DE] text-ok text-[11px] font-bold px-2 py-0.5">
+                        {regles} réglé{regles > 1 ? 's' : ''}
+                      </span>
+                    )}
+                    <span className="ml-auto text-[12px] text-ink-mute tabular-nums">
+                      {g.articles.length}
+                    </span>
+                    <span className="text-[13px] text-ink-mute">{ouvert ? '▾' : '▸'}</span>
+                  </button>
+                  {ouvert && <div className="mt-1.5">{g.articles.map(brut => {
               const st = stocks[brut.produit]
               // ⚠️ L'unité d'Odoo fait foi : c'est elle qui donne son sens au
               // stock affiché juste à côté, et donc aux chiffres qu'on tape.
@@ -196,6 +235,9 @@ export default function MinMaxCdView({ user, onLogout, onNavigate, activeView })
                     {enCours === l.produit && <span className="text-[11.5px] text-bordeaux">enregistrement…</span>}
                   </div>
                 </div>
+              )
+})}</div>}
+                </section>
               )
             })}
 

@@ -154,6 +154,11 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
   const [tout, setTout] = useState(null)          // tout ce que l'annexe sait faire
   const [erreur, setErreur] = useState(null)
   const [filtre, setFiltre] = useState('')
+  // ⚠️ « Crée un filtre pour voir les à finir dans mini/maxi annexe » (Layla,
+  // 2026-09-21). Une fois la liste cochée, il n'y avait aucun moyen de la
+  // relire : il fallait rouvrir chaque gâteau et repérer les pastilles une par
+  // une, au milieu de 277 articles.
+  const [queAFinir, setQueAFinir] = useState(false)
   const [enCours, setEnCours] = useState('')
   const [figes, setFiges] = useState(null)   // l'article dont on règle les figés
   // Les gâteaux sont repliés : 277 lignes d'un coup, personne n'y voit rien.
@@ -201,7 +206,10 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
     // 280 articles remontent ensemble. Or le tiret EST l'information — « SM- »
     // est un gâteau ou un format, « SM. » une préparation.
     const { prefixe, reste } = couperPrefixe(filtre)
-    const tries = prefixe ? base.filter(a => aPourPrefixe(a.produit, prefixe)) : base
+    let tries = prefixe ? base.filter(a => aPourPrefixe(a.produit, prefixe)) : base
+    // Le filtre « À finir » se pose PAR-DESSUS la recherche : on peut chercher
+    // une crème parmi les vracs cochés.
+    if (queAFinir) tries = tries.filter(a => enForme.has(a.produit))
 
     // Dans un gâteau, les tailles d'un même article se suivent, de la plus
     // petite à la plus grande : indiv, 5 pers, 10 pers…
@@ -212,7 +220,7 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
         || tailleDe(x.produit) - tailleDe(y.produit)
         || x.produit.localeCompare(y.produit, 'fr')),
     }))
-  }, [tout, lignes, filtre])
+  }, [tout, lignes, filtre, queAFinir, enForme])
 
   /**
    * ⚠️ SEULEMENT CE QUI SERT À UN GÂTEAU VENDABLE (Layla, 2026-09-20 :
@@ -228,8 +236,8 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
   const orphelins = useMemo(
     () => (groupes.find(g => g.nom === 'Le reste')?.articles.length || 0), [groupes])
   const visibles = useMemo(
-    () => (filtre.trim() ? groupes : groupes.filter(g => g.nom !== 'Le reste')),
-    [groupes, filtre])
+    () => (filtre.trim() || queAFinir ? groupes : groupes.filter(g => g.nom !== 'Le reste')),
+    [groupes, filtre, queAFinir])
 
   const combien = useMemo(
     () => new Set(visibles.flatMap(g => g.articles.map(a => a.produit))).size, [visibles])
@@ -302,9 +310,25 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
               className="w-full h-11 rounded-xl border border-cream-deep bg-cream-warm px-3
                          text-[15px] outline-none focus:border-bordeaux mb-3" />
 
+            {/* ⚠️ UN SEUL BOUTON, ET IL DIT COMBIEN. Sans le compte, on ne sait
+                pas si la liste est vide parce qu'on n'a rien coché ou parce
+                que le filtre n'a rien trouvé. */}
+            <button
+              type="button" onClick={() => setQueAFinir(v => !v)} aria-pressed={queAFinir}
+              className={`mb-3 inline-flex items-center gap-1.5 rounded-full border-[1.5px] px-3 py-1.5
+                          text-[12.5px] font-bold transition
+                ${queAFinir ? 'bg-bordeaux/10 text-bordeaux border-bordeaux/40'
+      : 'bg-cream text-ink-mute border-cream-deep'}`}>
+              🍮 {queAFinir ? 'Que les « À finir »' : 'Voir les « À finir »'}
+              <span className="tabular-nums opacity-70">({enForme.size})</span>
+            </button>
+
             <div className="text-[12px] text-ink-mute mb-2">
               {combien} article{combien > 1 ? 's' : ''} · {visibles.length} gâteau{visibles.length > 1 ? 'x' : ''}
-              {!filtre.trim() && orphelins > 0 && (
+              {queAFinir && !combien && (
+                <> · <span className="text-bordeaux">aucun article coché 🍮 ici</span></>
+              )}
+              {!filtre.trim() && !queAFinir && orphelins > 0 && (
                 <> · <span className="text-ink-mute">{orphelins} sans gâteau, tape un nom pour les voir</span></>
               )}
               {!tout && ' — lecture d’Odoo en cours…'}
@@ -312,7 +336,7 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
 
             {visibles.map(g => {
               // Une recherche ouvre tout : sinon on cherche et on ne voit rien.
-              const ouvert = !!filtre.trim() || ouverts.has(g.nom)
+              const ouvert = !!filtre.trim() || queAFinir || ouverts.has(g.nom)
               const aRefaire = g.articles.filter(
                 l => l.suivi && l.stock !== undefined && Number(l.stock) <= Number(l.mini)).length
               return (

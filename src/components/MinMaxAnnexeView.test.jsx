@@ -30,7 +30,10 @@ vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
 vi.mock('../lib/auth', () => ({ canSeeMinMaxAnnexe: () => true, isAdmin: () => true }))
-vi.mock('../lib/miseEnForme', () => ({ loadMiseEnForme: async () => [], setMiseEnForme: async () => true }))
+let cochesAFinir = []
+vi.mock('../lib/miseEnForme', () => ({
+  loadMiseEnForme: async () => cochesAFinir, setMiseEnForme: async () => true,
+}))
 vi.mock('../lib/fabAnnexe', async importOriginal => ({
   ...await importOriginal(),          // le VRAI rangement par gâteau
   loadCatalogueAnnexe: async () => catalogue,
@@ -44,7 +47,7 @@ vi.mock('../lib/fabAnnexe', async importOriginal => ({
 const { default: MinMaxAnnexeView } = await import('./MinMaxAnnexeView')
 
 const poser = () => render(<MinMaxAnnexeView user={{ id: 'u1' }} onNavigate={() => {}} />)
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); cochesAFinir = [] })
 afterEach(cleanup)
 
 describe('ce que la liste montre', () => {
@@ -80,6 +83,39 @@ describe('ce que la liste montre', () => {
     await screen.findByText(/Pistache fleur d’oranger/)
     fireEvent.change(screen.getByPlaceholderText(/chercher|Chercher/i), { target: { value: 'essai' } })
     expect(await screen.findByText('Le reste')).toBeTruthy()
+  })
+})
+
+// ⚠️ « Crée un filtre pour voir les à finir dans mini/maxi annexe » (Layla,
+// 2026-09-21). Une fois la liste cochée, rien ne permettait de la relire :
+// il fallait rouvrir chaque gâteau et repérer les pastilles une par une.
+describe('le filtre « À finir »', () => {
+  it('ne garde que les articles cochés 🍮, et dit combien', async () => {
+    cochesAFinir = ['SM. Crémeux Pistache']
+    poser()
+    const bouton = await screen.findByText(/Voir les « À finir »/)
+    expect(screen.getByText('(1)')).toBeTruthy()
+
+    fireEvent.click(bouton)
+    // Le dossier s'ouvre tout seul, et la ligne cochée est là…
+    expect(await screen.findByText('Crémeux pistache')).toBeTruthy()
+    // …sans celle qui n'est pas cochée.
+    expect(screen.queryByText(/Pistache Fleur d’Oranger 10 pers/)).toBeNull()
+  })
+
+  it('dit quand rien n’est coché, au lieu d’un écran vide', async () => {
+    poser()
+    fireEvent.click(await screen.findByText(/Voir les « À finir »/))
+    expect(await screen.findByText(/aucun article coché/)).toBeTruthy()
+  })
+
+  it('se relâche quand on le rappuie', async () => {
+    cochesAFinir = ['SM. Crémeux Pistache']
+    poser()
+    const b = await screen.findByText(/Voir les « À finir »/)
+    fireEvent.click(b)
+    fireEvent.click(await screen.findByText(/Que les « À finir »/))
+    expect(await screen.findByText(/Voir les « À finir »/)).toBeTruthy()
   })
 })
 
