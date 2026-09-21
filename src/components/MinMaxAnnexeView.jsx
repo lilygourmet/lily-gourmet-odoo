@@ -6,6 +6,7 @@ import { canSeeMinMaxAnnexe } from '../lib/auth'
 import { loadMiseEnForme, setMiseEnForme } from '../lib/miseEnForme'
 import { Interrupteur, Pastille } from './Interrupteur'
 import { couperPrefixe, aPourPrefixe } from '../lib/recherche'
+import { enGrammes, enUnite, uniteAffichee } from '../lib/ecranSimple'
 import {
   loadCatalogueAnnexe, saveCatalogueAnnexe, retirerDuCatalogue, loadToutFabAnnexe,
   saveFigesAnnexe, loadArticleFabAnnexe, parGateauMere,
@@ -19,6 +20,9 @@ import {
 // Réservé aux admins : changer un mini change ce que l'atelier fabriquera.
 
 const nb = v => Number(v || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 })
+// ⚠️ SANS ESPACE NI VIRGULE : une case <input type="number"> refuse « 1 400 ».
+// Les seuils s'y tapent en chiffres nus.
+const nbBrut = v => Math.round((Number(v) || 0) * 1000) / 1000
 const propre = n => String(n || '').replace(/^\[[^\]]*\]\s*/, '').trim()
 
 /**
@@ -387,16 +391,24 @@ export default function MinMaxAnnexeView({ user, onLogout, onNavigate, activeVie
                         {[['mini', 'mini'], ['maxi', 'maxi'], ['tournee', 'tournée']].map(([champ, titre]) => (
                           <label key={champ} className="block">
                             <span className="block text-[11px] text-ink-mute mb-0.5">
-                              {/* ⚠️ L'UNITÉ BRUTE D'ODOO, jamais convertie : ces
-                                  trois cases se tapent en KILOS quand l'article
-                                  est en kilos. Écrire « g » au-dessus d'un
-                                  champ qui attend des kilos, c'est le facteur
-                                  mille servi sur un plateau. */}
-                              {titre}{unite ? ` (${unite})` : ''}
+                              {/* ⚠️ EN GRAMMES, COMME PARTOUT AILLEURS (Layla,
+                                  2026-09-21). Ces cases prenaient l'unité
+                                  d'Odoo : sur un article compté en KILOS,
+                                  « 1400 » voulait dire 1 400 kg. Vécu le soir
+                                  même sur la masse gélatine — l'écran proposait
+                                  alors 14 000 000 g à fabriquer, avec 1,2 TONNE
+                                  d'eau dans la recette. Trois articles sur huit
+                                  étaient déjà dans ce cas.
+                                  L'atelier tape des grammes ; on convertit ici,
+                                  et Odoo garde son unité. */}
+                              {titre} ({uniteAffichee(unite)})
                             </span>
                             <input type="number" min="0" step="any" inputMode="decimal"
-                              value={l[champ] ?? ''} aria-label={`${titre} de ${propre(l.libelle || l.produit)}`}
-                              onChange={e => changer(l, champ, e.target.value)}
+                              value={l[champ] === '' || l[champ] === undefined || l[champ] === null
+                                ? '' : nbBrut(enGrammes(l[champ], unite))}
+                              aria-label={`${titre} de ${propre(l.libelle || l.produit)}`}
+                              onChange={e => changer(l, champ,
+                                e.target.value === '' ? '' : enUnite(e.target.value, unite))}
                               onBlur={() => enregistrer(l)}
                               className="w-full text-right text-[15px] font-bold border border-cream-deep
                                          rounded-lg px-2 py-2 bg-cream tabular-nums" />

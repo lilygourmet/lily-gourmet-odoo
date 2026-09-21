@@ -14,11 +14,16 @@ import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-li
 const catalogue = [
   { produit: 'SM. Crémeux Pistache', libelle: 'Crémeux pistache', mini: 600, maxi: 2400,
     tournee: 1200, actif: true, figes: [] },
+  // 0,2 kg de mini et 1,4 kg de tournée : l'atelier, lui, lit 200 g et 1 400 g.
+  { produit: 'SM. Masse Gélatine', libelle: 'Masse gélatine', mini: 0.2, maxi: 1,
+    tournee: 1.4, actif: true, figes: [] },
 ]
 // Ce qu'Odoo sait faire : le crémeux sert un gâteau vendu, la vieille recette
 // d'essai ne sert plus à rien.
 const tout = [
   { produit: 'SM. Crémeux Pistache', unite: 'g', stock: 230, pour: ['E- Pistache fleur d’oranger'] },
+  // ⚠️ Compté en KILOS chez Odoo — c'est là que le facteur mille se glissait.
+  { produit: 'SM. Masse Gélatine', unite: 'kg', stock: 1.4, pour: ['E- Pistache fleur d’oranger'] },
   // Même gâteau, mais un FORMAT (« SM- ») et non une préparation (« SM. »).
   { produit: 'SM- Pistache Fleur d’Oranger 10 pers', unite: 'u', stock: 4,
     pour: ['E- Pistache fleur d’oranger'] },
@@ -127,13 +132,29 @@ describe('les réglages d’une ligne', () => {
     return screen.findByText('Crémeux pistache')
   }
 
-  it('les trois cases portent leur unité — jamais convertie', async () => {
+  // ⚠️ LE FACTEUR MILLE, ET IL A VRAIMENT MORDU (Layla, 2026-09-21) : ces
+  // cases prenaient l'unité d'Odoo, donc « 1400 » sur un article en kilos
+  // voulait dire 1 400 kg. L'écran a proposé 14 000 000 g de masse gélatine à
+  // fabriquer, avec 1,2 tonne d'eau. L'atelier tape des GRAMMES, partout.
+  it('les trois cases se tapent en grammes, même sur un article en kilos', async () => {
     await ouvrirLeGateau()
-    // ⚠️ Le facteur mille : ces cases se tapent dans l'unité d'ODOO. Écrire
-    // « g » au-dessus d'un champ qui attend des kilos, c'est l'erreur servie.
-    expect(screen.getByText('mini (g)')).toBeTruthy()
-    expect(screen.getByText('maxi (g)')).toBeTruthy()
-    expect(screen.getByText('tournée (g)')).toBeTruthy()
+    expect(screen.getAllByText('mini (g)').length).toBe(2)
+    expect(screen.getAllByText('tournée (g)').length).toBe(2)
+    // 1,4 kg chez Odoo → 1 400 dans la case.
+    expect(screen.getByLabelText('tournée de Masse gélatine').value).toBe('1400')
+    expect(screen.getByLabelText('mini de Masse gélatine').value).toBe('200')
+    // L'article compté en grammes, lui, ne bouge pas.
+    expect(screen.getByLabelText('tournée de Crémeux pistache').value).toBe('1200')
+  })
+
+  it('et ce qu’on tape repart en kilos chez Odoo', async () => {
+    await ouvrirLeGateau()
+    const champ = screen.getByLabelText('tournée de Masse gélatine')
+    fireEvent.change(champ, { target: { value: '2000' } })
+    fireEvent.blur(champ)
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    // 2 000 g tapés → 2 kg enregistrés.
+    expect(save.mock.calls.at(-1)[0]).toMatchObject({ produit: 'SM. Masse Gélatine', tournee: 2 })
   })
 
   it('l’interrupteur dit s’il est allumé, et l’éteindre s’enregistre', async () => {
