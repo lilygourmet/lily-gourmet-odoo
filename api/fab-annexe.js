@@ -415,6 +415,7 @@ async function stocksDe(ids, cache = null) {
   return par
 }
 
+const uniteOdoo = u => (u ? String(u).replace(/^Units?$/i, 'u') : null)
 const uniteDe = p => String(p.uom_id?.[1] || '').replace(/^Units?$/i, 'u')
 
 /**
@@ -1022,8 +1023,16 @@ function grapheConsommateurs() {
         const a = vers.get(nom) || []
         a.push({
           produit: sansRef(parent.display_name || parent.name),
-          unite: parent.uom_id ? parent.uom_id[1] : null,
-          uniteVrac: l.product_uom_id ? l.product_uom_id[1] : null,
+          // ⚠️ « Units » EST LE MOT D'ODOO, PAS UNE UNITÉ QUE L'APP SAIT LIRE
+          // (Layla, 2026-09-21 : « Base Tarte CBS 23 cm — son ordre est en
+          // train de partir… sans ordre »). Tout le reste du fichier passe par
+          // `uniteDe` ; ces deux lignes-ci sortaient le nom brut. « À finir »
+          // déclarait donc en « Units », `declarer()` ne reconnaissait pas des
+          // pièces, convertissait en grammes — et `enGrammes(1, 'Units')` vaut
+          // NULL. L'ordre partait sans quantité et Odoo le refusait, en
+          // silence : la déclaration restait « sans ordre » pour toujours.
+          unite: uniteOdoo(parent.uom_id?.[1]),
+          uniteVrac: uniteOdoo(l.product_uom_id?.[1]),
           parUnite: Math.round((Number(l.product_qty) || 0) / sortie * 1000) / 1000,
         })
         vers.set(nom, a)

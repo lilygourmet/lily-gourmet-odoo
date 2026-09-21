@@ -1042,8 +1042,21 @@ export async function declarer({ produit, qty, unite, fois = null, ajustements =
   // plus — c'est elle qui a produit un ordre de « 14,33 g » là où il fallait
   // 14 328 g, mille fois trop peu (Layla, 2026-09-11). Le serveur reconvertit
   // ensuite dans l'unité de la recette, quelle qu'elle soit.
-  const enPieces = /^u$/i.test(String(unite || '').trim())
+  // ⚠️ « u » ET « Units » SONT LA MÊME CHOSE. Odoo appelle la pièce « Units » ;
+  // l'app écrit « u ». Un seul endroit du serveur laissait passer le nom brut,
+  // et cette ligne-ci ne le reconnaissait alors plus comme des pièces : elle
+  // convertissait en grammes une quantité qui n'en a pas (Layla, 2026-09-21 :
+  // « Base Tarte CBS 23 cm — son ordre est en train de partir… sans ordre »).
+  const enPieces = /^units?$|^u$/i.test(String(unite || '').trim())
   const pourOdoo = enPieces ? qty : enGrammesOdoo(qty, unite)
+  // ⚠️ ET ON N'ENVOIE JAMAIS UNE QUANTITÉ VIDE. `enGrammes` rend `null` quand
+  // il ne sait pas convertir l'unité : l'ordre partait alors sans quantité,
+  // Odoo le refusait, et la déclaration restait « sans ordre » — sans que
+  // personne sache pourquoi. Mieux vaut le dire tout de suite.
+  if (!(Number(pourOdoo) > 0)) {
+    toast(`L'ordre de ${produit} n'est pas parti : unité « ${unite} » incomprise.`)
+    return { produit, qty, ordre: null, erreur: `unité « ${unite} » incomprise` }
+  }
   creerOfPrepa(produit, pourOdoo, userId, [], enPieces ? 'u' : 'g', 'annexe', ajustements)
     .then(of => {
       // En mode test (?test=1) Odoo n'écrit rien : pas de numéro à rattacher.
