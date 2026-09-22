@@ -76,7 +76,12 @@ export default function VerifierReleveModal({ onClose, onDone }) {
   async function recuperer() {
     setEtape('lecture')
     try {
-      await saveUnmatchedReleveLines(res.manquantes)
+      // `ailleurs` n'existe que pour l'affichage (la contre-preuve). L'envoyer en base la
+      // faisait refuser TOUTE l'insertion : « Could not find the 'ailleurs' column ».
+      // On n'écrit que les colonnes de la table.
+      await saveUnmatchedReleveLines(res.manquantes.map(
+        ({ key, ligne_date, amount, label, type, releve_url, banque }) =>
+          ({ key, ligne_date, amount, label, type, releve_url, banque })))
       setEtape('fini'); onDone && onDone()
     } catch (e) { setErreur(e?.message || String(e)); setEtape('resultat') }
   }
