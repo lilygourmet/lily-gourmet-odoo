@@ -545,7 +545,7 @@ export async function loadAllLinkedReleveLines() {
   if (ids.length) {
     const { data: envs } = await supabase
       .from('caisse_enveloppes')
-      .select('id, source, session_date, amount_cash, payment_method, destinataire:caisse_destinataires(name)')
+      .select('id, source, session_date, amount_cash, payment_method, virement_client, destinataire:caisse_destinataires(name)')
       .in('id', ids)
       // Tronquée, cette recherche ferait passer des lignes parfaitement liées pour des
       // orphelines à l'écran.

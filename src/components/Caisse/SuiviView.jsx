@@ -970,6 +970,11 @@ function SuggestModal({ env, onClose, onAttach }) {
   // étroite et sans nom contradictoire. Quand il refuse à raison mais que Layla, elle, sait
   // que c'est le bon dépôt, il lui faut la main : cette case ouvre les trois moyens.
   const [tousMoyens, setTousMoyens] = useState(false)
+  // Lignes du MÊME montant déjà rattachées ailleurs. Sans elles, une caisse qui ne trouve
+  // pas sa ligne laisse Layla sans réponse : la ligne existe pourtant, une autre caisse l'a
+  // prise. Vécu : « VIR INST RECU ZOUBIDA EL BOUSS », 1 000 dh du 04/06, absent de la liste
+  // des libres — et impossible de savoir qui le retenait sans changer d'écran.
+  const [prises, setPrises] = useState([])
   const montant = Number(env.amount_cash)
   const moyenCaisse = env.payment_method || 'cash'
   useEffect(() => {
@@ -1002,6 +1007,10 @@ function SuggestModal({ env, onClose, onAttach }) {
       const marquer = l => ({ ...l, autreMoyen: (MOYEN_DE_LIGNE[l.type] || 'cash') !== moyenCaisse })
       setLines([...miennes, ...autres.filter(exact), ...autres.filter(l => !exact(l))].map(marquer))
       setSel(miennes.map(l => l.key))
+      try {
+        const liees = await loadAllLinkedReleveLines()
+        setPrises(liees.filter(l => l.used_by !== env.id && Math.abs(Number(l.amount) - montant) < ECART_MINI))
+      } catch { setPrises([]) }
     })()
   }, [env.id, tousMoyens])
 
@@ -1059,6 +1068,27 @@ function SuggestModal({ env, onClose, onAttach }) {
                 … {lines.length - visibles.length} autres lignes — affine la recherche.
               </div>
             )}
+          </div>
+        )}
+        {prises.length > 0 && (
+          <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: '#F4F0EA' }}>
+            <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
+              ℹ️ {prises.length} ligne(s) de {fmtMoney(montant)} sont <b>déjà prises</b> par une autre caisse :
+            </div>
+            {prises.slice(0, 6).map(l => (
+              <div key={l.key} style={{ fontSize: 11, color: '#8a7a70', lineHeight: 1.4, marginBottom: 4 }}>
+                <b>{l.ligne_date}</b> · {(l.label || '').slice(0, 80)}
+                <div style={{ color: '#0a7d3d' }}>
+                  → {l.env
+                    ? `${l.env.virement_client || l.env.destinataire?.name || l.env.source || 'caisse'} · ${l.env.session_date}`
+                    : 'une caisse qui n’existe plus — à délier depuis « Reçus banque non liés »'}
+                </div>
+              </div>
+            ))}
+            {prises.length > 6 && <div style={{ fontSize: 11, color: '#8a7a70' }}>… et {prises.length - 6} autres.</div>}
+            <div style={{ fontSize: 11, color: '#8a7a70' }}>
+              Pour en récupérer une : « Reçus banque non liés » → « Déjà liés » → <b>Délier</b>.
+            </div>
           </div>
         )}
         <div style={{ fontSize: 13, padding: '8px 10px', borderRadius: 8, background: '#F4F0EA', marginBottom: 10 }}>
