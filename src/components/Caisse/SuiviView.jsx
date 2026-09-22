@@ -8,6 +8,7 @@ import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte,
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
 import VerifierReleveModal from './modals/VerifierReleveModal'
+import RapprocherSection from './RapprocherSection'
 
 export default function SuiviView({ user }) {
   const [subTab, setSubTab] = usePersistedState('lily.suivi.subTab', 'banque')
@@ -17,10 +18,12 @@ export default function SuiviView({ user }) {
         <SubTabBtn active={subTab === 'banque'} onClick={() => setSubTab('banque')}><Landmark size={14} /> Banque</SubTabBtn>
         <SubTabBtn active={subTab === 'perso'}  onClick={() => setSubTab('perso')}><User size={14} /> Perso</SubTabBtn>
         <SubTabBtn active={subTab === 'nonlie'} onClick={() => setSubTab('nonlie')}><ArrowLeftRight size={14} /> Reçus banque non liés</SubTabBtn>
+        <SubTabBtn active={subTab === 'rapprocher'} onClick={() => setSubTab('rapprocher')}><ArrowLeftRight size={14} /> ⇄ Rapprocher</SubTabBtn>
       </div>
       {subTab === 'banque' && <BanqueSection user={user} />}
       {subTab === 'perso'  && <PersoSection  user={user} />}
       {subTab === 'nonlie' && <NonLieSection />}
+      {subTab === 'rapprocher' && <RapprocherSection />}
     </div>
   )
 }
