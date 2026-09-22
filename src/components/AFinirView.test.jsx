@@ -135,12 +135,20 @@ describe('le dispatch', () => {
     expect(declarer).not.toHaveBeenCalled()
   })
 
-  // ⚠️ On ne coule pas plus que ce qu'on a : 20 × 140 g = 2 800 g pour 2 030.
-  it('refuse d’en couler plus qu’il n’en reste', async () => {
+  // ⚠️ RÈGLE RETOURNÉE LE 2026-09-22. L'écran bloquait quand la recette
+  // réclamait plus que le reste (20 × 140 g = 2 800 g pour 2 030). Layla :
+  // « C'est fait ça doit pas coincer, c'est juste que ça a tout consommé » —
+  // on étire le vrac, tout y passe. Odoo ne reçoit jamais plus que ce qui
+  // existait : 2 030 g, pas 2 800.
+  it('laisse couler même quand la recette en réclame plus', async () => {
     await ouvrir()
     for (let i = 0; i < 20; i++) fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
     expect(screen.getByText(/plus que ce qu’il te reste/)).toBeTruthy()
     fireEvent.click(screen.getByText("C'est fait"))
-    expect(declarer).not.toHaveBeenCalled()
+    await waitFor(() => expect(declarer).toHaveBeenCalledTimes(1))
+    expect(declarer.mock.calls[0][0]).toMatchObject({ qty: 20 })
+    // ce qui part dans Odoo : le vrac qui existait, pas celui de la recette
+    expect(declarer.mock.calls[0][0].ajustements)
+      .toEqual({ 'SM. Gélée Mangue Ananas Pistache': 2030 })
   })
 })

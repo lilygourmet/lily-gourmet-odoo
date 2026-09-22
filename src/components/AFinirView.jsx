@@ -212,9 +212,14 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
                 <div className="mt-4 text-center text-[14px] text-ink-mute">
                   la recette en prend <b className="text-ink">{qte(prevu, 'g')}</b>
                 </div>
+                {/* Ce n'est PAS une erreur : on a étiré le vrac, tout y est
+                    passé. Odoo reçoit ce qui existait vraiment (stock − reste),
+                    jamais ce que la recette réclamait. « C'est fait ça doit pas
+                    coincer, c'est juste que ça a tout consommé » (Layla,
+                    2026-09-22). */}
                 {trop && (
-                  <div className="mt-1 text-center text-[14px] font-bold text-danger">
-                    c’est plus que ce qu’il te reste
+                  <div className="mt-1 text-center text-[13.5px] text-ink-mute">
+                    c’est plus que ce qu’il te reste — tout y passera
                   </div>
                 )}
 
@@ -251,10 +256,10 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
 
                 <button
                   onClick={valider}
-                  disabled={envoi || trop || !Object.values(combien).some(n => Number(n) > 0)}
+                  disabled={envoi || !Object.values(combien).some(n => Number(n) > 0)}
                   className={`w-full mt-6 rounded-2xl py-5 text-[20px] font-extrabold transition-colors
                     ${envoi ? 'bg-bordeaux text-cream'
-      : trop || !Object.values(combien).some(n => Number(n) > 0)
+      : !Object.values(combien).some(n => Number(n) > 0)
         ? 'bg-cream-deep text-ink-mute' : 'bg-success text-cream'}`}>
                   {envoi ? 'en cours…' : "C'est fait"}
                 </button>
