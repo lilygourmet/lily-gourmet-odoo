@@ -468,66 +468,82 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
           return (
             <div key={l.name} className={'border border-line rounded-xl mb-2 overflow-hidden border-l-4 ' +
               (l.manques.length ? 'border-l-[#d9a441]' : 'border-l-[#7ba05b]')}>
-              <div className="flex items-center gap-3 px-3.5 py-3 bg-white">
+              {/* ⚠️ MÊME TRAITEMENT QU'« À VALIDER ANNEXE » (Layla, 2026-09-22 :
+                  « arrange le look de À valider CD aussi »). Une carte tenait en
+                  six lignes ; elle en tient deux. Rien n'a changé dans les
+                  gestes — seulement dans ce qui se lit.
+
+                  ⚠️ LA PASTILLE « prêt / il manque » A DISPARU : le liseré de
+                  gauche le dit déjà, en couleur, sans un mot. */}
+              <div className="flex items-center gap-2.5 px-3 py-2.5 bg-white">
                 <input type="checkbox" checked={on} className="w-6 h-6 accent-[#993556] flex-shrink-0"
                   onChange={e => setSel(v => (e.target.checked ? [...v, l.name] : v.filter(x => x !== l.name)))} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[16px] font-bold">{propre(l.produit)} — {qte(l.qty, l.unite)}</div>
-                  {/* Ce qui est VRAIMENT sorti. Pré-rempli avec ce qui a été
-                      déclaré au labo, corrigeable ici — « les deux » (Layla,
-                      2026-09-18). Vide = on garde la quantité prévue.
-                      ⚠️ On tape des GRAMMES quand l'ordre est en kilos, comme
-                      partout ailleurs ; la conversion ne vit qu'ici. */}
-                  {estPrepa(l.produit) && (
-                    <label className="flex items-center gap-1.5 text-[12px] text-ink-mute mt-0.5">
-                      sorti
-                      <input type="text" inputMode="decimal"
-                        aria-label={`Quantité vraiment sortie de ${propre(l.produit)}`}
-                        value={sortis[l.name] === undefined ? '' : versSaisie(sortis[l.name], l.unite)}
-                        onChange={e => {
-                          const t = String(e.target.value).replace(/[^\d.,]/g, '').replace(',', '.')
-                          const v3 = Number(t)
-                          setSortis(v2 => {
-                            const c = { ...v2 }
-                            // Vide, ou pas encore un nombre (« 5, ») : on oublie la
-                            // ligne plutôt que d'y ranger un NaN.
-                            if (t === '' || !Number.isFinite(v3)) delete c[l.name]
-                            else c[l.name] = depuisSaisie(v3, l.unite)
-                            return c
-                          })
-                        }}
-                        onClick={e => e.stopPropagation()}
-                        placeholder={String(versSaisie(l.qty, l.unite))}
-                        className="w-[74px] text-right tabular-nums rounded-lg px-1.5 py-0.5
-                                   border border-cream-deep bg-cream-warm text-[12.5px] font-bold" />
-                      {norm(l.unite) === 'kg' ? 'g' : norm(l.unite)}
-                    </label>
+                  <div className="text-[16px] font-bold leading-tight">{propre(l.produit)}</div>
+                  {/* ⚠️ LA SEULE CHOSE QUI DOIT ARRÊTER L'ŒIL : une fournée
+                      prévue pour PLUS TARD. Valider aujourd'hui ce qui est prévu
+                      jeudi, ça se voit trop tard. Le reste part en bas, en gris. */}
+                  {l.quand && String(l.quand).slice(0, 10) > todayISO() && (
+                    <div className="text-[11.5px] text-[#854F0B] font-bold">
+                      prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z')
+    .toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
+                    </div>
                   )}
-                  <div className="text-[11px] text-ink-mute font-mono">{l.name}{l.lieu ? ' · ' + l.lieu : ''}</div>
-                  {/* Quand ça a été marqué fait à l'atelier — jour ET heure
-                      (Layla, 2026-09-19) : on valide parfois deux jours après. */}
-                  {datesFaites[l.name] && (
-                    <div className="text-[11.5px] text-ok">fait le {quandFait(datesFaites[l.name])}</div>
-                  )}
-                  {l.quand && <div className={'text-[11.5px] ' + (String(l.quand).slice(0, 10) > todayISO() ? 'text-[#854F0B] font-bold' : 'text-ink-mute')}>
-                    prévu le {new Date(String(l.quand).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
-                  </div>}
                 </div>
-                <span className={'text-[10.5px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ' +
-                  (l.manques.length ? 'bg-[#FFF7E0] text-[#854F0B]' : 'bg-[#EAF3DE] text-ok')}>
-                  {l.manques.length ? 'il manque' : 'prêt'}
-                </span>
+                {/* Ce qui est VRAIMENT sorti. Pré-rempli avec ce qui a été
+                    déclaré au labo, corrigeable ici — « les deux » (Layla,
+                    2026-09-18). Vide = on garde la quantité prévue.
+                    ⚠️ On tape des GRAMMES quand l'ordre est en kilos, comme
+                    partout ailleurs ; la conversion ne vit qu'ici.
+                    ⚠️ Et il est REMONTÉ sur la ligne du nom : c'est le seul
+                    chiffre qu'on touche, il doit être sous le pouce. */}
+                {estPrepa(l.produit) ? (
+                  <>
+                    <input type="text" inputMode="decimal"
+                      aria-label={`Quantité vraiment sortie de ${propre(l.produit)}`}
+                      value={sortis[l.name] === undefined ? '' : versSaisie(sortis[l.name], l.unite)}
+                      onChange={e => {
+                        const t = String(e.target.value).replace(/[^\d.,]/g, '').replace(',', '.')
+                        const v3 = Number(t)
+                        setSortis(v2 => {
+                          const c = { ...v2 }
+                          // Vide, ou pas encore un nombre (« 5, ») : on oublie la
+                          // ligne plutôt que d'y ranger un NaN.
+                          if (t === '' || !Number.isFinite(v3)) delete c[l.name]
+                          else c[l.name] = depuisSaisie(v3, l.unite)
+                          return c
+                        })
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      placeholder={String(versSaisie(l.qty, l.unite))}
+                      className="w-[84px] shrink-0 text-right tabular-nums rounded-lg px-2 py-1.5
+                                 border border-line bg-cream text-[14px] font-extrabold" />
+                    <span className="text-[11.5px] text-ink-mute shrink-0 whitespace-nowrap">
+                      / {qte(l.qty, l.unite)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-[14px] font-extrabold shrink-0 whitespace-nowrap">
+                    {qte(l.qty, l.unite)}
+                  </span>
+                )}
+                {/* ⚠️ « annuler l'ordre » REMONTE ICI, en croix. Il dormait tout
+                    au fond du panneau des consommations, là où personne n'allait
+                    le chercher. Même geste, même confirmation. */}
+                <button onClick={() => annuler(l)} title="Annuler l’ordre"
+                  aria-label={`Annuler l’ordre ${l.name}`}
+                  className="shrink-0 text-ink-mute text-[16px] px-1.5 py-0.5">✕</button>
               </div>
               {l.manques.length > 0 && (
-                <div className="border-t border-dashed border-line bg-[#fffdf7] px-3.5 py-2 text-[12.5px]">
+                <div className="px-3 pb-2 pl-[44px] text-[12.5px] text-[#854F0B]">
                   {l.manques.map((m, i) => {
                     const fours = (producteurDe.get(cleArticle(m.produit)) || []).filter(n => n !== l.name)
                     return (
                       <div key={i}>
-                        • <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}
+                        il manque <b className="text-ink">{qte(m.manque, m.unite)}</b> de {propre(m.produit)}
                         {fours.length > 0 && (
-                          <span className="block text-[11px] text-[#3d6f8e] ml-3">
-                            attend la validation de <b className="font-mono">{fours.join(', ')}</b> — dans cette liste
+                          <span className="block text-[11px] text-[#3d6f8e]">
+                            attend <b className="font-mono">{fours.join(', ')}</b> — dans cette liste
                           </span>
                         )}
                       </div>
@@ -536,15 +552,32 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                 </div>
               )}
 
-              {/* Noter ce qui a vraiment été consommé, avant de valider */}
-              {(l.lignes || []).length > 0 && (
-                <div className="border-t border-line">
+              {/* La ligne grise : tout ce qui ne se touche pas — le numéro, le
+                  lieu, l'heure de l'atelier, la date prévue. Elles étaient trois
+                  lignes l'une sous l'autre ; c'en est une. */}
+              <div className="px-3 pb-2 pl-[44px] flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] text-ink-mute font-mono">
+                  {l.name}{l.lieu ? ` · ${l.lieu}` : ''}
+                  {/* Quand ça a été marqué fait à l'atelier — jour ET heure
+                      (Layla, 2026-09-19) : on valide parfois deux jours après. */}
+                  {datesFaites[l.name] ? ` · fait ${quandFait(datesFaites[l.name])}` : ''}
+                  {l.quand && String(l.quand).slice(0, 10) <= todayISO()
+                    ? ` · prévu le ${new Date(String(l.quand).replace(' ', 'T') + 'Z')
+                      .toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}` : ''}
+                </span>
+                {(l.lignes || []).length > 0 && (
                   <button onClick={() => setOuvert(ouvert === l.name ? null : l.name)}
-                    className="w-full text-left px-3.5 py-2 text-[12.5px] text-bordeaux font-semibold">
-                    {ouvert === l.name ? '▾' : '▸'} noter ce qui a été consommé
+                    className="ml-auto text-[11.5px] font-bold text-bordeaux border border-line
+                               rounded-full px-2.5 py-0.5 bg-cream">
+                    {ouvert === l.name ? '▾' : '▸'} consommé
                   </button>
+                )}
+              </div>
+
+              {(l.lignes || []).length > 0 && (
+                <div>
                   {ouvert === l.name && (
-                    <div className="px-3.5 pb-3">
+                    <div className="px-3.5 pb-3 border-t border-line pt-2.5">
                       <p className="text-[12px] text-ink-mute mb-2">
                         Corrige les quantités si tu n'as pas utilisé exactement la recette.
                         Ferme sans rien changer pour garder ce qui est prévu.
@@ -595,16 +628,16 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
                           className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-soft">
                           fermer sans changer
                         </button>
-                        <button onClick={() => annuler(l)}
-                          className="ml-auto rounded-lg px-3 py-2 text-[12.5px] font-bold border border-danger bg-white text-danger">
-                          annuler l'ordre
-                        </button>
+                        {/* ⚠️ « annuler l'ordre » N'EST PLUS ICI : il est
+                            remonté en croix, au bout de la ligne du nom. Au fond
+                            de ce panneau, il fallait d'abord ouvrir « consommé »
+                            pour le trouver — personne n'y allait. */}
                         {(notes[l.name] || ajouts[l.name]) && (
                           <button onClick={() => {
                             setNotes(n => { const s2 = { ...n }; delete s2[l.name]; return s2 })
                             setAjouts(m => { const s2 = { ...m }; delete s2[l.name]; return s2 })
                           }}
-                            className="rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-mute">
+                            className="ml-auto rounded-lg px-3 py-2 text-[12.5px] font-bold border border-line bg-white text-ink-mute">
                             revenir à la recette
                           </button>
                         )}
