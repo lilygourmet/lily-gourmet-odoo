@@ -585,13 +585,17 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                         <th className="sticky top-0 z-10 text-right px-2 py-2 text-[10px] font-bold text-ink-mute bg-cream-warm" title="reçu + reste − vendu">devrait rester</th>
                         <th className="sticky top-0 z-10 text-right px-2 py-2 text-[10px] font-bold text-ink-mute bg-[#f3e6ea]" title="Café a compté en aveugle">compté</th>
                         <th className="sticky top-0 z-10 text-right px-2 py-2 text-[10px] font-bold text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo</th>
-                        {/* ⚠️ L'ÉCART SE DIT EN TOUTES LETTRES (Layla : « boutique
-                            lui manque 1 odoo », puis « 1 de plus qu'Odoo = 1 de
-                            plus EN BOUTIQUE »). « +8 » obligeait à se rappeler
-                            dans quel sens compte le signe ; « il manque 8 en
-                            boutique » se lit sans réfléchir. Et les deux sens
-                            parlent de la BOUTIQUE, pas d'Odoo. */}
-                        <th className="sticky top-0 z-10 text-left px-2 py-2 text-[10px] font-bold text-ink-mute bg-cream-warm"> </th>
+                        {/* ⚠️ « EN BOUTIQUE » EST DEVENU LE TITRE (Layla,
+                            2026-09-22 : « au lieu de "il manque" mettre −, et
+                            "1 de plus" mettre + ; "en boutique" devient un
+                            titre »).
+                            La phrase répétait « en boutique » à chaque ligne
+                            pour dire un chiffre. Le titre le dit une fois, la
+                            colonne ne dit plus que le signe — et le signe est
+                            enfin sans ambiguïté : il compte la BOUTIQUE par
+                            rapport à Odoo. Moins, il en manque ; plus, il y en
+                            a en trop. */}
+                        <th className="sticky top-0 z-10 text-right px-2 py-2 text-[10px] font-bold text-ink-mute bg-cream-warm" title="La boutique par rapport à Odoo : − il en manque, + il y en a en plus">en boutique</th>
                         <th className="sticky top-0 z-10 text-center px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute bg-cream-warm"></th>
                       </tr>
                     </thead>
@@ -685,7 +689,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                               <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50`}>
                                 {hasCurrent ? r.qty_odoo_current : <span className="text-ink-mute italic">—</span>}
                               </td>
-                              <td className="px-2 py-2 text-left text-[11.5px] whitespace-nowrap">
+                              <td className="px-2 py-2 text-right text-[13px] tabular-nums whitespace-nowrap">
                                 {isConflictRow ? <span className="text-ink-mute italic text-[10px]">à arbitrer</span>
                                   : effGapCurr === null ? <span className="text-ink-mute">—</span>
                                     /* ⚠️ UN STOCK ODOO NÉGATIF N'EST PAS UN ÉCART DE
@@ -699,11 +703,18 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                        c'est souvent la découpe d'un gâteau en parts,
                                        que rien n'enregistre. */
                                     : (r.qty_odoo_current < 0)
-                                      ? <span className="text-red-700 font-bold">Odoo à {r.qty_odoo_current} — impossible</span>
+                                      ? (
+                                        <span className="text-red-700 font-bold">
+                                          {-effGapCurr > 0 ? `+${-effGapCurr}` : -effGapCurr}
+                                          {/* Le chiffre seul ne dirait pas l'essentiel : un
+                                              stock Odoo négatif n'existe pas. */}
+                                          <span className="block text-[9.5px] font-semibold">⚠ Odoo à {r.qty_odoo_current}</span>
+                                        </span>
+                                      )
                                       : effGapCurr === 0 ? <span className="text-green-700 font-bold">✓</span>
                                         : effGapCurr > 0
-                                          ? <span className="text-red-700 font-bold">il manque {effGapCurr} en boutique</span>
-                                          : <span className="text-blue-800 font-bold">{-effGapCurr} de plus en boutique</span>}
+                                          ? <span className="text-red-700 font-bold">−{effGapCurr}</span>
+                                          : <span className="text-blue-800 font-bold">+{-effGapCurr}</span>}
                               </td>
                               <td className="px-2 py-2 text-center">
                                 {isConflictRow && conflictItems.length === 1 ? (
