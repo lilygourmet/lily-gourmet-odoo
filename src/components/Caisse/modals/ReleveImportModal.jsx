@@ -136,10 +136,16 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
       }
       // Lignes que l'app vient d'attribuer toute seule : marquées PRISES, sinon un
       // ré-import de la même période les ferait réapparaître dans « à lier ».
-      await markMatchedReleveLines(
-        toWrite.filter(r => r.status === 'trouve' && r.line).map(r => ligneRow(r.line, r.env.id)))
-      // Mémoriser les lignes du relevé non attribuées (pour rattachement manuel)
-      await saveUnmatchedReleveLines((recon.unmatched || []).map(u => ligneRow(u)))
+      const attribuees = toWrite.filter(r => r.status === 'trouve' && r.line)
+      await markMatchedReleveLines(attribuees.map(r => ligneRow(r.line, r.env.id)))
+      // Puis TOUTES les autres lignes du relevé — pas seulement celles que le calcul a
+      // laissées libres. Une ligne réservée (caisse justifiée par une photo, caisse déjà
+      // verte, paire « 🔗 ») n'était écrite nulle part et devenait introuvable.
+      // `ligneRow` numérote les clés en double : on exclut celles qu'on vient d'écrire,
+      // sinon elles repartiraient sous une clé « #2 » et feraient un vrai doublon.
+      const dejaEcrites = new Set(attribuees.map(r => r.line))
+      await saveUnmatchedReleveLines(
+        (recon.lignes || recon.unmatched || []).filter(l => !dejaEcrites.has(l)).map(u => ligneRow(u)))
       // Trace de l'import (historique) — non bloquant.
       try {
         await saveReleveImport({
