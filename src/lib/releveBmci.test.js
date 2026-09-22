@@ -613,3 +613,43 @@ describe('payeurs connus — un proche paie pour la cliente', () => {
     expect(nomDansLibelle('Maryam el bairi', 'VIR INST RECU LEBDAR NAWAL')).toBe(true)
   })
 })
+
+// Filet « virement ↔ espèces » : quand aucun virement ne correspond, on suppose une erreur
+// de saisie et on regarde les dépôts espèces. Une SUPPOSITION, donc jamais vert tout seul —
+// mais elle doit rester crédible. Deux garde-fous voulus par Layla :
+//   - une semaine, pas la fenêtre des dépôts (100 j) : la caisse du 4 juin était proposée
+//     sur le versement du 10 juillet, 36 jours plus tard ;
+//   - un bordereau au nom d'une AUTRE cliente ne paie pas cette commande-ci.
+describe('reconcileEnvelopes — filet virement ↔ espèces', () => {
+  const caisse = (extra = {}) => ({ id: 'e1', amount_cash: 1000, payment_method: 'virement',
+    virement_client: 'Zoubida El bousserghini', session_date: '2026-06-04', ...extra })
+  const depot = (dateIso, label = 'Versement Espèces 1249 0059748') =>
+    ({ dateIso, credit: 1000, label, type: 'versement' })
+  const etat = (env, txns) => reconcileEnvelopes([env], txns, { recompute: false }).results[0]
+
+  it('propose un dépôt espèces de la semaine', () => {
+    expect(etat(caisse(), [depot('2026-06-09')]).status).toBe('a_confirmer')
+  })
+
+  it('ne propose plus un dépôt d’un mois plus tard', () => {
+    expect(etat(caisse(), [depot('2026-07-10')]).status).toBe('absent')
+  })
+
+  it('écarte un bordereau au nom d’une autre cliente', () => {
+    const r = etat(caisse({ virement_client: 'Charkaoui Lina' }),
+      [depot('2026-06-05', 'Versement Espèces c672076 AZIZ ASFOURY 1058')])
+    expect(r.status).toBe('absent')
+  })
+
+  it('garde le bordereau au nom de la cliente elle-même', () => {
+    const r = etat(caisse({ virement_client: 'Charkaoui Lina' }),
+      [depot('2026-06-05', 'Versement Espèces CHARKAOUI LINA 1058')])
+    expect(r.status).toBe('a_confirmer')
+  })
+
+  it('ne juge pas le nom quand la caisse n’en porte aucun', () => {
+    const r = etat(caisse({ virement_client: null }),
+      [depot('2026-06-05', 'Versement Espèces AZIZ ASFOURY 1058')])
+    expect(r.status).toBe('a_confirmer')
+  })
+})
