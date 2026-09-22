@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FileSearch, X } from 'lucide-react'
 import { parseStatement } from '../../../lib/releveBmci'
-import { cleDeLigne, memeOperation, ECART_MINI } from '../../../lib/releveDoublons'
+import { cleDeLigne, memeOperation, memeEncaissement } from '../../../lib/releveDoublons'
 import { loadReleveLinesBetween, saveUnmatchedReleveLines } from '../../../lib/caisse'
 import { fmtMoney } from '../_helpers'
 
@@ -58,9 +58,7 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       // doublon. Même montant à 3 jours près = on considère que c'est déjà là. Le prix à
       // payer est connu et assumé : un VRAI second versement du même montant le même jour
       // passera pour déjà présent. Mieux vaut le rater que le dupliquer.
-      const dejaLa = (r) => enBase.some(b => memeOperation(b, r)
-        || (Math.abs(Number(b.amount) - Number(r.amount)) < ECART_MINI
-            && Math.abs((new Date(b.ligne_date) - new Date(r.ligne_date)) / 86400000) <= 3))
+      const dejaLa = (r) => enBase.some(b => memeOperation(b, r) || memeEncaissement(b, r))
       const manquantes = rows.filter(r => !dejaLa(r))
       setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes })
       setEtape('resultat')
