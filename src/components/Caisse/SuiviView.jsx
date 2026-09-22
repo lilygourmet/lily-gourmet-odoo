@@ -7,6 +7,7 @@ import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
+import VerifierReleveModal from './modals/VerifierReleveModal'
 
 export default function SuiviView({ user }) {
   const [subTab, setSubTab] = usePersistedState('lily.suivi.subTab', 'banque')
@@ -72,6 +73,7 @@ function BanqueSection({ user }) {
   const [uploadEnv, setUploadEnv] = useState(null)
   const [editDate, setEditDate] = useState({})
   const [showImport, setShowImport] = useState(false)
+  const [showVerif, setShowVerif] = useState(false)   // contrôle d'un relevé, sans rien réimporter
   const [confirmEnv, setConfirmEnv] = useState(null)
   const [suggestEnv, setSuggestEnv] = useState(null)
   const [query, setQuery] = useState('')
@@ -380,6 +382,9 @@ function BanqueSection({ user }) {
           title="Dit pourquoi chaque virement du mois ne se rapproche pas — ne modifie rien">
           🔍 Pourquoi ces virements ne se rapprochent pas
         </button>
+        <button onClick={() => setShowVerif(true)} style={btnNormal}>
+          🔎 Vérifier un relevé (sans rien changer)
+        </button>
         <button onClick={() => setShowImport(true)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>
           <FileText size={14} /> Importer relevé bancaire
         </button>
@@ -559,6 +564,10 @@ function BanqueSection({ user }) {
 
       {showImport && (
         <ReleveImportModal onClose={() => setShowImport(false)} onDone={reload} user={user} />
+      )}
+
+      {showVerif && (
+        <VerifierReleveModal onClose={() => setShowVerif(false)} onDone={reload} />
       )}
 
       {analyse && <AnalyseVirementsModal a={analyse} onClose={() => setAnalyse(null)} />}
