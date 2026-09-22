@@ -236,24 +236,26 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // sans retirer la place : le bon nombre de pages, toutes vides. Exactement
     // ce qu'elle a vu.
     //
-    // La classe ne gêne rien à l'écran (les deux règles vivent sous
-    // `@media print`). On la garde donc jusqu'à ce que Layla soit VRAIMENT
-    // revenue dans l'app — revenue sur l'onglet, ou un doigt posé dessus. On
-    // n'écoute qu'après le départ de l'impression, pour qu'un focus d'avant ne
-    // compte pas.
-    const rendreLEcran = () => {
-      for (const [cible, ev] of ecoutes) cible.removeEventListener(ev, rendreLEcran)
-      document.body.classList.remove('impr-feuilles')
-    }
-    const ecoutes = [[window, 'focus'], [window, 'pointerdown'],
-      [document, 'visibilitychange']]
-    const ecouterLeRetour = () => {
-      for (const [cible, ev] of ecoutes) cible.addEventListener(ev, rendreLEcran)
-    }
+    // ⚠️ ET LA CLASSE NE PART PLUS DU TOUT TANT QU'ON EST SUR CET ÉCRAN
+    // (Layla, 2026-09-22 : « quand je réimprime c'est blanc »).
+    //
+    // Elle partait « quand Layla est vraiment revenue » — au premier focus,
+    // doigt posé ou changement d'onglet après le départ de l'impression. Sur
+    // iPhone c'est une COURSE PERDUE D'AVANCE : `window.print()` rend la main
+    // tout de suite, le système fabrique son aperçu DERRIÈRE, et le moindre
+    // `visibilitychange` pendant ce temps-là retire la classe. La vieille règle
+    // `body:not(.impr-feuilles) * { visibility: hidden }` reprend alors la
+    // main : tout devient invisible SANS PERDRE SA PLACE. Le bon nombre de
+    // pages, toutes blanches — ce qu'elle a vu, surtout à la deuxième
+    // impression, quand le système ne refait plus les mêmes gestes.
+    //
+    // On ne cherche donc plus le bon moment : il n'y en a pas. La classe reste
+    // tant que l'écran est ouvert (elle ne coûte rien, les deux règles vivent
+    // sous `@media print`) et ne s'en va qu'en QUITTANT l'écran — voir l'effet
+    // de démontage juste en dessous. Plus de course, plus de hasard.
     const partir = () => {
       if (!vivant) return
       window.print()
-      ecouterLeRetour()
     }
     const apresLaPeinture = () =>
       requestAnimationFrame(() => requestAnimationFrame(partir))
@@ -266,11 +268,19 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
     // Les deux images d'affilée suffisent : la seconde n'arrive qu'une fois la
     // liasse peinte, et c'est la seule chose qu'il fallait vraiment attendre.
     apresLaPeinture()
-    return () => {
-      vivant = false
-      rendreLEcran()
-    }
+    return () => { vivant = false }
   }, [tirage])
+
+  /**
+   * LA CLASSE D'IMPRESSION S'EN VA EN QUITTANT L'ÉCRAN, et à ce moment-là
+   * seulement.
+   *
+   * C'est le seul instant où l'on est SÛR qu'aucun aperçu n'est en cours de
+   * fabrication. La laisser pendant qu'on reste ici ne gêne rien : elle ne
+   * parle qu'à `@media print`. Et si Layla imprime autre chose depuis un autre
+   * écran, ce démontage-ci est déjà passé.
+   */
+  useEffect(() => () => document.body.classList.remove('impr-feuilles'), [])
 
   /** La feuille de sortie de stock, vierge — on l'imprime par paquets. */
   const imprimerSortie = () => lancer(null, true)

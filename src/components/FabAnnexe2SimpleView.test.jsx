@@ -517,7 +517,19 @@ describe('rien ne part avant que la liasse soit posée', () => {
     expect(document.body.classList.contains('impr-feuilles')).toBe(true)
   })
 
-  it('l’écran n’est rendu que quand Layla revient dans l’app', async () => {
+  // ⚠️ CE TEST DISAIT EXACTEMENT LE CONTRAIRE, et c'était LUI le bug.
+  //
+  // « L'écran n'est rendu que quand Layla revient dans l'app » : la classe
+  // partait au premier focus, doigt posé ou changement d'onglet après le départ
+  // de l'impression. Sur iPhone c'est une course perdue d'avance —
+  // `window.print()` rend la main tout de suite et le système fabrique son
+  // aperçu DERRIÈRE. Le moindre événement pendant ce temps-là retirait la
+  // classe, la vieille règle `body:not(.impr-feuilles) * { visibility: hidden }`
+  // reprenait la main, et tout devenait invisible SANS PERDRE SA PLACE : le bon
+  // nombre de pages, toutes blanches.
+  //
+  // « Quand je réimprime c'est blanc » (Layla, 2026-09-22).
+  it('un doigt posé pendant que l’iPhone fabrique son aperçu ne blanchit plus rien', async () => {
     const peindre = renduALaMain()
     window.print = vi.fn()
     await ouvrirLaFiche()
@@ -526,12 +538,31 @@ describe('rien ne part avant que la liasse soit posée', () => {
     peindre()
     expect(document.body.classList.contains('impr-feuilles')).toBe(true)
 
-    // Elle repose le doigt sur l'app : là, et seulement là, on range.
+    // Tout ce qui la faisait partir autrefois — et qui arrive en plein aperçu.
     fireEvent(window, new Event('focus'))
-    await waitFor(() =>
-      expect(document.body.classList.contains('impr-feuilles')).toBe(false))
-    // La liasse, elle, reste : la prochaine impression la remplacera.
+    fireEvent(window, new Event('pointerdown'))
+    fireEvent(document, new Event('visibilitychange'))
+    await souffler()
+    expect(document.body.classList.contains('impr-feuilles')).toBe(true)
     expect(document.querySelectorAll('.feuille-impr').length).toBeGreaterThan(0)
+  })
+
+  // Elle ne s'en va qu'en QUITTANT l'écran : le seul instant où l'on est sûr
+  // qu'aucun aperçu n'est en train de se fabriquer.
+  it('et elle s’en va en quittant l’écran', async () => {
+    const peindre = renduALaMain()
+    window.print = vi.fn()
+    const vue = render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    await waitFor(() => expect(screen.getByText('Sirop imbibage')).toBeTruthy())
+    fireEvent.click(screen.getByText('Sirop imbibage'))
+    await waitFor(() => expect(screen.getByText("C'est fait")).toBeTruthy())
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+    peindre()
+    expect(document.body.classList.contains('impr-feuilles')).toBe(true)
+
+    vue.unmount()
+    expect(document.body.classList.contains('impr-feuilles')).toBe(false)
   })
 
   it('et on peut réimprimer la même chose juste après', async () => {
@@ -550,6 +581,41 @@ describe('rien ne part avant que la liasse soit posée', () => {
     fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
     peindre()
     expect(window.print).toHaveBeenCalledTimes(2)
+  })
+
+  // ⚠️ LA DEUXIÈME IMPRESSION, AVEC UN IPHONE QUI BOUGE — le cas de Layla.
+  //
+  // « Quand je réimprime c'est blanc » (2026-09-22). Entre deux impressions
+  // l'iPhone ferme sa feuille de partage, revient à l'app, on repose le doigt :
+  // autant d'événements qui retiraient la classe. Et sans elle, la page part à
+  // l'imprimante entièrement invisible, mais avec toute sa place — le bon
+  // nombre de pages, toutes blanches.
+  it('réimprimer après avoir touché l’écran ne sort plus du blanc', async () => {
+    const peindre = renduALaMain()
+    let classeALImpression = []
+    window.print = vi.fn(() => {
+      classeALImpression.push(document.body.classList.contains('impr-feuilles'))
+    })
+    await ouvrirLaFiche()
+
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+    peindre()
+
+    // L'iPhone rend la main, elle revient dans l'app, repose le doigt.
+    fireEvent(window, new Event('afterprint'))
+    fireEvent(document, new Event('visibilitychange'))
+    fireEvent(window, new Event('focus'))
+    fireEvent(window, new Event('pointerdown'))
+    await souffler()
+
+    fireEvent.click(screen.getByText('🖨 Imprimer'))
+    fireEvent.click(await screen.findByText('Imprimer 1 feuille'))
+    peindre()
+
+    // ⚠️ LES DEUX FOIS la classe était là : aucune des deux pages n'est blanche.
+    expect(classeALImpression).toEqual([true, true])
+    expect(document.querySelectorAll('.feuille-impr').length).toBeGreaterThan(0)
   })
 
   it('la feuille de sortie non plus ne part pas à vide', async () => {
