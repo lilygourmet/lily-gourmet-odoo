@@ -135,6 +135,15 @@ export function estRemiseCheque(label) {
   return /REMISE\s+CHEQUE/i.test(label || '')
 }
 
+// Un nom est-il l'autre, coupé ? Mot à mot, dans l'ordre (nomDeLigne trie les mots, donc
+// deux écritures du même nom donnent la même suite). Au moins deux mots : sur un seul, un
+// préfixe ne prouve rien.
+function memeNomTronque(a, b) {
+  const ma = a.split(' ').filter(Boolean), mb = b.split(' ').filter(Boolean)
+  if (ma.length < 2 || ma.length !== mb.length) return false
+  return ma.every((m, i) => m.startsWith(mb[i]) || mb[i].startsWith(m))
+}
+
 // Est-ce la MÊME opération bancaire, vue dans deux documents ?
 //   1. Même n° d'opération → oui, QUELLE QUE SOIT LA DATE : les documents ne datent pas
 //      une opération pareil (jour d'opération / jour de valeur), et le numéro tranche.
@@ -177,6 +186,13 @@ export function memeOperation(a, b) {
   // Le nom du client, lui, ne se mélange pas — c'est le seul repère solide.
   const na = nomDeLigne(a.label), nb = nomDeLigne(b.label)
   if (nomFiable(na) && nomFiable(nb) && similarite(na, nb) >= 0.85) return true
+  // L'extrait TRONQUE le libellé : « ATTYA ANDALOUSSI » y devient « ATTYA ANDALO ». Le
+  // même virement s'écrit donc avec un nom coupé, que ni le numéro (l'extrait n'en porte
+  // pas) ni la ressemblance d'ensemble ne rattrapent — « ANDALOUSSI ATTYA IBN » contre
+  // « ANDALO ATTYA IBN » tombe sous le seuil. On accepte alors un nom dont CHAQUE mot
+  // commence comme celui de l'autre, à mots identiques en nombre. Montant et jour sont
+  // déjà exigés plus haut : c'est ce qui rend cette règle sûre.
+  if (nomFiable(na) && nomFiable(nb) && memeNomTronque(na, nb)) return true
   // Sans nom pour trancher, deux n° qui se contredisent restent deux opérations.
   if (sa && sb) return false
   const la = libelleNorm(a.label), lb = libelleNorm(b.label)
