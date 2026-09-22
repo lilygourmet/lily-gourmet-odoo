@@ -29,6 +29,10 @@ import { loadAFinir, loadFormats, prevuParLaRecette, dispatchVersOdoo, aMettreEn
 import { ChoixDuReste } from './RebutView'
 import { demanderAJeter } from '../lib/rebuts'
 
+/** Deux noms d'article sont-ils le même ? Odoo colle parfois sa référence devant. */
+const cleArticle = n => String(n || '')
+  .replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+
 /** Une ligne de la liste : photo, ce qu'il en reste, ce qu'on en fait. */
 function LigneVrac({ a, onOuvrir }) {
   return (
@@ -119,11 +123,30 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
       // biscuit. Sans cette vérification, deux doigts ici auraient fait
       // consommer à Odoo des composants qui n'existent pas, alors que l'écran
       // de fabrication, lui, l'interdit depuis toujours.
+      //
+      // ⚠️ MAIS PAS SUR LE VRAC QU'ON EST EN TRAIN DE VIDER (Layla,
+      // 2026-09-22 : « il manque Subleme Fromage Passion pour Pr Cheesecake
+      // Exotique Indiv — passe par Fabrication Annexe 2 », alors que l'écran
+      // venait de lui écrire « c'est plus que ce qu'il te reste — tout y
+      // passera »).
+      //
+      // La recette de 50 individuels réclame 1 400 g ; il en restait 1 158, et
+      // c'est exprès : c'est TOUTE la question de cet écran. Le verrou voyait
+      // le vrac dans la recette du moule, le trouvait insuffisant, et refusait
+      // le seul geste pour lequel l'écran existe. L'écran promettait puis
+      // refusait — et renvoyait vers Fabrication Annexe 2, où elle n'aurait
+      // pas fait mieux.
+      //
+      // Ce vrac-là n'a pas besoin d'être vérifié : `dispatchVersOdoo` vient
+      // justement de dire combien il en part, au gramme près. Le verrou garde
+      // tout le RESTE — le crémeux, le biscuit, la gélée qu'on n'a pas.
+      const leVrac = cleArticle(ouvert.a.produit)
       for (const o of ordres) {
         const n = await loadArticleFabAnnexe(o.produit)
-        const manque = n
+        const manque = (n
           ? bloquants({ ...n, composants: ingredientsPour(n, o.qty), enfants: undefined }, {})
           : []
+        ).filter(x => cleArticle(x) !== leVrac)
         if (manque.length) {
           toast(`Il manque ${propre(manque[0])} pour ${propre(o.produit)} — passe par Fabrication Annexe 2.`)
           return

@@ -65,6 +65,9 @@ vi.mock('../lib/miseEnForme', async importOriginal => ({
 const { default: AFinirView } = await import('./AFinirView')
 
 beforeEach(() => {
+  // ⚠️ `vi.clearAllMocks()` ne vide PAS un tableau à nous : les messages d'un
+  // test fuitaient dans le suivant, et faisaient passer pour vrai un test faux.
+  toasts.length = 0
   vi.clearAllMocks(); liste = [vrac]; ficheDuMoule = { tournee: 10 }; peutJeter = false
   composantsDuMoule = [{ produit: 'SM. Biscuit Gianduja Indiv', unite: 'u', besoin: 10,
     stock: 50, dejaFait: 0, fabrique: true, ok: true }]
@@ -185,6 +188,49 @@ describe('le dispatch', () => {
   // « C'est fait ça doit pas coincer, c'est juste que ça a tout consommé » —
   // on étire le vrac, tout y passe. Odoo ne reçoit jamais plus que ce qui
   // existait : 2 030 g, pas 2 800.
+  /**
+   * ⚠️ LE CAS VÉCU LE 22/09 AU SOIR, remis tel quel.
+   *
+   * « Il manque Subleme Fromage Passion pour Pr Cheesecake Exotique Indiv —
+   * passe par Fabrication Annexe 2 » — alors que l'écran venait d'écrire, deux
+   * lignes plus haut : « c'est plus que ce qu'il te reste, tout y passera ».
+   *
+   * La recette de 50 individuels réclame 1 400 g ; il en restait 1 158, et
+   * c'est EXPRÈS — c'est toute la question de cet écran. Le verrou voyait le
+   * vrac dans la recette du moule, le trouvait insuffisant, et refusait le seul
+   * geste pour lequel l'écran existe. Il promettait, puis refusait, puis
+   * renvoyait vers Fabrication Annexe 2 où elle n'aurait pas fait mieux.
+   */
+  it('ne se bloque JAMAIS sur le vrac qu’on est en train de vider', async () => {
+    // Le moule contient son propre vrac, comme dans la vraie recette — et il
+    // en réclame plus qu'il n'en reste.
+    composantsDuMoule = [
+      { produit: 'SM. Gélée Mangue Ananas Pistache', unite: 'g', besoin: 2800,
+        stock: 0, dejaFait: 0, fabrique: true, ok: false },
+    ]
+    await ouvrir()
+    for (let i = 0; i < 20; i++) fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
+    fireEvent.click(screen.getByText("C'est fait"))
+    await waitFor(() => expect(declarer).toHaveBeenCalledTimes(1))
+    expect(toasts.join(' ')).not.toMatch(/Il manque/)
+  })
+
+  // ⚠️ ET LE VERROU GARDE TOUT LE RESTE : le crémeux, le biscuit, la gélée
+  // qu'on n'a pas. C'est la porte dérobée qu'il ne faut pas rouvrir.
+  it('mais bloque toujours sur un AUTRE composant manquant', async () => {
+    composantsDuMoule = [
+      { produit: 'SM. Gélée Mangue Ananas Pistache', unite: 'g', besoin: 2800,
+        stock: 0, dejaFait: 0, fabrique: true, ok: false },
+      { produit: 'SM. Biscuit Pistache Indiv', unite: 'u', besoin: 20,
+        stock: 0, dejaFait: 0, fabrique: true, ok: false },
+    ]
+    await ouvrir()
+    for (let i = 0; i < 20; i++) fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
+    fireEvent.click(screen.getByText("C'est fait"))
+    await waitFor(() => expect(toasts.join(' ')).toMatch(/Il manque Biscuit Pistache Indiv/))
+    expect(declarer).not.toHaveBeenCalled()
+  })
+
   it('laisse couler même quand la recette en réclame plus', async () => {
     await ouvrir()
     for (let i = 0; i < 20; i++) fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
