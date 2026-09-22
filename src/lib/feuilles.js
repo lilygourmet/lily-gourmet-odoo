@@ -204,6 +204,24 @@ export const enRetour = feuilles => (feuilles || []).filter(f =>
  */
 export const rendue = id => agir(id, 'pas-faite', { motif: 'rendue' })
 
+/**
+ * ANNULER UNE FOURNÉE DONT RIEN N'EST SORTI DE LA RÉSERVE.
+ *
+ * « Pouvoir annuler des déclarations dans À déclarer qui n'ont pas besoin de
+ * retour de matière première » (Layla, 2026-09-22).
+ *
+ * ⚠️ C'est l'AUTRE moitié du bouton « ↩ Rendre », pas un doublon. Rendre
+ * existe quand l'économe a donné : il doit récupérer sa marchandise. Quand il
+ * n'a RIEN donné, il n'y a rien à lui rendre — et la ligne restait alors dans
+ * « À déclarer » pour toujours, sans aucun moyen de s'en défaire.
+ *
+ * ⚠️ Ça ne contredit pas « pas faite n'existe plus comme bouton » (Layla,
+ * 2026-09-20 : « c'est systématique gardé »). Ce qu'elle refusait, c'est
+ * d'effacer une fournée dont la crème attend au frigo. Ici rien n'attend : la
+ * matière n'a jamais quitté la réserve.
+ */
+export const annulerFeuille = id => agir(id, 'pas-faite', { motif: 'annulee' })
+
 /** Fini, d'une façon ou d'une autre : plus rien à en attendre. */
 const clos = f => !!(f?.declare_le || f?.pas_faite_le)
 

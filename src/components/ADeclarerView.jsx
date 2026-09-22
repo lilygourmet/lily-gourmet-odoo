@@ -28,7 +28,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { propre } from '../lib/ecranSimple'
 import { PhotoFeuille, GrosseQuantite, Rien, TeteCascade, Bande } from './FeuilleVisuel'
-import { feuillesDuJour, aDeclarer, cheminDe, demanderRetour, resteDeLaCascade, parCascade, parJour, nomDuJour } from '../lib/feuilles'
+import { feuillesDuJour, aDeclarer, cheminDe, demanderRetour, annulerFeuille, resteDeLaCascade, parCascade, parJour, nomDuJour } from '../lib/feuilles'
 import { confirmDialog } from '../lib/confirmDialog'
 import { toast } from '../lib/toast'
 import { poserLeScan } from '../lib/scanEntrant'
@@ -51,7 +51,7 @@ const enRetard = f => Date.now() - Date.parse(f.donne_le || f.imprime_le || 0) >
  * ⚠️ Hors du composant, sans quoi React la prend pour un autre composant à
  * chaque relecture et recharge toutes les photos.
  */
-function Ligne({ f, rend, onDeclarer, onRendre }) {
+function Ligne({ f, rend, onDeclarer, onRendre, onAnnuler }) {
   const tard = enRetard(f)
   return (
     <div className={`flex items-stretch bg-cream-warm border border-line border-l-4 rounded-xl
@@ -87,6 +87,21 @@ function Ligne({ f, rend, onDeclarer, onRendre }) {
           className="flex-none w-11 border-l border-line text-ink-mute text-[16px]
                      active:bg-cream-deep transition disabled:opacity-50">
           {rend === f.id ? '…' : '↩'}
+        </button>
+      )}
+      {/* ⚠️ L'AUTRE MOITIÉ DU BOUTON D'À CÔTÉ (Layla, 2026-09-22 : « pouvoir
+          annuler les déclarations dans À déclarer qui n'ont pas besoin de
+          retour de matière première »). Quand l'économe a donné, on RESSORT la
+          marchandise — c'est le `↩`. Quand il n'a rien donné, il n'y a rien à
+          lui rendre, et la ligne restait là pour toujours sans aucun moyen de
+          s'en défaire. Les deux ne s'affichent jamais ensemble. */}
+      {!f.donne_le && (
+        <button
+          onClick={() => onAnnuler(f)} disabled={rend === f.id}
+          aria-label={`Annuler ${propre(f.libelle || f.produit)}`}
+          className="flex-none w-11 border-l border-line text-ink-mute text-[16px]
+                     active:bg-cream-deep transition disabled:opacity-50">
+          {rend === f.id ? '…' : '✕'}
         </button>
       )}
     </div>
@@ -157,6 +172,30 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
     finally { setRend(null) }
   }
 
+  /**
+   * ANNULER : la fournée ne sera pas faite, et rien n'est sorti de la réserve.
+   *
+   * ⚠️ ON DEMANDE TOUJOURS (Layla, 2026-09-22 : « avec un texte qui dit tu es
+   * sûre de vouloir annuler ? »). La ligne quitte « À déclarer » pour de bon,
+   * et elle quitte aussi la liste de l'économe s'il ne l'avait pas encore
+   * servie : c'est un geste qu'on ne rattrape pas depuis cet écran.
+   */
+  const annuler = async f => {
+    if (rend) return
+    navigator.vibrate?.(15)
+    if (!await confirmDialog(
+      `Tu es sûre de vouloir annuler « ${propre(f.libelle || f.produit)} » ?\n\n`
+      + "Cette fournée ne sera pas faite. Rien n'est sorti de la réserve, il n'y a donc rien à rendre.",
+      { confirmLabel: 'Oui, annuler', danger: true })) return
+    setRend(f.id)
+    try {
+      await annulerFeuille(f.id)
+      toast('Annulée.')
+      relire()
+    } catch (e) { toast('Erreur : ' + (e.message || e)) }
+    finally { setRend(null) }
+  }
+
   /** Le vrai écran de déclaration, posé sur cet article. */
   const ouvrirPourDeclarer = f => {
     navigator.vibrate?.(15)
@@ -210,7 +249,7 @@ export default function ADeclarerView({ user, onLogout, onNavigate, activeView }
                   <TeteCascade g={g} />
                   {g.feuilles.map(f => (
                     <Ligne key={f.id} f={f} rend={rend}
-                      onDeclarer={ouvrirPourDeclarer} onRendre={rendre} />
+                      onDeclarer={ouvrirPourDeclarer} onRendre={rendre} onAnnuler={annuler} />
                   ))}
                 </div>
               ))}

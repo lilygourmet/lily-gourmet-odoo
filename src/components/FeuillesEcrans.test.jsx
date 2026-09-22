@@ -76,12 +76,14 @@ let lues = []
 const donner = vi.fn(async () => ({ reste: 0 }))
 const retourRecu = vi.fn(async () => ({}))
 const demanderRetour = vi.fn(async () => ({}))
+const annulerFeuille = vi.fn(async () => ({}))
 const poserLeScan = vi.fn()
 
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
-vi.mock('../lib/confirmDialog', () => ({ confirmDialog: async () => true }))
+const confirmDialog = vi.fn(async () => true)
+vi.mock('../lib/confirmDialog', () => ({ confirmDialog: (...a) => confirmDialog(...a) }))
 vi.mock('../lib/scanEntrant', () => ({ poserLeScan: (...a) => poserLeScan(...a) }))
 vi.mock('../lib/feuilles', async importOriginal => ({
   ...await importOriginal(),            // les VRAIES règles de tri
@@ -89,12 +91,13 @@ vi.mock('../lib/feuilles', async importOriginal => ({
   donner: (...a) => donner(...a),
   retourRecu: (...a) => retourRecu(...a),
   demanderRetour: (...a) => demanderRetour(...a),
+  annulerFeuille: (...a) => annulerFeuille(...a),
 }))
 
 const { default: ADeclarerView } = await import('./ADeclarerView')
 const { default: DonneView } = await import('./DonneView')
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); confirmDialog.mockResolvedValue(true) })
 afterEach(cleanup)
 
 describe('« À déclarer », pour des mains farineuses', () => {
@@ -277,5 +280,77 @@ describe('« Donné », l’écran de l’économe', () => {
     render(<DonneView user={{ id: 'u1' }} onNavigate={() => {}} />)
     expect(await screen.findByText('Rien dehors')).toBeTruthy()
     expect(screen.queryByText(/Rien n’est sorti sans avoir été déclaré/)).toBeNull()
+  })
+})
+
+// ============================================================
+// ANNULER CE DONT RIEN N'EST SORTI DE LA RÉSERVE.
+//
+// « Pouvoir annuler les déclarations dans À déclarer qui n'ont pas besoin de
+// retour de matière première », puis « je parle de là où il n'y a pas la
+// matière première, avec un texte qui dit : tu es sûre de vouloir annuler ? »
+// (Layla, 2026-09-22).
+//
+// C'est l'AUTRE moitié du bouton « ↩ Rendre », pas un doublon : quand
+// l'économe a donné, il doit récupérer sa marchandise ; quand il n'a rien
+// donné, la ligne restait dans « À déclarer » POUR TOUJOURS, sans aucun moyen
+// de s'en défaire.
+// ============================================================
+describe('annuler une fournée dont rien n’est sorti', () => {
+  it('la croix n’apparaît QUE là où l’économe n’a rien donné', async () => {
+    lues = [donnee, seule]                    // `donnee` servie, `seule` non
+    render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText('Crème citron')
+    expect(screen.getAllByLabelText(/^Annuler /).length).toBe(1)
+    expect(screen.getAllByLabelText(/^Rendre /).length).toBe(1)
+  })
+
+  // ⚠️ LES DEUX NE SE CROISENT JAMAIS : sur une même ligne, c'est l'un OU
+  // l'autre. Rendre ce qui n'est pas sorti serait un retour fantôme ; annuler
+  // ce qui est sorti laisserait la marchandise dehors sans que personne le
+  // sache.
+  it('jamais les deux sur la même ligne', async () => {
+    lues = [donnee]
+    render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText('Crème citron')
+    expect(screen.queryByLabelText(/^Annuler /)).toBeNull()
+    cleanup()
+
+    lues = [seule]
+    render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText('Cadre citron meringuée')
+    expect(screen.queryByLabelText(/^Rendre /)).toBeNull()
+  })
+
+  // ⚠️ « AVEC UN TEXTE QUI DIT : TU ES SÛRE DE VOULOIR ANNULER ? » (Layla).
+  // La ligne part pour de bon — et elle quitte aussi la liste de l'économe s'il
+  // ne l'avait pas encore servie.
+  it('demande confirmation, en nommant la fournée', async () => {
+    lues = [seule]
+    render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText('Cadre citron meringuée')
+    fireEvent.click(screen.getByLabelText(/^Annuler /))
+    await waitFor(() => expect(confirmDialog).toHaveBeenCalled())
+    expect(confirmDialog.mock.calls[0][0]).toMatch(/Tu es sûre de vouloir annuler/)
+    expect(confirmDialog.mock.calls[0][0]).toContain('Cadre citron meringuée')
+  })
+
+  it('un « non » n’annule rien du tout', async () => {
+    confirmDialog.mockResolvedValue(false)
+    lues = [seule]
+    render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText('Cadre citron meringuée')
+    fireEvent.click(screen.getByLabelText(/^Annuler /))
+    await waitFor(() => expect(confirmDialog).toHaveBeenCalled())
+    expect(annulerFeuille).not.toHaveBeenCalled()
+  })
+
+  it('annuler ferme la ligne, et ne demande aucun retour', async () => {
+    lues = [seule]
+    render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
+    await screen.findByText('Cadre citron meringuée')
+    fireEvent.click(screen.getByLabelText(/^Annuler /))
+    await waitFor(() => expect(annulerFeuille).toHaveBeenCalledWith('f2'))
+    expect(demanderRetour).not.toHaveBeenCalled()
   })
 })
