@@ -645,15 +645,20 @@ export async function attachReleveLines(env, lines) {
 // Une caisse marquée « ⚠️ moyen différent » (virement saisi en espèces, ou l'inverse) a sa
 // ligne dans l'AUTRE catégorie : ne chercher que dans la sienne revenait à ne jamais la
 // retrouver, et l'app affirmait à tort qu'une autre caisse l'avait prise.
-const AUTRE_MOYEN = { virement: 'cash', cash: 'virement' }
 export async function lignesPourConfirmer(env) {
-  const methode = env.payment_method || 'cash'
-  const autre = (env.note_proof || '').includes('moyen différent') ? AUTRE_MOYEN[methode] : null
-  const pools = await Promise.all([
-    loadFreeReleveLines(env.amount_cash, methode),
-    autre ? loadFreeReleveLines(env.amount_cash, autre) : Promise.resolve([]),
-  ])
-  const libres = pools.flat()
+  // On cherche dans TOUS les moyens, sans se fier au moyen de la caisse : la ligne
+  // mémorisée a été choisie par le calcul, on ne fait que la retrouver — et elle est
+  // reconnue sur sa DATE et son LIBELLÉ, pas sur son type. Chercher large ne peut donc
+  // pas rattacher une mauvaise ligne.
+  //
+  // On s'est fié un temps au « ⚠️ moyen différent » écrit sur la caisse. C'était fragile :
+  // les caisses calculées avant que ce marqueur existe ne le portent pas, et « Confirmer »
+  // leur répondait que la ligne n'était plus disponible — alors qu'elle était libre, juste
+  // rangée dans un autre moyen. Vécu : Charkaoui Lina, 1 800 dh, sur un versement espèces.
+  const pools = await Promise.all(
+    ['cash', 'cheque', 'virement'].map(m => loadFreeReleveLines(env.amount_cash, m)))
+  const vues = new Set()
+  const libres = pools.flat().filter(l => !vues.has(l.key) && vues.add(l.key))
   const miennes = (await loadEnvReleveLines(env.id))
     .filter(m => Math.abs(Number(m.amount) - Number(env.amount_cash)) < ECART_MINI)
   return [...libres, ...miennes.filter(m => !libres.some(l => l.key === m.key))]
