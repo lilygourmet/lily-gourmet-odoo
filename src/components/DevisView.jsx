@@ -243,11 +243,18 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
         return lines.some(l => (typeof l === 'string' ? l : (l.text || '')).toLowerCase().includes(af))
       }
       const contacted = () => !!envois[d.name] || contactedRefs.has(String(d.name || '').toUpperCase()) || ['relance', 'confirme'].includes(traitements[d.name]?.action) || (phoneKey(d.clientPhone).length >= 9 && convPhones.has(phoneKey(d.clientPhone)))
-      // Devis internet : QUE les non traités (les traités partent vers « Commandes »).
+      // ⚠️ RÈGLE DE LAYLA (2026-09-22) : « un devis internet doit apparaître en
+      // devis tant qu'il n'est pas confirmé ou annulé, MÊME SI conversation
+      // entamée ». `sent` dit exactement cela : ni brouillon, ni confirmé
+      // (`sale`), ni annulé (`cancel`).
+      // Avant, une simple conversation WhatsApp au nom du client suffisait à
+      // sortir le devis de la liste — sans regarder la date : le devis S52988
+      // de Zineb Marzak, pris le 21/09, était masqué par une conversation du
+      // 24/07 qui parlait d'une autre commande. Un client déjà venu ne pouvait
+      // donc jamais apparaître ici.
       if (isList) {
         if (d.state !== 'sent') return false
         if (!matchArticle()) return false
-        if (contacted()) return false
         return true
       }
       if (!d.deliveryAt) return false
