@@ -77,7 +77,13 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
   // Ne se fait qu'UNE fois : après, c'est elle qui choisit sa date.
   const jourChoisi = useRef(false)
   const [historyDays, setHistoryDays] = useState([])
-  const [historyDaysBack, setHistoryDaysBack] = useState(30)
+  // ⚠️ SEPT JOURS, ET REPLIÉ (Layla, 2026-09-22 : « historique ouvert à la
+  // demande et par défaut 7j »). Trente jours, c'était trente lignes sous le
+  // rapport du jour — celui qu'on vient justement consulter. L'historique sert
+  // à revenir en arrière quand on en a besoin, pas à occuper le bas de l'écran
+  // tous les matins.
+  const [historyDaysBack, setHistoryDaysBack] = useState(7)
+  const [histoOuvert, setHistoOuvert] = useState(false)
   const [resolveModalItem, setResolveModalItem] = useState(null)
   const [, setTick] = useState(0)
 
@@ -223,9 +229,15 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
    */
   const aUnEcart = r => {
     if (r.is_conflict_row) return true
-    if (!r.is_counted) return false
     if (r.qty_odoo_current === null || r.qty_odoo_current === undefined) return false
-    return (r.qty_odoo_current - (r.qty_counted || 0)) !== 0
+    // ⚠️ « PAS COMPTÉ » VEUT DIRE ZÉRO (Layla, 2026-09-22 : « pas compté ou non
+    // compté, ça veut dire 0, donc pas d'écart, c'est tout — pas besoin de le
+    // dire »). J'avais fait l'inverse la veille, en croyant protéger des faux
+    // écarts. Mesuré depuis : sur les 92 articles non comptés du 22/09,
+    // 84 ont un stock Odoo à ZÉRO — zéro contre zéro, aucun écart, rien à
+    // afficher. Les 8 autres sont de VRAIS écarts que je masquais, dont un
+    // « Suprême amande (1) » à −9 que personne ne voyait.
+    return (r.qty_odoo_current - (r.is_counted ? (r.qty_counted || 0) : 0)) !== 0
   }
 
   async function handleForceClose() {
@@ -611,14 +623,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           const hasCurrent = r.qty_odoo_current !== null && r.qty_odoo_current !== undefined
                           const notCounted = !r.is_counted
                           const effQty = notCounted ? 0 : r.qty_counted
-                          // ⚠️ « PAS COMPTÉ » N'EST PAS « COMPTÉ ZÉRO » (Layla,
-                          // 2026-09-22). Un article qu'on n'a pas eu le temps de
-                          // compter affichait un écart égal à TOUT son stock
-                          // Odoo — d'où les 39 « écarts » annoncés en haut de
-                          // l'écran, pour une poignée de vrais. Ce n'est pas un
-                          // écart, c'est du comptage qui reste à faire.
-                          const effGapCurr = (hasCurrent && !notCounted)
-                            ? (r.qty_odoo_current - effQty) : null
+                          const effGapCurr = hasCurrent ? (r.qty_odoo_current - effQty) : null
                           const isConflictRow = r.is_conflict_row
                           const conflictItems = r.conflict_items || []
                           const rowKey = `${r.product_name}-${isConflictRow ? 'conflict' : 'ok'}`
@@ -639,11 +644,11 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                     {conflictItems.length} conflit{conflictItems.length > 1 ? 's' : ''}
                                   </span>
                                 )}
-                                {!isConflictRow && notCounted && (
-                                  <span className="ml-2 inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[9px] font-medium align-middle">
-                                    non compté
-                                  </span>
-                                )}
+                                {/* ⚠️ L'ÉTIQUETTE « non compté » EST PARTIE
+                                    (Layla, 2026-09-22 : « pas besoin de le
+                                    dire »). Zéro est un chiffre comme un autre :
+                                    la colonne « compté » affiche 0, et l'écart
+                                    se lit tout seul. */}
                               </td>
                               <td className="px-2 py-2 text-right tabular-nums">
                                 {(() => {
@@ -679,12 +684,11 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                               </td>
                               <td className="px-2 py-2 text-left text-[11.5px] whitespace-nowrap">
                                 {isConflictRow ? <span className="text-ink-mute italic text-[10px]">à arbitrer</span>
-                                  : notCounted ? <span className="text-amber-700 text-[10px]">pas compté</span>
-                                    : effGapCurr === null ? <span className="text-ink-mute">—</span>
-                                      : effGapCurr === 0 ? <span className="text-green-700 font-bold">✓</span>
-                                        : effGapCurr > 0
-                                          ? <span className="text-red-700 font-bold">il manque {effGapCurr} en boutique</span>
-                                          : <span className="text-blue-800 font-bold">{-effGapCurr} de plus en boutique</span>}
+                                  : effGapCurr === null ? <span className="text-ink-mute">—</span>
+                                    : effGapCurr === 0 ? <span className="text-green-700 font-bold">✓</span>
+                                      : effGapCurr > 0
+                                        ? <span className="text-red-700 font-bold">il manque {effGapCurr} en boutique</span>
+                                        : <span className="text-blue-800 font-bold">{-effGapCurr} de plus en boutique</span>}
                               </td>
                               <td className="px-2 py-2 text-center">
                                 {isConflictRow && conflictItems.length === 1 ? (
@@ -918,14 +922,21 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
         )}
 
         {/* HISTORIQUE */}
-        <div className="bg-bordeaux text-cream px-4 py-3 rounded-t-2xl flex items-center justify-between mt-8">
-          <div>
+        <div className={`bg-bordeaux text-cream px-4 py-3 flex items-center justify-between mt-8
+          ${histoOuvert ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
+          <button
+            type="button" onClick={() => setHistoOuvert(o => !o)}
+            aria-expanded={histoOuvert}
+            className="text-left flex-1 min-w-0">
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-80">
               Historique stock boutique
             </div>
-            <div className="font-semibold text-[14px] italic">{historyDaysBack} derniers jours</div>
-          </div>
-          <div className="flex gap-1">
+            <div className="font-semibold text-[14px] italic">
+              {histoOuvert ? `${historyDaysBack} derniers jours` : 'voir les jours précédents'}
+              <span className="ml-2 not-italic">{histoOuvert ? '▾' : '▸'}</span>
+            </div>
+          </button>
+          <div className={`flex gap-1 ${histoOuvert ? '' : 'hidden'}`}>
             {[7, 30, 90].map(n => (
               <button
                 key={n}
@@ -941,7 +952,8 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
           </div>
         </div>
 
-        <div className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
+        {histoOuvert && (
+        <div className="bg-white border border-line rounded-b-2xl overflow-hidden shadow-sm">
           {historyDays.length === 0 ? (
             <div className="p-8 text-center text-ink-mute text-[12px]">
               Aucune journée enregistrée sur la période.
@@ -1021,6 +1033,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
             </table>
           )}
         </div>
+        )}
       </div>
 
       {/* MODAL TRANCHER */}
