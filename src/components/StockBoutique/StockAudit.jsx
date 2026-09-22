@@ -162,6 +162,27 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
     }
   }, [report])
 
+  // ⚠️ « Le tableau est long » (Layla, 2026-09-22) : sur ~214 articles, une
+  // poignée demande une décision. On ne montre que ceux-là, et l'interrupteur
+  // rend le tableau entier quand elle veut vérifier autre chose.
+  const [ecartsSeuls, setEcartsSeuls] = useState(true)
+
+  /**
+   * Ce qui mérite vraiment un regard : un écart, ou un conflit de réception.
+   *
+   * ⚠️ Un article NON COMPTÉ n'en fait pas partie — ce n'est pas un écart, c'est
+   * du comptage qui reste à faire. Il est annoncé à part, sous le tableau.
+   */
+  const aUnEcart = r => {
+    if (r.is_conflict_row) return true
+    if (!r.is_counted) return false
+    if (r.qty_odoo_current === null || r.qty_odoo_current === undefined) return false
+    return (r.qty_odoo_current - (r.qty_counted || 0)) !== 0
+  }
+  const nbEcarts = useMemo(() => report.filter(aUnEcart).length, [report])
+  const nbPasComptes = useMemo(
+    () => report.filter(r => !r.is_counted && !r.is_conflict_row).length, [report])
+
   async function handleForceClose() {
     if (!stockDay) return
     if (!await confirmDialog("Forcer la clôture sans que le café ait fini de compter ?\n\nLe rapport sera généré avec les données disponibles. Cette action est réservée aux admins.", { danger: true, confirmLabel: 'Forcer' })) return
@@ -397,12 +418,11 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
           </div>
         ) : (
           <>
-            {/* STATS */}
-            <div className="grid grid-cols-3 gap-2">
-              <StatCard label="Compté (café)" value={stats.totalCounted} color="green" />
-              <StatCard label="Stock Odoo actuel" value={stats.totalOdooCurrent || '—'} color="blue" />
-              <StatCard label="Articles avec écart" value={stats.articlesWithGapCurrent} color="red" />
-            </div>
+            {/* ⚠️ LES TROIS CASES DE TOTAUX SONT PARTIES (Layla, 2026-09-22 :
+                « COMPTÉ 225 / STOCK ODOO 230 / ARTICLES AVEC ÉCART 39, c'est
+                inutile »). Un total de pommes et de cafés ne veut rien dire, et
+                le compte d'écarts était faux : il comptait les articles NON
+                COMPTÉS comme des écarts. Ce qui sert est dans le tableau. */}
 
             {(isSubmitted || isAudited) && report.length > 0 && stats.totalOdooCurrent === 0 && (
               <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-[12px] text-amber-900">
@@ -426,11 +446,30 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
 
             {/* TABLEAU RAPPORT */}
             <div className="bg-white border border-line rounded-2xl overflow-hidden shadow-sm">
-              <div className="px-4 py-2.5 border-b border-line bg-cream-warm">
-                <div className="text-[12px] font-semibold">Rapport d'écarts par article</div>
-                <div className="text-[10px] text-ink-mute mt-0.5">
-                  {report.length} article{report.length > 1 ? 's' : ''} · tri par catégorie
+              <div className="px-4 py-2.5 border-b border-line bg-cream-warm flex items-center gap-3 flex-wrap">
+                <div>
+                  <div className="text-[12px] font-semibold">Rapport d'écarts par article</div>
+                  <div className="text-[10px] text-ink-mute mt-0.5">
+                    {ecartsSeuls
+                      ? `${nbEcarts} écart${nbEcarts > 1 ? 's' : ''} sur ${report.length} article${report.length > 1 ? 's' : ''}`
+                      : `${report.length} article${report.length > 1 ? 's' : ''} · tri par catégorie`}
+                  </div>
                 </div>
+                {/* L'interrupteur : même objet que dans Mini/maxi, même geste. */}
+                <button
+                  type="button" role="switch" aria-checked={ecartsSeuls}
+                  onClick={() => setEcartsSeuls(v => !v)}
+                  className={`ml-auto inline-flex items-center gap-1.5 rounded-full border-[1.5px]
+                    px-3 py-1.5 text-[12px] font-bold transition
+                    ${ecartsSeuls ? 'bg-green-50 text-green-800 border-green-300'
+    : 'bg-cream text-ink-mute border-cream-deep'}`}>
+                  <span className={`relative w-[30px] h-[17px] rounded-full flex-none transition-colors
+                    ${ecartsSeuls ? 'bg-green-600' : 'bg-ink-mute/40'}`}>
+                    <span className={`absolute top-[2px] w-[13px] h-[13px] rounded-full bg-white transition-all
+                      ${ecartsSeuls ? 'left-[15px]' : 'left-[2px]'}`} />
+                  </span>
+                  {ecartsSeuls ? 'Écarts seulement' : 'Tout voir'}
+                </button>
               </div>
 
               {report.length === 0 ? (
@@ -443,8 +482,14 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                     <thead>
                       <tr className="bg-cream-warm border-b border-line">
                         <th className="text-left px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Article</th>
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Hamza a annoncé envoyer">Apporté</th>
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Café dit avoir reçu">Reçu</th>
+                        {/* ⚠️ « Apporté » A DISPARU (Layla, 2026-09-22 : « est-ce
+                            qu'en général reçu et apporté sont pareils ? si c'est
+                            le cas garder que reçu »). Mesuré sur 252 lignes :
+                            UNE SEULE différait — 0,4 %. La colonne était donc
+                            vide de sens 99,6 % du temps, et ce sont ces
+                            colonnes-là qui rendent un tableau illisible. Quand
+                            les deux diffèrent, c'est écrit sous le chiffre. */}
+                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Café dit avoir reçu — et ce que le pâtissier disait envoyer, quand ça diffère">Reçu</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Restes d'hier propagés">Reste hier</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute bg-bordeaux/10" title="Café a compté en aveugle">Compté</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo actuel</th>
@@ -466,6 +511,9 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                             (!r.qty_odoo_current || r.qty_odoo_current === 0)
                           )
                           if (allZero) continue
+                          // ⚠️ Le filtre vient APRÈS le saut des lignes vides :
+                          // une catégorie ne doit pas s'afficher pour rien.
+                          if (ecartsSeuls && !aUnEcart(r)) continue
                           const cat = r.category_label || 'Autres'
                           if (cat !== lastCategory) {
                             rendered.push(
@@ -480,7 +528,14 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           const hasCurrent = r.qty_odoo_current !== null && r.qty_odoo_current !== undefined
                           const notCounted = !r.is_counted
                           const effQty = notCounted ? 0 : r.qty_counted
-                          const effGapCurr = hasCurrent ? (r.qty_odoo_current - effQty) : null
+                          // ⚠️ « PAS COMPTÉ » N'EST PAS « COMPTÉ ZÉRO » (Layla,
+                          // 2026-09-22). Un article qu'on n'a pas eu le temps de
+                          // compter affichait un écart égal à TOUT son stock
+                          // Odoo — d'où les 39 « écarts » annoncés en haut de
+                          // l'écran, pour une poignée de vrais. Ce n'est pas un
+                          // écart, c'est du comptage qui reste à faire.
+                          const effGapCurr = (hasCurrent && !notCounted)
+                            ? (r.qty_odoo_current - effQty) : null
                           const isConflictRow = r.is_conflict_row
                           const conflictItems = r.conflict_items || []
                           const rowKey = `${r.product_name}-${isConflictRow ? 'conflict' : 'ok'}`
@@ -503,20 +558,17 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_morning_announced || '—'}</td>
                               <td className="px-2 py-2 text-right tabular-nums">
                                 {(() => {
                                   const recu = r.qty_morning_received || 0
                                   const annonce = r.qty_morning_announced || 0
-                                  const diff = recu - annonce
                                   if (recu === 0 && annonce === 0) return <span className="text-ink-mute">—</span>
-                                  if (diff === 0) return <span className="text-ink-mute">{recu}</span>
+                                  if (recu === annonce) return <span className="text-ink-mute">{recu}</span>
+                                  // Le cas rare : on dit les DEUX, sans colonne à part.
                                   return (
                                     <span>
-                                      <span className={diff > 0 ? 'text-green-700 font-medium' : 'text-red-700 font-medium'}>{recu}</span>
-                                      <span className={`ml-1 text-[9px] px-1 rounded ${diff > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                        {diff > 0 ? '+' : ''}{diff}
-                                      </span>
+                                      <span className="font-medium text-amber-800">{recu}</span>
+                                      <span className="block text-[9px] text-amber-700">{annonce} apportés</span>
                                     </span>
                                   )
                                 })()}
@@ -550,6 +602,14 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                       })()}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {/* ⚠️ LES NON-COMPTÉS SE DISENT, MAIS PAS COMME DES ÉCARTS : c'est
+                  une tâche du lendemain, pas une perte à expliquer. */}
+              {nbPasComptes > 0 && (
+                <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-200 text-[11.5px] text-amber-900">
+                  ⏳ {nbPasComptes} article{nbPasComptes > 1 ? 's' : ''} pas compté{nbPasComptes > 1 ? 's' : ''}
+                  {' — '}ils ne comptent pas comme des écarts.
                 </div>
               )}
             </div>
