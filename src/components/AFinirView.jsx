@@ -24,8 +24,10 @@ import { Rien } from './FeuilleVisuel'
 import { toast } from '../lib/toast'
 import { propre, qte } from '../lib/ecranSimple'
 import { photoFabAnnexe, declarer, loadArticleFabAnnexe, bloquants, ingredientsPour } from '../lib/fabAnnexe'
-import { hasValidJwt } from '../lib/auth'
+import { hasValidJwt, canRebuts } from '../lib/auth'
 import { loadAFinir, loadFormats, prevuParLaRecette, dispatchVersOdoo, aMettreEnForme } from '../lib/miseEnForme'
+import { ChoixDuReste } from './RebutView'
+import { demanderAJeter } from '../lib/rebuts'
 
 /** Une ligne de la liste : photo, ce qu'il en reste, ce qu'on en fait. */
 function LigneVrac({ a, onOuvrir }) {
@@ -160,6 +162,28 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
     } finally { setEnvoi(false) }
   }
 
+  /**
+   * JETER LE RESTE au lieu de le remettre au frigo.
+   *
+   * ⚠️ ON JETTE AVANT DE DISPATCHER, et c'est voulu : une fois le reste parti
+   * au rebut, il ne reste plus rien — le dispatch qui suit fait donc entrer
+   * TOUT le vrac dans les gâteaux, exactement comme un « rien ». Sans ça, on
+   * aurait jeté 140 g ET laissé 140 g au frigo.
+   */
+  const jeterLeReste = async a => {
+    if (envoi) return
+    navigator.vibrate?.(15)
+    setEnvoi(true)
+    try {
+      const r = await demanderAJeter({
+        produit: a.produit, libelle: a.libelle, qty: resteRetenu, unite: 'g',
+        motif: `À finir — ${propre(a.libelle || a.produit)}`,
+      }, user?.id)
+      if (r) { setResteDit(true); setReste(0) }
+    } catch (e) { toast('Erreur : ' + (e.message || e)) }
+    finally { setEnvoi(false) }
+  }
+
   const nav = { user, onLogout, onNavigate, activeView }
 
   return (
@@ -269,6 +293,15 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
                     </div>
                   )}
                 </div>
+
+                {/* ⚠️ « Je devrais décider ce que j'en fais — par exemple 140
+                    Subleme en rebut ? ou à intégrer dans le reste » (Layla,
+                    2026-09-22). Le choix n'apparaît QUE s'il reste quelque
+                    chose, et QUE pour qui a le droit de jeter : sans la
+                    permission, l'écran reste exactement comme avant. */}
+                <ChoixDuReste
+                  reste={resteRetenu} unite="g" sur="l’annexe" envoi={envoi}
+                  onJeter={canRebuts(user) ? () => jeterLeReste(ouvert.a) : undefined} />
 
                 <button
                   onClick={valider}

@@ -15,6 +15,7 @@ import {
   canSeeMinMaxCd, canSeeMinMaxAnnexe,
   canDeclarer,
   canVoirDonne,
+  canRebuts,
 } from './auth'
 
 const TAB_DEFS = [
@@ -39,6 +40,9 @@ const TAB_DEFS = [
   // Sa propre permission : voir ce qui a été donné n'oblige plus à avoir un
   // profil d'économat. (Layla, 2026-09-21.)
   { view: 'donne',              emoji: '📦', label: 'Donné',                can: u => !isLivreur(u) && canVoirDonne(u) },
+  // ⚠️ JETER NE SE RATTRAPE PAS : sa propre permission, jamais l'atelier entier
+  // (Layla, 2026-09-22 : « celui qui a la perm des rebuts »).
+  { view: 'rebut',              emoji: '🗑', label: 'Rebut',                can: u => !isLivreur(u) && canRebuts(u) },
   { view: 'fabrication-prod', emoji: '🥣', label: 'Fabrication Prod', can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_fabrication_prod) },
   { view: 'valider-annexe',      emoji: '🏭', label: 'À valider Annexe',   can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_annexe) },
   { view: 'fabrication-valider', emoji: '✅', label: 'À valider CD-',       can: u => !isLivreur(u) && (isAdmin(u) || !!u?.perm_valider_of) },

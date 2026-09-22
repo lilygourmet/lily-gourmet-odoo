@@ -16,6 +16,12 @@ import { waitUntil } from '@vercel/functions'
 import { versUnite, enGrammes } from '../src/lib/unites.js'
 
 const LIEU_ANNEXE = 62          // stock.location « WHPDX/Stock Prod annexe »
+// ⚠️ ODOO A DÉJÀ SA PLACE POUR LES REBUTS, et l'équipe s'en sert tous les jours
+// (Layla, 2026-09-22 : « il y a un endroit spécial dans Odoo pour les rebuts,
+// tu les as vus ? »). Huit rebuts le jour même, chacun avec son numéro SP/….
+// On n'invente donc rien : on écrit dans `stock.scrap`, du Stock Prod annexe
+// vers cet emplacement-ci, et Odoo tient l'historique tout seul.
+const LIEU_REBUT = 16           // stock.location « Virtual Locations/Scrap »
 // Une recette peut descendre loin (Layla : « même s'il y en a 10 ou plus »).
 // La vraie garde-fou n'est pas la profondeur mais la BOUCLE, plus bas.
 const PROFONDEUR_MAX = 12
@@ -45,6 +51,13 @@ async function sr(model, domain, fields, opts = {}) {
   const uid = await odooAuth()
   return odooJsonRpc('object', 'execute_kw',
     [process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, model, 'search_read', [domain, fields], opts])
+}
+
+/** Appeler une méthode d'Odoo — pour ce qui ÉCRIT, et seulement ça. */
+async function ex(model, methode, args, kw = {}) {
+  const uid = await odooAuth()
+  return odooJsonRpc('object', 'execute_kw',
+    [process.env.ODOO_DB, uid, process.env.ODOO_PASSWORD, model, methode, args, kw])
 }
 
 // ---------------------------------------------------------------
@@ -1345,6 +1358,71 @@ export default async function handler(req, res) {
     // changement d'écran. On garde donc le résultat une minute POUR ELLE.
     // L'écran, lui, demande toujours du frais (`&frais=1`) : après un
     // dispatch, la ligne doit disparaître tout de suite, pas dans une minute.
+    /**
+     * LES REBUTS — lire ce qui a été jeté, et jeter.
+     *
+     * « Crée un onglet rebut » (Layla, 2026-09-22). Rien n'est inventé : on
+     * écrit un vrai `stock.scrap`, comme le fait déjà la boutique depuis son
+     * Odoo — même modèle, même emplacement, même numérotation SP/….
+     *
+     * ⚠️ JETER NE SE RATTRAPE PAS depuis l'app : `action_validate` sort la
+     * marchandise du stock pour de bon. C'est pour ça que le geste demande une
+     * permission à lui (`perm_rebuts`), et que l'écran confirme avant.
+     */
+    if (req.query.rebuts) {
+      if (req.method === 'POST') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+        const produit = String(body.produit || '').trim()
+        const qty = Number(body.qty) || 0
+        if (!produit || !(qty > 0)) return res.status(400).json({ error: 'article ou quantité manquante' })
+        if (body.test) return res.status(200).json({ test: true, name: 'TEST (rien jeté dans Odoo)' })
+        const cache = creerCache()
+        const p = await produitParNom(cache, produit)
+        if (!p) return res.status(200).json({ error: `« ${produit} » est introuvable chez Odoo.` })
+        // ⚠️ LA QUANTITÉ ARRIVE EN GRAMMES (ou en pièces), comme partout dans
+        // ces écrans ; Odoo, lui, compte dans l'unité de L'ARTICLE. Sans cette
+        // conversion, jeter 140 g d'un vrac compté en kilos en jetterait 140.
+        const enPieces = /^u$/i.test(uniteDe(p))
+        const q = enPieces ? qty : (versUnite(qty, 'g', uniteDe(p)) ?? qty)
+        if (!(q > 0)) return res.status(200).json({ error: 'quantité illisible' })
+        try {
+          const id = await ex('stock.scrap', 'create', [{
+            product_id: p.id,
+            scrap_qty: Math.round(q * 1000) / 1000,
+            product_uom_id: p.uom_id[0],
+            location_id: LIEU_ANNEXE,
+            scrap_location_id: LIEU_REBUT,
+            origin: String(body.motif || 'Lily Gourmet').slice(0, 60),
+          }])
+          await ex('stock.scrap', 'action_validate', [[id]])
+          const [cree] = await sr('stock.scrap', [['id', '=', id]], ['name', 'scrap_qty', 'state'])
+          console.log(`[rebut] ${produit} ${q} ${uniteDe(p)} par ${body.userId || '?'} → ${cree?.name}`)
+          return res.status(200).json({ ok: true, name: cree?.name || null, qty: cree?.scrap_qty, etat: cree?.state })
+        } catch (e) {
+          return res.status(200).json({ error: (e.message || String(e)).slice(0, 300) })
+        }
+      }
+      // La liste : ce qui a été jeté ces derniers jours, le plus récent d'abord.
+      const jours = Math.min(60, Math.max(1, Number(req.query.jours) || 14))
+      const depuis = new Date(Date.now() - jours * 86400000).toISOString().slice(0, 19).replace('T', ' ')
+      const lignes = await sr('stock.scrap',
+        [['date_done', '>=', depuis], ['scrap_location_id', '=', LIEU_REBUT]],
+        ['name', 'product_id', 'scrap_qty', 'product_uom_id', 'date_done', 'state', 'origin', 'location_id'],
+        { limit: 400, order: 'id desc' })
+      return res.status(200).json({
+        rebuts: lignes.map(l => ({
+          name: l.name,
+          produit: Array.isArray(l.product_id) ? sansRef(l.product_id[1]) : '',
+          qty: l.scrap_qty,
+          unite: Array.isArray(l.product_uom_id) ? uniteOdoo(l.product_uom_id[1]) : null,
+          quand: l.date_done || null,
+          etat: l.state,
+          motif: l.origin || null,
+          lieu: Array.isArray(l.location_id) ? l.location_id[1] : null,
+        })),
+      })
+    }
+
     if (req.query.afinir) {
       res.setHeader('Cache-Control', 'no-store')
       const frais = req.query.frais === '1'

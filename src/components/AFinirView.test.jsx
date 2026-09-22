@@ -39,7 +39,13 @@ const toasts = []
 vi.mock('../lib/toast', () => ({
   toast: Object.assign(m => toasts.push(String(m)), { success: () => {}, error: () => {} }),
 }))
-vi.mock('../lib/auth', () => ({ hasValidJwt: () => true, isAdmin: () => true }))
+// ⚠️ `canRebuts` compte ici : sans elle dans le mock, le composant plante au
+// rendu (elle vaut `undefined`, et on l'appelle). Par défaut on N'A PAS le
+// droit de jeter — l'écran doit rester exactement comme avant.
+let peutJeter = false
+vi.mock('../lib/auth', () => ({
+  hasValidJwt: () => true, isAdmin: () => true, canRebuts: () => peutJeter,
+}))
 vi.mock('../lib/fabAnnexe', async importOriginal => ({
   ...await importOriginal(),          // les VRAIES règles de verrou
   declarer: (...a) => declarer(...a),
@@ -48,6 +54,8 @@ vi.mock('../lib/fabAnnexe', async importOriginal => ({
   }),
 }))
 const loadAFinir = vi.fn(async () => liste)
+const demanderAJeter = vi.fn(async () => ({ name: 'SP/04762' }))
+vi.mock('../lib/rebuts', () => ({ demanderAJeter: (...a) => demanderAJeter(...a) }))
 vi.mock('../lib/miseEnForme', async importOriginal => ({
   ...await importOriginal(),          // les VRAIS calculs de dispatch
   loadAFinir: (...a) => loadAFinir(...a),
@@ -57,7 +65,7 @@ vi.mock('../lib/miseEnForme', async importOriginal => ({
 const { default: AFinirView } = await import('./AFinirView')
 
 beforeEach(() => {
-  vi.clearAllMocks(); liste = [vrac]; ficheDuMoule = { tournee: 10 }
+  vi.clearAllMocks(); liste = [vrac]; ficheDuMoule = { tournee: 10 }; peutJeter = false
   composantsDuMoule = [{ produit: 'SM. Biscuit Gianduja Indiv', unite: 'u', besoin: 10,
     stock: 50, dejaFait: 0, fabrique: true, ok: true }]
 })
@@ -231,5 +239,78 @@ describe('après le dispatch, sans rien rafraîchir', () => {
     fireEvent.click(screen.getByText("C'est fait"))
     await waitFor(() => expect(declarer).toHaveBeenCalled())
     expect(loadAFinir.mock.calls.length).toBe(avant)
+  })
+})
+
+// ============================================================
+// LE SORT DU RESTE : au frigo, ou au rebut.
+//
+// « Je devrais décider ce que j'en fais — par exemple 140 Subleme en rebut ?
+// ou à intégrer dans le reste » (Layla, 2026-09-22), puis « celui qui a la
+// perm des rebuts ».
+//
+// ⚠️ Odoo a déjà sa place pour ça (`stock.scrap`, numéros SP/…), et l'équipe
+// s'en sert tous les jours : on écrit chez lui, on ne tient pas un deuxième
+// registre.
+// ============================================================
+describe('garder le reste, ou le jeter', () => {
+  const ouvrirAvecReste = async () => {
+    await ouvrir()
+    // Un seul 10 pers servi : il restera largement de quoi choisir.
+    fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
+  }
+
+  it('sans la permission, rien ne change : le choix ne s’affiche pas', async () => {
+    peutJeter = false
+    await ouvrirAvecReste()
+    expect(screen.queryByText('🗑 Au rebut')).toBeNull()
+  })
+
+  it('avec la permission, le choix apparaît', async () => {
+    peutJeter = true
+    await ouvrirAvecReste()
+    expect(screen.getByText('🗑 Au rebut')).toBeTruthy()
+    expect(screen.getByText('🧊 Je le garde')).toBeTruthy()
+  })
+
+  // ⚠️ Rien à décider quand il ne reste rien : « rien » a déjà tout dit.
+  it('ne se propose pas quand il ne reste rien', async () => {
+    peutJeter = true
+    await ouvrirAvecReste()
+    fireEvent.click(screen.getByText('rien'))
+    expect(screen.queryByText('🗑 Au rebut')).toBeNull()
+  })
+
+  it('jeter nomme l’article et la quantité, et part chez Odoo', async () => {
+    peutJeter = true
+    await ouvrirAvecReste()
+    fireEvent.click(screen.getByText('🗑 Au rebut'))
+    await waitFor(() => expect(demanderAJeter).toHaveBeenCalled())
+    const [quoi, qui] = demanderAJeter.mock.calls[0]
+    expect(quoi.produit).toBe('SM. Gélée Mangue Ananas Pistache')
+    expect(quoi.qty).toBeGreaterThan(0)
+    expect(quoi.unite).toBe('g')
+    expect(qui).toBe('u1')
+  })
+
+  // ⚠️ UNE FOIS JETÉ, IL NE RESTE PLUS RIEN : le dispatch qui suit fait entrer
+  // tout le vrac dans les gâteaux. Sans ça, on aurait jeté 140 g ET laissé
+  // 140 g au frigo — la même marchandise comptée deux fois.
+  it('une fois jeté, le reste retombe à rien', async () => {
+    peutJeter = true
+    await ouvrirAvecReste()
+    fireEvent.click(screen.getByText('🗑 Au rebut'))
+    await waitFor(() => expect(demanderAJeter).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText('🗑 Au rebut')).toBeNull())
+    expect(screen.getByText('tout part dans les gâteaux, même le rab')).toBeTruthy()
+  })
+
+  it('renoncer ne change rien', async () => {
+    peutJeter = true
+    demanderAJeter.mockResolvedValueOnce(null)          // elle dit non
+    await ouvrirAvecReste()
+    fireEvent.click(screen.getByText('🗑 Au rebut'))
+    await waitFor(() => expect(demanderAJeter).toHaveBeenCalled())
+    expect(screen.getByText('🗑 Au rebut')).toBeTruthy()
   })
 })

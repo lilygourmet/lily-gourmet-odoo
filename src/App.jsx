@@ -12,6 +12,7 @@ const FabricationProdView = lazy(() => import('./components/FabricationProdView'
 const FabAnnexe2View = lazy(() => import('./components/FabAnnexe2SimpleView'))
 const ADeclarerView = lazy(() => import('./components/ADeclarerView'))
 const AFinirView = lazy(() => import('./components/AFinirView'))
+const RebutView = lazy(() => import('./components/RebutView'))
 const DonneView = lazy(() => import('./components/DonneView'))
 const ValidationView = lazy(() => import('./components/ValidationView'))
 const MinMaxCdView = lazy(() => import('./components/MinMaxCdView'))
@@ -409,6 +410,7 @@ function App() {
     if (activeView === 'a-declarer') return <ADeclarerView {...navProps} />
     if (activeView === 'a-finir') return <AFinirView {...navProps} />
     if (activeView === 'donne') return <DonneView {...navProps} />
+    if (activeView === 'rebut') return <RebutView {...navProps} />
     if (activeView === 'fabrication-valider') return <ValidationView {...navProps} />
     if (activeView === 'minmax-cd') return <MinMaxCdView {...navProps} />
     if (activeView === 'minmax-annexe') return <MinMaxAnnexeView {...navProps} />
