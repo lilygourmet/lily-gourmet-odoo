@@ -291,3 +291,20 @@ export function libelleDesLignes(textes, prefixe = '') {
   const budget = Math.floor((300 - prefixe.length - 5 * (textes.length - 1)) / textes.length)
   return (prefixe + textes.map(t => t.slice(0, Math.max(40, budget))).join('  |  ')).slice(0, 300) || null
 }
+
+// Clé d'une ligne de relevé en base. Stable d'un import à l'autre : c'est elle qui fait
+// qu'un même relevé relu ne crée PAS de doublon. Montant + le 1er numéro long du libellé
+// (le n° d'opération) ; sans numéro, date + montant + début du libellé.
+// `vues` numérote deux opérations rigoureusement identiques le même jour, pour n'en perdre
+// aucune — passer le MÊME `vues` et les lignes dans l'ordre du relevé redonne les mêmes
+// clés, c'est ce qui permet de comparer un PDF à la base sans rien réimporter.
+export function cleDeLigne(u, vues = new Set()) {
+  const ref = (u.label || '').match(/\d{5,}/)
+  const base = ref
+    ? `ref|${Math.round(u.credit * 100)}|${ref[0]}`
+    : `${u.dateIso}|${Math.round(u.credit * 100)}|${(u.label || '').slice(0, 50)}`
+  let key = base
+  for (let n = 2; vues.has(key); n++) key = `${base}#${n}`
+  vues.add(key)
+  return key
+}
