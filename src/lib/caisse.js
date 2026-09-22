@@ -373,6 +373,18 @@ export async function saveUnmatchedReleveLines(lines) {
   if (error) throw error
 }
 
+// Lignes du relevé déjà en base sur une période, quel que soit leur état (libres, prises,
+// ignorées). Sert au contrôle d'un relevé : on compare le PDF à CE QUI EXISTE.
+export async function loadReleveLinesBetween(dMin, dMax) {
+  const { data, error } = await supabase
+    .from('caisse_releve_lignes')
+    .select('key, label, ligne_date, amount, used_by, ignored')
+    .gte('ligne_date', dMin).lte('ligne_date', dMax)
+    .limit(5000)
+  if (error) throw error
+  return data || []
+}
+
 // Parmi ces clés, lesquelles sont DÉJÀ en base ? Sert au contrôle d'un réimport : « sur
 // les N lignes lues dans ce PDF, combien manquaient ? ». Sans ce compte, un réimport ne
 // dit rien — l'upsert ignore silencieusement les doublons, et Layla ne peut pas savoir si
