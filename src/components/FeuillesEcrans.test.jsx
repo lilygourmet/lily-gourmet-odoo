@@ -103,8 +103,15 @@ beforeEach(() => { vi.clearAllMocks(); confirmDialog.mockResolvedValue(true) })
 afterEach(cleanup)
 
 describe('« À déclarer », pour des mains farineuses', () => {
+  // ⚠️ ANCRÉES À MIDI, ET C'EST INDISPENSABLE (vécu le 2026-09-23 à 00 h 30).
+  // `donnee` était posée « il y a 5 h 40 » et `seule` « il y a 30 min » : passé
+  // minuit, la première tombe la VEILLE. Les deux fournées se retrouvent alors
+  // dans deux journées différentes, donc deux titres de cascade, donc quatre
+  // photos au lieu de trois. Le deuxième test de ce fichier à tomber pour la
+  // même raison en une journée — l'atelier travaille la nuit, les tests aussi.
   it('montre une photo et le chiffre, et rien à lire', async () => {
-    lues = [donnee, seule]
+    lues = [{ ...donnee, imprime_le: aMidi(0), donne_le: aMidi(0) },
+      { ...seule, imprime_le: aMidi(0) }]
     render(<ADeclarerView user={{ id: 'u1' }} onNavigate={() => {}} />)
     await screen.findByText('Crème citron')
 
