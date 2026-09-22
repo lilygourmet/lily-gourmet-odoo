@@ -319,10 +319,16 @@ export async function loadEnveloppesForSuivi({ type, month, year, statusFilter =
   // Une caisse « à confirmer » RESTE en attente : l'import lui a attaché le PDF du relevé
   // comme preuve, mais elle attend toujours que Layla désigne la bonne ligne. Sans ça elle
   // passait pour « versée » et disparaissait de la liste — du travail invisible.
+  // Une caisse RAPPROCHÉE est finie, qu'elle porte une preuve ou non. Elle n'en porte
+  // justement pas quand sa ligne vient de « 🔎 Vérifier un relevé » : ce contrôle relit le
+  // PDF sans le téléverser, donc la ligne n'a pas d'URL de relevé à transmettre. Définir
+  // « En attente » par l'absence de preuve laissait alors une caisse verte dans la liste
+  // des choses à faire. Vécu : Zoubida El bousserghini, 1 000 dh du 4 juin.
   const aConfirmer = e => e.releve_status === 'a_confirmer'
+  const rapprochee = e => e.releve_status === 'trouve'
   if (statusFilter === 'ignored')   return list.filter(e =>  e.releve_ignore)
-  if (statusFilter === 'pending')   return list.filter(e => (!e.proof_url || aConfirmer(e)) && !e.releve_ignore)
-  if (statusFilter === 'done')      return list.filter(e =>  e.proof_url && !aConfirmer(e))
+  if (statusFilter === 'pending')   return list.filter(e => !rapprochee(e) && (!e.proof_url || aConfirmer(e)) && !e.releve_ignore)
+  if (statusFilter === 'done')      return list.filter(e =>  rapprochee(e) || (e.proof_url && !aConfirmer(e)))
   return list
 }
 
