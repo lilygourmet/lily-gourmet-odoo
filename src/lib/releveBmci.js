@@ -436,6 +436,12 @@ export function windowFor(method, nomDansLeLibelle = false) {
 // puissent plus se désaccorder.
 export const CAISSE_APRES_DERNIERE_LIGNE = -windowFor('virement', true).min
 
+// Filet « virement ↔ espèces » : au-delà d'une semaine, un dépôt espèces ne paie plus une
+// commande de cette caisse. Règle de Layla — l'argent part à la banque dans les jours qui
+// suivent la vente. La fenêtre normale des dépôts (100 jours) proposait la caisse du 4 juin
+// sur le versement du 10 juillet : 36 jours, aucun rapport.
+export const ESPECES_CROISE_MAX_JOURS = 7
+
 // Au-delà de ce délai, un chèque n'est plus validé TOUT SEUL (il passe « à confirmer »).
 // Les relevés s'importent mois par mois : « une seule ligne possible » veut alors dire
 // « une seule ligne DANS CE FICHIER-LÀ », et le vrai dépôt peut se trouver dans un mois
@@ -639,8 +645,8 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
   }
 
   // 3) Filet anti-erreur de typage : une enveloppe restée 'absent' est aussi cherchée dans l'AUTRE
-  //    moyen (virement ↔ espèces), même montant + fenêtre du moyen visé. Toujours 'à confirmer'
-  //    (jamais vert auto) car les versements espèces n'ont pas de nom à vérifier.
+  //    moyen (virement ↔ espèces), même montant. Toujours 'à confirmer' (jamais vert auto) :
+  //    c'est une SUPPOSITION sur la saisie, pas une preuve.
   const OTHER = { virement: 'cash', cash: 'virement' }
   for (const env of pending) {
     const d = decided.get(env.id)
@@ -648,10 +654,16 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     const other = OTHER[env.payment_method || 'cash']
     if (!other) continue
     const amt = Number(env.amount_cash)
-    const w = windowFor(other)
+    // Côté espèces, la fenêtre des dépôts (100 jours) est bien trop large ICI : on ne
+    // suppose une erreur de saisie que sur une semaine.
+    const w = other === 'cash' ? { min: 0, max: ESPECES_CROISE_MAX_JOURS } : windowFor(other)
+    // Un bordereau au nom d'une AUTRE cliente ne paie pas cette commande-ci. On n'écarte
+    // que si la caisse porte elle-même un nom : sans nom, on n'a rien à comparer.
+    const nommee = nameTokens(env.virement_client).length > 0
     const c = candidatesFor(other, credits).filter(x =>
       !used.has(x) && Math.abs(x.credit - amt) < ECART_MINI &&
-      signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max)
+      signedDays(x.dateIso, env.session_date) >= w.min && signedDays(x.dateIso, env.session_date) <= w.max &&
+      !(nommee && nomAutreCliente(env.virement_client, x.label)))
     if (c.length) decided.set(env.id, { status: 'a_confirmer', line: null, candidates: c, crossMethod: true })
   }
   const results = pending.map(env => ({ env, ...decided.get(env.id) }))
