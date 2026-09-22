@@ -1668,24 +1668,22 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
       const [o] = await loadManques([name])
       // Tout en grammes dans la fenêtre : c'est ce que dit la balance, et ce
       // que l'équipe lit partout ailleurs. On reconvertit à l'enregistrement.
-      sirops = (o?.lignes || []).filter(l => estSirop(l.produit) && l.dispo > 0)
+      sirops = (o?.lignes || []).filter(l => estSirop(l.produit) && l.besoin > 0)
         .map(l => {
           const fact = norm(l.unite) === 'kg' ? 1000 : 1
           return {
             id: l.id, produit: l.produit, uniteOdoo: l.unite, fact,
             unite: fact === 1000 ? 'g' : l.unite,
-            avant: Math.round(l.dispo * fact * 100) / 100,
             prevu: Math.round(l.besoin * fact * 100) / 100,
           }
         })
     } catch { /* Odoo muet : on coche sans peser, comme avant */ }
     if (!sirops.length) return marquer(name, produit, qty)
-    // Pré-rempli avec ce que la recette laisserait : ne rien toucher revient
-    // au fonctionnement d'aujourd'hui.
+    // Pré-rempli avec ce que dit la recette : valider sans rien toucher revient
+    // au fonctionnement d'avant la pesée.
     setPesee({
       ordre: name, produit, qty, sirops,
-      restes: Object.fromEntries(sirops.map(l =>
-        [l.id, String(Math.max(0, Math.round((l.avant - l.prevu) * 100) / 100))])),
+      mis: Object.fromEntries(sirops.map(l => [l.id, String(l.prevu)])),
     })
   }
 
@@ -1694,9 +1692,8 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
     setPesee(null)
     const mesures = []
     for (const s2 of p.sirops) {
-      const reste = Number(String(p.restes[s2.id] ?? '').replace(',', '.'))
-      if (!Number.isFinite(reste)) continue
-      const utilise = Math.max(0, Math.round((s2.avant - reste) * 100) / 100)
+      const utilise = Number(String(p.mis[s2.id] ?? '').replace(',', '.'))
+      if (!Number.isFinite(utilise) || utilise < 0) continue
       mesures.push({ id: s2.id, qty: utilise / s2.fact, unite: s2.uniteOdoo })
     }
     if (mesures.length) {
@@ -1993,8 +1990,10 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
         </div>
       )}
 
-      {/* Peser plutôt que calculer : le bac contenait 2 790 g, il en reste
-          1 200 → 1 590 g ont servi. C'est la réalité, pas une règle de trois.
+      {/* Peser plutôt que calculer : on tape ce qui a VRAIMENT servi à ce
+          gâteau. On demandait « ce qui reste » et on le soustrayait du stock
+          entier de Stock Prod — un gâteau de 30 cm a ainsi mangé 19,64 kg de
+          sirop au lieu de 760 g, et le stock est tombé à −48 kg (2026-09-22).
           Trois zones figé/défile/figé et `vh` : sur la tablette, `dvh` déborde
           et le bas devient inatteignable. */}
       {pesee && (
@@ -2002,47 +2001,34 @@ export default function FabricationView({ user, onLogout, onNavigate, activeView
           onPointerDown={e => { if (e.target === e.currentTarget) setPesee(null) }}>
           <div className="bg-cream rounded-2xl w-full max-w-[520px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
             <div className="px-4 pt-4 pb-2 flex-shrink-0 border-b border-line">
-              <b className="text-[16px]">⚖️ Pèse ce qui reste de sirop</b>
+              <b className="text-[16px]">⚖️ Combien de sirop tu as mis ?</b>
               <div className="text-[12.5px] text-ink-mute mt-0.5">
                 {propre(pesee.produit)} · {nb(pesee.qty)}
               </div>
             </div>
             <div className="px-4 py-3 flex-1 overflow-y-auto overscroll-contain">
-              {pesee.sirops.map(l => {
-                const reste = Number(String(pesee.restes[l.id] ?? '').replace(',', '.'))
-                const utilise = Number.isFinite(reste)
-                  ? Math.max(0, Math.round((l.avant - reste) * 100) / 100) : null
-                return (
-                  <div key={l.id} className="rounded-xl border border-line bg-white p-3 mb-2.5">
-                    <div className="text-[14px] font-bold">{propre(l.produit)}</div>
-                    <div className="text-[12px] text-ink-mute mt-0.5 mb-2">
-                      Il y en avait {nb(l.avant)} {l.unite} avant
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[12.5px] text-ink-mute">Ce qui reste, pesé</span>
-                      <input inputMode="decimal" aria-label={'Reste de ' + l.produit}
-                        value={pesee.restes[l.id] ?? ''}
-                        onChange={e => {
-                          const v = e.target.value.replace(/[^\d.,]/g, '')
-                          setPesee(p => ({ ...p, restes: { ...p.restes, [l.id]: v } }))
-                        }}
-                        className="w-24 h-11 rounded-xl border-2 border-bordeaux bg-cream-warm
-                                   text-center font-serif text-[19px] text-ink outline-none" />
-                      <span className="text-[12.5px] text-ink-mute">{l.unite}</span>
-                    </div>
-                    <div className="flex justify-between text-[12.5px] mt-2 pt-2 border-t border-line">
-                      <span>Donc utilisé <b className="text-bordeaux">
-                        {utilise === null ? '—' : `${nb(utilise)} ${l.unite}`}</b></span>
-                      <span className="text-ink-mute">
-                        la recette aurait dit {nb(l.prevu)} {l.unite}
-                      </span>
-                    </div>
+              {pesee.sirops.map(l => (
+                <div key={l.id} className="rounded-xl border border-line bg-white p-3 mb-2.5">
+                  <div className="text-[14px] font-bold">{propre(l.produit)}</div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-[12.5px] text-ink-mute">Ce que tu as mis, pesé</span>
+                    <input inputMode="decimal" aria-label={'Sirop mis pour ' + l.produit}
+                      value={pesee.mis[l.id] ?? ''}
+                      onChange={e => {
+                        const v = e.target.value.replace(/[^\d.,]/g, '')
+                        setPesee(p => ({ ...p, mis: { ...p.mis, [l.id]: v } }))
+                      }}
+                      className="w-24 h-11 rounded-xl border-2 border-bordeaux bg-cream-warm
+                                 text-center font-serif text-[19px] text-ink outline-none" />
+                    <span className="text-[12.5px] text-ink-mute">{l.unite}</span>
                   </div>
-                )
-              })}
+                  <div className="text-[12.5px] text-ink-mute mt-2 pt-2 border-t border-line">
+                    la recette dit {nb(l.prevu)} {l.unite}
+                  </div>
+                </div>
+              ))}
               <p className="text-[12px] text-ink-mute">
-                Ne rien changer revient au fonctionnement d'aujourd'hui : c'est la
-                recette qui décide.
+                Ne rien changer revient à ce que dit la recette.
               </p>
             </div>
             <div className="flex gap-2 px-4 py-3 flex-shrink-0 border-t border-line">
