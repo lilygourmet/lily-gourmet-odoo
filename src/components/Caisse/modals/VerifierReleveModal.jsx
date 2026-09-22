@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FileSearch, X } from 'lucide-react'
 import { parseStatement } from '../../../lib/releveBmci'
-import { cleDeLigne, memeOperation } from '../../../lib/releveDoublons'
+import { cleDeLigne, memeOperation, ECART_MINI } from '../../../lib/releveDoublons'
 import { loadReleveLinesBetween, saveUnmatchedReleveLines } from '../../../lib/caisse'
 import { fmtMoney } from '../_helpers'
 
@@ -49,8 +49,20 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       const dates = rows.map(r => r.ligne_date).sort()
       const jour = (d, n) => new Date(new Date(d).getTime() + n * 86400000).toISOString().slice(0, 10)
       const enBase = await loadReleveLinesBetween(jour(dates[0], -4), jour(dates[dates.length - 1], 4))
-      const manquantes = rows.filter(r => !enBase.some(b => memeOperation(b, r)))
-      setRes({ lues: rows.length, enBase: enBase.length, manquantes })
+      // Une même opération s'écrit DIFFÉREMMENT selon le document : le relevé intercale ses
+      // références (« VIR INST RECU M 2118940 000011400383 … MAROUANE »), l'extrait tronque
+      // à 30 caractères (« VIR INST RECU M MAROUANE MOUTA »). Ni le n° ni le nom ne
+      // permettent alors de les rapprocher, et le contrôle criait « manquante » sur une
+      // ligne déjà présente.
+      // Ici on ne cherche pas à prouver que c'est la même : on cherche à ne JAMAIS faire de
+      // doublon. Même montant à 3 jours près = on considère que c'est déjà là. Le prix à
+      // payer est connu et assumé : un VRAI second versement du même montant le même jour
+      // passera pour déjà présent. Mieux vaut le rater que le dupliquer.
+      const dejaLa = (r) => enBase.some(b => memeOperation(b, r)
+        || (Math.abs(Number(b.amount) - Number(r.amount)) < ECART_MINI
+            && Math.abs((new Date(b.ligne_date) - new Date(r.ligne_date)) / 86400000) <= 3))
+      const manquantes = rows.filter(r => !dejaLa(r))
+      setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes })
       setEtape('resultat')
     } catch (e) { setErreur(e?.message || String(e)); setEtape('pick') }
   }
@@ -92,10 +104,11 @@ export default function VerifierReleveModal({ onClose, onDone }) {
         {etape === 'resultat' && res && (
           <>
             <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: res.manquantes.length ? '#FDF0DF' : '#e6f6ec' }}>
-              <b>{res.lues}</b> ligne(s) d'argent reçu lues dans ce relevé, <b>{res.enBase}</b> déjà connues en base sur la même période.<br />
+              Ce relevé contient <b>{res.lues}</b> encaissement(s).<br />
+              ✅ <b>{res.retrouvees}</b> sont déjà dans l'app.<br />
               {res.manquantes.length
-                ? <>⚠️ <b>{res.manquantes.length}</b> ne sont pas en base.</>
-                : <>✅ Toutes sont déjà en base — ce relevé est complet.</>}
+                ? <>⚠️ <b>{res.manquantes.length}</b> n'y sont pas :</>
+                : <>Aucun ne manque — ce relevé est complet.</>}
             </div>
             {res.manquantes.length > 0 && (
               <>
