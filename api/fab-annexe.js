@@ -1189,24 +1189,44 @@ const estKgOdoo = u => /^kg$/i.test(String(u || '').trim())
  * Même règle que le papier (`aDemander`) : ce qui ne se fabrique pas, et
  * jamais l'eau du robinet — elle sort du mur.
  */
+/**
+ * ⚠️ LES LIGNES DE LA RECETTE SONT LUES DE FRONT (Layla, 2026-09-22 : « le
+ * Donné est lent à s'ouvrir », puis « tout est lent, même Fabrication Annexe
+ * 2 »). Mesuré en production : 139 SECONDES pour cet écran, contre 0,4 s pour
+ * le même sans le détail des demandes — et il se rafraîchit toutes les
+ * 30 secondes, donc les appels s'empilaient et ralentissaient tout le reste.
+ *
+ * La boucle interrogeait Odoo ligne par ligne, l'une APRÈS l'autre : deux
+ * allers-retours par ingrédient, pour chaque feuille en attente. Des centaines
+ * d'allers-retours à la file.
+ *
+ * Paralléliser est sans danger ICI parce que le cache retient les PROMESSES et
+ * pas seulement les résultats (`produitParNom`, `bomDe`) : deux lignes qui
+ * réclament le même article se partagent une seule requête, même lancées en
+ * même temps. Le nombre d'appels réels reste donc le nombre d'articles
+ * DISTINCTS — c'est l'attente qui disparaît, pas le travail.
+ */
 async function demandeEconomat(cache, produit, qty, achetes) {
   const p = await produitParNom(cache, produit)
   const bom = p && await bomDe(cache, p)
   if (!bom) return []
   const base = versUnite(bom.product_qty || 1, bom.product_uom_id?.[1], p.uom_id?.[1]) || 1
   const facteur = (Number(qty) || 0) / base
-  const out = []
-  for (const l of lignesPour(bom, p)) {
+  const lignes = lignesPour(bom, p)
+    .filter(l => !/eau\s*(du\s*)?robinet/i.test(sansRef(l.product_id[1])))
+  const lus = await Promise.all(lignes.map(async l => {
     const nom = sansRef(l.product_id[1])
-    if (/eau\s*(du\s*)?robinet/i.test(nom)) continue
     const c = await produitParNom(cache, nom)
-    if (!c) continue
+    if (!c) return null
     // Une préparation a sa PROPRE feuille dans la liasse : on ne la demande pas.
-    if (!achetes.has(nom) && await bomDe(cache, c)) continue
+    if (!achetes.has(nom) && await bomDe(cache, c)) return null
     const q = versUnite(l.product_qty, l.product_uom_id[1], c.uom_id[1]) * facteur
-    if (q > 0) out.push({ produit: nom, qty: Math.round(q * 1000) / 1000, unite: uniteDe(c) })
-  }
-  return out
+    if (!(q > 0)) return null
+    return { produit: nom, qty: Math.round(q * 1000) / 1000, unite: uniteDe(c) }
+  }))
+  // ⚠️ L'ORDRE DE LA RECETTE EST GARDÉ : l'économe lit sa feuille de haut en
+  // bas, dans l'ordre où elle est écrite chez Odoo.
+  return lus.filter(Boolean)
 }
 
 async function photoDe(nom) {
@@ -1332,11 +1352,13 @@ export default async function handler(req, res) {
           const cache = creerCache()
           const attendent = feuilles.filter(f =>
             !f.donne_le && !f.sans_economat && !f.declare_le && !f.pas_faite_le && !f.retour_le)
-          for (const f of attendent) {
+          // ⚠️ ET TOUTES LES FEUILLES DE FRONT, pour la même raison : elles
+          // s'attendaient l'une l'autre alors qu'elles partagent le même cache.
+          await Promise.all(attendent.map(async f => {
             try {
               f.demande = await demandeEconomat(cache, f.produit, f.qty_prevue, achetes)
             } catch { /* recette illisible : la ligne garde juste son nom */ }
-          }
+          }))
         }
         return res.status(200).json({ feuilles })
       }
