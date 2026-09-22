@@ -628,7 +628,19 @@ export async function loadFreeReleveLines(amount, paymentMethod = 'cash') {
   if (amount != null) q = q.gte('amount', a - ECART_MINI).lte('amount', a + ECART_MINI)
   const { data, error } = await q.order('ligne_date', { ascending: false }).limit(1000)
   if (error) throw error
-  return data || []
+  // Les deux documents de la banque écrivent la MÊME opération, et l'extrait tronque le
+  // nom : « VIRT RECU MLLE AATIYAD LAAMOUR » et « … LAAMOURI », 500 dh le 2 juin, sont un
+  // seul virement. « Reçus banque non liés » les fusionne déjà ; cette liste-ci — celle
+  // des fenêtres « Suggérer », « Chercher » et « Grouper » — ne le faisait pas, et
+  // proposait deux fois le même encaissement.
+  // On ne fusionne QUE deux documents différents : deux versements identiques dans le
+  // MÊME relevé sont deux vrais encaissements, et les perdre coûterait plus cher.
+  const gardees = []
+  for (const l of (data || [])) {
+    if (gardees.some(g => g.releve_url !== l.releve_url && memeOperation(g, l))) continue
+    gardees.push(l)
+  }
+  return gardees
 }
 
 // Lignes du relevé déjà rattachées à UNE enveloppe (une remise splittée en compte plusieurs).
