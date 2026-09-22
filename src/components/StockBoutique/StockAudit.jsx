@@ -227,7 +227,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
     if (r.qty_odoo_current === null || r.qty_odoo_current === undefined) return false
     return (r.qty_odoo_current - (r.qty_counted || 0)) !== 0
   }
-  const nbEcarts = useMemo(() => report.filter(aUnEcart).length, [report])
   const nbPasComptes = useMemo(
     () => report.filter(r => !r.is_counted && !r.is_conflict_row).length, [report])
 
@@ -402,16 +401,12 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                   )}
                 </>
               )}
-              {isSubmitted && (
-                <>
-                  <span className="font-semibold text-blue-900">Comptage reçu — en attente d'audit</span>
-                  {stockDay.submitted_at && (
-                    <span className="ml-2 text-blue-800 opacity-70">
-                      envoyé {fmtRelative(stockDay.submitted_at)}
-                    </span>
-                  )}
-                </>
-              )}
+              {/* ⚠️ « Comptage reçu — en attente d'audit · envoyé il y a 19 min »
+                  RETIRÉ (Layla, 2026-09-22). Le bandeau porte déjà l'état de la
+                  journée ; répéter « en attente d'audit » à quelqu'un qui est
+                  justement en train de l'auditer ne lui apprend rien. Et
+                  l'heure de clôture se lit dans l'historique, là où elle sert
+                  vraiment à juger si le rapport est fiable. */}
               {isOpen && (
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="font-semibold text-amber-900">⏳ Café est encore en train de compter — rapport non disponible</span>
@@ -507,11 +502,10 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               <div className="px-4 py-2.5 border-b border-line bg-cream-warm flex items-center gap-3 flex-wrap">
                 <div>
                   <div className="text-[12px] font-semibold">Rapport d'écarts par article</div>
-                  <div className="text-[10px] text-ink-mute mt-0.5">
-                    {ecartsSeuls
-                      ? `${nbEcarts} écart${nbEcarts > 1 ? 's' : ''} sur ${report.length} article${report.length > 1 ? 's' : ''}`
-                      : `${report.length} article${report.length > 1 ? 's' : ''} · tri par catégorie`}
-                  </div>
+                  {/* ⚠️ « 19 écarts sur 124 articles » RETIRÉ (Layla,
+                      2026-09-22) : le tableau juste en dessous les montre, et
+                      les compter au-dessus n'ajoute rien — c'était le même
+                      reproche que les trois cases de totaux. */}
                 </div>
                 {/* L'interrupteur : même objet que dans Mini/maxi, même geste. */}
                 <button
@@ -721,16 +715,11 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[10px]">
-              <div className="bg-white border border-line rounded-md p-2">
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-900 font-semibold">+ rouge</span>
-                <span className="text-ink-mute ml-2">Stock Odoo &gt; compté — vol, casse non saisie, erreur de comptage</span>
-              </div>
-              <div className="bg-white border border-line rounded-md p-2">
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-semibold">− bleu</span>
-                <span className="text-ink-mute ml-2">Stock Odoo &lt; compté — ventes non syncées, ou erreur</span>
-              </div>
-            </div>
+            {/* ⚠️ LA LÉGENDE « + rouge / − bleu » EST PARTIE (Layla,
+                2026-09-22). Elle expliquait tous les jours la même chose à
+                quelqu'un qui la connaît par cœur — et depuis que la ligne
+                s'ouvre sur ses horaires de vente et son calcul, l'écart
+                s'explique tout seul, article par article. */}
 
             {/* ============================================ */}
             {/* SECTION CONFLITS À ARBITRER */}
@@ -851,16 +840,13 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               </div>
             )}
 
+            {/* ⚠️ LE CHAMP « Notes d'audit (optionnel) » EST RETIRÉ (Layla,
+                2026-09-22) — optionnel et jamais rempli, il occupait le bas de
+                l'écran devant le seul bouton qui compte. Le bouton reste, lui,
+                exactement là où il était. La colonne existe toujours en base :
+                les notes déjà écrites s'affichent encore plus bas. */}
             {isSubmitted && (
               <div className="bg-white border border-line rounded-lg p-4">
-                <div className="text-[12px] font-semibold mb-2">Notes d'audit (optionnel)</div>
-                <textarea
-                  value={auditNotes}
-                  onChange={e => setAuditNotes(e.target.value)}
-                  placeholder="Observations, anomalies, actions à mener..."
-                  rows={3}
-                  className="w-full px-3 py-2 text-[12px] border border-line rounded-md mb-3"
-                />
                 <div className="flex justify-end">
                   <button
                     type="button"
@@ -926,9 +912,11 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                       rapport est fiable — une clôture le lendemain matin prend
                       la photo Odoo APRÈS les ventes du jour. */}
                   <th className="text-left px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Quand la photo du stock Odoo a été prise">Clôturé</th>
-                  <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Reçu</th>
-                  <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Compté</th>
-                  <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Audit</th>
+                  {/* ⚠️ « REÇU · COMPTÉ · AUDIT » RETIRÉS (Layla, 2026-09-22).
+                      Des totaux de pommes et de cafés additionnés — la même
+                      chose que les trois cases supprimées en haut. L'historique
+                      sert à CHOISIR une journée, pas à la juger : sa date, son
+                      état, et l'heure de clôture qui dit si on peut la croire. */}
                 </tr>
               </thead>
               <tbody>
@@ -977,24 +965,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           )
                         })()
                       }</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{
-                        (() => {
-                          const recu = d.qty_received_total || 0
-                          const annonce = d.qty_announced_total || 0
-                          if (!recu && !annonce) return '—'
-                          if (recu === annonce) return recu
-                          return (
-                            <span>
-                              <span className="text-amber-800 font-medium">{recu}</span>
-                              <span className="block text-[9px] text-amber-700">{annonce} apportés</span>
-                            </span>
-                          )
-                        })()
-                      }</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-medium text-blue-900">{d.qty_counted_total || '—'}</td>
-                      <td className="px-3 py-2 text-right text-[10px] text-ink-mute">
-                        {d.audited_at ? new Date(d.audited_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
-                      </td>
+
                     </tr>
                   )
                 })}
