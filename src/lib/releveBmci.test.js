@@ -653,3 +653,37 @@ describe('reconcileEnvelopes — filet virement ↔ espèces', () => {
     expect(r.status).toBe('a_confirmer')
   })
 })
+
+// Le relevé est la source de vérité : une ligne d'argent reçu doit TOUJOURS pouvoir être
+// enregistrée, même quand le calcul l'a « réservée » pour une caisse déjà justifiée. On
+// n'enregistrait que `unmatched` — donc pas les réservées — et ces lignes devenaient
+// introuvables pour toujours : ni liées, ni non liées, ni ignorées.
+// Vécu : « VIR INST RECU ZOUBIDA EL BOUSS », 1 000 dh du 04/06/2026, sur le PDF et nulle
+// part dans l'app. La réservation se fait au montant et à la date, sans regarder le nom :
+// une caisse espèces justifiée par une photo avait avalé le virement d'une cliente.
+describe('reconcileEnvelopes — aucune ligne du relevé ne doit disparaître', () => {
+  const photo = { id: 'p1', amount_cash: 1000, payment_method: 'cash', virement_client: null,
+    session_date: '2026-06-04', proof_date: '2026-06-04', proof_url: 'env_p1/bordereau.jpg', releve_status: null }
+  const virement = { dateIso: '2026-06-04', credit: 1000, type: 'virement_recu',
+    label: 'VIR INST RECU ZOUBIDA EL BOUSS 2138384 260604167682' }
+
+  it('rend la ligne réservée par une caisse justifiée par une photo', () => {
+    const r = reconcileEnvelopes([photo], [virement], { recompute: false })
+    expect(r.unmatched).toHaveLength(0)        // réservée : le calcul la considère justifiée
+    expect(r.lignes).toHaveLength(1)           // mais elle existe, et doit être enregistrée
+    expect(r.lignes[0].label).toContain('ZOUBIDA')
+  })
+
+  it('rend aussi les lignes que personne ne réclame', () => {
+    const r = reconcileEnvelopes([], [virement], { recompute: false })
+    expect(r.unmatched).toHaveLength(1)
+    expect(r.lignes).toHaveLength(1)
+  })
+
+  it('laisse de côté ce qui n’est pas de l’argent reçu (solde, TPE)', () => {
+    const r = reconcileEnvelopes([], [virement,
+      { dateIso: '2026-06-30', credit: 125430.5, type: 'solde', label: 'NOUVEAU SOLDE AU 30/06/2026' },
+      { dateIso: '2026-06-05', credit: 800, type: 'tpe', label: 'REMISE TPE 9900887663' }], { recompute: false })
+    expect(r.lignes).toHaveLength(1)
+  })
+})

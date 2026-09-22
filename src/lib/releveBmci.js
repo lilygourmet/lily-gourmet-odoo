@@ -667,15 +667,28 @@ export function reconcileEnvelopes(envelopes, txns, opts = {}) {
     if (c.length) decided.set(env.id, { status: 'a_confirmer', line: null, candidates: c, crossMethod: true })
   }
   const results = pending.map(env => ({ env, ...decided.get(env.id) }))
-  // Lignes du relevé NON attribuées (argent reçu sans enveloppe correspondante)
   const RELEVANT = new Set(['virement_recu', 'autre', 'versement', 'cheque_depot'])
-  const unmatched = credits
-    .filter(c => !used.has(c) && RELEVANT.has(c.type))
+  // TOUTES les lignes d'argent reçu du relevé. C'est ce qu'il faut enregistrer en base :
+  // le relevé est la source de vérité, et une ligne qu'on n'écrit pas devient introuvable
+  // POUR TOUJOURS — même l'écran « Reçus banque non liés » ne peut plus la montrer.
+  //
+  // On n'enregistrait que `unmatched`, c'est-à-dire « hors de `used` ». Or `used` sert
+  // aussi à RÉSERVER : une caisse justifiée par une photo, une caisse déjà verte, ou une
+  // paire « 🔗 2 virements = 1 ligne » y mettent leur ligne. Ces réservations se font au
+  // montant et à la date, sans vérifier le nom : elles attrapent parfois la ligne d'une
+  // AUTRE cliente, qui disparaissait alors sans laisser de trace.
+  // Vécu : « VIR INST RECU ZOUBIDA EL BOUSS », 1 000 dh du 04/06/2026, présent sur le PDF
+  // et absent de l'app — ni lié, ni non lié, ni ignoré. Introuvable.
+  // L'affichage sait déjà masquer ce qui est déjà justifié (loadAllFreeReleveLines) : la
+  // base doit tout garder, c'est l'écran qui trie.
+  const lignes = credits.filter(c => RELEVANT.has(c.type))
+  const unmatched = lignes
+    .filter(c => !used.has(c))
     .sort((a, b) => (a.dateIso < b.dateIso ? 1 : -1))
   const stats = {
     trouve: results.filter(r => r.status === 'trouve').length,
     a_confirmer: results.filter(r => r.status === 'a_confirmer').length,
     absent: results.filter(r => r.status === 'absent').length,
   }
-  return { results, refunds, period, stats, unmatched }
+  return { results, refunds, period, stats, unmatched, lignes }
 }
