@@ -131,6 +131,45 @@ export function dispatchVersOdoo({ vrac, stock, uniteStock, formats, quantites, 
   }))
 }
 
+/**
+ * ⚠️ JUSQU'OÙ ON PEUT ÉTIRER UNE CUVE — « refuser en dessous de 50 % »
+ * (Layla, 2026-09-22, après avoir demandé : « mais pour cet écran, pas de
+ * verrou ? »).
+ *
+ * Une fin de cuve s'étire un peu, et c'est normal : 1 158 g pour 50 individuels
+ * dont la recette en veut 1 400, chaque pièce reçoit 83 % de sa dose. Personne
+ * ne va rouvrir une cuve pour 17 %.
+ *
+ * Mais rien n'empêchait de taper 500 pièces avec ces mêmes 1 158 g — chacune
+ * aurait reçu 8 % de sa dose, et Odoo l'aurait enregistré sans broncher. C'est
+ * la même faute que les 15 biscuits sortis d'une plaque qui n'en donne que 13
+ * (2026-09-13) : « jamais déclarer plus qu'il n'existe ».
+ *
+ * La moitié, donc. En dessous, ce n'est plus une fin de cuve, c'est un chiffre
+ * tapé de travers.
+ */
+export const PART_MINI_PAR_PIECE = 0.5
+
+/**
+ * Ce dispatch étire-t-il la cuve au-delà du raisonnable ?
+ * Rend `null` quand tout va bien, sinon de quoi le DIRE en clair.
+ */
+export function etirementExcessif({ stock, uniteStock, formats, quantites, reste }) {
+  const stockG = enGrammes(stock, uniteStock)
+  const prevuG = prevuParLaRecette(formats, quantites)
+  if (!(stockG > 0) || !(prevuG > 0)) return null
+  const resteG = Math.max(0, Math.min(stockG, enGrammes(reste, uniteStock)))
+  const consommeG = stockG - resteG
+  const part = consommeG / prevuG
+  if (part >= PART_MINI_PAR_PIECE) return null
+  return {
+    part,
+    pourcent: Math.round(part * 100),
+    consommeG: Math.round(consommeG),
+    prevuG: Math.round(prevuG),
+  }
+}
+
 const arrondi = v => Math.round(v * 1000) / 1000
 // Le repli quand l'écran ne sait pas dire l'unité de l'article : l'unité de la
 // ligne, comme avant. Elles sont identiques dans l'immense majorité des cas.

@@ -25,7 +25,7 @@ import { toast } from '../lib/toast'
 import { propre, qte } from '../lib/ecranSimple'
 import { photoFabAnnexe, declarer, loadArticleFabAnnexe, bloquants, ingredientsPour } from '../lib/fabAnnexe'
 import { hasValidJwt, canRebuts } from '../lib/auth'
-import { loadAFinir, loadFormats, prevuParLaRecette, dispatchVersOdoo, aMettreEnForme } from '../lib/miseEnForme'
+import { loadAFinir, loadFormats, prevuParLaRecette, dispatchVersOdoo, aMettreEnForme, etirementExcessif } from '../lib/miseEnForme'
 import { ChoixDuReste } from './RebutView'
 import { demanderAJeter } from '../lib/rebuts'
 
@@ -114,6 +114,26 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
       uniteVracArticle: ouvert.a.unite || null,
     })
     if (!ordres.length) return
+    /**
+     * ⚠️ LE SEUL VERROU QUI RESTE SUR LE VRAC LUI-MÊME — « refuser en dessous
+     * de 50 % » (Layla, 2026-09-22 : « mais pour cet écran, pas de verrou ? »).
+     *
+     * On ne vérifie plus qu'il y en a ASSEZ — étirer une fin de cuve est
+     * normal, c'est même la raison d'être de l'écran. On vérifie seulement
+     * qu'on ne l'étire pas jusqu'à l'absurde : chaque pièce doit recevoir au
+     * moins la MOITIÉ de sa dose. En dessous, ce n'est plus une fin de cuve,
+     * c'est un chiffre tapé de travers — 500 pièces au lieu de 50.
+     */
+    const trop = etirementExcessif({
+      stock: ouvert.a.resteG, uniteStock: 'g',
+      formats: ouvert.formats, quantites: combien, reste: resteRetenu,
+    })
+    if (trop) {
+      toast(`Chaque pièce ne recevrait que ${trop.pourcent} % de sa dose `
+        + `(${qte(trop.consommeG, 'g')} pour ${qte(trop.prevuG, 'g')} demandés). `
+        + 'Vérifie le nombre de pièces.')
+      return
+    }
     navigator.vibrate?.(15)
     setEnvoi(true)
     try {

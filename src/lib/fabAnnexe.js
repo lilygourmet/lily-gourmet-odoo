@@ -10,7 +10,7 @@ import { creerOfPrepa, loadEtats } from './fabrication'
 import { toast } from './toast'
 import { todayISO } from './dates'
 import { correspond, aplatir } from './recherche'
-import { enGrammes as enGrammesOdoo } from './unites'
+import { enGrammes as enGrammesOdoo, versUnite } from './unites'
 import { manqueTolerable } from './tolerance'
 import { supabase } from './supabase'
 
@@ -979,13 +979,39 @@ export function quantitePourDose({ quantite, besoin, saisi, unite, facteur = 1, 
 export function peseesDe(noeud, fois) {
   const par = new Map()
   for (const l of noeud?.recette || []) {
-    const e = par.get(l.produit) || { total: 0, lignes: 0 }
+    const e = par.get(l.produit) || { total: 0, lignes: 0, unite: l.unite }
     e.total += (Number(l.qty) || 0) * fois
     e.lignes += 1
     par.set(l.produit, e)
   }
-  return Object.fromEntries([...par].map(([nom, e]) =>
-    [nom, Math.round((e.total / e.lignes) * 1000) / 1000]))
+  // ⚠️ ET ON SORT DANS L'UNITÉ DE L'ARTICLE, JAMAIS DANS CELLE DE LA LIGNE.
+  //
+  // « Je pense que j'étais claire sur ce sujet ! » (Layla, 2026-09-22 au soir,
+  // devant « recette : 5 600 000 g » d'œufs et un ordre de 32 000 plaques au
+  // lieu de 32). Elle l'était : le matin même, « assure-toi que partout
+  // pareil ».
+  //
+  // Et j'avais unifié le serveur sans regarder d'assez près le client : DEUX
+  // conventions cohabitaient dans le MÊME objet d'ajustements. `toutConsomme`
+  // et `cuveDeclaree` lisent `c.stock` / `c.dejaFait`, qui sont dans l'unité de
+  // l'ARTICLE (1,4 kg d'œufs) ; celle-ci lisait la recette, écrite dans l'unité
+  // de la LIGNE (1 400 g). Le serveur, lui, convertit tout en croyant recevoir
+  // des unités d'article : les œufs partaient donc ×1000, et le garde-fou
+  // anti-facteur-mille « corrigeait » alors la SORTIE ×1000 à son tour.
+  //
+  // L'unité de l'article se lit dans les composants du nœud — ils viennent du
+  // même serveur, au même instant. Sans elle, on ne devine pas : on rend le
+  // nombre tel quel, comme avant.
+  const uniteArticle = new Map((noeud?.composants || []).map(c => [c.produit, c.unite]))
+  return Object.fromEntries([...par].map(([nom, e]) => {
+    const moyenne = e.total / e.lignes
+    const ua = uniteArticle.get(nom)
+    const memeUnite = !ua || !e.unite
+      || String(ua).trim().toLowerCase() === String(e.unite).trim().toLowerCase()
+    const v = memeUnite ? moyenne : versUnite(moyenne, e.unite, ua)
+    const n = (v === null || !Number.isFinite(v)) ? moyenne : v
+    return [nom, Math.round(n * 1000) / 1000]
+  }))
 }
 
 /**
