@@ -1,3 +1,4 @@
+/* global __BUILD_ID__ */
 import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
@@ -10,6 +11,17 @@ import ReleveImportModal from './modals/ReleveImportModal'
 import VerifierReleveModal from './modals/VerifierReleveModal'
 import RapprocherSection from './RapprocherSection'
 
+// Date de la version chargée par CETTE page (injectée par Vite au build). Sans repère
+// visible, impossible de distinguer « le correctif ne marche pas » de « le navigateur sert
+// encore l'ancien fichier » — on a perdu plusieurs allers-retours là-dessus.
+const VERSION = (() => {
+  const id = typeof __BUILD_ID__ !== 'undefined' ? Number(__BUILD_ID__) : null
+  if (!id) return null
+  const d = new Date(id)
+  const dd = n => String(n).padStart(2, '0')
+  return `${dd(d.getDate())}/${dd(d.getMonth() + 1)} ${dd(d.getHours())}h${dd(d.getMinutes())}`
+})()
+
 export default function SuiviView({ user }) {
   const [subTab, setSubTab] = usePersistedState('lily.suivi.subTab', 'banque')
   return (
@@ -19,6 +31,12 @@ export default function SuiviView({ user }) {
         <SubTabBtn active={subTab === 'perso'}  onClick={() => setSubTab('perso')}><User size={14} /> Perso</SubTabBtn>
         <SubTabBtn active={subTab === 'nonlie'} onClick={() => setSubTab('nonlie')}><ArrowLeftRight size={14} /> Reçus banque non liés</SubTabBtn>
         <SubTabBtn active={subTab === 'rapprocher'} onClick={() => setSubTab('rapprocher')}><ArrowLeftRight size={14} /> ⇄ Rapprocher</SubTabBtn>
+        {VERSION && (
+          <span title="Date de la version chargée dans cet écran. Si elle ne bouge pas après une mise à jour, c'est le navigateur qui garde l'ancienne."
+            style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 11, color: '#8a7a70' }}>
+            version du {VERSION}
+          </span>
+        )}
       </div>
       {subTab === 'banque' && <BanqueSection user={user} />}
       {subTab === 'perso'  && <PersoSection  user={user} />}
