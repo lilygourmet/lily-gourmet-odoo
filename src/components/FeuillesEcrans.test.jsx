@@ -77,6 +77,7 @@ const donner = vi.fn(async () => ({ reste: 0 }))
 const retourRecu = vi.fn(async () => ({}))
 const demanderRetour = vi.fn(async () => ({}))
 const annulerFeuille = vi.fn(async () => ({}))
+const defaireDon = vi.fn(async () => ({}))
 const poserLeScan = vi.fn()
 
 vi.mock('./AppHeader', () => ({ default: () => null }))
@@ -92,6 +93,7 @@ vi.mock('../lib/feuilles', async importOriginal => ({
   retourRecu: (...a) => retourRecu(...a),
   demanderRetour: (...a) => demanderRetour(...a),
   annulerFeuille: (...a) => annulerFeuille(...a),
+  defaireDon: (...a) => defaireDon(...a),
 }))
 
 const { default: ADeclarerView } = await import('./ADeclarerView')
@@ -352,5 +354,72 @@ describe('annuler une fournée dont rien n’est sorti', () => {
     fireEvent.click(screen.getByLabelText(/^Annuler /))
     await waitFor(() => expect(annulerFeuille).toHaveBeenCalledWith('f2'))
     expect(demanderRetour).not.toHaveBeenCalled()
+  })
+})
+
+// ============================================================
+// L'ÉCONOME AUSSI PEUT REVENIR EN ARRIÈRE.
+//
+// « Je veux pouvoir annuler une "donné" aussi » (Layla, 2026-09-22) — et, à la
+// question « annuler quoi ? » : « les deux ».
+//
+//   • dans 🤲 À DONNER : annuler une demande qu'on ne servira pas ;
+//   • dans ✅ DÉJÀ DONNÉ : défaire un don posé par erreur (QR scanné de
+//     travers, doigt qui ripe) — la ligne repart dans « À donner ».
+// ============================================================
+describe('revenir en arrière dans « Donné »', () => {
+  it('« À donner » propose d’annuler la demande', async () => {
+    lues = [attendue]
+    render(<DonneView user={{ id: 'e1' }} onNavigate={() => {}} />)
+    await screen.findByText('Ganache gold')
+    fireEvent.click(screen.getByLabelText(/^Annuler /))
+    await waitFor(() => expect(annulerFeuille).toHaveBeenCalledWith('f3'))
+    expect(donner).not.toHaveBeenCalled()
+  })
+
+  it('« Déjà donné » propose de défaire le don', async () => {
+    lues = [donnee]
+    render(<DonneView user={{ id: 'e1' }} onNavigate={() => {}} />)
+    await screen.findByText('Crème citron')
+    fireEvent.click(screen.getByLabelText(/^Défaire le don /))
+    await waitFor(() => expect(defaireDon).toHaveBeenCalledWith('f1'))
+  })
+
+  // ⚠️ LES DEUX NE SE CROISENT JAMAIS : une demande en attente ne se « défait »
+  // pas (rien n'a été donné), et un don posé ne s'« annule » pas (la
+  // marchandise est dehors — il faut la reprendre, pas l'effacer).
+  it('chaque bloc n’a que son propre geste', async () => {
+    lues = [attendue]
+    render(<DonneView user={{ id: 'e1' }} onNavigate={() => {}} />)
+    await screen.findByText('Ganache gold')
+    expect(screen.queryByLabelText(/^Défaire le don /)).toBeNull()
+    cleanup()
+
+    lues = [donnee]
+    render(<DonneView user={{ id: 'e1' }} onNavigate={() => {}} />)
+    await screen.findByText('Crème citron')
+    expect(screen.queryByLabelText(/^Annuler /)).toBeNull()
+  })
+
+  it('les deux demandent confirmation, et un « non » ne fait rien', async () => {
+    confirmDialog.mockResolvedValue(false)
+    lues = [donnee]
+    render(<DonneView user={{ id: 'e1' }} onNavigate={() => {}} />)
+    await screen.findByText('Crème citron')
+    fireEvent.click(screen.getByLabelText(/^Défaire le don /))
+    await waitFor(() => expect(confirmDialog).toHaveBeenCalled())
+    expect(defaireDon).not.toHaveBeenCalled()
+  })
+
+  // ⚠️ La ligne ENTIÈRE reste le bouton principal : un bouton ne s'imbrique pas
+  // dans un bouton (sa règle du 20/09 : « je n'arrive pas à cocher un article,
+  // il fait que bouger »).
+  it('toucher la ligne donne toujours, la croix est à côté', async () => {
+    lues = [attendue]
+    render(<DonneView user={{ id: 'e1' }} onNavigate={() => {}} />)
+    await screen.findByText('Ganache gold')
+    fireEvent.click(screen.getByLabelText(/^Donné : /))
+    await waitFor(() => expect(donner).toHaveBeenCalledWith('f3', 'e1'))
+    expect(annulerFeuille).not.toHaveBeenCalled()
   })
 })

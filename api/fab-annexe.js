@@ -1565,6 +1565,39 @@ export default async function handler(req, res) {
         return res.status(200).json({ feuille: data })
       }
 
+      /**
+       * DÉFAIRE UN « DONNÉ » POSÉ PAR ERREUR.
+       *
+       * « Je veux pouvoir annuler une donné aussi » (Layla, 2026-09-22). Un QR
+       * scanné de travers, un doigt qui ripe sur la bonne ligne de la mauvaise
+       * cascade : la marchandise n'est jamais sortie, et l'économe n'avait
+       * aucun moyen de revenir en arrière. La ligne retourne simplement dans
+       * « À donner ».
+       *
+       * ⚠️ DEUX REFUS, et ils disent la même chose : on ne réécrit pas une
+       * histoire déjà écrite ailleurs.
+       *   • DÉCLARÉE : le pâtissier a fait la fournée. Effacer le don
+       *     laisserait du travail fait avec une matière jamais sortie.
+       *   • EN RETOUR : le pâtissier rend la marchandise, elle est en chemin.
+       *     C'est « retour reçu » qui clôt ce cas-là, pas celui-ci.
+       */
+      if (req.query.mode === 'defaire-don') {
+        if (feuille.declare_le) {
+          return res.status(200).json({ feuille, refus: 'Cette fournée a déjà été déclarée : on ne peut plus défaire le don.' })
+        }
+        if (feuille.retour_le) {
+          return res.status(200).json({ feuille, refus: 'Le pâtissier est en train de la rendre — c’est « retour reçu » qu’il faut.' })
+        }
+        if (!feuille.donne_le) {
+          return res.status(200).json({ feuille, refus: 'Rien n’a été donné sur cette ligne.' })
+        }
+        const { data, error } = await sb.from('annexe_feuilles')
+          .update({ donne_le: null, donne_par: null })
+          .eq('id', id).select(F).single()
+        if (error) return res.status(200).json({ error: error.message })
+        return res.status(200).json({ feuille: data })
+      }
+
       // L'ÉCONOME CONFIRME AVOIR RÉCUPÉRÉ. Le seul geste qu'il puisse honnêtement
       // poser : la marchandise est revenue dans sa réserve. La ligne se ferme.
       if (req.query.mode === 'retour-recu') {

@@ -222,6 +222,19 @@ export const rendue = id => agir(id, 'pas-faite', { motif: 'rendue' })
  */
 export const annulerFeuille = id => agir(id, 'pas-faite', { motif: 'annulee' })
 
+/**
+ * DÉFAIRE UN « DONNÉ » POSÉ PAR ERREUR — la ligne retourne dans « À donner ».
+ *
+ * « Je veux pouvoir annuler une donné aussi » (Layla, 2026-09-22). Un QR scanné
+ * de travers, un doigt qui ripe : la marchandise n'est jamais sortie de la
+ * réserve, et l'économe n'avait aucun moyen de revenir en arrière.
+ *
+ * ⚠️ Le serveur refuse si la fournée a été DÉCLARÉE (du travail fait avec une
+ * matière qui n'existerait plus) ou si elle est EN RETOUR (c'est « retour
+ * reçu » qui clôt ce cas-là).
+ */
+export const defaireDon = id => agir(id, 'defaire-don', {})
+
 /** Fini, d'une façon ou d'une autre : plus rien à en attendre. */
 const clos = f => !!(f?.declare_le || f?.pas_faite_le)
 

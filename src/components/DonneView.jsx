@@ -30,7 +30,7 @@ import { PhotoFeuille, GrosseQuantite, Bande, Rien, TeteCascade, Quand } from '.
 import { toast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirmDialog'
 import { propre, qte } from '../lib/ecranSimple'
-import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu, parCascade, donneEtSolde } from '../lib/feuilles'
+import { feuillesDuJour, aDonner, aReprendre, enRetour, donner, retourRecu, annulerFeuille, defaireDon, parCascade, donneEtSolde } from '../lib/feuilles'
 
 /**
  * Une fournée, EN UNE LIGNE : photo, nom, chiffre — et le geste à droite.
@@ -50,7 +50,7 @@ const dernierGeste = f => {
   return { iso: f.donne_le, quoi: 'donné' }
 }
 
-function Ligne({ f, bord, couleur, quoi, busy, onAgir }) {
+function Ligne({ f, bord, couleur, quoi, busy, onAgir, onAnnuler, onDefaire }) {
   const dedans = (
     <>
       <span className="flex-1 min-w-0 flex items-center gap-2.5 p-2">
@@ -90,20 +90,42 @@ function Ligne({ f, bord, couleur, quoi, busy, onAgir }) {
   const habit = `flex items-stretch w-full text-left bg-cream-warm border border-line
                  border-l-4 ${bord} rounded-xl overflow-hidden mb-1.5`
 
-  // Rien à faire dessus (le déjà-donné, l'historique) : pas un bouton.
-  if (!onAgir) return <div className={habit}>{dedans}</div>
+  /* ⚠️ LE PETIT BOUTON EST À CÔTÉ, JAMAIS DEDANS (Layla, 2026-09-22 : « je
+     veux pouvoir annuler une donné aussi »). Toute la ligne est déjà un bouton
+     — sa règle du 20/09 — et un bouton ne s'imbrique pas dans un bouton : le
+     navigateur n'en rend qu'un cliquable, et ce serait le mauvais. */
+  const petit = (au, quoiDire, signe) => (
+    <button
+      type="button" onClick={() => au(f)} disabled={busy === f.id}
+      aria-label={`${quoiDire} : ${propre(f.libelle || f.produit)}`}
+      className="flex-none w-11 border-l border-line text-ink-mute text-[16px]
+                 active:bg-cream-deep transition disabled:opacity-50">
+      {busy === f.id ? '…' : signe}
+    </button>
+  )
+  const aCote = onAnnuler ? petit(onAnnuler, 'Annuler', '✕')
+    : onDefaire ? petit(onDefaire, 'Défaire le don', '↩') : null
+
+  // Rien à faire dessus (l'historique) : pas un bouton.
+  if (!onAgir) {
+    return <div className={habit}>{dedans}{aCote}</div>
+  }
 
   // ⚠️ TOUTE LA LIGNE SERT (Layla, 2026-09-20 : « je n'arrive pas à cocher un
   // article, il fait que bouger »). Seule la bande verte de 64 px répondait :
   // toucher la photo ou le nom ne faisait rien, et l'écran se contentait de
   // glisser sous le doigt. Le ✓ reste, mais comme repère, pas comme cible.
   return (
-    <button
-      type="button" onClick={() => onAgir(f, quoi)} disabled={busy === f.id}
-      aria-label={`${quoi === 'donner' ? 'Donné' : 'Repris'} : ${propre(f.libelle || f.produit)}`}
-      className={`${habit} active:brightness-95 transition disabled:opacity-50`}>
-      {dedans}
-    </button>
+    <div className={habit}>
+      <button
+        type="button" onClick={() => onAgir(f, quoi)} disabled={busy === f.id}
+        aria-label={`${quoi === 'donner' ? 'Donné' : 'Repris'} : ${propre(f.libelle || f.produit)}`}
+        className="flex-1 min-w-0 flex items-stretch text-left
+                   active:brightness-95 transition disabled:opacity-50">
+        {dedans}
+      </button>
+      {aCote}
+    </div>
   )
 }
 
@@ -181,6 +203,52 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
     finally { setBusy(null) }
   }
 
+  /**
+   * ANNULER UNE DEMANDE QU'ON NE SERVIRA PAS — le pendant exact de la croix de
+   * « À déclarer ». Rien n'est sorti de la réserve : la ligne quitte cet écran
+   * ET celui du pâtissier.
+   */
+  const annuler = async f => {
+    if (busy) return
+    navigator.vibrate?.(15)
+    if (!await confirmDialog(
+      `Tu es sûre de vouloir annuler « ${propre(f.libelle || f.produit)} » ?\n\n`
+      + "Cette fournée ne sera pas faite, et le pâtissier ne la verra plus non plus.",
+      { confirmLabel: 'Oui, annuler', danger: true })) return
+    setBusy(f.id)
+    try {
+      await annulerFeuille(f.id)
+      toast('Annulée.')
+      relire()
+    } catch (e) { toast('Erreur : ' + (e.message || e)) }
+    finally { setBusy(null) }
+  }
+
+  /**
+   * DÉFAIRE UN « DONNÉ » POSÉ PAR ERREUR — la ligne retourne dans « À donner ».
+   *
+   * ⚠️ Ça va contre « ce qui est déjà fait ne propose rien » (Layla,
+   * 2026-09-19), et elle l'a demandé en connaissance de cause le 2026-09-22 :
+   * un QR scanné de travers n'est pas un travail fait, c'est une erreur de
+   * doigt. Le serveur refuse quand même si la fournée a été déclarée ou si un
+   * retour est en cours — là, l'histoire est écrite ailleurs.
+   */
+  const defaire = async f => {
+    if (busy) return
+    navigator.vibrate?.(15)
+    if (!await confirmDialog(
+      `Tu n'as pas donné « ${propre(f.libelle || f.produit)} » ?\n\n`
+      + "La ligne repart dans « À donner », comme si rien n'était sorti.",
+      { confirmLabel: 'Oui, défaire', danger: true })) return
+    setBusy(f.id)
+    try {
+      await defaireDon(f.id)
+      toast('C’est défait — la ligne est revenue dans « À donner ».')
+      relire()
+    } catch (e) { toast('Erreur : ' + (e.message || e)) }
+    finally { setBusy(null) }
+  }
+
   const nav = { user, onLogout, onNavigate, activeView }
   const attente = feuilles ? aDonner(feuilles) : []
   const sortis = feuilles ? aReprendre(feuilles) : []
@@ -208,7 +276,7 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
           <>
             <Bande emoji="🤲" titre="À donner" n={attente.length} ton="bg-gold-pale text-gold" />
             <Cascades feuilles={attente} bord="border-l-gold" couleur="bg-ok"
-              quoi="donner" busy={busy} onAgir={agir} horizontal />
+              quoi="donner" busy={busy} onAgir={agir} onAnnuler={annuler} horizontal />
           </>
         )}
 
@@ -225,7 +293,7 @@ export default function DonneView({ user, onLogout, onNavigate, activeView }) {
         {!!sortis.length && (
           <>
             <Bande emoji="✅" titre="Déjà donné" n={sortis.length} ton="bg-success-bg text-success" />
-            <Cascades feuilles={sortis} bord="border-l-ok" />
+            <Cascades feuilles={sortis} bord="border-l-ok" busy={busy} onDefaire={defaire} />
           </>
         )}
 
