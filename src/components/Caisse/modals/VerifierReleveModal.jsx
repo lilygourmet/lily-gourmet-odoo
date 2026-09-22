@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { FileSearch, X } from 'lucide-react'
 import { parseStatement } from '../../../lib/releveBmci'
-import { cleDeLigne } from '../../../lib/releveDoublons'
-import { clesDejaEnBase, saveUnmatchedReleveLines } from '../../../lib/caisse'
+import { cleDeLigne, memeOperation } from '../../../lib/releveDoublons'
+import { loadReleveLinesBetween, saveUnmatchedReleveLines } from '../../../lib/caisse'
 import { fmtMoney } from '../_helpers'
 
 // Contrôle d'un relevé SANS rien réimporter.
@@ -39,8 +39,18 @@ export default function VerifierReleveModal({ onClose, onDone }) {
           })
         }
       }
-      const connues = await clesDejaEnBase(rows.map(r => r.key))
-      setRes({ lues: rows.length, manquantes: rows.filter(r => !connues.has(r.key)) })
+      // On NE compare PAS par clé : la clé a changé de forme au fil du temps, et les
+      // lignes importées autrefois en portent une ancienne. Comparer là-dessus déclarait
+      // « manquantes » 114 lignes sur 157 — et les ajouter aurait fait 114 doublons,
+      // exactement ce qu'on veut éviter.
+      // On utilise la règle de l'app pour « est-ce la même opération bancaire ? »
+      // (memeOperation : même n° d'opération, ou même montant + même jour + même nom),
+      // celle qui sert déjà partout ailleurs.
+      const dates = rows.map(r => r.ligne_date).sort()
+      const jour = (d, n) => new Date(new Date(d).getTime() + n * 86400000).toISOString().slice(0, 10)
+      const enBase = await loadReleveLinesBetween(jour(dates[0], -4), jour(dates[dates.length - 1], 4))
+      const manquantes = rows.filter(r => !enBase.some(b => memeOperation(b, r)))
+      setRes({ lues: rows.length, enBase: enBase.length, manquantes })
       setEtape('resultat')
     } catch (e) { setErreur(e?.message || String(e)); setEtape('pick') }
   }
@@ -82,7 +92,7 @@ export default function VerifierReleveModal({ onClose, onDone }) {
         {etape === 'resultat' && res && (
           <>
             <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: res.manquantes.length ? '#FDF0DF' : '#e6f6ec' }}>
-              <b>{res.lues}</b> ligne(s) d'argent reçu lues dans ce relevé.<br />
+              <b>{res.lues}</b> ligne(s) d'argent reçu lues dans ce relevé, <b>{res.enBase}</b> déjà connues en base sur la même période.<br />
               {res.manquantes.length
                 ? <>⚠️ <b>{res.manquantes.length}</b> ne sont pas en base.</>
                 : <>✅ Toutes sont déjà en base — ce relevé est complet.</>}
