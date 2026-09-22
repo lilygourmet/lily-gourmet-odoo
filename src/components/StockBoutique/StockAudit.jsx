@@ -686,7 +686,8 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                               <td className={`px-2 py-2 text-right tabular-nums font-bold bg-bordeaux/5 ${notCounted ? 'text-amber-700' : ''}`}>
                                 {isConflictRow ? <span className="text-red-700 italic">—</span> : effQty}
                               </td>
-                              <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50`}>
+                              <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50
+                                ${hasCurrent && r.qty_odoo_current < 0 ? 'text-red-700 font-bold' : ''}`}>
                                 {hasCurrent ? r.qty_odoo_current : <span className="text-ink-mute italic">—</span>}
                               </td>
                               <td className="px-2 py-2 text-right text-[13px] tabular-nums whitespace-nowrap">
@@ -702,16 +703,15 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                        22/09, dont « Suprême amande (1) » à −9 — et
                                        c'est souvent la découpe d'un gâteau en parts,
                                        que rien n'enregistre. */
-                                    : (r.qty_odoo_current < 0)
-                                      ? (
-                                        <span className="text-red-700 font-bold">
-                                          {-effGapCurr > 0 ? `+${-effGapCurr}` : -effGapCurr}
-                                          {/* Le chiffre seul ne dirait pas l'essentiel : un
-                                              stock Odoo négatif n'existe pas. */}
-                                          <span className="block text-[9.5px] font-semibold">⚠ Odoo à {r.qty_odoo_current}</span>
-                                        </span>
-                                      )
-                                      : effGapCurr === 0 ? <span className="text-green-700 font-bold">✓</span>
+                                    /* ⚠️ PLUS DE « ⚠ Odoo à −1 » SOUS LE CHIFFRE (Layla,
+                                       2026-09-22 : « c'est répétitif, on peut le lire à
+                                       côté »). Elle a raison : la colonne Odoo est juste
+                                       à gauche et porte déjà le nombre. Ce qui manquait,
+                                       ce n'était pas de le répéter — c'était de le faire
+                                       REMARQUER. Il s'écrit donc en rouge dans sa propre
+                                       colonne, et la ligne remonte de toute façon parmi
+                                       les écarts. */
+                                    : effGapCurr === 0 ? <span className="text-green-700 font-bold">✓</span>
                                         : effGapCurr > 0
                                           ? <span className="text-red-700 font-bold">−{effGapCurr}</span>
                                           : <span className="text-blue-800 font-bold">+{-effGapCurr}</span>}
