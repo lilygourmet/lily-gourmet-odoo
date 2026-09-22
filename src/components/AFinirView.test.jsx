@@ -27,6 +27,11 @@ let composantsDuMoule = [
     dejaFait: 0, fabrique: true, ok: true },
 ]
 let liste = [vrac]
+// ⚠️ LA FORME QUE RENVOIE VRAIMENT `/api/fab-annexe?article=` : la fournée pour
+// laquelle les composants sont calculés s'appelle `tournee`. Le mock disait
+// `tourneeTaille` — un nom réservé aux découpes — et masquait donc le défaut
+// de mise à l'échelle pendant que la production bloquait.
+let ficheDuMoule = { tournee: 10 }
 
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
@@ -39,7 +44,7 @@ vi.mock('../lib/fabAnnexe', async importOriginal => ({
   ...await importOriginal(),          // les VRAIES règles de verrou
   declarer: (...a) => declarer(...a),
   loadArticleFabAnnexe: async produit => ({
-    produit, tourneeTaille: 10, composants: composantsDuMoule, recette: [],
+    produit, composants: composantsDuMoule, recette: [], ...ficheDuMoule,
   }),
 }))
 vi.mock('../lib/miseEnForme', async importOriginal => ({
@@ -51,7 +56,7 @@ vi.mock('../lib/miseEnForme', async importOriginal => ({
 const { default: AFinirView } = await import('./AFinirView')
 
 beforeEach(() => {
-  vi.clearAllMocks(); liste = [vrac]
+  vi.clearAllMocks(); liste = [vrac]; ficheDuMoule = { tournee: 10 }
   composantsDuMoule = [{ produit: 'SM. Biscuit Gianduja Indiv', unite: 'u', besoin: 10,
     stock: 50, dejaFait: 0, fabrique: true, ok: true }]
 })
@@ -130,6 +135,37 @@ describe('le dispatch', () => {
       unite: 'u', besoin: 10, stock: 0, dejaFait: 0, fabrique: true, ok: false }]
     await ouvrir()
     for (let i = 0; i < 5; i++) fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
+    fireEvent.click(screen.getByText("C'est fait"))
+    await waitFor(() => expect(toasts.at(-1)).toMatch(/manque/i))
+    expect(declarer).not.toHaveBeenCalled()
+  })
+
+  // ⚠️ LE CAS VÉCU (Layla, 2026-09-22) : une seule tarte 18 cm à déclarer, une
+  // seule base en stock — et l'écran répondait « Il manque Base Tarte CBS
+  // 18 cm ». Les composants arrivent calculés pour une FOURNÉE de 6 ; faute de
+  // reconnaître `tournee`, `ingredientsPour` ne les ramenait pas à 1 et le
+  // verrou réclamait les 6 bases de la fournée entière.
+  it('ne réclame pas la fournée entière pour un seul moule', async () => {
+    ficheDuMoule = { tournee: 6 }
+    composantsDuMoule = [{ produit: 'SM- Base Tarte CBS 18 cm', unite: 'u',
+      besoin: 6, stock: 1, dejaFait: 0, fabrique: true, ok: false }]
+    await ouvrir()
+    const avant = toasts.length          // `toasts` n'est pas vidé entre les tests
+    fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))   // une seule
+    fireEvent.click(screen.getByText("C'est fait"))
+    await waitFor(() => expect(declarer).toHaveBeenCalledTimes(1))
+    expect(toasts.slice(avant).join(' ')).not.toMatch(/manque/i)
+  })
+
+  // ⚠️ L'AUTRE MOITIÉ DE LA RÈGLE : ramener à l'échelle ne doit pas ouvrir la
+  // porte. Six moules d'un coup demandent bien les 6 bases, et il n'y en a
+  // qu'une.
+  it('bloque encore quand la fournée entière manque vraiment', async () => {
+    ficheDuMoule = { tournee: 6 }
+    composantsDuMoule = [{ produit: 'SM- Base Tarte CBS 18 cm', unite: 'u',
+      besoin: 6, stock: 1, dejaFait: 0, fabrique: true, ok: false }]
+    await ouvrir()
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
     fireEvent.click(screen.getByText("C'est fait"))
     await waitFor(() => expect(toasts.at(-1)).toMatch(/manque/i))
     expect(declarer).not.toHaveBeenCalled()

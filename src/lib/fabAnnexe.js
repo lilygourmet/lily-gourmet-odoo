@@ -788,7 +788,14 @@ export function enNoeud(article) {
  * renvoie qu'à la tête).
  */
 export function ingredientsPour(noeud, quantite) {
-  const base = noeud?.pourQuantite || noeud?.tourneeTaille || 0
+  // ⚠️ `tournee` EST UN NOM DE PLUS POUR LA MÊME CHOSE. Les composants d'un
+  // nœud sont calculés pour une fournée entière ; la racine que renvoie
+  // `/api/fab-annexe?article=` l'annonce sous `tournee`, et `tourneeTaille`
+  // n'existe QUE pour une découpe. L'oublier laissait `base` à 0, donc aucune
+  // mise à l'échelle : déclarer 1 tarte exigeait les 6 bases d'une fournée
+  // entière, et « À finir » restait bloqué sur « il manque Base Tarte CBS
+  // 18 cm » alors qu'il y en avait une (Layla, 2026-09-22).
+  const base = noeud?.pourQuantite || noeud?.tourneeTaille || noeud?.tournee || 0
   const fabriques = enfantsDe(noeud)
     .map(c => (base > 0 && quantite !== base ? echelle(c, quantite / base) : c))
   const dejaLa = new Set(fabriques.map(c => c.produit))
