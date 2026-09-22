@@ -363,7 +363,7 @@ function BanqueSection({ user }) {
         </label>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         {imports.length > 0 && (
           <button onClick={() => setShowHistory(v => !v)} style={btnNormal}>
             🕑 Relevés importés ({imports.length})
@@ -382,8 +382,9 @@ function BanqueSection({ user }) {
           title="Dit pourquoi chaque virement du mois ne se rapproche pas — ne modifie rien">
           🔍 Pourquoi ces virements ne se rapprochent pas
         </button>
-        <button onClick={() => setShowVerif(true)} style={btnNormal}>
-          🔎 Vérifier un relevé (sans rien changer)
+        <button onClick={() => setShowVerif(true)} style={btnNormal}
+          title="Relit un relevé déjà importé et dit si des lignes manquent — n'écrit rien">
+          🔎 Vérifier un relevé
         </button>
         <button onClick={() => setShowImport(true)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>
           <FileText size={14} /> Importer relevé bancaire
