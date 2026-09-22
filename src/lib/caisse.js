@@ -635,9 +635,14 @@ export async function loadFreeReleveLines(amount, paymentMethod = 'cash') {
   // proposait deux fois le même encaissement.
   // On ne fusionne QUE deux documents différents : deux versements identiques dans le
   // MÊME relevé sont deux vrais encaissements, et les perdre coûterait plus cher.
+  // « Documents différents » veut dire : on SAIT qu'ils viennent de deux documents. Une
+  // ligne récupérée par « 🔎 Vérifier un relevé » n'a pas d'URL — ce contrôle relit le PDF
+  // sans le téléverser. Exiger deux URL différentes laissait donc passer les jumelles dès
+  // qu'une des deux venait de là.
+  const memeDocConnu = (x, y) => !!x.releve_url && !!y.releve_url && x.releve_url === y.releve_url
   const gardees = []
   for (const l of (data || [])) {
-    if (gardees.some(g => g.releve_url !== l.releve_url && memeOperation(g, l))) continue
+    if (gardees.some(g => !memeDocConnu(g, l) && memeOperation(g, l))) continue
     gardees.push(l)
   }
   return gardees
