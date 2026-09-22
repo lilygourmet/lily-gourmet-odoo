@@ -26,6 +26,14 @@ const genoise = {
   etat: 'confirmed', lieu: 'Stock Prod', quand: '2026-09-22 08:00:00',
   manques: [], lignes: [{ id: 11, produit: 'MP- Farine', besoin: 900, unite: 'g' }],
 }
+// ⚠️ LE NOM RÉEL D'ODOO, avec son point de séparation : « SM CD*. Creme
+// Patissiere ». L'écran retirait « SM », puis « CD* », et laissait le point tout
+// seul devant le nom — « . Creme Patissiere » (Layla, 2026-09-22).
+const patissiere = {
+  name: 'WHLVP/MO/4', produit: 'SM CD*. Creme Patissiere', qty: 0.64, unite: 'kg',
+  etat: 'confirmed', lieu: 'Stock Prod', quand: '2026-09-22 08:00:00',
+  manques: [], lignes: [],
+}
 // Un gâteau monté : pas de pesée, juste son compte.
 const cadre = {
   name: 'WHLVP/MO/2', produit: 'CD* Cadre Foret Noir Grand', qty: 24, unite: 'u',
@@ -142,5 +150,35 @@ describe('ce qui doit encore arrêter l’œil', () => {
   it('le numéro, le lieu et l’heure tiennent sur UNE ligne', async () => {
     await afficher()
     expect(screen.getByText(/WHLVP\/MO\/1 · Stock Prod · fait 22\/09 à 09h12/)).toBeTruthy()
+  })
+})
+
+// ⚠️ « SM CD*. Creme Patissiere » : deux préfixes, et un point entre les deux.
+describe('les noms du cake design, lisibles', () => {
+  it('le point de séparation ne reste pas orphelin devant le nom', async () => {
+    ouverts = [patissiere]
+    render(<ValidationView user={{ id: 'u1' }} onNavigate={() => {}} onLogout={() => {}} />)
+    await screen.findByText('Creme Patissiere')
+    expect(screen.queryByText('. Creme Patissiere')).toBeNull()
+  })
+})
+
+// ⚠️ « Les forcer inclut les valider » (Layla, 2026-09-22) — la même demande
+// qu'à l'annexe deux jours plus tôt. Forcer ne partait qu'avec les bloqués : il
+// fallait forcer, puis revenir cocher et valider le reste. Le second tour
+// s'oubliait.
+describe('« Tout forcer » emporte aussi les prêts', () => {
+  it('le bouton compte TOUT ce qui est coché, pas seulement les bloqués', async () => {
+    await afficher()
+    // Une ligne prête (la génoise) et une bloquée (la mousse pistache).
+    fireEvent.click(screen.getAllByRole('checkbox')[0])
+    fireEvent.click(screen.getAllByRole('checkbox')[2])
+    expect(screen.getByText('Tout forcer (2)')).toBeTruthy()
+  })
+
+  it('et il ne s’allume que s’il y a vraiment quelque chose à forcer', async () => {
+    await afficher()
+    fireEvent.click(screen.getAllByRole('checkbox')[0])       // la prête, seule
+    expect(screen.getByText('Tout forcer (1)').closest('button').disabled).toBe(true)
   })
 })

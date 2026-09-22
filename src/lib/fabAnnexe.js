@@ -11,6 +11,7 @@ import { toast } from './toast'
 import { todayISO } from './dates'
 import { correspond, aplatir } from './recherche'
 import { enGrammes as enGrammesOdoo } from './unites'
+import { manqueTolerable } from './tolerance'
 import { supabase } from './supabase'
 
 /**
@@ -428,24 +429,20 @@ export function pressageDe(noeud) {
  *
  * ⚠️ Et jamais quand il n'y a RIEN : zéro n'est pas « presque tout ».
  */
-const PART_TOLEREE = 0.05
-const GRAMMES_TOLERES = 50
-
 /**
  * La règle en chiffres, sans rien savoir de la forme des données — pour que
  * Fabrication CD applique EXACTEMENT la même tolérance que l'annexe. Le
  * 2026-09-12, le CD ne bloquait que sur un stock à zéro : 0,08 kg de crème au
  * beurre praliné oubliés au labo ont débloqué un gâteau qui en demande 0,9.
+ *
+ * ⚠️ ELLE A DÉMÉNAGÉ dans `tolerance.js` : le SERVEUR en a besoin lui aussi
+ * (« À valider » montrait « il manque 4 g » sur 640 — Layla, 2026-09-22 :
+ * « quand ça se rapproche, le laisser »), et il ne peut pas importer ce
+ * fichier-ci, qui parle à Supabase. Ré-exportée ici pour que tout ce qui
+ * l'importait déjà continue de marcher — une seule règle, un seul endroit où
+ * la changer.
  */
-export function manqueTolerable(besoin, dispo, unite) {
-  if (/^u$/i.test(String(unite || '').trim())) return false
-  const b = Number(besoin) || 0
-  const d = Number(dispo) || 0
-  const manque = b - d
-  if (!(b > 0) || !(manque > 0) || !(d > 0)) return false
-  const enG = enGrammesOdoo(manque, unite)
-  return manque <= b * PART_TOLEREE && enG !== null && enG <= GRAMMES_TOLERES
-}
+export { manqueTolerable }
 
 export function presqueLa(composant) {
   const c = composant

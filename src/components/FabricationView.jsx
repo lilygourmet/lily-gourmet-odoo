@@ -123,7 +123,10 @@ const sansRecette = (n, recettes) => estPrepa(n) && !estIngredient(n) && !estGen
 const propre = n => String(n || '')
   .replace(/^SM\s+CD\*\s*/i, '').replace(/^SM\s+/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
   .replace(/\s*\bKG\b\s*CD\b/i, '').replace(/\s*\bCD\*?\b\s*$/i, '').replace(/\s*\bkg\b\s*$/i, '')
-  .replace(/\s*\baccs\b/i, '').trim()
+  .replace(/\s*\baccs\b/i, '')
+  // ⚠️ Même point orphelin qu'à « À valider » : « SM CD*. Creme Patissiere »
+  // laissait « . Creme Patissiere » (Layla, 2026-09-22).
+  .replace(/^[.\-*\s]+/, '').trim()
 
 // ce que produit une tournée de cette préparation (« Tournée (3 kg) » → 3 kg)
 function tailleTournee(recettes, n) {

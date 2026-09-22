@@ -8,6 +8,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { waitUntil } from '@vercel/functions'
 import { versUnite, enGrammes } from '../src/lib/unites.js'
+import { manqueTolerable } from '../src/lib/tolerance.js'
 
 // Ce que Check CD- a déjà contrôlé. Sans la base (SQL pas lancé, variables
 // absentes), on renvoie null : la chaîne stricte se met alors en veille plutôt
@@ -1844,7 +1845,16 @@ async function manquesDesOrdres(uid, names) {
         // ce qui sera consommé — modifiable au moment de valider
         consomme: x.quantity_done > 0 ? x.quantity_done : x.product_uom_qty,
         dispo: comparable ? Math.round(dispo * 100) / 100 : null, ignore,
-        manque: (ignore || !comparable) ? 0 : Math.max(0, x.product_uom_qty - dispo),
+        // ⚠️ QUELQUES GRAMMES NE SONT PAS UNE PÉNURIE (Layla, 2026-09-22,
+        // devant 636 g de crème pâtissière pour 640 demandés : « quand ça se
+        // rapproche, le laisser »). C'est la balance, pas un manque — et
+        // Fabrication CD comme l'annexe laissent déjà passer ce cas-là depuis
+        // le 2026-09-12. « À valider » était le seul à bloquer encore.
+        // La règle est partagée, au chiffre près : au plus 5 % du besoin ET au
+        // plus 50 g, jamais sur ce qui se compte à la pièce, jamais sur zéro.
+        manque: (ignore || !comparable
+          || manqueTolerable(x.product_uom_qty, dispo, uniteLigne))
+          ? 0 : Math.max(0, x.product_uom_qty - dispo),
       }
     })
     return {

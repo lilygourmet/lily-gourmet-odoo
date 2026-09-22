@@ -39,7 +39,11 @@ const versSaisie = (q, u) => (norm(u) === 'kg' ? Math.round(q * 1000) : Math.rou
 const depuisSaisie = (n, u) => (norm(u) === 'kg' ? n / 1000 : n)
 const propre = n => String(n || '')
   .replace(/^SM\.?\s*/i, '').replace(/^CD\*\s*/i, '').replace(/^MP-\s*/i, '').replace(/^C-\s*/i, '')
-  .replace(/\s*\bCD\*?\b\s*$/i, '').replace(/\s*\baccs\b/i, '').trim()
+  .replace(/\s*\bCD\*?\b\s*$/i, '').replace(/\s*\baccs\b/i, '')
+  // ⚠️ LE POINT ORPHELIN (Layla, 2026-09-22 : « . Creme Patissiere »). L'article
+  // s'appelle « SM CD*. Creme Patissiere » : on retire « SM », puis « CD* », et
+  // il reste le point de séparation, tout seul devant le nom.
+  .replace(/^[.\-*\s]+/, '').trim()
 
 /**
  * Champ de recherche d'un article Odoo : on tape, il propose.
@@ -361,8 +365,16 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
     setRefus(false)
   }
 
+  /**
+   * ⚠️ FORCER EMPORTE AUSSI LES PRÊTS (Layla, 2026-09-22 : « les forcer inclus
+   * les valider » — la même demande qu'à l'annexe deux jours plus tôt).
+   *
+   * Elle coche une sélection, dont une partie bloque. « Forcer » ne partait
+   * qu'avec les bloqués : il fallait forcer, puis revenir cocher et valider le
+   * reste. Deux tours pour un seul geste, et le second s'oubliait.
+   */
   async function lancer(forcer) {
-    const cibles = rangerParDependance(forcer ? bloques : prets).map(l => l.name)
+    const cibles = rangerParDependance(forcer ? [...prets, ...bloques] : prets).map(l => l.name)
     if (!cibles.length) return
     setEnvoi(true)
     const aEnvoyer = {}
@@ -664,7 +676,7 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
               <button onClick={() => setConfirmer(true)} disabled={!bloques.length}
                 className={'rounded-2xl py-3.5 px-4 text-[13.5px] font-bold border bg-white ' +
                   (bloques.length ? 'border-danger text-danger' : 'border-line text-ink-mute')}>
-                Forcer la sélection{bloques.length ? ` (${bloques.length})` : ''}
+                Tout forcer{choisis.length ? ` (${choisis.length})` : ''}
               </button>
             </div>
             {/* Refuser : ce qui a été coché « fait » par erreur, ou qu'on ne
@@ -718,7 +730,10 @@ export default function ValidationView({ user, onLogout, onNavigate, activeView 
           onPointerDown={e => { if (e.target === e.currentTarget) setConfirmer(false) }}>
           <div className="bg-white rounded-2xl p-4 max-w-[420px]">
             <b className="text-[16px]">Forcer la validation ?</b>
-            <p className="text-[13px] text-ink-soft mt-1 mb-2">Odoo enregistrera la fabrication même si le stock ne suit pas. Il manque :</p>
+            <p className="text-[13px] text-ink-soft mt-1 mb-2">
+              Les {choisis.length} lignes cochées partent — les {prets.length} prêtes comprises.
+              Odoo enregistrera la fabrication même si le stock ne suit pas. Il manque :
+            </p>
             {manquesCumules.map((m, i) => (
               <div key={i} className="text-[13.5px]">• <b>{qte(m.manque, m.unite)}</b> de {propre(m.produit)}</div>
             ))}
