@@ -664,6 +664,43 @@ export async function lignesPourConfirmer(env) {
   return [...libres, ...miennes.filter(m => !libres.some(l => l.key === m.key))]
 }
 
+// Pourquoi une ligne PROPOSÉE à une caisse n'est-elle plus choisissable ? « Pas encore
+// disponible (déjà prise, ou disparue) » laissait Layla sans suite : elle ne pouvait ni
+// savoir qui la retenait, ni qu'elle l'avait elle-même mise de côté. On va donc lire
+// l'état réel de chaque ligne mémorisée, au lieu de deviner.
+//
+// On cherche par DATE puis par libellé — pas par montant : sur un « 🔗 2 virements =
+// 1 ligne », la ligne vaut la somme de deux caisses et ne fait celui d'aucune.
+export async function etatDesLignesProposees(candidates) {
+  const dates = [...new Set((candidates || []).map(c => c.d).filter(Boolean))]
+  if (!dates.length) return []
+  const { data: lignes } = await supabase
+    .from('caisse_releve_lignes')
+    .select('key, label, ligne_date, amount, ignored, ignore_reason, used_by')
+    .in('ligne_date', dates)
+    .limit(2000)
+  const ids = [...new Set((lignes || []).map(l => l.used_by).filter(Boolean))]
+  let envById = {}
+  if (ids.length) {
+    const { data: envs } = await supabase.from('caisse_enveloppes')
+      .select('id, source, session_date, virement_client').in('id', ids).limit(2000)
+    envById = Object.fromEntries((envs || []).map(e => [e.id, e]))
+  }
+  const debut = t => (t || '').toUpperCase().replace(/\s+/g, ' ').trim().slice(0, 30)
+  return (candidates || []).map(c => {
+    const duJour = (lignes || []).filter(l => l.ligne_date === c.d)
+    const l = duJour.find(x => debut(x.label).startsWith(debut(c.l)) || debut(c.l).startsWith(debut(x.label)))
+    if (!l) return { ...c, etat: 'absente', texte: 'introuvable dans les relevés importés' }
+    if (l.used_by) {
+      const e = envById[l.used_by]
+      const qui = e ? `${e.virement_client || e.source || 'une caisse'} · ${e.session_date}` : 'une caisse supprimée'
+      return { ...c, etat: 'prise', texte: `déjà prise par ${qui}` }
+    }
+    if (l.ignored) return { ...c, etat: 'ignoree', texte: `mise de côté${l.ignore_reason ? ` (${l.ignore_reason})` : ''} — réactive-la dans « Reçus banque non liés » → « 🚫 Ignorés »` }
+    return { ...c, etat: 'libre', texte: 'libre — relance le rapprochement' }
+  })
+}
+
 export async function confirmReleveLine(env, choice) {
   if (choice) {
     const pool = await lignesPourConfirmer(env)
