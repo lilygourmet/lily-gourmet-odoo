@@ -25,7 +25,7 @@ import { toast } from '../lib/toast'
 import { propre, qte } from '../lib/ecranSimple'
 import { photoFabAnnexe, declarer, loadArticleFabAnnexe, bloquants, ingredientsPour } from '../lib/fabAnnexe'
 import { hasValidJwt } from '../lib/auth'
-import { loadAFinir, loadFormats, prevuParLaRecette, dispatchVersOdoo } from '../lib/miseEnForme'
+import { loadAFinir, loadFormats, prevuParLaRecette, dispatchVersOdoo, aMettreEnForme } from '../lib/miseEnForme'
 
 /** Une ligne de la liste : photo, ce qu'il en reste, ce qu'on en fait. */
 function LigneVrac({ a, onOuvrir }) {
@@ -137,8 +137,24 @@ export default function AFinirView({ user, onLogout, onNavigate, activeView }) {
       setFini({ quoi: propre(ouvert.a.libelle || ouvert.a.produit),
         combien: ordres.reduce((t, o) => t + o.qty, 0) })
       setTimeout(() => setFini(null), 1600)
-      fermer()
-      relire()
+      /**
+       * ⚠️ LA LIGNE PART TOUT DE SUITE, AVEC LE CHIFFRE QU'ELLE A DIT (Layla,
+       * 2026-09-22 : « j'ai dit qu'il m'en est resté 0, ça m'a remis 140 »,
+       * puis « ça doit s'enlever seul sans rafraîchir la page »).
+       *
+       * Depuis que « À finir » lit la consommation RÉELLE de l'ordre Odoo, il y
+       * a un trou de quelques secondes : l'ordre met sept allers-retours à
+       * naître, et pendant ce temps-là le serveur retombe sur le calcul de la
+       * recette — donc sur un reste fantôme. Relire immédiatement, c'était
+       * ramener ce fantôme sous ses yeux.
+       *
+       * Ce qu'elle a VU de ses yeux et DIT fait foi, et n'a rien à attendre
+       * d'Odoo. On l'applique ici ; la prochaine ouverture de l'écran relira
+       * le serveur, qui d'ici là connaîtra l'ordre.
+       */
+      const ditG = Math.max(0, Number(resteRetenu) || 0)
+      setVracs(v => aMettreEnForme((v || []).map(x =>
+        (x.produit === ouvert.a.produit ? { ...x, resteG: ditG, pris: null } : x))))
     } catch (e) {
       toast('Erreur : ' + (e.message || e))
     } finally { setEnvoi(false) }

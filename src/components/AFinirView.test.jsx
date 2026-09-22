@@ -47,9 +47,10 @@ vi.mock('../lib/fabAnnexe', async importOriginal => ({
     produit, composants: composantsDuMoule, recette: [], ...ficheDuMoule,
   }),
 }))
+const loadAFinir = vi.fn(async () => liste)
 vi.mock('../lib/miseEnForme', async importOriginal => ({
   ...await importOriginal(),          // les VRAIS calculs de dispatch
-  loadAFinir: async () => liste,
+  loadAFinir: (...a) => loadAFinir(...a),
   loadFormats: async () => formats,
 }))
 
@@ -186,5 +187,49 @@ describe('le dispatch', () => {
     // ce qui part dans Odoo : le vrac qui existait, pas celui de la recette
     expect(declarer.mock.calls[0][0].ajustements)
       .toEqual({ 'SM. Gélée Mangue Ananas Pistache': 2030 })
+  })
+})
+
+// ============================================================
+// LA LIGNE S'EN VA TOUTE SEULE, AVEC LE CHIFFRE QU'ELLE A DIT.
+//
+// « J'ai dit qu'il m'en est resté 0, ça m'a remis 140 », puis « ça doit
+// s'enlever seul sans rafraîchir la page » (Layla, 2026-09-22).
+//
+// Depuis que « À finir » lit la consommation RÉELLE de l'ordre Odoo, il y a un
+// trou de quelques secondes : l'ordre met sept allers-retours à naître, et
+// pendant ce temps-là le serveur retombe sur le calcul de la recette — donc
+// sur un reste fantôme. Relire le serveur juste après le dispatch, c'était
+// ramener ce fantôme sous ses yeux.
+//
+// Ce qu'elle a VU de ses yeux et DIT fait foi, et n'a rien à attendre d'Odoo.
+// ============================================================
+describe('après le dispatch, sans rien rafraîchir', () => {
+  it('« rien » fait disparaître la ligne tout de suite', async () => {
+    await ouvrir()
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
+    fireEvent.click(screen.getByText('rien'))
+    fireEvent.click(screen.getByText("C'est fait"))
+    await waitFor(() => expect(declarer).toHaveBeenCalled())
+    // ⚠️ Le serveur, lui, renverrait encore le vrac entier (`loadAFinir` est
+    // figé sur `liste`) : c'est exactement le fantôme qu'on refuse de rappeler.
+    // On vise le BOUTON de la liste — le bandeau « c'est fait » porte le même
+    // nom pendant une seconde et demie.
+    await waitFor(() => expect(screen.queryByRole('button',
+      { name: /Gélée mangue ananas pistache/ })).toBeNull())
+  })
+
+  // ⚠️ ET SURTOUT : ON NE RELIT PAS LE SERVEUR DANS LA FOULÉE. C'est ce
+  // retour au serveur qui ramenait le fantôme — l'ordre Odoo n'existe pas
+  // encore, le serveur retombe sur la recette. La prochaine ouverture de
+  // l'écran relira, et d'ici là l'ordre sera né.
+  it('ne redemande pas la liste au serveur juste après', async () => {
+    await ouvrir()
+    for (let i = 0; i < 5; i++) fireEvent.click(screen.getByLabelText('Plus Gélée 10 pers'))
+    const avant = loadAFinir.mock.calls.length
+    fireEvent.click(screen.getByText('rien'))
+    fireEvent.click(screen.getByText("C'est fait"))
+    await waitFor(() => expect(declarer).toHaveBeenCalled())
+    expect(loadAFinir.mock.calls.length).toBe(avant)
   })
 })
