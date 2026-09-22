@@ -373,6 +373,20 @@ export async function saveUnmatchedReleveLines(lines) {
   if (error) throw error
 }
 
+// Parmi ces clés, lesquelles sont DÉJÀ en base ? Sert au contrôle d'un réimport : « sur
+// les N lignes lues dans ce PDF, combien manquaient ? ». Sans ce compte, un réimport ne
+// dit rien — l'upsert ignore silencieusement les doublons, et Layla ne peut pas savoir si
+// une ligne manquait vraiment.
+export async function clesDejaEnBase(keys) {
+  const connues = new Set()
+  for (let i = 0; i < keys.length; i += 200) {
+    const { data } = await supabase.from('caisse_releve_lignes')
+      .select('key').in('key', keys.slice(i, i + 200))
+    for (const r of (data || [])) connues.add(r.key)
+  }
+  return connues
+}
+
 // Marque les lignes du relevé que le rapprochement AUTO vient d'attribuer : elles sortent
 // de « à lier » et rejoignent « déjà liés ». Sans ça, un ré-import de la même période les
 // remettait dans « à lier » alors qu'elles étaient déjà rapprochées.
