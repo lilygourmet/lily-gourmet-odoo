@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
 import { parseStatement, reconcileEnvelopes, prefixeSupposition, CAISSE_APRES_DERNIERE_LIGNE } from '../../../lib/releveBmci'
 import { libelleDesLignes } from '../../../lib/releveDoublons'
-import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, markMatchedReleveLines, saveReleveImport, freeReleveLinesOf, chargerPayeursConnus } from '../../../lib/caisse'
+import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, markMatchedReleveLines, saveReleveImport, freeReleveLinesOf, chargerPayeursConnus, clesDejaEnBase } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
 import { confirmDialog } from '../../../lib/confirmDialog'
 
@@ -16,6 +16,7 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
   const [recon, setRecon] = useState(null)
   const [savedCount, setSavedCount] = useState(0)
   const [unmatchedQuery, setUnmatchedQuery] = useState('')
+  const [controle, setControle] = useState(null)   // lignes lues / lignes qui manquaient en base
   const [parsed, setParsed] = useState(null) // { envs, allTx }
   const [recompute, setRecompute] = useState(false)
 
@@ -144,8 +145,14 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
       // `ligneRow` numérote les clés en double : on exclut celles qu'on vient d'écrire,
       // sinon elles repartiraient sous une clé « #2 » et feraient un vrai doublon.
       const dejaEcrites = new Set(attribuees.map(r => r.line))
-      await saveUnmatchedReleveLines(
-        (recon.lignes || recon.unmatched || []).filter(l => !dejaEcrites.has(l)).map(u => ligneRow(u)))
+      const aEcrire = (recon.lignes || recon.unmatched || []).filter(l => !dejaEcrites.has(l)).map(u => ligneRow(u))
+      // Contrôle : combien de ces lignes manquaient en base ? C'est la réponse à
+      // « est-ce que tout mon relevé est bien importé ? », qu'aucun écran ne donnait.
+      try {
+        const connues = await clesDejaEnBase(aEcrire.map(r => r.key))
+        setControle({ lues: aEcrire.length + attribuees.length, nouvelles: aEcrire.filter(r => !connues.has(r.key)).length })
+      } catch { /* le contrôle ne doit pas bloquer l'import */ }
+      await saveUnmatchedReleveLines(aEcrire)
       // Trace de l'import (historique) — non bloquant.
       try {
         await saveReleveImport({
@@ -268,7 +275,15 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
           <div style={{ padding: 24, textAlign: 'center' }}>
             <CheckCircle2 size={32} color="#0a7d3d" />
             <div style={{ fontSize: 15, fontWeight: 600, margin: '10px 0 4px' }}>Rapprochement enregistré</div>
-            <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 16 }}>{savedCount} enveloppe(s) mise(s) à jour.</div>
+            <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 10 }}>{savedCount} enveloppe(s) mise(s) à jour.</div>
+            {controle && (
+              <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 16, padding: '10px 12px', borderRadius: 10, background: controle.nouvelles ? '#FDF0DF' : '#e6f6ec', textAlign: 'left' }}>
+                <b>{controle.lues}</b> ligne(s) d'argent reçu lues dans ce relevé.<br />
+                {controle.nouvelles
+                  ? <>⚠️ <b>{controle.nouvelles}</b> manquai(en)t en base — elles viennent d'être récupérées. Lance « 🔄 Relancer le rapprochement ».</>
+                  : <>✅ Aucune ne manquait : ce relevé était déjà entièrement enregistré.</>}
+              </div>
+            )}
             <button onClick={onClose} style={pickBtn}>Fermer</button>
           </div>
         )}
