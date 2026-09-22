@@ -237,6 +237,9 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
     // 84 ont un stock Odoo à ZÉRO — zéro contre zéro, aucun écart, rien à
     // afficher. Les 8 autres sont de VRAIS écarts que je masquais, dont un
     // « Suprême amande (1) » à −9 que personne ne voyait.
+    // Un stock Odoo négatif se montre toujours : c'est une anomalie du système,
+    // même quand la soustraction tombe juste.
+    if (r.qty_odoo_current < 0) return true
     return (r.qty_odoo_current - (r.is_counted ? (r.qty_counted || 0) : 0)) !== 0
   }
 
@@ -685,10 +688,22 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                               <td className="px-2 py-2 text-left text-[11.5px] whitespace-nowrap">
                                 {isConflictRow ? <span className="text-ink-mute italic text-[10px]">à arbitrer</span>
                                   : effGapCurr === null ? <span className="text-ink-mute">—</span>
-                                    : effGapCurr === 0 ? <span className="text-green-700 font-bold">✓</span>
-                                      : effGapCurr > 0
-                                        ? <span className="text-red-700 font-bold">il manque {effGapCurr} en boutique</span>
-                                        : <span className="text-blue-800 font-bold">{-effGapCurr} de plus en boutique</span>}
+                                    /* ⚠️ UN STOCK ODOO NÉGATIF N'EST PAS UN ÉCART DE
+                                       COMPTAGE (Layla, 2026-09-22, sur « E- Suprême
+                                       amande (10) » à −1 : « y a un écart là non ? »).
+                                       Oui — mais pas celui qu'on croit. Dire « 1 de
+                                       plus en boutique » serait vrai et inutile :
+                                       Odoo a vendu ou consommé quelque chose qu'il
+                                       n'avait pas. Sept articles dans ce cas le
+                                       22/09, dont « Suprême amande (1) » à −9 — et
+                                       c'est souvent la découpe d'un gâteau en parts,
+                                       que rien n'enregistre. */
+                                    : (r.qty_odoo_current < 0)
+                                      ? <span className="text-red-700 font-bold">Odoo à {r.qty_odoo_current} — impossible</span>
+                                      : effGapCurr === 0 ? <span className="text-green-700 font-bold">✓</span>
+                                        : effGapCurr > 0
+                                          ? <span className="text-red-700 font-bold">il manque {effGapCurr} en boutique</span>
+                                          : <span className="text-blue-800 font-bold">{-effGapCurr} de plus en boutique</span>}
                               </td>
                               <td className="px-2 py-2 text-center">
                                 {isConflictRow && conflictItems.length === 1 ? (
