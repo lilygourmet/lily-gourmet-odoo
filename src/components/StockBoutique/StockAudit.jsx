@@ -227,8 +227,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
     if (r.qty_odoo_current === null || r.qty_odoo_current === undefined) return false
     return (r.qty_odoo_current - (r.qty_counted || 0)) !== 0
   }
-  const nbPasComptes = useMemo(
-    () => report.filter(r => !r.is_counted && !r.is_conflict_row).length, [report])
 
   async function handleForceClose() {
     if (!stockDay) return
@@ -529,7 +527,19 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                   Aucun article comptabilisé.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                /* ⚠️ L'EN-TÊTE RESTE FIGÉ (Layla, 2026-09-22 : « article ·
+                   reçu + reste · vendu · devrait rester · compté · Odoo — reste
+                   figé »). Sur une longue liste, on descend et on ne sait plus
+                   quelle colonne on lit — six chiffres alignés se ressemblent
+                   tous.
+
+                   ⚠️ Et c'est la BOÎTE qui défile, pas la page : un `position:
+                   sticky` cherche le conteneur qui défile au-dessus de lui.
+                   Avec `overflow-x-auto` seul, ce conteneur existait déjà (le
+                   navigateur rend l'axe vertical `auto` aussi) mais avait la
+                   hauteur de son contenu — l'en-tête n'avait donc rien à quoi
+                   se coller. Une hauteur maximale, et il tient. */
+                <div className="overflow-auto max-h-[72vh]">
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="bg-cream-warm border-b border-line">
@@ -540,7 +550,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                             chemin du gâteau, de gauche à droite : ce qui est
                             arrivé, ce qui est parti, ce qui devrait rester, ce
                             qui reste vraiment. */}
-                        <th className="text-left px-3 py-2 text-[10px] font-bold text-ink-mute">article</th>
+                        <th className="sticky top-0 z-10 text-left px-3 py-2 text-[10px] font-bold text-ink-mute bg-cream-warm">article</th>
                         {/* ⚠️ « Apporté » A DISPARU (Layla, 2026-09-22 : « est-ce
                             qu'en général reçu et apporté sont pareils ? si c'est
                             le cas garder que reçu »). Mesuré sur 252 lignes :
@@ -551,23 +561,23 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                         {/* « reçu » et « reste d'hier » n'en font qu'un : ce
                             qui était là au départ. Le second reste lisible, en
                             petit, à côté du premier. */}
-                        <th className="text-right px-2 py-2 text-[10px] font-bold text-ink-mute" title="Ce qui était là au départ : reçu ce matin + reste d'hier">reçu + reste</th>
+                        <th className="sticky top-0 z-10 text-right px-2 py-2 text-[10px] font-bold text-ink-mute bg-cream-warm" title="Ce qui était là au départ : reçu ce matin + reste d'hier">reçu + reste</th>
                         {/* ⚠️ Informative, et prise à la CAISSE : personne ne la
                             saisit. Clique la ligne pour voir les heures. */}
-                        <th className="text-right px-2 py-2 text-[10px] font-bold text-ink-mute" title="Vendu d'après la caisse — clique la ligne pour les heures">vendu</th>
+                        <th className="sticky top-0 z-10 text-right px-2 py-2 text-[10px] font-bold text-ink-mute bg-cream-warm" title="Vendu d'après la caisse — clique la ligne pour les heures">vendu</th>
                         {/* ⚠️ NOUVEAU, et c'est le calcul qu'elle faisait de
                             tête à chaque ligne : reçu + reste − vendu. */}
-                        <th className="text-right px-2 py-2 text-[10px] font-bold text-ink-mute" title="reçu + reste − vendu">devrait rester</th>
-                        <th className="text-right px-2 py-2 text-[10px] font-bold text-ink-mute bg-bordeaux/10" title="Café a compté en aveugle">compté</th>
-                        <th className="text-right px-2 py-2 text-[10px] font-bold text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo</th>
+                        <th className="sticky top-0 z-10 text-right px-2 py-2 text-[10px] font-bold text-ink-mute bg-cream-warm" title="reçu + reste − vendu">devrait rester</th>
+                        <th className="sticky top-0 z-10 text-right px-2 py-2 text-[10px] font-bold text-ink-mute bg-[#f3e6ea]" title="Café a compté en aveugle">compté</th>
+                        <th className="sticky top-0 z-10 text-right px-2 py-2 text-[10px] font-bold text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo</th>
                         {/* ⚠️ L'ÉCART SE DIT EN TOUTES LETTRES (Layla : « boutique
                             lui manque 1 odoo », puis « 1 de plus qu'Odoo = 1 de
                             plus EN BOUTIQUE »). « +8 » obligeait à se rappeler
                             dans quel sens compte le signe ; « il manque 8 en
                             boutique » se lit sans réfléchir. Et les deux sens
                             parlent de la BOUTIQUE, pas d'Odoo. */}
-                        <th className="text-left px-2 py-2 text-[10px] font-bold text-ink-mute"> </th>
-                        <th className="text-center px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute"></th>
+                        <th className="sticky top-0 z-10 text-left px-2 py-2 text-[10px] font-bold text-ink-mute bg-cream-warm"> </th>
+                        <th className="sticky top-0 z-10 text-center px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute bg-cream-warm"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -746,14 +756,11 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                   </table>
                 </div>
               )}
-              {/* ⚠️ LES NON-COMPTÉS SE DISENT, MAIS PAS COMME DES ÉCARTS : c'est
-                  une tâche du lendemain, pas une perte à expliquer. */}
-              {nbPasComptes > 0 && (
-                <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-200 text-[11.5px] text-amber-900">
-                  ⏳ {nbPasComptes} article{nbPasComptes > 1 ? 's' : ''} pas compté{nbPasComptes > 1 ? 's' : ''}
-                  {' — '}ils ne comptent pas comme des écarts.
-                </div>
-              )}
+              {/* ⚠️ « 90 articles pas comptés » RETIRÉ (Layla, 2026-09-22).
+                  Le chiffre était juste — 90 des 124 articles ne sont pas
+                  comptés chaque soir — mais il ne demandait aucune action, et
+                  il alarmait tous les jours pour la même chose. Les lignes
+                  concernées portent déjà « pas compté » quand on les regarde. */}
             </div>
 
             {/* ⚠️ LA LÉGENDE « + rouge / − bleu » EST PARTIE (Layla,
@@ -1013,9 +1020,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
               </tbody>
             </table>
           )}
-        </div>
-        <div className="text-[10px] text-ink-mute italic">
-          Clique une ligne pour afficher le rapport détaillé de cette journée ci-dessus.
         </div>
       </div>
 
