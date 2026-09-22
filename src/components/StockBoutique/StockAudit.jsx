@@ -533,7 +533,14 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="bg-cream-warm border-b border-line">
-                        <th className="text-left px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Article</th>
+                        {/* ⚠️ DES EN-TÊTES QUI RACONTENT (Layla, 2026-09-22 :
+                            « j'aime bien ces titres, c'est plus clair que REÇU
+                            RESTE HIER COMPTÉ VENDU ODOO ACTUEL ÉCART ACTUEL »).
+                            Les anciens nommaient des CASES ; ceux-ci suivent le
+                            chemin du gâteau, de gauche à droite : ce qui est
+                            arrivé, ce qui est parti, ce qui devrait rester, ce
+                            qui reste vraiment. */}
+                        <th className="text-left px-3 py-2 text-[10px] font-bold text-ink-mute">article</th>
                         {/* ⚠️ « Apporté » A DISPARU (Layla, 2026-09-22 : « est-ce
                             qu'en général reçu et apporté sont pareils ? si c'est
                             le cas garder que reçu »). Mesuré sur 252 lignes :
@@ -541,14 +548,25 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                             vide de sens 99,6 % du temps, et ce sont ces
                             colonnes-là qui rendent un tableau illisible. Quand
                             les deux diffèrent, c'est écrit sous le chiffre. */}
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Café dit avoir reçu — et ce que le pâtissier disait envoyer, quand ça diffère">Reçu</th>
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Restes d'hier propagés">Reste hier</th>
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute bg-bordeaux/10" title="Café a compté en aveugle">Compté</th>
+                        {/* « reçu » et « reste d'hier » n'en font qu'un : ce
+                            qui était là au départ. Le second reste lisible, en
+                            petit, à côté du premier. */}
+                        <th className="text-right px-2 py-2 text-[10px] font-bold text-ink-mute" title="Ce qui était là au départ : reçu ce matin + reste d'hier">reçu + reste</th>
                         {/* ⚠️ Informative, et prise à la CAISSE : personne ne la
                             saisit. Clique la ligne pour voir les heures. */}
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Vendu d'après la caisse — clique la ligne pour les heures">Vendu</th>
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo actuel</th>
-                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Écart actuel : Odoo actuel - Compté">Écart actuel</th>
+                        <th className="text-right px-2 py-2 text-[10px] font-bold text-ink-mute" title="Vendu d'après la caisse — clique la ligne pour les heures">vendu</th>
+                        {/* ⚠️ NOUVEAU, et c'est le calcul qu'elle faisait de
+                            tête à chaque ligne : reçu + reste − vendu. */}
+                        <th className="text-right px-2 py-2 text-[10px] font-bold text-ink-mute" title="reçu + reste − vendu">devrait rester</th>
+                        <th className="text-right px-2 py-2 text-[10px] font-bold text-ink-mute bg-bordeaux/10" title="Café a compté en aveugle">compté</th>
+                        <th className="text-right px-2 py-2 text-[10px] font-bold text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo</th>
+                        {/* ⚠️ L'ÉCART SE DIT EN TOUTES LETTRES (Layla : « boutique
+                            lui manque 1 odoo », puis « 1 de plus qu'Odoo = 1 de
+                            plus EN BOUTIQUE »). « +8 » obligeait à se rappeler
+                            dans quel sens compte le signe ; « il manque 8 en
+                            boutique » se lit sans réfléchir. Et les deux sens
+                            parlent de la BOUTIQUE, pas d'Odoo. */}
+                        <th className="text-left px-2 py-2 text-[10px] font-bold text-ink-mute"> </th>
                         <th className="text-center px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute"></th>
                       </tr>
                     </thead>
@@ -573,7 +591,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           if (cat !== lastCategory) {
                             rendered.push(
                               <tr key={`cat-${cat}`} className="bg-cream-warm/60">
-                                <td colSpan={9} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
+                                <td colSpan={8} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
                                   {cat}
                                 </td>
                               </tr>
@@ -621,29 +639,42 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                 {(() => {
                                   const recu = r.qty_morning_received || 0
                                   const annonce = r.qty_morning_announced || 0
-                                  if (recu === 0 && annonce === 0) return <span className="text-ink-mute">—</span>
-                                  if (recu === annonce) return <span className="text-ink-mute">{recu}</span>
-                                  // Le cas rare : on dit les DEUX, sans colonne à part.
+                                  const reste = r.qty_leftover || 0
+                                  if (!recu && !annonce && !reste) return <span className="text-ink-mute">—</span>
                                   return (
                                     <span>
-                                      <span className="font-medium text-amber-800">{recu}</span>
-                                      <span className="block text-[9px] text-amber-700">{annonce} apportés</span>
+                                      <span className={recu !== annonce && annonce ? 'font-medium text-amber-800' : ''}>{recu}</span>
+                                      {!!reste && <span className="text-ink-mute text-[11px]"> + {reste}</span>}
+                                      {/* Le cas rare (0,4 %) : le pâtissier disait autre chose. */}
+                                      {!!annonce && recu !== annonce && (
+                                        <span className="block text-[9px] text-amber-700">{annonce} apportés</span>
+                                      )}
                                     </span>
                                   )
                                 })()}
                               </td>
-                              <td className="px-2 py-2 text-right tabular-nums text-ink-mute">{r.qty_leftover || '—'}</td>
-                              <td className={`px-2 py-2 text-right tabular-nums font-semibold bg-bordeaux/5 ${notCounted ? 'text-amber-700' : ''}`}>
-                                {isConflictRow ? <span className="text-red-700 italic">—</span> : effQty}
-                              </td>
                               <td className="px-2 py-2 text-right tabular-nums text-ink-soft">
                                 {vente ? Math.round(vente.total) : <span className="text-ink-mute">—</span>}
+                              </td>
+                              <td className="px-2 py-2 text-right tabular-nums font-semibold text-ink-soft">
+                                {vente
+                                  ? (r.qty_morning_received || 0) + (r.qty_leftover || 0) - Math.round(vente.total)
+                                  : <span className="text-ink-mute">—</span>}
+                              </td>
+                              <td className={`px-2 py-2 text-right tabular-nums font-bold bg-bordeaux/5 ${notCounted ? 'text-amber-700' : ''}`}>
+                                {isConflictRow ? <span className="text-red-700 italic">—</span> : effQty}
                               </td>
                               <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50`}>
                                 {hasCurrent ? r.qty_odoo_current : <span className="text-ink-mute italic">—</span>}
                               </td>
-                              <td className="px-2 py-2 text-right">
-                                {isConflictRow ? <span className="text-ink-mute italic text-[10px]">à arbitrer</span> : <GapBadge value={effGapCurr} bold />}
+                              <td className="px-2 py-2 text-left text-[11.5px] whitespace-nowrap">
+                                {isConflictRow ? <span className="text-ink-mute italic text-[10px]">à arbitrer</span>
+                                  : notCounted ? <span className="text-amber-700 text-[10px]">pas compté</span>
+                                    : effGapCurr === null ? <span className="text-ink-mute">—</span>
+                                      : effGapCurr === 0 ? <span className="text-green-700 font-bold">✓</span>
+                                        : effGapCurr > 0
+                                          ? <span className="text-red-700 font-bold">il manque {effGapCurr} en boutique</span>
+                                          : <span className="text-blue-800 font-bold">{-effGapCurr} de plus en boutique</span>}
                               </td>
                               <td className="px-2 py-2 text-center">
                                 {isConflictRow && conflictItems.length === 1 ? (
@@ -671,7 +702,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                             const attendu = vendu === null ? null : recu + reste - vendu
                             rendered.push(
                               <tr key={`${rowKey}-detail`} className="border-b border-line bg-amber-50/20">
-                                <td colSpan={9} className="px-3 py-2.5">
+                                <td colSpan={8} className="px-3 py-2.5">
                                   {vente && Object.keys(vente.heures).length > 0 ? (
                                     <div className="flex flex-wrap gap-1.5">
                                       {Object.entries(vente.heures).sort().map(([h, q]) => (
@@ -995,23 +1026,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
 // SOUS-COMPOSANTS
 // =============================================================
 
-function GapBadge({ value, bold = false }) {
-  if (value === null || value === undefined) return <span className="text-ink-mute">—</span>
-  if (value === 0) {
-    return (
-      <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-900 font-medium">
-        ✓ OK
-      </span>
-    )
-  }
-  return (
-    <span className={`text-[11px] px-2 py-0.5 rounded-full tabular-nums ${bold ? 'font-bold' : 'font-semibold'} ${
-      value > 0 ? 'bg-red-100 text-red-900' : 'bg-blue-100 text-blue-900'
-    }`}>
-      {value > 0 ? '+' : ''}{value}
-    </span>
-  )
-}
 
 function StatCard({ label, value, color }) {
   const styles = {
