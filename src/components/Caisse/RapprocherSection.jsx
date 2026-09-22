@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { loadPendingBanqueEnvelopes, loadAllFreeReleveLines, attachReleveLines, ECART_MINI } from '../../lib/caisse'
 import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
-import { fmtMoney, fmtDateCourte } from './_helpers'
+import { fmtMoney, fmtDateCourte, fmtMois } from './_helpers'
 
 // Rapprocher : les deux côtés en même temps.
 //
@@ -24,6 +24,7 @@ export default function RapprocherSection() {
   const [ql, setQl] = useState('')
   const [tout, setTout] = useState(false)        // montrer aussi les lignes qui ne collent pas
   const [enCours, setEnCours] = useState(false)
+  const [replies, setReplies] = useState(new Set())   // mois repliés (à gauche)
 
   useEffect(() => { recharger() }, [])
   async function recharger() {
@@ -35,13 +36,29 @@ export default function RapprocherSection() {
     } catch { setCaisses([]); setLignes([]) }
   }
 
-  const caissesVues = useMemo(() => {
+  // Groupées par mois : à 141 caisses, une liste à plat ne se travaille pas. Un mois se
+  // replie d'un clic, et son en-tête porte ce qui compte pour le contrôle — combien de
+  // caisses, et combien d'argent.
+  const moisDeCaisses = useMemo(() => {
     const t = qc.trim().toLowerCase()
-    const l = (caisses || []).filter(e => !t
+    const gardees = (caisses || []).filter(e => !t
       || String(e.amount_cash).includes(t)
       || (e.virement_client || '').toLowerCase().includes(t)
       || (e.source || '').toLowerCase().includes(t))
-    return l.slice(0, 200)
+    const par = new Map()
+    for (const e of gardees) {
+      const k = String(e.session_date || '').slice(0, 7)
+      if (!par.has(k)) par.set(k, [])
+      par.get(k).push(e)
+    }
+    return [...par.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([k, liste]) => ({
+        mois: k,
+        titre: /^\d{4}-\d{2}$/.test(k) ? `${fmtMois(Number(k.slice(5, 7)))} ${k.slice(0, 4)}` : 'Sans date',
+        liste,
+        total: liste.reduce((s, e) => s + Number(e.amount_cash || 0), 0),
+      }))
   }, [caisses, qc])
 
   // Une ligne « va » avec la caisse choisie : même montant, même moyen, et dans la fenêtre
@@ -96,21 +113,35 @@ export default function RapprocherSection() {
           <div style={{ fontSize: 13, fontWeight: 600 }}>Caisses en attente ({caisses.length})</div>
           <input value={qc} onChange={e => setQc(e.target.value)} placeholder="Chercher un montant, une cliente…" style={recherche} />
           <div style={{ maxHeight: '60dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {caissesVues.map(e => {
-              const on = choisie?.id === e.id
+            {moisDeCaisses.map(g => {
+              const replie = replies.has(g.mois)
               return (
-                <button key={e.id} onClick={() => setChoisie(on ? null : e)}
-                  style={{ textAlign: 'left', padding: '9px 11px', borderRadius: 10, fontSize: 13, cursor: 'pointer',
-                    border: on ? '2px solid #993556' : '1px solid #e5d8c3', background: on ? '#FBF0F3' : '#F9F6F1' }}>
-                  <b>{fmtMoney(e.amount_cash)}</b>{e.virement_client ? ` · ${e.virement_client}` : ''}
-                  <div style={{ fontSize: 11, color: '#8a7a70' }}>
-                    {fmtDateCourte(e.session_date)} · {e.payment_method === 'virement' ? 'virement' : e.payment_method === 'cheque' ? 'chèque' : 'espèces'}
-                    {e.a_confirmer ? ' · ⏳ à confirmer' : e.preuve_manuelle ? ' · 🧾 versée' : ''}
-                  </div>
-                </button>
+                <div key={g.mois} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <button onClick={() => setReplies(s => { const n = new Set(s); n.has(g.mois) ? n.delete(g.mois) : n.add(g.mois); return n })}
+                    style={{ textAlign: 'left', padding: '7px 11px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                      background: '#F4F0EA', color: '#4a3a30', fontSize: 12, fontWeight: 600,
+                      display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span>{replie ? '▸' : '▾'} {g.titre}</span>
+                    <span style={{ fontWeight: 500, color: '#8a7a70' }}>{g.liste.length} · {fmtMoney(g.total)}</span>
+                  </button>
+                  {!replie && g.liste.map(e => {
+                    const on = choisie?.id === e.id
+                    return (
+                      <button key={e.id} onClick={() => setChoisie(on ? null : e)}
+                        style={{ textAlign: 'left', padding: '9px 11px', borderRadius: 10, fontSize: 13, cursor: 'pointer',
+                          border: on ? '2px solid #993556' : '1px solid #e5d8c3', background: on ? '#FBF0F3' : '#F9F6F1' }}>
+                        <b>{fmtMoney(e.amount_cash)}</b>{e.virement_client ? ` · ${e.virement_client}` : ''}
+                        <div style={{ fontSize: 11, color: '#8a7a70' }}>
+                          {fmtDateCourte(e.session_date)} · {e.payment_method === 'virement' ? 'virement' : e.payment_method === 'cheque' ? 'chèque' : 'espèces'}
+                          {e.a_confirmer ? ' · ⏳ à confirmer' : e.preuve_manuelle ? ' · 🧾 versée' : ''}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               )
             })}
-            {!caissesVues.length && <div style={{ fontSize: 12, color: '#8a7a70' }}>Aucune caisse en attente.</div>}
+            {!moisDeCaisses.length && <div style={{ fontSize: 12, color: '#8a7a70' }}>Aucune caisse en attente.</div>}
           </div>
         </div>
 
