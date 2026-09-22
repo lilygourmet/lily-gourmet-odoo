@@ -55,7 +55,7 @@ export default function RapprocherSection() {
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([k, liste]) => ({
         mois: k,
-        titre: /^\d{4}-\d{2}$/.test(k) ? `${fmtMois(Number(k.slice(5, 7)))} ${k.slice(0, 4)}` : 'Sans date',
+        titre: /^\d{4}-\d{2}$/.test(k) ? `${fmtMois(Number(k.slice(5, 7)) - 1)} ${k.slice(0, 4)}` : 'Sans date',
         liste,
         total: liste.reduce((s, e) => s + Number(e.amount_cash || 0), 0),
       }))
