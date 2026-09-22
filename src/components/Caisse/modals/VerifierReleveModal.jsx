@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { FileSearch, X } from 'lucide-react'
 import { parseStatement } from '../../../lib/releveBmci'
 import { cleDeLigne, memeOperation, memeEncaissement } from '../../../lib/releveDoublons'
-import { loadReleveLinesBetween, saveUnmatchedReleveLines } from '../../../lib/caisse'
+import { loadReleveLinesBetween, loadReleveLinesByAmounts, saveUnmatchedReleveLines } from '../../../lib/caisse'
 import { fmtMoney } from '../_helpers'
 
 // Contrôle d'un relevé SANS rien réimporter.
@@ -60,7 +60,15 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       // passera pour déjà présent. Mieux vaut le rater que le dupliquer.
       const dejaLa = (r) => enBase.some(b => memeOperation(b, r) || memeEncaissement(b, r))
       const manquantes = rows.filter(r => !dejaLa(r))
-      setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes })
+      // Contre-preuve : pour chaque ligne déclarée manquante, on cherche SON MONTANT dans
+      // toute la base, sans limite de date. Aucune ligne de ce montant nulle part = elle
+      // manque vraiment. Sinon on montre ce qui existe, et Layla juge sur pièce.
+      const memeMontant = await loadReleveLinesByAmounts(manquantes.map(m => m.amount))
+      const avecPreuve = manquantes.map(m => ({
+        ...m,
+        ailleurs: memeMontant.filter(x => Math.abs(Number(x.amount) - Number(m.amount)) < 0.5),
+      }))
+      setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes: avecPreuve })
       setEtape('resultat')
     } catch (e) { setErreur(e?.message || String(e)); setEtape('pick') }
   }
@@ -115,6 +123,11 @@ export default function VerifierReleveModal({ onClose, onDone }) {
                     <div key={l.key} style={{ fontSize: 12, color: '#4a3a30', padding: '5px 0', borderBottom: '1px solid #F4F0EA' }}>
                       <b>{fmtMoney(l.amount)}</b> · {l.ligne_date}
                       <div style={{ fontSize: 11, color: '#8a7a70' }}>{l.label}</div>
+                      <div style={{ fontSize: 11, color: (l.ailleurs || []).length ? '#a9620a' : '#0a7d3d' }}>
+                        {(l.ailleurs || []).length
+                          ? `⚠️ ${l.ailleurs.length} ligne(s) de ce montant existent déjà (${l.ailleurs.slice(0, 3).map(x => x.ligne_date).join(', ')}) — regarde si c'est la même`
+                          : `✓ aucune ligne de ${fmtMoney(l.amount)} dans toute l'app — elle manque vraiment`}
+                      </div>
                     </div>
                   ))}
                 </div>

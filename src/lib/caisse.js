@@ -385,6 +385,23 @@ export async function loadReleveLinesBetween(dMin, dMax) {
   return data || []
 }
 
+// Toutes les lignes du relevé de ces montants, SANS limite de date. Sert de contre-preuve
+// au contrôle d'un relevé : dire « cette ligne manque » est une affirmation forte, et elle
+// se vérifie — si aucune ligne de ce montant n'existe nulle part dans la base, le doute
+// n'est plus permis.
+export async function loadReleveLinesByAmounts(montants) {
+  const valeurs = [...new Set(montants.flatMap(m => [Number(m), Math.round(Number(m))]))]
+  const out = []
+  for (let i = 0; i < valeurs.length; i += 100) {
+    const { data } = await supabase
+      .from('caisse_releve_lignes')
+      .select('label, ligne_date, amount, used_by, ignored')
+      .in('amount', valeurs.slice(i, i + 100)).limit(2000)
+    out.push(...(data || []))
+  }
+  return out
+}
+
 // Parmi ces clés, lesquelles sont DÉJÀ en base ? Sert au contrôle d'un réimport : « sur
 // les N lignes lues dans ce PDF, combien manquaient ? ». Sans ce compte, un réimport ne
 // dit rien — l'upsert ignore silencieusement les doublons, et Layla ne peut pas savoir si
