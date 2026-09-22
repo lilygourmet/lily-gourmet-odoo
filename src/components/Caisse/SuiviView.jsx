@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, lignesPourConfirmer, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, analyserVirements, ECART_MINI } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, lignesPourConfirmer, etatDesLignesProposees, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, analyserVirements, ECART_MINI } from '../../lib/caisse'
 import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
@@ -1124,6 +1124,7 @@ function SuggestModal({ env, onClose, onAttach }) {
 // en disparaît, quel que soit son libellé.
 function ConfirmChoiceModal({ env, onClose, onPick, onGrouper }) {
   const [libres, setLibres] = useState(null)
+  const [etats, setEtats] = useState(null)   // pourquoi chaque ligne proposée n'est plus choisissable
   // « 🔗 2 virements = 1 ligne » : la ligne du relevé vaut la SOMME de deux caisses, elle
   // ne fait donc pas le montant de celle-ci. « Confirmer » ne pouvait pas la retrouver et
   // annonçait à tort qu'une autre caisse l'avait prise — une impasse. Le bon geste est
@@ -1134,6 +1135,11 @@ function ConfirmChoiceModal({ env, onClose, onPick, onGrouper }) {
     ;(async () => {
       try { const l = await lignesPourConfirmer(env); if (vivant) setLibres(l) }
       catch { if (vivant) setLibres([]) }
+      try {
+        const memo = JSON.parse(env.releve_candidates || '[]')
+        const e = memo.length ? await etatDesLignesProposees(memo) : []
+        if (vivant) setEtats(e)
+      } catch { if (vivant) setEtats([]) }
     })()
     return () => { vivant = false }
   }, [env])
@@ -1167,9 +1173,19 @@ function ConfirmChoiceModal({ env, onClose, onPick, onGrouper }) {
           </div>
         ) : candidates.length === 0 ? (
           <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>
-            {nbMemorisees
-              ? `Aucune des ${nbMemorisees} ligne(s) proposées n'est encore disponible (déjà prise par une autre caisse, ou disparue du relevé). Utilise « Lier » pour en choisir une autre.`
-              : 'Aucune ligne mémorisée. Tu peux confirmer sans choisir.'}
+            {!nbMemorisees ? 'Aucune ligne mémorisée. Tu peux confirmer sans choisir.' : (
+              <>
+                <div style={{ marginBottom: 6 }}>Aucune des {nbMemorisees} ligne(s) proposées n'est choisissable :</div>
+                {(etats || []).map((e, i) => (
+                  <div key={i} style={{ marginBottom: 5, lineHeight: 1.4 }}>
+                    <span style={{ color: '#4a3a30' }}><b>{e.d}</b> · {(e.l || '').slice(0, 70)}</span>
+                    <div style={{ color: e.etat === 'prise' ? '#99201E' : '#a9620a' }}>→ {e.texte}</div>
+                  </div>
+                ))}
+                {etats === null && <div>Vérification…</div>}
+                <div style={{ marginTop: 6 }}>Tu peux aussi en choisir une autre avec « 🔍 Chercher ».</div>
+              </>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
