@@ -74,6 +74,7 @@ export default function VerifierReleveModal({ onClose, onDone }) {
   }
 
   async function recuperer() {
+    setErreur('')      // sans ça, le message rouge d'un essai raté reste après un essai réussi
     setEtape('lecture')
     try {
       // `ailleurs` n'existe que pour l'affichage (la contre-preuve). L'envoyer en base la
