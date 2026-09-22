@@ -308,3 +308,25 @@ export function cleDeLigne(u, vues = new Set()) {
   vues.add(key)
   return key
 }
+
+// Deux écritures du même montant à quelques jours d'écart : est-ce le MÊME encaissement,
+// vu dans deux documents, ou DEUX encaissements différents ?
+//
+// La banque n'écrit pas une opération pareil d'un document à l'autre : le relevé intercale
+// ses références (« VIR INST RECU M 2118940 000011400383 … MAROUANE »), l'extrait tronque
+// à 30 caractères (« VIR INST RECU M MAROUANE MOUTA »). Ni le n° ni le libellé ne
+// permettent de trancher. Reste le NOM.
+//
+// - noms incompatibles (MAROUANE vs ZOUBIDA) → deux encaissements différents ;
+// - sinon (noms compatibles, ou pas de nom lisible d'un côté) → on suppose le même.
+//
+// Ce doute-là se tranche toujours du même côté : ne jamais dupliquer. Un encaissement raté
+// reste lisible sur le relevé ; un doublon, lui, coûte des heures à démêler.
+export function memeEncaissement(a, b, joursMax = 3) {
+  if (Math.abs(Number(a.amount) - Number(b.amount)) >= ECART_MINI) return false
+  if (!a.ligne_date || !b.ligne_date) return false
+  if (Math.abs((new Date(a.ligne_date) - new Date(b.ligne_date)) / 86400000) > joursMax) return false
+  const na = nomDeLigne(a.label), nb = nomDeLigne(b.label)
+  if (!na || !nb) return true              // rien à comparer : on suppose le même
+  return memePersonne(na, nb)
+}
