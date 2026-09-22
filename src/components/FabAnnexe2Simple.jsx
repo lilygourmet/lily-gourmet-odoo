@@ -1084,32 +1084,68 @@ function Partage({ noeud, decoupe, cuites, coupes }) {
  * Répondre 0 ne « perd » rien : au contraire, ça dit à Odoo de consommer les
  * 12 500, au lieu de garder au frigo une crème qui n'existe plus.
  */
-function Restes({ restes, valeurs, onChange }) {
+/**
+ * LE SORT DU RELIQUAT — gardé, jeté, ou inclus.
+ *
+ * « Que le reliquat reste, ou jeté, ou inclus — tu vois ce que je veux dire »
+ * (Layla, 2026-09-22), puis « ok mais simplifie, pas trop de texte ».
+ *
+ * Trois pastilles, aucune phrase d'explication. Ce qui est vrai se lit dans le
+ * chiffre à côté, pas dans un mode d'emploi.
+ *
+ *   🧊 gardé  → il reste au frigo (ce que l'app faisait déjà, et le défaut)
+ *   🥣 inclus → il est parti DANS les gâteaux, Odoo consomme tout
+ *   🗑 jeté   → il sort du stock, vrai rebut chez Odoo
+ *
+ * ⚠️ « Jeté » ne s'affiche que pour qui a le droit de jeter : c'est le seul
+ * geste de cet écran qu'on ne rattrape pas.
+ */
+const SORTS = [
+  { cle: 'garde', mot: '🧊 gardé', on: 'bg-success-bg text-success border-success/50' },
+  { cle: 'jete', mot: '🗑 jeté', on: 'bg-danger-bg text-danger border-danger/50' },
+  { cle: 'inclus', mot: '🥣 inclus', on: 'bg-bordeaux/10 text-bordeaux border-bordeaux/50' },
+]
+
+function Restes({ restes, valeurs, onChange, sorts, onSort, peutJeter }) {
   if (!restes.length) return null
+  const choix = peutJeter ? SORTS : SORTS.filter(x => x.cle !== 'jete')
   return (
     <div className="mt-8 border-t border-cream-deep pt-5">
-      <div className="text-center text-[17px] font-extrabold">Il t’en reste ?</div>
-      <div className="text-center text-[13px] text-ink-mute mt-0.5 mb-3">
-        Laisse 0 si tu as tout mis dedans.
-      </div>
-      {restes.map(r => (
-        <div key={r.produit} className="flex items-center gap-3 py-2 border-t border-cream-deep first:border-0">
-          <div className="flex-1 min-w-0">
-            <div className="text-[15px] font-bold leading-tight">{propre(r.libelle)}</div>
-            <div className="text-[12px] text-ink-mute">
-              fait {qte(r.fait, r.unite)} · utilisé {qte(r.besoin, r.unite)}
+      <div className="text-center text-[17px] font-extrabold mb-3">Il t’en reste ?</div>
+      {restes.map(r => {
+        const sort = sorts?.[r.produit] || 'garde'
+        return (
+          <div key={r.produit} className="py-2 border-t border-cream-deep first:border-0">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0 text-[15px] font-bold leading-tight truncate">
+                {propre(r.libelle)}
+              </div>
+              <input
+                type="text" inputMode="decimal"
+                aria-label={`Ce qu'il reste de ${propre(r.libelle)}`}
+                value={valeurs[r.produit] ?? 0}
+                onChange={e => onChange(r.produit, e.target.value.replace(/[^\d.,]/g, ''))}
+                className="w-[92px] text-right text-[19px] font-extrabold tabular-nums
+                           rounded-xl px-3 py-2 border-2 border-cream-deep bg-cream-warm" />
+              <span className="text-[13px] font-bold text-ink-mute w-6">{uniteAffichee(r.unite)}</span>
             </div>
+            {!!onSort && (
+              <div className="flex gap-1.5 mt-1.5">
+                {choix.map(x => (
+                  <button
+                    key={x.cle} type="button" onClick={() => onSort(r.produit, x.cle)}
+                    aria-pressed={sort === x.cle}
+                    aria-label={`${x.mot.replace(/^\S+\s/, '')} : ${propre(r.libelle)}`}
+                    className={`flex-1 rounded-xl border-[1.5px] py-2 text-[12.5px] font-extrabold
+                      ${sort === x.cle ? x.on : 'bg-cream text-ink-mute border-cream-deep'}`}>
+                    {x.mot}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <input
-            type="text" inputMode="decimal"
-            aria-label={`Ce qu'il reste de ${propre(r.libelle)}`}
-            value={valeurs[r.produit] ?? 0}
-            onChange={e => onChange(r.produit, e.target.value.replace(/[^\d.,]/g, ''))}
-            className="w-[92px] text-right text-[19px] font-extrabold tabular-nums
-                       rounded-xl px-3 py-2 border-2 border-cream-deep bg-cream-warm" />
-          <span className="text-[13px] font-bold text-ink-mute w-6">{uniteAffichee(r.unite)}</span>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -1147,7 +1183,7 @@ function Restants({ restants }) {
   )
 }
 
-export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nomCuve, parTaille, onTaille, prevu, question, restes = [], restesValeurs = {}, onReste, restants = [] }) {
+export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nomCuve, parTaille, onTaille, prevu, question, restes = [], restesValeurs = {}, onReste, sorts, onSort, peutJeter, restants = [] }) {
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -1185,7 +1221,10 @@ export function Sortie({ noeud, valeur, onValeur, onValider, envoi, tailles, nom
           valeurs={parTaille} onChange={onTaille} />
       )}
 
-      {onReste && <Restes restes={restes} valeurs={restesValeurs} onChange={onReste} />}
+      {onReste && (
+        <Restes restes={restes} valeurs={restesValeurs} onChange={onReste}
+          sorts={sorts} onSort={onSort} peutJeter={peutJeter} />
+      )}
 
       <Restants restants={restants} />
 

@@ -70,7 +70,7 @@ vi.mock('../lib/feuilles', async importOriginal => {
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
-vi.mock('../lib/auth', () => ({ hasValidJwt: () => true, isAdmin: () => true }))
+vi.mock('../lib/auth', () => ({ canRebuts: () => false, hasValidJwt: () => true, isAdmin: () => true }))
 vi.mock('../lib/fabrication', () => ({ dernierEcran: () => null, garderEcran: () => {} }))
 vi.mock('../lib/fabAnnexe', async importOriginal => {
   const vrai = await importOriginal()

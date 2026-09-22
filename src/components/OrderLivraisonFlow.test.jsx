@@ -52,7 +52,7 @@ vi.mock('./CopyableRef', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
 vi.mock('../lib/confirmDialog', () => ({ confirmDialog: (...a) => confirmDialog(...a) }))
 vi.mock('../lib/photoCompress', () => ({ filePhoto: async () => null }))
-vi.mock('../lib/auth', () => ({ canSeeWatiInfo: () => true }))
+vi.mock('../lib/auth', () => ({ canRebuts: () => false, canSeeWatiInfo: () => true }))
 
 const { default: OrderEditModal } = await import('./OrderEditModal')
 

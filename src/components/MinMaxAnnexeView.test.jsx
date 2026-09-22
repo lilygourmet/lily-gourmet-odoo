@@ -34,7 +34,7 @@ const save = vi.fn(async () => {})
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
-vi.mock('../lib/auth', () => ({ canSeeMinMaxAnnexe: () => true, isAdmin: () => true }))
+vi.mock('../lib/auth', () => ({ canRebuts: () => false, canSeeMinMaxAnnexe: () => true, isAdmin: () => true }))
 let cochesAFinir = []
 vi.mock('../lib/miseEnForme', () => ({
   loadMiseEnForme: async () => cochesAFinir, setMiseEnForme: async () => true,

@@ -18,7 +18,9 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { enClairErreur } from '../lib/erreurs'
-import { hasValidJwt, isAdmin } from '../lib/auth'
+import { hasValidJwt, isAdmin, canRebuts } from '../lib/auth'
+import { demanderAJeter } from '../lib/rebuts'
+import { enGrammes } from '../lib/unites'
 import { Assemblage, CasesAFaire, Cases, Confirmation, Fiche, Fil, Onglets, Sortie } from './FabAnnexe2Simple'
 import HistoriqueAnnexe from './HistoriqueAnnexe'
 import { ChoixImpression, FeuillesImpression } from './ImpressionFournee'
@@ -137,6 +139,7 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // c'est voulu : « si 0, le reste de la crème théorique doit rentrer dans le
   // produit ». On racle la cuve, c'est le cas le plus fréquent.
   const [restes, setRestes] = useState({})
+  const [sortsReste, setSortsReste] = useState({})
   /**
    * Poser la liasse, puis lancer l'impression. Les deux dans le même geste.
    *
@@ -456,8 +459,37 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   /** Ce qu'on cuit : le chiffre réglé à la main, sinon ce qui manque. */
   const aCuire = (noeud, decoupe) => cuites[noeud.produit] ?? aCuireParDefaut(decoupe.enfant)
 
+  /**
+   * LE SORT DU RELIQUAT, traduit en chiffres (Layla, 2026-09-22).
+   *
+   *   🧊 gardé  → il reste au frigo : Odoo n'en consomme pas ;
+   *   🥣 inclus → il est DANS les gâteaux : le reste tombe à zéro, Odoo
+   *                consomme tout — c'est ce que « 0 » voulait déjà dire ;
+   *   🗑 jeté   → Odoo n'en consomme pas non plus (il n'est pas dans le
+   *                gâteau), et il sort du stock par un vrai rebut.
+   *
+   * « Gardé » est le défaut : sans rien toucher, l'app fait ce qu'elle a
+   * toujours fait.
+   */
+  const resteGarde = (lignes, valeurs, sorts) => Object.fromEntries(
+    (lignes || []).map(r => {
+      const n = Number(String(valeurs?.[r.produit] ?? 0).replace(',', '.')) || 0
+      return [r.produit, (sorts?.[r.produit] || 'garde') === 'inclus' ? 0 : n]
+    }))
+
+  /** Ce qui part au rebut, en grammes (ou en pièces) — la convention de l'app. */
+  const aJeter = (lignes, valeurs, sorts) => (lignes || [])
+    .filter(r => (sorts?.[r.produit] || 'garde') === 'jete')
+    .map(r => {
+      const n = Number(String(valeurs?.[r.produit] ?? 0).replace(',', '.')) || 0
+      const pieces = /^u$/i.test(String(r.unite || '').trim())
+      return { produit: r.produit, libelle: r.libelle, unite: r.unite,
+        qty: pieces ? n : (enGrammes(n, r.unite) ?? n) }
+    })
+    .filter(x => x.qty > 0)
+
   const envoyer = async (noeud, tete, qty, cuitesReelles = null, pressees = 0, prevu = 0,
-    restesDits = {}) => {
+    restesDits = {}, jetables = []) => {
     if (!(qty > 0) || envoi) return
     // ⚠️ Le jeton de connexion dure 12 h. Sur une tablette allumée toute la
     // journée il expire en plein travail : l'écran a l'air normal, mais plus
@@ -524,6 +556,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         // le MÊME travail : sans ce raccord, la fournée restait « à déclarer »
         // et la redéclarer la comptait deux fois — deux ordres Odoo.
         eteindreFeuille(noeud.produit, qty)
+        // ⚠️ LE REBUT PART DERRIÈRE LA DÉCLARATION, jamais avant : si Odoo
+        // refuse la fournée, on n'aura pas jeté pour rien. Et un par un —
+        // chacun demande sa confirmation, en nommant l'article.
+        for (const j of jetables || []) {
+          try { await demanderAJeter({ ...j, motif: propre(tete.produit) }, user?.id) }
+          catch (e) { toast(`Rebut refusé pour ${propre(j.produit)} : ${e.message || e}`) }
+        }
         // ⚠️ ET LE RESTE DE LA CUVE PART DANS « À FINIR » (Layla, 2026-09-20 :
         // « si mousse, crémeux, etc., ça doit toujours me dire combien il t'en
         // reste — et le reste va dans À finir »). Une mousse qui reste n'est
@@ -950,6 +989,12 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
         !restesTheoriques(cible).some(x => x.produit === r.produit))
       : []}
                 restesValeurs={restes}
+                // ⚠️ LE SORT DU RELIQUAT (Layla, 2026-09-22 : « que le
+                // reliquat reste, ou jeté, ou inclus »). « Gardé » reste le
+                // défaut — c'est ce que l'app faisait déjà.
+                sorts={sortsReste}
+                onSort={finale ? (p, v) => setSortsReste(x => ({ ...x, [p]: v })) : undefined}
+                peutJeter={canRebuts(user)}
                 onReste={finale ? (p, v) => setRestes(x => ({ ...x, [p]: v })) : undefined}
                 onTaille={finale && (brut.tailles || []).length
                   ? (p, n) => setParTaille(x => ({ ...x, [p]: n })) : undefined}
@@ -961,7 +1006,9 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
                     // qui décide des ingrédients (Layla, 2026-09-14).
                     // ⚠️ Et le reste de la crème part avec : c'est la seule
                     // chose que le pâtissier a VUE et DITE.
-                    : envoyer(noeud, tete, sortie.valeur, null, 0, q, restes))} />
+                    : envoyer(noeud, tete, sortie.valeur, null, 0, q,
+                      resteGarde(restesTheoriques(cible), restes, sortsReste),
+                      aJeter(restesTheoriques(cible), restes, sortsReste)))} />
             )
           })()
           : (
