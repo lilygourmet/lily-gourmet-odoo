@@ -3,7 +3,7 @@
 // v3 : section "Conflits à arbitrer" + modal Trancher
 // =============================================================
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { RefreshCw, Scale } from 'lucide-react'
 import AppHeader from '../AppHeader'
 import PrintButton from './PrintButton'
@@ -51,7 +51,31 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState('')
   const [refreshSuccess, setRefreshSuccess] = useState('')
-  const [day, setDay] = useState(todayISO())
+  /**
+   * ⚠️ ON OUVRE SUR LA DERNIÈRE JOURNÉE CLÔTURÉE, PAS SUR AUJOURD'HUI.
+   *
+   * « Le premier rapport qu'on voit quand on ouvre, c'est de quel jour ? Ça
+   * doit être toujours le rapport de la veille, vu que la journée n'est pas
+   * clôturée » (Layla, 2026-09-22).
+   *
+   * Elle a raison, et c'est une question d'horaire : le café compte à 19 h, la
+   * journée se clôt à 23 h, et la personne qui traite les écarts travaille LE
+   * MATIN. À 9 h, la journée du jour est vide — on lui ouvrait donc un écran
+   * sans rien, et c'est à elle de comprendre qu'il fallait reculer d'un jour.
+   *
+   * ⚠️ Mais pas « hier » en dur : la dernière journée CLÔTURÉE. Si celle du
+   * jour est déjà fermée (elle regarde le soir), c'est elle qu'il faut montrer ;
+   * et si le café n'a pas compté hier, on remonte à avant-hier plutôt que
+   * d'ouvrir sur du vide.
+   */
+  const veille = () => {
+    const d = new Date()
+    d.setDate(d.getDate() - 1)
+    return d.toLocaleDateString('sv-SE')
+  }
+  const [day, setDay] = useState(veille())
+  // Ne se fait qu'UNE fois : après, c'est elle qui choisit sa date.
+  const jourChoisi = useRef(false)
   const [historyDays, setHistoryDays] = useState([])
   const [historyDaysBack, setHistoryDaysBack] = useState(30)
   const [resolveModalItem, setResolveModalItem] = useState(null)
@@ -65,7 +89,14 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
   useEffect(() => {
     let mounted = true
     loadDaySummary(historyDaysBack).then(d => {
-      if (mounted) setHistoryDays(d)
+      if (!mounted) return
+      setHistoryDays(d)
+      // La plus récente journée qui a vraiment quelque chose à montrer.
+      if (!jourChoisi.current) {
+        jourChoisi.current = true
+        const clos = (d || []).find(x => x.status === 'submitted' || x.status === 'audited')
+        if (clos && clos.day !== day) setDay(clos.day)
+      }
     })
     return () => { mounted = false }
   }, [historyDaysBack, day])
@@ -305,8 +336,18 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
             <div className="font-mono text-[10px] tracking-[0.2em] uppercase opacity-80">
               Rapport audit stock
             </div>
+            {/* ⚠️ LA DATE, EN TOUTES LETTRES ET SANS AMBIGUÏTÉ (Layla,
+                2026-09-22 : « le premier rapport qu'on voit quand on ouvre,
+                c'est de quel jour ? mentionner la date »). On ouvre sur la
+                veille : sans le dire, on lit les chiffres d'hier en croyant
+                lire ceux d'aujourd'hui. */}
             <div className="font-semibold text-[14px] italic">
-              {new Date(day).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {new Date(day).toLocaleDateString('fr-FR',
+                { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {(() => {
+                const q = day === todayISO() ? 'aujourd’hui' : day === veille() ? 'hier' : null
+                return q ? <span className="not-italic font-normal opacity-80"> · {q}</span> : null
+              })()}
             </div>
           </div>
           <div className="flex items-center gap-2">
