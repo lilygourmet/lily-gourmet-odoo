@@ -242,19 +242,28 @@ export default function DevisView({ user, initialDevis = null, internetOnly = fa
         const lines = Array.isArray(d.productLines) ? d.productLines : []
         return lines.some(l => (typeof l === 'string' ? l : (l.text || '')).toLowerCase().includes(af))
       }
-      const contacted = () => !!envois[d.name] || contactedRefs.has(String(d.name || '').toUpperCase()) || ['relance', 'confirme'].includes(traitements[d.name]?.action) || (phoneKey(d.clientPhone).length >= 9 && convPhones.has(phoneKey(d.clientPhone)))
-      // ⚠️ RÈGLE DE LAYLA (2026-09-22) : « un devis internet doit apparaître en
-      // devis tant qu'il n'est pas confirmé ou annulé, MÊME SI conversation
-      // entamée ». `sent` dit exactement cela : ni brouillon, ni confirmé
-      // (`sale`), ni annulé (`cancel`).
-      // Avant, une simple conversation WhatsApp au nom du client suffisait à
-      // sortir le devis de la liste — sans regarder la date : le devis S52988
-      // de Zineb Marzak, pris le 21/09, était masqué par une conversation du
-      // 24/07 qui parlait d'une autre commande. Un client déjà venu ne pouvait
-      // donc jamais apparaître ici.
+      // ⚠️ CE QUE « TRAITÉ » VEUT DIRE (Layla, 2026-09-22, en deux temps) :
+      //   « un devis internet doit apparaître en devis tant qu'il n'est pas
+      //     confirmé ou annulé, même si conversation entamée »
+      //   « si un devis est traité par WhatsApp il ne reste plus dans devis
+      //     internet »
+      // Donc : traité = ON A FAIT QUELQUE CHOSE DE CE DEVIS-LÀ — il a été
+      // envoyé, son numéro cité dans un message, ou quelqu'un a cliqué
+      // « relancé » / « confirmé ». Le simple fait que le CLIENT ait déjà une
+      // conversation ne compte pas : c'était la règle d'avant, et elle
+      // masquait le devis S52988 (Zineb Marzak, pris le 21/09) à cause d'une
+      // conversation du 24/07 qui parlait d'une autre commande. Un client déjà
+      // venu ne pouvait donc jamais apparaître dans la liste — les 2 seuls
+      // devis `sent` de la base étaient masqués, l'onglet était vide.
+      // La MÊME mesure des deux côtés : ce qui quitte « Devis internet » est
+      // exactement ce qui entre dans « Commandes ».
+      const contacted = () => !!envois[d.name]
+        || contactedRefs.has(String(d.name || '').toUpperCase())
+        || ['relance', 'confirme'].includes(traitements[d.name]?.action)
       if (isList) {
         if (d.state !== 'sent') return false
         if (!matchArticle()) return false
+        if (contacted()) return false
         return true
       }
       if (!d.deliveryAt) return false
