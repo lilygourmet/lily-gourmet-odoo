@@ -696,10 +696,6 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                              ligne de calcul dit d'où sort l'écart — sans elle,
                              « −8 » ne s'explique pas tout seul. */
                           if (ouvert) {
-                            const recu = r.qty_morning_received || 0
-                            const reste = r.qty_leftover || 0
-                            const vendu = vente ? Math.round(vente.total) : null
-                            const attendu = vendu === null ? null : recu + reste - vendu
                             rendered.push(
                               <tr key={`${rowKey}-detail`} className="border-b border-line bg-amber-50/20">
                                 <td colSpan={8} className="px-3 py-2.5">
@@ -731,16 +727,14 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                                   ) : (
                                     <div className="text-[11.5px] text-ink-mute">Aucune vente enregistrée ce jour-là.</div>
                                   )}
-                                  {attendu !== null && (
-                                    <div className="text-[11.5px] text-ink-mute mt-2">
-                                      reçu <b className="text-ink">{recu}</b> + reste <b className="text-ink">{reste}</b>
-                                      {' '}− vendu <b className="text-ink">{vendu}</b>
-                                      {' '}= devrait rester <b className="text-ink">{attendu}</b>
-                                      {!notCounted && <> · compté <b className="text-ink">{effQty}</b>
-                                        {attendu === effQty ? ' ✅'
-                                          : <b className="text-red-700"> · écart {effQty - attendu}</b>}</>}
-                                    </div>
-                                  )}
+                                  {/* ⚠️ LA LIGNE DE CALCUL EST PARTIE (Layla,
+                                      2026-09-22). Je l'avais écrite quand le
+                                      tableau ne disait ni « vendu » ni « devrait
+                                      rester » : elle servait alors à expliquer
+                                      l'écart. Depuis que les colonnes le font,
+                                      elle répétait mot pour mot la ligne du
+                                      dessus. Le dépli ne sert plus qu'à UNE
+                                      chose : les heures. */}
                                 </td>
                               </tr>
                             )
