@@ -877,9 +877,15 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                 <tr className="bg-cream-warm border-b border-line">
                   <th className="text-left px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Date</th>
                   <th className="text-left px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Statut</th>
-                  <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Apporté</th>
+                  {/* ⚠️ « Apporté » part d'ici aussi : mêmes 0,4 % de
+                      différence que dans le tableau du haut. Et « Réception »
+                      (l'écart entre les deux) était donc vide presque toujours.
+                      À leur place, LA CHOSE QUI MANQUAIT : à quelle heure la
+                      journée a été clôturée. C'est elle qui décide si le
+                      rapport est fiable — une clôture le lendemain matin prend
+                      la photo Odoo APRÈS les ventes du jour. */}
+                  <th className="text-left px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Quand la photo du stock Odoo a été prise">Clôturé</th>
                   <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Reçu</th>
-                  <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Écart net : Reçu - Apporté">Réception</th>
                   <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Compté</th>
                   <th className="text-right px-3 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute">Audit</th>
                 </tr>
@@ -905,15 +911,43 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           {statusInfo.label}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{d.qty_announced_total || '—'}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{d.qty_received_total || '—'}</td>
+                      <td className="px-3 py-2">{
+                        (() => {
+                          if (!d.submitted_at) return <span className="text-ink-mute">—</span>
+                          const q = new Date(d.submitted_at)
+                          const opt = { timeZone: 'Africa/Casablanca' }
+                          const h = q.toLocaleTimeString('fr-FR', { ...opt, hour: '2-digit', minute: '2-digit' })
+                          // ⚠️ CLÔTURÉE LE LENDEMAIN = RAPPORT DOUTEUX. La photo
+                          // du stock Odoo est prise à la clôture : le lendemain
+                          // matin, elle inclut déjà les ventes du jour. Une
+                          // journée sur deux était dans ce cas avant la clôture
+                          // automatique de 23 h.
+                          const jourClot = q.toLocaleDateString('sv-SE', opt)
+                          const tard = jourClot !== d.day
+                          return (
+                            <span className={tard ? 'text-amber-800' : 'text-ink-soft'}>
+                              {h}
+                              {tard && (
+                                <span className="block text-[9px] font-semibold" title="La photo Odoo a été prise après le début des ventes du lendemain">
+                                  ⚠ le lendemain
+                                </span>
+                              )}
+                            </span>
+                          )
+                        })()
+                      }</td>
                       <td className="px-3 py-2 text-right tabular-nums">{
                         (() => {
-                          const net = (d.reception_gap_plus || 0) - (d.reception_gap_minus || 0)
-                          if (net === 0 && d.reception_gap_plus === 0 && d.reception_gap_minus === 0) return '—'
-                          if (net > 0) return <span className="text-green-700 font-medium">+{net}</span>
-                          if (net < 0) return <span className="text-red-700 font-medium">{net}</span>
-                          return <span className="text-amber-700 font-medium" title="Compense">~</span>
+                          const recu = d.qty_received_total || 0
+                          const annonce = d.qty_announced_total || 0
+                          if (!recu && !annonce) return '—'
+                          if (recu === annonce) return recu
+                          return (
+                            <span>
+                              <span className="text-amber-800 font-medium">{recu}</span>
+                              <span className="block text-[9px] text-amber-700">{annonce} apportés</span>
+                            </span>
+                          )
                         })()
                       }</td>
                       <td className="px-3 py-2 text-right tabular-nums font-medium text-blue-900">{d.qty_counted_total || '—'}</td>
