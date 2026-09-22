@@ -1135,7 +1135,8 @@ async function aFinir(sb) {
   // 2026-09-20 avec les trois mousses (gianduja, tiramisu, royal) créées le
   // jour même. On va donc les chercher chez Odoo, une seule fois.
   const cache = creerCache()
-  const out = []
+  // ⚠️ Les articles d'abord, la lecture d'Odoo ENSUITE, en une seule fois.
+  const articles = []
   for (const l of liste) {
     let a = connus.get(l.produit)
     if (!a) {
@@ -1143,14 +1144,59 @@ async function aFinir(sb) {
       if (!p) continue                                 // renommé chez Odoo : on se tait
       a = { id: p.id, produit: l.produit, libelle: l.produit, unite: uniteDe(p), photo: null }
     }
+    articles.push({ l, a })
+  }
+
+  /**
+   * ⚠️ CE QUE L'ORDRE A VRAIMENT CONSOMMÉ, PAS CE QUE LA RECETTE DIRAIT.
+   *
+   * « J'ai dit qu'il m'en est resté 400 g. Il me remet 500 ? Pourquoi ? »
+   * (Layla, 2026-09-22, sur le Subleme Fleur d'Oranger Pistache).
+   *
+   * Son chiffre était pourtant bien parti : l'ordre WHPDX/MO/21766 consomme
+   * 748,12 g — exactement 1 148,12 moins les 400 qu'elle a vus de ses yeux.
+   * Mais cet écran-ci refaisait le calcul de la RECETTE — 24 individuels ×
+   * 27 g = 648 g — et annonçait donc 500 g au frigo. Les 100 g d'écart, c'est
+   * précisément ce que l'atelier avait mis EN PLUS dans les pièces.
+   *
+   * On lit donc la consommation réelle des ordres encore ouverts. Une seule
+   * requête pour tout le monde, et seulement sur les vracs de la liste.
+   */
+  const ouverts = ordres.filter(n => !clos.has(n))
+  const idsVrac = [...new Set(articles.map(x => x.a.id).filter(Boolean))]
+  const reel = new Map()                               // id produit → quantité, unité de l'article
+  if (ouverts.length && idsVrac.length) {
+    const uniteParId = new Map(articles.map(x => [x.a.id, x.a.unite]))
+    const moves = await sr('stock.move',
+      [['raw_material_production_id.name', 'in', ouverts], ['product_id', 'in', idsVrac]],
+      ['product_id', 'product_uom_qty', 'product_uom'], { limit: 4000 })
+    for (const m of moves) {
+      const id = Array.isArray(m.product_id) ? m.product_id[0] : null
+      if (!id) continue
+      const u = Array.isArray(m.product_uom) ? m.product_uom[1] : null
+      const q = versUnite(Number(m.product_uom_qty) || 0, u, uniteParId.get(id))
+      if (q === null || !Number.isFinite(q)) continue
+      reel.set(id, (reel.get(id) || 0) + q)
+    }
+  }
+  // Ce qui a été déclaré SANS ordre n'apparaît dans aucun mouvement : pour
+  // celui-là, et seulement celui-là, la recette reste le seul repère.
+  const sansOrdre = partagerDeclarations(
+    (faits || []).filter(f => !f.ordre), clos).total
+
+  const out = []
+  for (const { l, a } of articles) {
     const stock = Math.round((parId.get(a.id) || 0) * 1000) / 1000
+    // `pris` se compte en GRAMMES (ou en pièces), comme le stock converti
+    // plus bas : une seule monnaie pour la soustraction.
+    const enG = estKgOdoo(a.unite) ? 1000 : 1
     // Ce que les formats déclarés aujourd'hui lui ont déjà pris.
-    let pris = 0
+    let pris = (reel.get(a.id) || 0) * enG
     const vus = new Set()
     for (const f of vers.get(l.produit) || []) {
       if (vus.has(f.produit)) continue
       vus.add(f.produit)
-      const n = declare[f.produit] || 0
+      const n = sansOrdre[f.produit] || 0
       if (n > 0) pris += n * (Number(f.parUnite) || 0) * (estKgOdoo(f.uniteVrac) ? 1000 : 1)
     }
     // ⚠️ ET CE QUI VIENT D'ÊTRE DÉCLARÉ COMPTE AUSSI. Le stock d'Odoo ne monte
@@ -1160,9 +1206,6 @@ async function aFinir(sb) {
     // ne réclamait rien — exactement le travail qu'on cherche à réclamer.
     const fait = declare[l.produit] || 0
 
-    // `pris` est en grammes (ou en pièces) ; le stock, lui, dans l'unité de
-    // l'article. On compare donc dans la même monnaie.
-    const enG = estKgOdoo(a.unite) ? 1000 : 1
     // ⚠️ JAMAIS MOINS QUE RIEN. Un reste négatif n'est pas une dette, c'est un
     // compteur faux — même règle que le stock négatif ailleurs. Vécu le
     // 2026-09-20, une heure après avoir créé « SM. Mousse Tiramisu » : les
