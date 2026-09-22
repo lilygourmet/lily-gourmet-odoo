@@ -2,7 +2,7 @@
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
 import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI, libelleDesLignes } from './releveDoublons'
-import { reconcileEnvelopes, nomAutreCliente, nomDansLibelle, setPayeursConnus, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
+import { reconcileEnvelopes, nomAutreCliente, nomDansLibelle, setPayeursConnus, windowFor, CAISSE_APRES_DERNIERE_LIGNE, prefixeSupposition } from './releveBmci'
 import { loadPayeursConnus } from './conversations'
 export { ECART_MINI }
 
@@ -765,7 +765,7 @@ export async function relancerRapprochement({ annulerFaux = true } = {}) {
     } else if (r.status === 'a_confirmer' && r.candidates?.length) {
       await setEnveloppeReleve(r.env.id, {
         status: 'a_confirmer',
-        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`)),
+        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`), prefixeSupposition(r)),
         candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
       })
       aConfirmer++
@@ -949,7 +949,7 @@ export async function refaireMois(year, month, { simulation = true } = {}) {
     } else if (r.status === 'a_confirmer' && r.candidates?.length) {
       await setEnveloppeReleve(r.env.id, {
         status: 'a_confirmer',
-        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`)),
+        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`), prefixeSupposition(r)),
         candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
       })
     }

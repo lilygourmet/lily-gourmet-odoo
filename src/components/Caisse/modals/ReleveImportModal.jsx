@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Upload, CheckCircle2, AlertTriangle, Circle, X, RotateCcw } from 'lucide-react'
-import { parseStatement, reconcileEnvelopes, CAISSE_APRES_DERNIERE_LIGNE } from '../../../lib/releveBmci'
+import { parseStatement, reconcileEnvelopes, prefixeSupposition, CAISSE_APRES_DERNIERE_LIGNE } from '../../../lib/releveBmci'
 import { libelleDesLignes } from '../../../lib/releveDoublons'
 import { loadBanqueEnvelopesBetween, uploadReleve, setEnveloppeReleve, clearEnveloppeReleve, saveUnmatchedReleveLines, markMatchedReleveLines, saveReleveImport, freeReleveLinesOf, chargerPayeursConnus } from '../../../lib/caisse'
 import { fmtMoney, fmtDateCourte } from '../_helpers'
@@ -83,8 +83,7 @@ export default function ReleveImportModal({ onClose, onDone, user }) {
           status: r.status,
           libelle: r.line
             ? `${r.line.dateIso} · ${r.line.label}`.slice(0, 220)
-            : libelleDesLignes((r.candidates || []).map(c => `${c.dateIso} · ${c.label}`),
-                (r.combined ? '🔗 2 virements = 1 ligne · ' : '') + (r.crossMethod ? '⚠️ moyen différent · ' : '')),
+            : libelleDesLignes((r.candidates || []).map(c => `${c.dateIso} · ${c.label}`), prefixeSupposition(r)),
           candidates: r.status === 'a_confirmer'
             ? JSON.stringify((r.candidates || []).map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) })))
             : null,
