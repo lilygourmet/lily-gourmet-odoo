@@ -450,6 +450,14 @@ const CHEQUE_AUTO_MAX_DAYS = 90
 
 // Rapproche les enveloppes Banque avec les lignes du relevé.
 // Ne touche pas aux enveloppes déjà 'trouve'. status: 'trouve' | 'a_confirmer' | 'absent'
+// Ce que le calcul a supposé pour proposer ces lignes, à écrire EN TÊTE du libellé de la
+// caisse. Le 🔗 n'est pas décoratif : le code le relit (pré-marquage des lignes prises,
+// annulation d'un rapprochement, fenêtre « Grouper 2 caisses »). Il était ajouté par
+// l'import seulement — une relance le faisait disparaître, et avec lui le sens de la
+// proposition. Une même règle pour les trois chemins.
+export const prefixeSupposition = r =>
+  (r.combined ? '🔗 2 virements = 1 ligne · ' : '') + (r.crossMethod ? '⚠️ moyen différent · ' : '')
+
 export function reconcileEnvelopes(envelopes, txns, opts = {}) {
   const recompute = !!opts.recompute
   // Dédoublonnage : un même dépôt présent dans plusieurs relevés (formats/périodes qui se
