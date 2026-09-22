@@ -285,26 +285,32 @@ html, body {
        4. la recette                 pointillés jusqu'au chiffre
        5. le cadre à remplir         collé en bas de page
      ------------------------------------------------------------ */
+  /* ⚠️ NI `flex`, NI `min-height` EN CENTIMÈTRES — LA PREUVE EST ARRIVÉE.
+     (Layla, 2026-09-22 : « j'ai imprimé Voile ce matin, ça m'a sorti que la
+     demande d'économat », puis « oui de l'iPhone, encore des pages blanches
+     qui sortent ».)
+
+     La note d'avant disait : « si l'iPhone s'arrête un jour de nouveau à la
+     première page, c'est ici qu'il faudra revenir — mais avec une preuve ».
+     La voici, et elle est double : la recette du labo ne sortait pas DU TOUT,
+     et des pages blanches sortaient à la place. Les sept tests de
+     `FeuillesImprimees.test.jsx` montrent que les deux pages sont bel et bien
+     fabriquées : ce qui se perd, se perd ICI.
+
+     Pourquoi ça casse : 23 cm de hauteur imposée, plus les marges de la page,
+     dépassent la hauteur imprimable que l'iPhone se choisit. Chaque feuille
+     déborde alors d'un poil sur la suivante — d'où les pages blanches — et
+     WebKit renonce à couper la boîte flexible, d'où la feuille qui manque.
+
+     Ce qu'on perd : le cadre à remplir n'est plus collé PILE en bas. Il est
+     désormais à distance fixe de la recette. Une feuille courte le place plus
+     haut qu'une longue. C'est le prix d'une liasse qui sort en entier. */
   .feuille-impr {
     page-break-after: always;
     break-after: page;
     font-size: 11pt;
     line-height: 1.4;
     color: #000;
-    /* La hauteur minimale pousse le cadre en bas de page : toutes les feuilles
-       se ressemblent, la main va toujours au même endroit. Prudente (23 cm
-       pour 26,7 disponibles) — une recette longue déborderait sinon.
-
-       ⚠️ J'avais retiré cette hauteur et ce `flex` le 2026-09-18, en accusant
-       WebKit de ne pas savoir couper une boîte flexible entre deux pages. Je ne
-       l'ai JAMAIS vérifié — mon banc d'essai WebKit s'emballait — et la vraie
-       cause était ailleurs (la liasse démontée trop tôt, voir
-       `FabAnnexe2SimpleView`). La mise en page de Layla est donc rendue telle
-       qu'elle l'avait demandée. Si l'iPhone s'arrête un jour de nouveau à la
-       première page, c'est ici qu'il faudra revenir — mais avec une preuve. */
-    min-height: 23cm;
-    display: flex;
-    flex-direction: column;
   }
 
   .feuille-impr:last-child {
@@ -478,7 +484,9 @@ html, body {
   .feuille-economat .fe-sign {
     display: flex;
     justify-content: flex-end;
-    margin-top: auto;
+    /* Même raison qu'au labo : sans boîte flexible à hauteur imposée, `auto`
+       ne pousse plus rien. Une marge franche fait le même travail. */
+    margin-top: 12mm;
     padding-top: 6mm;
     page-break-inside: avoid;
     break-inside: avoid;
@@ -601,8 +609,11 @@ html, body {
      « Juste des chiffres à remplir, un tableau plus simple » (Layla,
      2026-09-15) : quatre colonnes, une ligne haute où écrire, rien d'autre. */
   .feuille-impr .fi-table {
-    /* `auto` le pousse en bas : la main va toujours au même endroit. */
-    margin-top: auto;
+    /* ⚠️ `auto` le poussait en bas — mais il n'a de sens que dans une boîte
+       FLEXIBLE À HAUTEUR IMPOSÉE, et c'est exactement ce couple-là qui faisait
+       sortir des pages blanches sur l'iPhone. Une marge franche, à la place :
+       le cadre reste nettement séparé de la recette, et la page se coupe. */
+    margin-top: 16mm;
     width: 100%;
     border-collapse: collapse;
     page-break-inside: avoid;
