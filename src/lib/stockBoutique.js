@@ -902,3 +902,29 @@ export function canSeeStock(user) {
   return canStockPatissier(user) || canStockCafe(user) || canStockAudit(user)
 }
 
+
+// ============================================================
+// CE QUI A ÉTÉ VENDU, ET À QUELLES HEURES.
+//
+// « Est-ce qu'on fait rentrer vendu ? » (Layla, 2026-09-22) — non, et il ne
+// faut surtout pas : saisir les ventes à la main doublerait la caisse, et deux
+// sources finissent toujours par diverger. C'est Odoo qui le sait déjà.
+//
+// Puis : « une colonne informative de vendu, avec un détail si on clique, des
+// horaires vendus de cet article ».
+//
+// Rendu : { 'biscuit cannelle': { produit, total, heures: { '08': 4, … } } },
+// la clé étant le nom nettoyé — c'est par le NOM qu'on relie caisse et
+// comptage, comme partout ailleurs dans l'app.
+// ============================================================
+export async function loadVentesDuJour(jour) {
+  const r = await fetch(`/api/stock-ventes?jour=${encodeURIComponent(jour)}`)
+  if (!r.ok) throw new Error(`Caisse indisponible (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+  return d.ventes || {}
+}
+
+/** La même clé que le serveur : sans référence Odoo, sans casse, sans double espace. */
+export const cleVente = t => String(t || '')
+  .replace(/^\[[^\]]*\]\s*/, '').replace(/\s+/g, ' ').trim().toLowerCase()

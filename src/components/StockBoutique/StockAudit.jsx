@@ -22,6 +22,8 @@ import {
   auditOverrideQty,
   auditResolveInFavorOf,
   todayISO,
+  loadVentesDuJour,
+  cleVente,
 } from '../../lib/stockBoutique'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
@@ -166,6 +168,21 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
   // poignée demande une décision. On ne montre que ceux-là, et l'interrupteur
   // rend le tableau entier quand elle veut vérifier autre chose.
   const [ecartsSeuls, setEcartsSeuls] = useState(true)
+  // ⚠️ CE QUI A ÉTÉ VENDU VIENT DE LA CAISSE, pas d'un calcul (Layla,
+  // 2026-09-22 : « est-ce qu'on fait rentrer vendu ? » — non, et il ne faut
+  // pas : deux sources finissent toujours par diverger). Il explique l'écart :
+  // reçu + reste − vendu = ce qui devrait rester.
+  const [ventes, setVentes] = useState({})
+  // La ligne dépliée : ses horaires de vente (« un détail si on clique »).
+  const [detailOuvert, setDetailOuvert] = useState(null)
+
+  useEffect(() => {
+    let vivant = true
+    // Silencieux : la caisse est un bonus, pas une dépendance. Si elle ne
+    // répond pas, le tableau reste entier, juste sans la colonne remplie.
+    loadVentesDuJour(day).then(v => { if (vivant) setVentes(v) }).catch(() => { })
+    return () => { vivant = false }
+  }, [day])
 
   /**
    * Ce qui mérite vraiment un regard : un écart, ou un conflit de réception.
@@ -492,6 +509,9 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Café dit avoir reçu — et ce que le pâtissier disait envoyer, quand ça diffère">Reçu</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Restes d'hier propagés">Reste hier</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute bg-bordeaux/10" title="Café a compté en aveugle">Compté</th>
+                        {/* ⚠️ Informative, et prise à la CAISSE : personne ne la
+                            saisit. Clique la ligne pour voir les heures. */}
+                        <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Vendu d'après la caisse — clique la ligne pour les heures">Vendu</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-blue-800 bg-blue-50" title="Stock Odoo après dernier rafraîchissement">Odoo actuel</th>
                         <th className="text-right px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute" title="Écart actuel : Odoo actuel - Compté">Écart actuel</th>
                         <th className="text-center px-2 py-2 font-mono uppercase tracking-wider text-[10px] text-ink-mute"></th>
@@ -518,7 +538,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           if (cat !== lastCategory) {
                             rendered.push(
                               <tr key={`cat-${cat}`} className="bg-cream-warm/60">
-                                <td colSpan={8} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
+                                <td colSpan={9} className="px-3 py-1.5 font-mono uppercase tracking-[0.15em] text-[10px] text-bordeaux-deep font-semibold">
                                   {cat}
                                 </td>
                               </tr>
@@ -539,12 +559,16 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                           const isConflictRow = r.is_conflict_row
                           const conflictItems = r.conflict_items || []
                           const rowKey = `${r.product_name}-${isConflictRow ? 'conflict' : 'ok'}`
+                          const vente = ventes[cleVente(r.product_name)] || null
+                          const ouvert = detailOuvert === rowKey
                           rendered.push(
-                            <tr key={rowKey} className={`border-b border-line ${
-                              isConflictRow ? 'bg-red-50/60' :
-                              notCounted ? 'bg-amber-50/20' :
-                              (effGapCurr !== null && effGapCurr !== 0 ? 'bg-orange-50/30' : '')
-                            }`}>
+                            <tr key={rowKey}
+                              onClick={() => setDetailOuvert(ouvert ? null : rowKey)}
+                              className={`border-b border-line cursor-pointer ${
+                                isConflictRow ? 'bg-red-50/60' :
+                                notCounted ? 'bg-amber-50/20' :
+                                (effGapCurr !== null && effGapCurr !== 0 ? 'bg-orange-50/30' : '')
+                              }`}>
                               <td className="px-3 py-2 font-medium">
                                 {r.product_name}
                                 {isConflictRow && (
@@ -577,6 +601,9 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                               <td className={`px-2 py-2 text-right tabular-nums font-semibold bg-bordeaux/5 ${notCounted ? 'text-amber-700' : ''}`}>
                                 {isConflictRow ? <span className="text-red-700 italic">—</span> : effQty}
                               </td>
+                              <td className="px-2 py-2 text-right tabular-nums text-ink-soft">
+                                {vente ? Math.round(vente.total) : <span className="text-ink-mute">—</span>}
+                              </td>
                               <td className={`px-2 py-2 text-right tabular-nums bg-blue-50/50`}>
                                 {hasCurrent ? r.qty_odoo_current : <span className="text-ink-mute italic">—</span>}
                               </td>
@@ -597,6 +624,45 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                               </td>
                             </tr>
                           )
+                          /* ⚠️ LE DÉTAIL AU CLIC (Layla, 2026-09-22 : « avec un
+                             détail si on clique, des horaires vendus de cet
+                             article »). Les heures viennent de la caisse, et la
+                             ligne de calcul dit d'où sort l'écart — sans elle,
+                             « −8 » ne s'explique pas tout seul. */
+                          if (ouvert) {
+                            const recu = r.qty_morning_received || 0
+                            const reste = r.qty_leftover || 0
+                            const vendu = vente ? Math.round(vente.total) : null
+                            const attendu = vendu === null ? null : recu + reste - vendu
+                            rendered.push(
+                              <tr key={`${rowKey}-detail`} className="border-b border-line bg-amber-50/20">
+                                <td colSpan={9} className="px-3 py-2.5">
+                                  {vente && Object.keys(vente.heures).length > 0 ? (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {Object.entries(vente.heures).sort().map(([h, q]) => (
+                                        <span key={h} className="inline-block bg-white border border-line rounded-lg
+                                                                 px-2 py-0.5 text-[11.5px] tabular-nums">
+                                          {h}h <b className="text-bordeaux">{Math.round(q)}</b>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[11.5px] text-ink-mute">Aucune vente enregistrée ce jour-là.</div>
+                                  )}
+                                  {attendu !== null && (
+                                    <div className="text-[11.5px] text-ink-mute mt-2">
+                                      reçu <b className="text-ink">{recu}</b> + reste <b className="text-ink">{reste}</b>
+                                      {' '}− vendu <b className="text-ink">{vendu}</b>
+                                      {' '}= devrait rester <b className="text-ink">{attendu}</b>
+                                      {!notCounted && <> · compté <b className="text-ink">{effQty}</b>
+                                        {attendu === effQty ? ' ✅'
+                                          : <b className="text-red-700"> · écart {effQty - attendu}</b>}</>}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          }
                         }
                         return rendered
                       })()}

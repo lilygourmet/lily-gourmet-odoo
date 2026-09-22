@@ -54,6 +54,22 @@ describe('ce qu’elle refuse de faire', () => {
   })
 })
 
+// ⚠️ « SI CLÔTURÉ À 20 H PAR L'EMPLOYÉ, TU NE RECLÔTURES PAS À 23 H » (Layla,
+// 2026-09-22). Reclôturer reprendrait une photo du stock Odoo trois heures plus
+// tard — et si le café a vendu entre-temps, on détruirait le bon rapport avec
+// un faux.
+describe('elle ne touche jamais à une journée déjà clôturée', () => {
+  it('ne SÉLECTIONNE que les journées encore ouvertes', () => {
+    expect(src).toMatch(/\.eq\('day', jour\)\.eq\('status', 'open'\)/)
+  })
+
+  // Ceinture ET bretelles : même si la lecture ramenait une journée fermée
+  // entre-temps (deux tâches qui se croisent), l'écriture la refuserait.
+  it('et l’ÉCRITURE le réexige, au cas où', () => {
+    expect(src).toMatch(/\.eq\('id', j\.id\)\.eq\('status', 'open'\)/)
+  })
+})
+
 describe('ce qu’elle fait', () => {
   it('passe la journée en « submitted »', () => {
     expect(src).toContain("status: 'submitted'")
