@@ -959,15 +959,28 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
 // Lignes du relevé à rattacher à une caisse. La banque split souvent une remise de chèques
 // en PLUSIEURS encaissements : on coche autant de lignes qu'il en faut, le total se compare
 // au montant de la caisse. Rouvrable sur une caisse déjà rapprochée (ses lignes sont cochées).
+// Moyen de paiement correspondant au type d'une ligne du relevé (l'inverse de candidatesFor).
+const MOYEN_DE_LIGNE = { versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' }
+
 function SuggestModal({ env, onClose, onAttach }) {
   const [lines, setLines] = useState(null)
   const [sel, setSel] = useState([])        // clés cochées
   const [q, setQ] = useState('')
+  // Le rapprochement automatique ne propose une ligne d'un AUTRE moyen que dans une fenêtre
+  // étroite et sans nom contradictoire. Quand il refuse à raison mais que Layla, elle, sait
+  // que c'est le bon dépôt, il lui faut la main : cette case ouvre les trois moyens.
+  const [tousMoyens, setTousMoyens] = useState(false)
   const montant = Number(env.amount_cash)
+  const moyenCaisse = env.payment_method || 'cash'
   useEffect(() => {
     (async () => {
       let libres = [], miennes = []
-      try { libres = await loadFreeReleveLines(null, env.payment_method) } catch { libres = [] }
+      const moyens = tousMoyens ? ['cash', 'cheque', 'virement'] : [moyenCaisse]
+      try {
+        const parMoyen = await Promise.all(moyens.map(m => loadFreeReleveLines(null, m)))
+        const vues = new Set()
+        libres = parMoyen.flat().filter(l => !vues.has(l.key) && vues.add(l.key))
+      } catch { libres = [] }
       try { miennes = env.releve_status ? await loadEnvReleveLines(env.id) : [] } catch { miennes = [] }
       // Même tolérance que partout ailleurs : Odoo compte les centimes, la banque arrondit.
       const exact = l => Math.abs(Number(l.amount) - montant) < ECART_MINI
@@ -979,17 +992,18 @@ function SuggestModal({ env, onClose, onAttach }) {
       const sameDayInst = libres.filter(l => exact(l) && l.type === 'virement_recu'
         && /\bINST\b/i.test(l.label || '') && l.ligne_date === env.session_date
         && nomDansLibelle(env.virement_client, l.label))
-      if (!env.releve_status && sameDayInst.length === 1) {
+      if (!tousMoyens && !env.releve_status && sameDayInst.length === 1) {
         onAttach(env, sameDayInst)
         return
       }
       // Ordre : les lignes déjà rattachées, puis celles du montant exact, puis le reste.
       const prises = new Set(miennes.map(l => l.key))
       const autres = libres.filter(l => !prises.has(l.key))
-      setLines([...miennes, ...autres.filter(exact), ...autres.filter(l => !exact(l))])
+      const marquer = l => ({ ...l, autreMoyen: (MOYEN_DE_LIGNE[l.type] || 'cash') !== moyenCaisse })
+      setLines([...miennes, ...autres.filter(exact), ...autres.filter(l => !exact(l))].map(marquer))
       setSel(miennes.map(l => l.key))
     })()
-  }, [env.id])
+  }, [env.id, tousMoyens])
 
   const toggle = k => setSel(s => (s.includes(k) ? s.filter(x => x !== k) : [...s, k]))
   const coche = (lines || []).filter(l => sel.includes(l.key))
@@ -1012,12 +1026,18 @@ function SuggestModal({ env, onClose, onAttach }) {
           (la banque peut avoir splitté la remise).
         </div>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un montant, une date, un libellé…"
-          style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #C4BFB6', borderRadius: 8, marginBottom: 10 }} />
+          style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #C4BFB6', borderRadius: 8, marginBottom: 8 }} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#4a3a30', marginBottom: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={tousMoyens} onChange={e => { setTousMoyens(e.target.checked); setLines(null) }} />
+          Voir aussi les autres moyens (espèces, chèques, virements)
+        </label>
         {lines === null ? (
           <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Chargement…</div>
         ) : visibles.length === 0 ? (
           <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>
-            {lines.length ? 'Aucune ligne ne correspond à cette recherche.' : 'Aucune ligne libre de ce type dans les relevés importés.'}
+            {lines.length ? 'Aucune ligne ne correspond à cette recherche.'
+              : tousMoyens ? 'Aucune ligne libre dans les relevés importés.'
+              : 'Aucune ligne libre de ce moyen. Coche « Voir aussi les autres moyens » juste au-dessus.'}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, overflowY: 'auto' }}>
@@ -1028,6 +1048,7 @@ function SuggestModal({ env, onClose, onAttach }) {
                   <input type="checkbox" checked={on} onChange={() => toggle(l.key)} style={{ marginTop: 2 }} />
                   <span>
                     <b>{fmtMoney(l.amount)}</b> · {l.ligne_date}
+                    {l.autreMoyen && <span style={{ fontSize: 11, color: '#a9620a' }}> · ⚠️ moyen différent</span>}
                     <div style={{ fontSize: 11, color: '#8a7a70', lineHeight: 1.3 }}>{l.label}</div>
                   </span>
                 </label>
