@@ -84,6 +84,14 @@
         window.location.replace(u.toString())
       }
 
+      // ⚠️ ET ON GARDE CE QUI A ÉCHOUÉ, pour pouvoir le DIRE (Layla,
+      // 2026-09-22 : « page blanche sur Safari », « toujours rien »). Une page
+      // blanche ne se diagnostique pas à distance : sur un iPhone, personne
+      // n'ouvre une console. Tant qu'elle reste blanche, on ne sait rien.
+      // Alors on note tout, et au bout du compte on l'AFFICHE.
+      var soucis = []
+      function noter (t) { if (soucis.length < 6 && soucis.indexOf(t) < 0) soucis.push(t) }
+
       // ⚠️ TOUT DE SUITE, PAS DANS DOUZE SECONDES. Quand un fichier de l'app
       // répond 404 — la page gardée en cache réclame un fichier déjà remplacé
       // par un déploiement — le navigateur le DIT immédiatement. On n'a aucune
@@ -92,16 +100,52 @@
       // chargement ne remontent pas autrement.
       window.addEventListener('error', function (e) {
         var t = e && e.target
-        if (!t || (t.tagName !== 'SCRIPT' && t.tagName !== 'LINK')) return
-        lgSecours()
+        if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+          noter('fichier introuvable : ' + String(t.src || t.href || '?').split('/').pop())
+          lgSecours()
+          return
+        }
+        if (e && e.message) {
+          noter(e.message + (e.filename ? ' (' + String(e.filename).split('/').pop() + ')' : ''))
+        }
       }, true)
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = e && e.reason
+        noter('erreur : ' + String((r && r.message) || r || '?'))
+      })
 
       // Et le minuteur reste, en dernier recours : un fichier qui arrive mais
       // ne démarre pas ne déclenche aucune erreur de chargement.
       setTimeout(function () {
         var r = document.getElementById('root')
-        if (r && r.childElementCount > 0) return
-        lgSecours()
+        if (!r || r.childElementCount > 0) return
+        var deja = Number(new URL(window.location.href).searchParams.get('lg') || 0)
+        // Premier échec : on tente une adresse neuve, sans rien montrer.
+        if (!deja) { lgSecours(); return }
+        // ⚠️ DEUXIÈME ÉCHEC : ON ARRÊTE DE RECHARGER ET ON PARLE. Recharger
+        // encore, c'est laisser quelqu'un devant un écran blanc sans jamais
+        // lui dire pourquoi — et nous priver du seul indice qui existe.
+        r.innerHTML =
+          '<div style="font:16px/1.5 -apple-system,system-ui,sans-serif;color:#1a0f0a;'
+          + 'background:#fcfbf8;padding:22px;max-width:520px;margin:0 auto">'
+          + '<div style="font-size:34px">😕</div>'
+          + '<h1 style="font-size:21px;margin:6px 0 4px">L’app n’a pas pu démarrer</h1>'
+          + '<p style="color:#8a7a70;margin:0 0 14px">Envoie cet écran à Layla — '
+          + 'ce qui suit dit exactement ce qui manque.</p>'
+          + '<div style="background:#fff;border:1px solid #e5d8c3;border-radius:12px;'
+          + 'padding:12px;font:12px/1.55 ui-monospace,Menlo,monospace;'
+          + 'word-break:break-word;white-space:pre-wrap">'
+          + (soucis.length ? soucis.join('\n') : 'aucune erreur signalée par le navigateur')
+          + '\n\nfichier principal : ' + (function () {
+            var m = document.querySelector('script[type=module][src]')
+            return m ? String(m.src).split('/').pop() : 'aucun !'
+          })()
+          + '\n' + navigator.userAgent
+          + '</div>'
+          + '<button onclick="var u=new URL(location.href);u.searchParams.set(\'lg\',Date.now());'
+          + 'location.replace(u.toString())" style="width:100%;margin-top:14px;padding:14px;'
+          + 'border:0;border-radius:12px;background:#993556;color:#fff;font-size:16px;'
+          + 'font-weight:700">Réessayer</button></div>'
       }, 12000)
     </script>
   </body>

@@ -153,3 +153,51 @@ describe('la réaction immédiate au fichier manquant', () => {
     expect(remplace).toHaveBeenCalledTimes(1)
   })
 })
+
+// ============================================================
+// QUAND ÇA NE REPART PAS : ON PARLE, AU LIEU DE RECHARGER.
+//
+// « Page blanche sur Safari, ça marche sur Chrome », puis « toujours rien »
+// (Layla, 2026-09-22). Une page blanche ne se diagnostique pas à distance :
+// sur un iPhone, personne n'ouvre une console. Tant qu'elle reste blanche, on
+// ne sait RIEN — et moi je devine, ce qui a coûté assez cher aujourd'hui.
+//
+// Au deuxième échec, l'écran dit ce qui manque, et elle peut le lire.
+// ============================================================
+describe('le message qui remplace l’écran blanc', () => {
+  it('au PREMIER échec, il recharge sans rien montrer', () => {
+    poser()
+    expect(remplace).toHaveBeenCalledTimes(1)
+    expect(document.getElementById('root').innerHTML).toBe('')
+  })
+
+  it('au DEUXIÈME, il arrête de recharger et affiche la raison', () => {
+    window.location = { href: `https://app.test/?lg=${Date.now() - 70000}`, replace: remplace }
+    // eslint-disable-next-line no-eval
+    eval(script)
+    const ev = new Event('error')
+    Object.defineProperty(ev, 'target', { value: { tagName: 'SCRIPT', src: 'https://app.test/assets/main-XYZ.js' } })
+    window.dispatchEvent(ev)
+    remplace.mockClear()
+    vi.advanceTimersByTime(13000)
+
+    const html = document.getElementById('root').innerHTML
+    expect(html).toContain('L’app n’a pas pu démarrer')
+    expect(html).toContain('main-XYZ.js')        // le fichier qui manque, nommé
+    expect(html).toContain('Réessayer')
+  })
+
+  it('et il le dit même quand le navigateur n’a rien signalé', () => {
+    window.location = { href: `https://app.test/?lg=${Date.now() - 70000}`, replace: remplace }
+    poser()
+    expect(document.getElementById('root').innerHTML)
+      .toContain('aucune erreur signalée par le navigateur')
+  })
+
+  it('l’app affichée ne voit jamais ce message', () => {
+    window.location = { href: `https://app.test/?lg=${Date.now() - 70000}`, replace: remplace }
+    document.body.innerHTML = '<div id="root"><div>l’app est là</div></div>'
+    poser()
+    expect(document.getElementById('root').innerHTML).not.toContain('n’a pas pu démarrer')
+  })
+})
