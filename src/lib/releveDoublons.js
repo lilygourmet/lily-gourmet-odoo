@@ -291,3 +291,42 @@ export function libelleDesLignes(textes, prefixe = '') {
   const budget = Math.floor((300 - prefixe.length - 5 * (textes.length - 1)) / textes.length)
   return (prefixe + textes.map(t => t.slice(0, Math.max(40, budget))).join('  |  ')).slice(0, 300) || null
 }
+
+// Clé d'une ligne de relevé en base. Stable d'un import à l'autre : c'est elle qui fait
+// qu'un même relevé relu ne crée PAS de doublon. Montant + le 1er numéro long du libellé
+// (le n° d'opération) ; sans numéro, date + montant + début du libellé.
+// `vues` numérote deux opérations rigoureusement identiques le même jour, pour n'en perdre
+// aucune — passer le MÊME `vues` et les lignes dans l'ordre du relevé redonne les mêmes
+// clés, c'est ce qui permet de comparer un PDF à la base sans rien réimporter.
+export function cleDeLigne(u, vues = new Set()) {
+  const ref = (u.label || '').match(/\d{5,}/)
+  const base = ref
+    ? `ref|${Math.round(u.credit * 100)}|${ref[0]}`
+    : `${u.dateIso}|${Math.round(u.credit * 100)}|${(u.label || '').slice(0, 50)}`
+  let key = base
+  for (let n = 2; vues.has(key); n++) key = `${base}#${n}`
+  vues.add(key)
+  return key
+}
+
+// Deux écritures du même montant à quelques jours d'écart : est-ce le MÊME encaissement,
+// vu dans deux documents, ou DEUX encaissements différents ?
+//
+// La banque n'écrit pas une opération pareil d'un document à l'autre : le relevé intercale
+// ses références (« VIR INST RECU M 2118940 000011400383 … MAROUANE »), l'extrait tronque
+// à 30 caractères (« VIR INST RECU M MAROUANE MOUTA »). Ni le n° ni le libellé ne
+// permettent de trancher. Reste le NOM.
+//
+// - noms incompatibles (MAROUANE vs ZOUBIDA) → deux encaissements différents ;
+// - sinon (noms compatibles, ou pas de nom lisible d'un côté) → on suppose le même.
+//
+// Ce doute-là se tranche toujours du même côté : ne jamais dupliquer. Un encaissement raté
+// reste lisible sur le relevé ; un doublon, lui, coûte des heures à démêler.
+export function memeEncaissement(a, b, joursMax = 3) {
+  if (Math.abs(Number(a.amount) - Number(b.amount)) >= ECART_MINI) return false
+  if (!a.ligne_date || !b.ligne_date) return false
+  if (Math.abs((new Date(a.ligne_date) - new Date(b.ligne_date)) / 86400000) > joursMax) return false
+  const na = nomDeLigne(a.label), nb = nomDeLigne(b.label)
+  if (!na || !nb) return true              // rien à comparer : on suppose le même
+  return memePersonne(na, nb)
+}

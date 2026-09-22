@@ -2,11 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { usePersistedState } from '../../lib/usePersistedState'
 import { confirmDialog } from '../../lib/confirmDialog'
 import { Landmark, User, ScrollText, Banknote, Calendar, Eye, Upload, ArrowLeftRight, FileText } from 'lucide-react'
-import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, lignesPourConfirmer, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, analyserVirements, ECART_MINI } from '../../lib/caisse'
+import { loadDestinataires, loadEnveloppesForSuivi, updateEnveloppeDate, setEnveloppeProof, uploadPreuve, getPreuveSignedUrl, setEnveloppeReleve, clearEnveloppeReleve, loadFreeReleveLines, loadEnvReleveLines, lignesPourConfirmer, etatDesLignesProposees, attachReleveLines, confirmReleveLine, takeReleveLine, loadAllFreeReleveLines, loadAllLinkedReleveLines, setReleveLineIgnore, loadIgnoredReleveLines, loadPendingBanqueEnvelopes, loadBanqueEnvelopesWithEcart, loadBanqueEcartsValides, setEcartValide, clearEnveloppeProof, setEnveloppeIgnore, loadReleveImports, relancerRapprochement, annulerRapprochementsFaux, refaireMois, analyserVirements, ECART_MINI } from '../../lib/caisse'
 import { windowFor, nomDansLibelle } from '../../lib/releveBmci'
 import { MOIS_TABS, currentMonth, currentYear, fmtMoney, fmtMois, fmtDateCourte, fmtDateLongue, COLOR_PALETTE } from './_helpers'
 import UploadPreuveModal from './modals/UploadPreuveModal'
 import ReleveImportModal from './modals/ReleveImportModal'
+import VerifierReleveModal from './modals/VerifierReleveModal'
 
 export default function SuiviView({ user }) {
   const [subTab, setSubTab] = usePersistedState('lily.suivi.subTab', 'banque')
@@ -72,6 +73,7 @@ function BanqueSection({ user }) {
   const [uploadEnv, setUploadEnv] = useState(null)
   const [editDate, setEditDate] = useState({})
   const [showImport, setShowImport] = useState(false)
+  const [showVerif, setShowVerif] = useState(false)   // contrôle d'un relevé, sans rien réimporter
   const [confirmEnv, setConfirmEnv] = useState(null)
   const [suggestEnv, setSuggestEnv] = useState(null)
   const [query, setQuery] = useState('')
@@ -361,7 +363,7 @@ function BanqueSection({ user }) {
         </label>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         {imports.length > 0 && (
           <button onClick={() => setShowHistory(v => !v)} style={btnNormal}>
             🕑 Relevés importés ({imports.length})
@@ -379,6 +381,10 @@ function BanqueSection({ user }) {
         <button onClick={handleAnalyser} disabled={relance} style={{ ...btnNormal, opacity: relance ? 0.6 : 1 }}
           title="Dit pourquoi chaque virement du mois ne se rapproche pas — ne modifie rien">
           🔍 Pourquoi ces virements ne se rapprochent pas
+        </button>
+        <button onClick={() => setShowVerif(true)} style={btnNormal}
+          title="Relit un relevé déjà importé et dit si des lignes manquent — n'écrit rien">
+          🔎 Vérifier un relevé
         </button>
         <button onClick={() => setShowImport(true)} style={{ ...btnNormal, background: '#993556', color: 'white', border: 'none' }}>
           <FileText size={14} /> Importer relevé bancaire
@@ -559,6 +565,10 @@ function BanqueSection({ user }) {
 
       {showImport && (
         <ReleveImportModal onClose={() => setShowImport(false)} onDone={reload} user={user} />
+      )}
+
+      {showVerif && (
+        <VerifierReleveModal onClose={() => setShowVerif(false)} onDone={reload} />
       )}
 
       {analyse && <AnalyseVirementsModal a={analyse} onClose={() => setAnalyse(null)} />}
@@ -959,15 +969,33 @@ function LinkLineModal({ line, envs, onClose, onLink }) {
 // Lignes du relevé à rattacher à une caisse. La banque split souvent une remise de chèques
 // en PLUSIEURS encaissements : on coche autant de lignes qu'il en faut, le total se compare
 // au montant de la caisse. Rouvrable sur une caisse déjà rapprochée (ses lignes sont cochées).
+// Moyen de paiement correspondant au type d'une ligne du relevé (l'inverse de candidatesFor).
+const MOYEN_DE_LIGNE = { versement: 'cash', cheque_depot: 'cheque', virement_recu: 'virement', autre: 'virement' }
+
 function SuggestModal({ env, onClose, onAttach }) {
   const [lines, setLines] = useState(null)
   const [sel, setSel] = useState([])        // clés cochées
   const [q, setQ] = useState('')
+  // Le rapprochement automatique ne propose une ligne d'un AUTRE moyen que dans une fenêtre
+  // étroite et sans nom contradictoire. Quand il refuse à raison mais que Layla, elle, sait
+  // que c'est le bon dépôt, il lui faut la main : cette case ouvre les trois moyens.
+  const [tousMoyens, setTousMoyens] = useState(false)
+  // Lignes du MÊME montant déjà rattachées ailleurs. Sans elles, une caisse qui ne trouve
+  // pas sa ligne laisse Layla sans réponse : la ligne existe pourtant, une autre caisse l'a
+  // prise. Vécu : « VIR INST RECU ZOUBIDA EL BOUSS », 1 000 dh du 04/06, absent de la liste
+  // des libres — et impossible de savoir qui le retenait sans changer d'écran.
+  const [prises, setPrises] = useState([])
   const montant = Number(env.amount_cash)
+  const moyenCaisse = env.payment_method || 'cash'
   useEffect(() => {
     (async () => {
       let libres = [], miennes = []
-      try { libres = await loadFreeReleveLines(null, env.payment_method) } catch { libres = [] }
+      const moyens = tousMoyens ? ['cash', 'cheque', 'virement'] : [moyenCaisse]
+      try {
+        const parMoyen = await Promise.all(moyens.map(m => loadFreeReleveLines(null, m)))
+        const vues = new Set()
+        libres = parMoyen.flat().filter(l => !vues.has(l.key) && vues.add(l.key))
+      } catch { libres = [] }
       try { miennes = env.releve_status ? await loadEnvReleveLines(env.id) : [] } catch { miennes = [] }
       // Même tolérance que partout ailleurs : Odoo compte les centimes, la banque arrondit.
       const exact = l => Math.abs(Number(l.amount) - montant) < ECART_MINI
@@ -979,17 +1007,22 @@ function SuggestModal({ env, onClose, onAttach }) {
       const sameDayInst = libres.filter(l => exact(l) && l.type === 'virement_recu'
         && /\bINST\b/i.test(l.label || '') && l.ligne_date === env.session_date
         && nomDansLibelle(env.virement_client, l.label))
-      if (!env.releve_status && sameDayInst.length === 1) {
+      if (!tousMoyens && !env.releve_status && sameDayInst.length === 1) {
         onAttach(env, sameDayInst)
         return
       }
       // Ordre : les lignes déjà rattachées, puis celles du montant exact, puis le reste.
       const prises = new Set(miennes.map(l => l.key))
       const autres = libres.filter(l => !prises.has(l.key))
-      setLines([...miennes, ...autres.filter(exact), ...autres.filter(l => !exact(l))])
+      const marquer = l => ({ ...l, autreMoyen: (MOYEN_DE_LIGNE[l.type] || 'cash') !== moyenCaisse })
+      setLines([...miennes, ...autres.filter(exact), ...autres.filter(l => !exact(l))].map(marquer))
       setSel(miennes.map(l => l.key))
+      try {
+        const liees = await loadAllLinkedReleveLines()
+        setPrises(liees.filter(l => l.used_by !== env.id && Math.abs(Number(l.amount) - montant) < ECART_MINI))
+      } catch { setPrises([]) }
     })()
-  }, [env.id])
+  }, [env.id, tousMoyens])
 
   const toggle = k => setSel(s => (s.includes(k) ? s.filter(x => x !== k) : [...s, k]))
   const coche = (lines || []).filter(l => sel.includes(l.key))
@@ -1012,12 +1045,18 @@ function SuggestModal({ env, onClose, onAttach }) {
           (la banque peut avoir splitté la remise).
         </div>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher un montant, une date, un libellé…"
-          style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #C4BFB6', borderRadius: 8, marginBottom: 10 }} />
+          style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #C4BFB6', borderRadius: 8, marginBottom: 8 }} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#4a3a30', marginBottom: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={tousMoyens} onChange={e => { setTousMoyens(e.target.checked); setLines(null) }} />
+          Voir aussi les autres moyens (espèces, chèques, virements)
+        </label>
         {lines === null ? (
           <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>Chargement…</div>
         ) : visibles.length === 0 ? (
           <div style={{ fontSize: 13, color: '#8a7a70', padding: 8 }}>
-            {lines.length ? 'Aucune ligne ne correspond à cette recherche.' : 'Aucune ligne libre de ce type dans les relevés importés.'}
+            {lines.length ? 'Aucune ligne ne correspond à cette recherche.'
+              : tousMoyens ? 'Aucune ligne libre dans les relevés importés.'
+              : 'Aucune ligne libre de ce moyen. Coche « Voir aussi les autres moyens » juste au-dessus.'}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10, overflowY: 'auto' }}>
@@ -1028,6 +1067,7 @@ function SuggestModal({ env, onClose, onAttach }) {
                   <input type="checkbox" checked={on} onChange={() => toggle(l.key)} style={{ marginTop: 2 }} />
                   <span>
                     <b>{fmtMoney(l.amount)}</b> · {l.ligne_date}
+                    {l.autreMoyen && <span style={{ fontSize: 11, color: '#a9620a' }}> · ⚠️ moyen différent</span>}
                     <div style={{ fontSize: 11, color: '#8a7a70', lineHeight: 1.3 }}>{l.label}</div>
                   </span>
                 </label>
@@ -1038,6 +1078,27 @@ function SuggestModal({ env, onClose, onAttach }) {
                 … {lines.length - visibles.length} autres lignes — affine la recherche.
               </div>
             )}
+          </div>
+        )}
+        {prises.length > 0 && (
+          <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: '#F4F0EA' }}>
+            <div style={{ fontSize: 12, color: '#4a3a30', marginBottom: 6 }}>
+              ℹ️ {prises.length} ligne(s) de {fmtMoney(montant)} sont <b>déjà prises</b> par une autre caisse :
+            </div>
+            {prises.slice(0, 6).map(l => (
+              <div key={l.key} style={{ fontSize: 11, color: '#8a7a70', lineHeight: 1.4, marginBottom: 4 }}>
+                <b>{l.ligne_date}</b> · {(l.label || '').slice(0, 80)}
+                <div style={{ color: '#0a7d3d' }}>
+                  → {l.env
+                    ? `${l.env.virement_client || l.env.destinataire?.name || l.env.source || 'caisse'} · ${l.env.session_date}`
+                    : 'une caisse qui n’existe plus — à délier depuis « Reçus banque non liés »'}
+                </div>
+              </div>
+            ))}
+            {prises.length > 6 && <div style={{ fontSize: 11, color: '#8a7a70' }}>… et {prises.length - 6} autres.</div>}
+            <div style={{ fontSize: 11, color: '#8a7a70' }}>
+              Pour en récupérer une : « Reçus banque non liés » → « Déjà liés » → <b>Délier</b>.
+            </div>
           </div>
         )}
         <div style={{ fontSize: 13, padding: '8px 10px', borderRadius: 8, background: '#F4F0EA', marginBottom: 10 }}>
@@ -1073,6 +1134,7 @@ function SuggestModal({ env, onClose, onAttach }) {
 // en disparaît, quel que soit son libellé.
 function ConfirmChoiceModal({ env, onClose, onPick, onGrouper }) {
   const [libres, setLibres] = useState(null)
+  const [etats, setEtats] = useState(null)   // pourquoi chaque ligne proposée n'est plus choisissable
   // « 🔗 2 virements = 1 ligne » : la ligne du relevé vaut la SOMME de deux caisses, elle
   // ne fait donc pas le montant de celle-ci. « Confirmer » ne pouvait pas la retrouver et
   // annonçait à tort qu'une autre caisse l'avait prise — une impasse. Le bon geste est
@@ -1083,6 +1145,11 @@ function ConfirmChoiceModal({ env, onClose, onPick, onGrouper }) {
     ;(async () => {
       try { const l = await lignesPourConfirmer(env); if (vivant) setLibres(l) }
       catch { if (vivant) setLibres([]) }
+      try {
+        const memo = JSON.parse(env.releve_candidates || '[]')
+        const e = memo.length ? await etatDesLignesProposees(memo) : []
+        if (vivant) setEtats(e)
+      } catch { if (vivant) setEtats([]) }
     })()
     return () => { vivant = false }
   }, [env])
@@ -1116,9 +1183,19 @@ function ConfirmChoiceModal({ env, onClose, onPick, onGrouper }) {
           </div>
         ) : candidates.length === 0 ? (
           <div style={{ fontSize: 13, color: '#8a7a70', marginBottom: 12 }}>
-            {nbMemorisees
-              ? `Aucune des ${nbMemorisees} ligne(s) proposées n'est encore disponible (déjà prise par une autre caisse, ou disparue du relevé). Utilise « Lier » pour en choisir une autre.`
-              : 'Aucune ligne mémorisée. Tu peux confirmer sans choisir.'}
+            {!nbMemorisees ? 'Aucune ligne mémorisée. Tu peux confirmer sans choisir.' : (
+              <>
+                <div style={{ marginBottom: 6 }}>Aucune des {nbMemorisees} ligne(s) proposées n'est choisissable :</div>
+                {(etats || []).map((e, i) => (
+                  <div key={i} style={{ marginBottom: 5, lineHeight: 1.4 }}>
+                    <span style={{ color: '#4a3a30' }}><b>{e.d}</b> · {(e.l || '').slice(0, 70)}</span>
+                    <div style={{ color: e.etat === 'prise' ? '#99201E' : '#a9620a' }}>→ {e.texte}</div>
+                  </div>
+                ))}
+                {etats === null && <div>Vérification…</div>}
+                <div style={{ marginTop: 6 }}>Tu peux aussi en choisir une autre avec « 🔍 Chercher ».</div>
+              </>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>

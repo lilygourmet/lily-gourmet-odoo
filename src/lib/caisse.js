@@ -2,7 +2,7 @@
 import { supabase } from './supabase'
 import { monthBounds, todayISO } from '../components/Caisse/_helpers'
 import { marquerDoublons, signatureDepot, memeDepotSansNumero, memeOperation, nomDeLigne, nomFiable, ECART_MINI, libelleDesLignes } from './releveDoublons'
-import { reconcileEnvelopes, nomAutreCliente, nomDansLibelle, setPayeursConnus, windowFor, CAISSE_APRES_DERNIERE_LIGNE } from './releveBmci'
+import { reconcileEnvelopes, nomAutreCliente, nomDansLibelle, setPayeursConnus, windowFor, CAISSE_APRES_DERNIERE_LIGNE, prefixeSupposition } from './releveBmci'
 import { loadPayeursConnus } from './conversations'
 export { ECART_MINI }
 
@@ -373,6 +373,49 @@ export async function saveUnmatchedReleveLines(lines) {
   if (error) throw error
 }
 
+// Lignes du relevé déjà en base sur une période, quel que soit leur état (libres, prises,
+// ignorées). Sert au contrôle d'un relevé : on compare le PDF à CE QUI EXISTE.
+export async function loadReleveLinesBetween(dMin, dMax) {
+  const { data, error } = await supabase
+    .from('caisse_releve_lignes')
+    .select('key, label, ligne_date, amount, used_by, ignored')
+    .gte('ligne_date', dMin).lte('ligne_date', dMax)
+    .limit(5000)
+  if (error) throw error
+  return data || []
+}
+
+// Toutes les lignes du relevé de ces montants, SANS limite de date. Sert de contre-preuve
+// au contrôle d'un relevé : dire « cette ligne manque » est une affirmation forte, et elle
+// se vérifie — si aucune ligne de ce montant n'existe nulle part dans la base, le doute
+// n'est plus permis.
+export async function loadReleveLinesByAmounts(montants) {
+  const valeurs = [...new Set(montants.flatMap(m => [Number(m), Math.round(Number(m))]))]
+  const out = []
+  for (let i = 0; i < valeurs.length; i += 100) {
+    const { data } = await supabase
+      .from('caisse_releve_lignes')
+      .select('label, ligne_date, amount, used_by, ignored')
+      .in('amount', valeurs.slice(i, i + 100)).limit(2000)
+    out.push(...(data || []))
+  }
+  return out
+}
+
+// Parmi ces clés, lesquelles sont DÉJÀ en base ? Sert au contrôle d'un réimport : « sur
+// les N lignes lues dans ce PDF, combien manquaient ? ». Sans ce compte, un réimport ne
+// dit rien — l'upsert ignore silencieusement les doublons, et Layla ne peut pas savoir si
+// une ligne manquait vraiment.
+export async function clesDejaEnBase(keys) {
+  const connues = new Set()
+  for (let i = 0; i < keys.length; i += 200) {
+    const { data } = await supabase.from('caisse_releve_lignes')
+      .select('key').in('key', keys.slice(i, i + 200))
+    for (const r of (data || [])) connues.add(r.key)
+  }
+  return connues
+}
+
 // Marque les lignes du relevé que le rapprochement AUTO vient d'attribuer : elles sortent
 // de « à lier » et rejoignent « déjà liés ». Sans ça, un ré-import de la même période les
 // remettait dans « à lier » alors qu'elles étaient déjà rapprochées.
@@ -545,7 +588,7 @@ export async function loadAllLinkedReleveLines() {
   if (ids.length) {
     const { data: envs } = await supabase
       .from('caisse_enveloppes')
-      .select('id, source, session_date, amount_cash, payment_method, destinataire:caisse_destinataires(name)')
+      .select('id, source, session_date, amount_cash, payment_method, virement_client, destinataire:caisse_destinataires(name)')
       .in('id', ids)
       // Tronquée, cette recherche ferait passer des lignes parfaitement liées pour des
       // orphelines à l'écran.
@@ -645,18 +688,60 @@ export async function attachReleveLines(env, lines) {
 // Une caisse marquée « ⚠️ moyen différent » (virement saisi en espèces, ou l'inverse) a sa
 // ligne dans l'AUTRE catégorie : ne chercher que dans la sienne revenait à ne jamais la
 // retrouver, et l'app affirmait à tort qu'une autre caisse l'avait prise.
-const AUTRE_MOYEN = { virement: 'cash', cash: 'virement' }
 export async function lignesPourConfirmer(env) {
-  const methode = env.payment_method || 'cash'
-  const autre = (env.note_proof || '').includes('moyen différent') ? AUTRE_MOYEN[methode] : null
-  const pools = await Promise.all([
-    loadFreeReleveLines(env.amount_cash, methode),
-    autre ? loadFreeReleveLines(env.amount_cash, autre) : Promise.resolve([]),
-  ])
-  const libres = pools.flat()
+  // On cherche dans TOUS les moyens, sans se fier au moyen de la caisse : la ligne
+  // mémorisée a été choisie par le calcul, on ne fait que la retrouver — et elle est
+  // reconnue sur sa DATE et son LIBELLÉ, pas sur son type. Chercher large ne peut donc
+  // pas rattacher une mauvaise ligne.
+  //
+  // On s'est fié un temps au « ⚠️ moyen différent » écrit sur la caisse. C'était fragile :
+  // les caisses calculées avant que ce marqueur existe ne le portent pas, et « Confirmer »
+  // leur répondait que la ligne n'était plus disponible — alors qu'elle était libre, juste
+  // rangée dans un autre moyen. Vécu : Charkaoui Lina, 1 800 dh, sur un versement espèces.
+  const pools = await Promise.all(
+    ['cash', 'cheque', 'virement'].map(m => loadFreeReleveLines(env.amount_cash, m)))
+  const vues = new Set()
+  const libres = pools.flat().filter(l => !vues.has(l.key) && vues.add(l.key))
   const miennes = (await loadEnvReleveLines(env.id))
     .filter(m => Math.abs(Number(m.amount) - Number(env.amount_cash)) < ECART_MINI)
   return [...libres, ...miennes.filter(m => !libres.some(l => l.key === m.key))]
+}
+
+// Pourquoi une ligne PROPOSÉE à une caisse n'est-elle plus choisissable ? « Pas encore
+// disponible (déjà prise, ou disparue) » laissait Layla sans suite : elle ne pouvait ni
+// savoir qui la retenait, ni qu'elle l'avait elle-même mise de côté. On va donc lire
+// l'état réel de chaque ligne mémorisée, au lieu de deviner.
+//
+// On cherche par DATE puis par libellé — pas par montant : sur un « 🔗 2 virements =
+// 1 ligne », la ligne vaut la somme de deux caisses et ne fait celui d'aucune.
+export async function etatDesLignesProposees(candidates) {
+  const dates = [...new Set((candidates || []).map(c => c.d).filter(Boolean))]
+  if (!dates.length) return []
+  const { data: lignes } = await supabase
+    .from('caisse_releve_lignes')
+    .select('key, label, ligne_date, amount, ignored, ignore_reason, used_by')
+    .in('ligne_date', dates)
+    .limit(2000)
+  const ids = [...new Set((lignes || []).map(l => l.used_by).filter(Boolean))]
+  let envById = {}
+  if (ids.length) {
+    const { data: envs } = await supabase.from('caisse_enveloppes')
+      .select('id, source, session_date, virement_client').in('id', ids).limit(2000)
+    envById = Object.fromEntries((envs || []).map(e => [e.id, e]))
+  }
+  const debut = t => (t || '').toUpperCase().replace(/\s+/g, ' ').trim().slice(0, 30)
+  return (candidates || []).map(c => {
+    const duJour = (lignes || []).filter(l => l.ligne_date === c.d)
+    const l = duJour.find(x => debut(x.label).startsWith(debut(c.l)) || debut(c.l).startsWith(debut(x.label)))
+    if (!l) return { ...c, etat: 'absente', texte: 'introuvable dans les relevés importés' }
+    if (l.used_by) {
+      const e = envById[l.used_by]
+      const qui = e ? `${e.virement_client || e.source || 'une caisse'} · ${e.session_date}` : 'une caisse supprimée'
+      return { ...c, etat: 'prise', texte: `déjà prise par ${qui}` }
+    }
+    if (l.ignored) return { ...c, etat: 'ignoree', texte: `mise de côté${l.ignore_reason ? ` (${l.ignore_reason})` : ''} — réactive-la dans « Reçus banque non liés » → « 🚫 Ignorés »` }
+    return { ...c, etat: 'libre', texte: 'libre — relance le rapprochement' }
+  })
 }
 
 export async function confirmReleveLine(env, choice) {
@@ -765,7 +850,7 @@ export async function relancerRapprochement({ annulerFaux = true } = {}) {
     } else if (r.status === 'a_confirmer' && r.candidates?.length) {
       await setEnveloppeReleve(r.env.id, {
         status: 'a_confirmer',
-        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`)),
+        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`), prefixeSupposition(r)),
         candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
       })
       aConfirmer++
@@ -949,7 +1034,7 @@ export async function refaireMois(year, month, { simulation = true } = {}) {
     } else if (r.status === 'a_confirmer' && r.candidates?.length) {
       await setEnveloppeReleve(r.env.id, {
         status: 'a_confirmer',
-        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`)),
+        libelle: libelleDesLignes(r.candidates.map(c => `${c.dateIso} · ${c.label}`), prefixeSupposition(r)),
         candidates: JSON.stringify(r.candidates.map(c => ({ d: c.dateIso, l: (c.label || '').slice(0, 90) }))),
       })
     }
