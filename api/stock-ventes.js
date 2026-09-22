@@ -87,16 +87,25 @@ export default async function handler(req, res) {
       // d'écart sur un horaire de vente, et la lecture ne veut plus rien dire.
       // ⚠️ PAS le français ici : `fr-FR` rend « 10 h », et on se retrouvait avec
       // « 10 hh:7 » à l'écran. `en-GB` rend « 10 », tout court.
-      const h = d ? String(new Date(d.replace(' ', 'T') + 'Z')
-        .toLocaleString('en-GB', { timeZone: 'Africa/Casablanca', hour: '2-digit', hour12: false }))
-        .replace(/\D/g, '').padStart(2, '0')
+      // ⚠️ `en-GB` et pas `fr-FR` : le français rend « 10 h 07 », avec un « h »
+      // au milieu. Ici on veut « 10:07 », tout court.
+      const h = d ? new Date(d.replace(' ', 'T') + 'Z').toLocaleTimeString('en-GB',
+        { timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit', hour12: false })
         : null
-      const e = par[k] || (par[k] = { produit: nom, total: 0, heures: {} })
+      const e = par[k] || (par[k] = { produit: nom, total: 0, moments: [] })
       const q = Number(l.qty) || 0
       e.total += q
-      if (h) e.heures[h] = Math.round(((e.heures[h] || 0) + q) * 100) / 100
+      // ⚠️ L'HEURE EXACTE, PAS LA TRANCHE (Layla, 2026-09-22 : « mets-moi
+      // l'heure exacte d'achat »). « 10h : 7 » disait combien, jamais quand —
+      // or c'est le QUAND qui permet de rapprocher une vente d'une découpe,
+      // d'un passage, d'un soupçon. Sept ventes à 10 h 03 et sept ventes
+      // étalées sur l'heure ne racontent pas la même histoire.
+      if (h) e.moments.push({ h, qty: q })
     }
-    for (const k of Object.keys(par)) par[k].total = Math.round(par[k].total * 100) / 100
+    for (const k of Object.keys(par)) {
+      par[k].total = Math.round(par[k].total * 100) / 100
+      par[k].moments.sort((a, b) => a.h.localeCompare(b.h))
+    }
 
     return res.status(200).json({ jour, ventes: par })
   } catch (e) {

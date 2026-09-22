@@ -703,13 +703,29 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                             rendered.push(
                               <tr key={`${rowKey}-detail`} className="border-b border-line bg-amber-50/20">
                                 <td colSpan={8} className="px-3 py-2.5">
-                                  {vente && Object.keys(vente.heures).length > 0 ? (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {Object.entries(vente.heures).sort().map(([h, q]) => (
-                                        <span key={h} className="inline-block bg-white border border-line rounded-lg
-                                                                 px-2 py-0.5 text-[11.5px] tabular-nums">
-                                          {h}h <b className="text-bordeaux">{Math.round(q)}</b>
-                                        </span>
+                                  {vente && (vente.moments || []).length > 0 ? (
+                                    /* ⚠️ L'HEURE EXACTE (Layla, 2026-09-22 : « mets-moi
+                                       l'heure exacte d'achat »). « 10h : 7 » disait
+                                       combien, jamais quand — or c'est le QUAND qui
+                                       permet de rapprocher une vente d'une découpe ou
+                                       d'un passage. La quantité ne s'écrit que si le
+                                       ticket en portait plusieurs. */
+                                    /* ⚠️ EN LISTE VERTICALE (Layla, 2026-09-22). En
+                                       pastilles qui s'enroulent, l'œil saute d'une
+                                       ligne à l'autre et on perd le fil de la
+                                       journée. L'une sous l'autre, on lit une
+                                       chronologie — et les paquets vendus à la même
+                                       minute sautent aux yeux. */
+                                    <div className="inline-block min-w-[124px] bg-white border border-line rounded-lg overflow-hidden">
+                                      {vente.moments.map((m, i) => (
+                                        <div key={`${m.h}-${i}`}
+                                          className="flex items-baseline gap-3 px-2.5 py-1 text-[12px] tabular-nums
+                                                     border-b border-line/60 last:border-0">
+                                          <span className="text-ink-soft">{m.h}</span>
+                                          {Math.round(m.qty) !== 1 && (
+                                            <b className="ml-auto text-bordeaux">×{Math.round(m.qty)}</b>
+                                          )}
+                                        </div>
                                       ))}
                                     </div>
                                   ) : (

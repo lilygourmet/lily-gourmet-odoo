@@ -913,7 +913,7 @@ export function canSeeStock(user) {
 // Puis : « une colonne informative de vendu, avec un détail si on clique, des
 // horaires vendus de cet article ».
 //
-// Rendu : { 'biscuit cannelle': { produit, total, heures: { '08': 4, … } } },
+// Rendu : { 'biscuit cannelle': { produit, total, moments: [{h:'08:12',qty:1}…] } },
 // la clé étant le nom nettoyé — c'est par le NOM qu'on relie caisse et
 // comptage, comme partout ailleurs dans l'app.
 // ============================================================
