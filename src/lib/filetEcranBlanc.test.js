@@ -17,13 +17,20 @@ import fs from 'fs'
 /** Le script de secours, extrait de la vraie page. */
 const script = (() => {
   const html = fs.readFileSync('index.html', 'utf8')
-  const m = html.match(/<script>\s*(setTimeout\(function[\s\S]*?)<\/script>/)
+  const m = html.match(/<script>\s*(\/\/ Le secours[\s\S]*?)<\/script>/)
   if (!m) throw new Error('le filet a disparu d’index.html')
   return m[1]
 })()
 
+// ⚠️ Un test qui casse `sessionStorage` doit le rendre : sans ça, tous les
+// suivants héritent d'un navigateur qui refuse sa mémoire.
+const vraiStockage = window.sessionStorage
+
 let remplace
 beforeEach(() => {
+  Object.defineProperty(window, 'sessionStorage', {
+    configurable: true, value: vraiStockage,
+  })
   vi.useFakeTimers()
   remplace = vi.fn()
   delete window.location
@@ -71,14 +78,78 @@ describe('le filet', () => {
     expect(remplace).toHaveBeenCalledTimes(1)
   })
 
-  it('sans mémoire de session, il s’abstient plutôt que de boucler', () => {
+  /**
+   * ⚠️ CE TEST DISAIT L'INVERSE, ET C'ÉTAIT LUI LE TROU (Layla, 2026-09-22 :
+   * « page blanche sur Safari, ça marche sur Chrome »).
+   *
+   * « Sans mémoire de session, il s'abstient » : or Safari en navigation
+   * privée REFUSE `sessionStorage`. Le filet ne servait donc à rien
+   * exactement là où il servait le plus. Le garde-fou anti-boucle vit
+   * maintenant dans l'ADRESSE (`?lg=` est son propre horodatage) : il ne
+   * demande rien au navigateur.
+   */
+  it('marche même quand le navigateur refuse sa mémoire (Safari privé)', () => {
     const vrai = window.sessionStorage
     Object.defineProperty(window, 'sessionStorage', {
       configurable: true,
       get() { throw new Error('bloqué par le navigateur') },
     })
     poser()
-    expect(remplace).not.toHaveBeenCalled()
+    expect(remplace).toHaveBeenCalledTimes(1)
     Object.defineProperty(window, 'sessionStorage', { configurable: true, value: vrai })
+  })
+
+  it('et il ne boucle pas non plus sans mémoire : l’adresse le retient', () => {
+    Object.defineProperty(window, 'sessionStorage', {
+      configurable: true,
+      get() { throw new Error('bloqué par le navigateur') },
+    })
+    // On revient AVEC le `?lg=` qu'il vient de poser : il doit se taire.
+    window.location = {
+      href: `https://app.test/?article=X&lg=${Date.now()}`, replace: remplace,
+    }
+    poser()
+    expect(remplace).not.toHaveBeenCalled()
+  })
+})
+
+// ⚠️ DOUZE SECONDES DEVANT UN ÉCRAN BLANC, C'EST ONZE DE TROP. Quand un
+// fichier répond 404, le navigateur le dit TOUT DE SUITE : on n'a aucune
+// raison d'attendre le minuteur.
+describe('la réaction immédiate au fichier manquant', () => {
+  const echouer = (tag = 'SCRIPT') => {
+    const ev = new Event('error')
+    Object.defineProperty(ev, 'target', { value: { tagName: tag } })
+    window.dispatchEvent(ev)
+  }
+
+  it('un script qui ne se charge pas recharge aussitôt', () => {
+    // eslint-disable-next-line no-eval
+    eval(script)
+    echouer('SCRIPT')
+    expect(remplace).toHaveBeenCalledTimes(1)
+  })
+
+  it('une feuille de style manquante aussi', () => {
+    // eslint-disable-next-line no-eval
+    eval(script)
+    echouer('LINK')
+    expect(remplace).toHaveBeenCalledTimes(1)
+  })
+
+  // Une image cassée n'est pas une app cassée.
+  it('mais pas une image', () => {
+    // eslint-disable-next-line no-eval
+    eval(script)
+    echouer('IMG')
+    expect(remplace).not.toHaveBeenCalled()
+  })
+
+  it('et deux fichiers manquants ne font qu’un rechargement', () => {
+    // eslint-disable-next-line no-eval
+    eval(script)
+    echouer('SCRIPT')
+    echouer('SCRIPT')
+    expect(remplace).toHaveBeenCalledTimes(1)
   })
 })

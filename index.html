@@ -61,17 +61,47 @@
          voyage dedans, et le perdre renverrait le pâtissier à l'accueil.
          ============================================================ -->
     <script>
+      // Le secours : on recharge avec une adresse neuve, au plus une fois par
+      // minute. Une app vraiment cassée ne doit pas tourner en boucle — c'est
+      // ce qui était arrivé le 09/09, « le site saute, se remet et saute ».
+      //
+      // ⚠️ LE GARDE-FOU EST DANS L'ADRESSE, PAS DANS LA MÉMOIRE (Layla,
+      // 2026-09-22 : « page blanche sur Safari, ça marche sur Chrome »). Safari
+      // en navigation privée REFUSE `sessionStorage` — le `catch` renvoyait
+      // alors sans rien faire, et le filet ne servait à rien là où il servait
+      // le plus. Le `?lg=` qu'on pose est lui-même l'horodatage : il survit au
+      // rechargement, et il ne demande rien à personne.
+      function lgSecours () {
+        var u = new URL(window.location.href)
+        var deja = Number(u.searchParams.get('lg') || 0)
+        if (deja && Date.now() - deja < 60000) return
+        try {
+          var d = Number(sessionStorage.getItem('lg:secours') || 0)
+          if (Date.now() - d < 60000) return
+          sessionStorage.setItem('lg:secours', String(Date.now()))
+        } catch (e) { /* navigation privée : l'adresse suffit */ }
+        u.searchParams.set('lg', String(Date.now()))
+        window.location.replace(u.toString())
+      }
+
+      // ⚠️ TOUT DE SUITE, PAS DANS DOUZE SECONDES. Quand un fichier de l'app
+      // répond 404 — la page gardée en cache réclame un fichier déjà remplacé
+      // par un déploiement — le navigateur le DIT immédiatement. On n'a aucune
+      // raison de laisser quelqu'un devant un écran blanc le temps d'un
+      // minuteur. L'écoute est en phase de capture : les erreurs de
+      // chargement ne remontent pas autrement.
+      window.addEventListener('error', function (e) {
+        var t = e && e.target
+        if (!t || (t.tagName !== 'SCRIPT' && t.tagName !== 'LINK')) return
+        lgSecours()
+      }, true)
+
+      // Et le minuteur reste, en dernier recours : un fichier qui arrive mais
+      // ne démarre pas ne déclenche aucune erreur de chargement.
       setTimeout(function () {
         var r = document.getElementById('root')
         if (r && r.childElementCount > 0) return
-        try {
-          var dernier = Number(sessionStorage.getItem('lg:secours') || 0)
-          if (Date.now() - dernier < 60000) return
-          sessionStorage.setItem('lg:secours', String(Date.now()))
-        } catch (e) { return }
-        var u = new URL(window.location.href)
-        u.searchParams.set('lg', String(Date.now()))
-        window.location.replace(u.toString())
+        lgSecours()
       }, 12000)
     </script>
   </body>
