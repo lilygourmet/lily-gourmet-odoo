@@ -64,10 +64,19 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       // toute la base, sans limite de date. Aucune ligne de ce montant nulle part = elle
       // manque vraiment. Sinon on montre ce qui existe, et Layla juge sur pièce.
       const memeMontant = await loadReleveLinesByAmounts(manquantes.map(m => m.amount))
-      const avecPreuve = manquantes.map(m => ({
-        ...m,
-        ailleurs: memeMontant.filter(x => Math.abs(Number(x.amount) - Number(m.amount)) < 0.5),
-      }))
+      // Ce qui compte n'est pas « combien de lignes de 300 dh existent » — 300 dh est un
+      // montant courant, en citer 34 n'apprend rien. C'est : en existe-t-il une À UNE DATE
+      // PROCHE ? Si oui, on montre son libellé, et Layla compare les noms elle-même.
+      const jours = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000)
+      const avecPreuve = manquantes.map(m => {
+        const duMontant = memeMontant.filter(x => Math.abs(Number(x.amount) - Number(m.amount)) < 0.5)
+        return {
+          ...m,
+          proches: duMontant.filter(x => jours(x.ligne_date, m.ligne_date) <= 10)
+            .sort((x, y) => jours(x.ligne_date, m.ligne_date) - jours(y.ligne_date, m.ligne_date)),
+          loin: duMontant.length,
+        }
+      })
       setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes: avecPreuve })
       setEtape('resultat')
     } catch (e) { setErreur(e?.message || String(e)); setEtape('pick') }
@@ -129,11 +138,19 @@ export default function VerifierReleveModal({ onClose, onDone }) {
                     <div key={l.key} style={{ fontSize: 12, color: '#4a3a30', padding: '5px 0', borderBottom: '1px solid #F4F0EA' }}>
                       <b>{fmtMoney(l.amount)}</b> · {l.ligne_date}
                       <div style={{ fontSize: 11, color: '#8a7a70' }}>{l.label}</div>
-                      <div style={{ fontSize: 11, color: (l.ailleurs || []).length ? '#a9620a' : '#0a7d3d' }}>
-                        {(l.ailleurs || []).length
-                          ? `⚠️ ${l.ailleurs.length} ligne(s) de ce montant existent déjà (${l.ailleurs.slice(0, 3).map(x => x.ligne_date).join(', ')}) — regarde si c'est la même`
-                          : `✓ aucune ligne de ${fmtMoney(l.amount)} dans toute l'app — elle manque vraiment`}
-                      </div>
+                      {(l.proches || []).length ? (
+                        <div style={{ fontSize: 11, color: '#a9620a', marginTop: 2 }}>
+                          ⚠️ même montant à une date proche — est-ce la même ?
+                          {l.proches.slice(0, 3).map((x, i) => (
+                            <div key={i} style={{ color: '#8a7a70' }}>{x.ligne_date} · {(x.label || '').slice(0, 60)}</div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11, color: '#0a7d3d', marginTop: 2 }}>
+                          ✓ aucune ligne de {fmtMoney(l.amount)} autour de cette date — elle manque vraiment
+                          {l.loin ? <span style={{ color: '#8a7a70' }}> ({l.loin} à d'autres périodes, sans rapport)</span> : null}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
