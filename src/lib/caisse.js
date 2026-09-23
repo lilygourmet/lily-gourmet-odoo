@@ -319,10 +319,16 @@ export async function loadEnveloppesForSuivi({ type, month, year, statusFilter =
   // Une caisse « à confirmer » RESTE en attente : l'import lui a attaché le PDF du relevé
   // comme preuve, mais elle attend toujours que Layla désigne la bonne ligne. Sans ça elle
   // passait pour « versée » et disparaissait de la liste — du travail invisible.
+  // Une caisse RAPPROCHÉE est finie, qu'elle porte une preuve ou non. Elle n'en porte
+  // justement pas quand sa ligne vient de « 🔎 Vérifier un relevé » : ce contrôle relit le
+  // PDF sans le téléverser, donc la ligne n'a pas d'URL de relevé à transmettre. Définir
+  // « En attente » par l'absence de preuve laissait alors une caisse verte dans la liste
+  // des choses à faire. Vécu : Zoubida El bousserghini, 1 000 dh du 4 juin.
   const aConfirmer = e => e.releve_status === 'a_confirmer'
+  const rapprochee = e => e.releve_status === 'trouve'
   if (statusFilter === 'ignored')   return list.filter(e =>  e.releve_ignore)
-  if (statusFilter === 'pending')   return list.filter(e => (!e.proof_url || aConfirmer(e)) && !e.releve_ignore)
-  if (statusFilter === 'done')      return list.filter(e =>  e.proof_url && !aConfirmer(e))
+  if (statusFilter === 'pending')   return list.filter(e => !rapprochee(e) && (!e.proof_url || aConfirmer(e)) && !e.releve_ignore)
+  if (statusFilter === 'done')      return list.filter(e =>  rapprochee(e) || (e.proof_url && !aConfirmer(e)))
   return list
 }
 
@@ -622,7 +628,24 @@ export async function loadFreeReleveLines(amount, paymentMethod = 'cash') {
   if (amount != null) q = q.gte('amount', a - ECART_MINI).lte('amount', a + ECART_MINI)
   const { data, error } = await q.order('ligne_date', { ascending: false }).limit(1000)
   if (error) throw error
-  return data || []
+  // Les deux documents de la banque écrivent la MÊME opération, et l'extrait tronque le
+  // nom : « VIRT RECU MLLE AATIYAD LAAMOUR » et « … LAAMOURI », 500 dh le 2 juin, sont un
+  // seul virement. « Reçus banque non liés » les fusionne déjà ; cette liste-ci — celle
+  // des fenêtres « Suggérer », « Chercher » et « Grouper » — ne le faisait pas, et
+  // proposait deux fois le même encaissement.
+  // On ne fusionne QUE deux documents différents : deux versements identiques dans le
+  // MÊME relevé sont deux vrais encaissements, et les perdre coûterait plus cher.
+  // « Documents différents » veut dire : on SAIT qu'ils viennent de deux documents. Une
+  // ligne récupérée par « 🔎 Vérifier un relevé » n'a pas d'URL — ce contrôle relit le PDF
+  // sans le téléverser. Exiger deux URL différentes laissait donc passer les jumelles dès
+  // qu'une des deux venait de là.
+  const memeDocConnu = (x, y) => !!x.releve_url && !!y.releve_url && x.releve_url === y.releve_url
+  const gardees = []
+  for (const l of (data || [])) {
+    if (gardees.some(g => !memeDocConnu(g, l) && memeOperation(g, l))) continue
+    gardees.push(l)
+  }
+  return gardees
 }
 
 // Lignes du relevé déjà rattachées à UNE enveloppe (une remise splittée en compte plusieurs).
