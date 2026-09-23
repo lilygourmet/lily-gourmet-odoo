@@ -280,6 +280,30 @@ describe('arriver par le scan', () => {
   })
 })
 
+// ============================================================
+// LE FIGÉ ARRIVE TOUT SEUL SUR L'ÉCRAN DES AUTRES.
+//
+// « Quand j'imprime mes articles à faire, ça fige, ça dit que c'est déjà
+// imprimé. Ça doit le faire pour les autres écrans aussi, pas que le mien »
+// (Layla, 2026-09-23). Les papiers vivaient bien sur le serveur, mais un écran
+// déjà ouvert ne les relisait qu'au chargement.
+// ============================================================
+describe('l’écran d’un autre se met à jour tout seul', () => {
+  it('le papier imprimé ailleurs débloque la fiche sans recharger', async () => {
+    PRODUITS_IMPRIMES = []                       // personne n'a encore imprimé
+    const { poserLeScan } = await import('../lib/scanEntrant')
+    poserLeScan({ chemin: ['SM. sirop Imbibage production KG'] })
+    render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+    await waitFor(() => expect(screen.getByText(/pas de papier pour ça/)).toBeTruthy())
+
+    // Layla imprime depuis SON téléphone : le serveur a la feuille.
+    PRODUITS_IMPRIMES = ['SM. sirop Imbibage production KG']
+    // Le pâtissier revient sur son écran — il n'a rien rechargé.
+    fireEvent.focus(window)
+    await waitFor(() => expect(screen.queryByText(/pas de papier pour ça/)).toBeNull())
+  })
+})
+
 describe('le chemin complet', () => {
   it('la fiche s’ouvre sur la fournée, écrite en GRAMMES', async () => {
     await ouvrirLaFiche()

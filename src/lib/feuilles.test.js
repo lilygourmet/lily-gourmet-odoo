@@ -10,7 +10,7 @@
 // ============================================================
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe, resteDeLaCascade, ingredientsSortis, quantitesImposees, sansPapier } from './feuilles'
+import { etatFeuille, aDeclarer, aDonner, aReprendre, enRetour, depuis, lienFeuille, nouvelId, cheminDe, resteDeLaCascade, ingredientsSortis, quantitesImposees, sansPapier, fusionnerFeuilles } from './feuilles'
 
 const imprimee = { id: 'a', imprime_le: '2026-09-19T08:00:00Z' }
 const donnee = { ...imprimee, id: 'b', donne_le: '2026-09-19T09:00:00Z' }
@@ -366,5 +366,46 @@ describe('pas de papier, pas de déclaration', () => {
   it('le soir du 21/09, la deuxième mousse aurait été bloquée', () => {
     const feuilles = [mousse({ ...declaree, id: '13h02' })]
     expect(sansPapier(feuilles, 'SM. Mousse Gianduja')).toBe(true)
+  })
+})
+
+// ============================================================
+// RELIRE LES PAPIERS SANS PERDRE CE QU'ON VIENT D'IMPRIMER.
+//
+// « Ça doit le faire pour les autres écrans aussi, pas que le mien » (Layla,
+// 2026-09-23) : l'écran relit maintenant tout seul, toutes les 45 s. Sans
+// précaution, cette relecture écraserait la feuille posée à l'impression avant
+// que le serveur l'ait enregistrée — le bug « j'ai imprimé et ça montre
+// toujours qu'il n'y a pas de papier ».
+// ============================================================
+describe('fusionnerFeuilles', () => {
+  const T = Date.parse('2026-09-23T10:00:00Z')
+  const fraiche = { id: 'neuve', produit: 'SM. Mousse Gianduja',
+    imprime_le: '2026-09-23T09:59:30Z' }
+  const vieille = { ...fraiche, id: 'vieille', imprime_le: '2026-09-23T09:50:00Z' }
+  const duServeur = { id: 'serveur', produit: 'SM. Creme Citron',
+    imprime_le: '2026-09-23T09:00:00Z' }
+
+  it('garde la feuille qu’on vient d’imprimer, absente du serveur', () => {
+    const r = fusionnerFeuilles([fraiche], [duServeur], T)
+    expect(r.map(f => f.id).sort()).toEqual(['neuve', 'serveur'])
+  })
+
+  it('le serveur fait foi dès qu’il la connaît (pas de doublon)', () => {
+    const r = fusionnerFeuilles([fraiche], [{ ...fraiche, donne_le: 'x' }], T)
+    expect(r).toHaveLength(1)
+    expect(r[0].donne_le).toBe('x')
+  })
+
+  it('lâche une feuille locale de plus de deux minutes — elle n’a pas pris', () => {
+    expect(fusionnerFeuilles([vieille], [duServeur], T).map(f => f.id)).toEqual(['serveur'])
+  })
+
+  it('une feuille annulée sur le serveur ne revient pas par la porte locale', () => {
+    expect(fusionnerFeuilles([duServeur], [], T)).toEqual([])
+  })
+
+  it('premier chargement : rien en local, on prend le serveur tel quel', () => {
+    expect(fusionnerFeuilles(null, [duServeur], T)).toEqual([duServeur])
   })
 })

@@ -32,7 +32,8 @@ import { setMiseEnForme } from '../lib/miseEnForme'
 import { dernierEcran, garderEcran } from '../lib/fabrication'
 import { propre, qte } from '../lib/ecranSimple'
 import { nouvelId, poserFeuilles, eteindreFeuille, feuillesDuJour, ingredientsSortis,
-  quantitesImposees, attendLeDon, feuilleOuverte, complementsAImprimer, sansPapier } from '../lib/feuilles'
+  quantitesImposees, attendLeDon, feuilleOuverte, complementsAImprimer, sansPapier,
+  fusionnerFeuilles } from '../lib/feuilles'
 import { lireLeScan, oublierLeScan } from '../lib/scanEntrant'
 import { confirmDialog } from '../lib/confirmDialog'
 import { todayISO } from '../lib/dates'
@@ -355,13 +356,33 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // arrivées — « ça bouge encore » (Layla, 2026-09-20). On attend donc de
   // savoir avant de montrer un nombre.
   const [feuillesJour, setFeuillesJour] = useState(null)
+  // ⚠️ LE FIGÉ DOIT ARRIVER SUR LE TÉLÉPHONE DES AUTRES, TOUT SEUL (Layla,
+  // 2026-09-23 : « ça doit le faire pour les autres écrans aussi, pas que le
+  // mien »). Les papiers vivent bien sur le serveur, donc tout le monde les
+  // voit — mais un écran déjà ouvert ne relisait qu'au chargement : le
+  // pâtissier pouvait taper sa quantité, et réimprimer, pendant que Layla
+  // venait de figer la sienne.
+  // On relit donc au retour sur l'écran (onglet réaffiché, appli reprise) et,
+  // tant qu'il reste devant, toutes les 45 secondes. C'est une lecture
+  // Supabase, pas un appel à Odoo : ça ne coûte rien.
   useEffect(() => {
     let vivant = true
-    feuillesDuJour()
-      .then(l => { if (vivant) setFeuillesJour(l) })
-      // Réseau coupé : on n'attend pas indéfiniment, l'écran reprend la main.
-      .catch(() => { if (vivant) setFeuillesJour([]) })
-    return () => { vivant = false }
+    const lire = () => feuillesDuJour()
+      .then(l => { if (vivant) setFeuillesJour(avant => fusionnerFeuilles(avant, l)) })
+      // Réseau coupé : on n'attend pas indéfiniment, l'écran reprend la main —
+      // et on ne jette pas ce qu'on savait déjà.
+      .catch(() => { if (vivant) setFeuillesJour(avant => avant || []) })
+    lire()
+    const relire = () => { if (!document.hidden) lire() }
+    const rythme = setInterval(relire, 45000)
+    document.addEventListener('visibilitychange', relire)
+    window.addEventListener('focus', relire)
+    return () => {
+      vivant = false
+      clearInterval(rythme)
+      document.removeEventListener('visibilitychange', relire)
+      window.removeEventListener('focus', relire)
+    }
   }, [tour])
 
   useEffect(() => {

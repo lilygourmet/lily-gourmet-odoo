@@ -132,6 +132,31 @@ export async function feuillesDuJour({ demandes = false } = {}) {
   return j.feuilles || []
 }
 
+/**
+ * RELIRE LES PAPIERS SANS PERDRE CEUX QU'ON VIENT D'IMPRIMER.
+ *
+ * L'écran relit les feuilles régulièrement pour que le figé arrive TOUT SEUL
+ * sur le téléphone des autres (Layla, 2026-09-23 : « ça doit le faire pour les
+ * autres écrans aussi, pas que le mien »). Mais une relecture brutale écrase
+ * les lignes posées à l'impression avant que le serveur les ait enregistrées —
+ * c'est exactement le bug de « j'ai imprimé et ça montre toujours : il n'y a
+ * pas de papier pour ça ».
+ *
+ * Le serveur fait donc foi, SAUF pour une feuille qu'il ne connaît pas encore
+ * et qui vient d'être imprimée. Passé deux minutes, on la lâche : si le serveur
+ * ne l'a toujours pas, c'est que l'enregistrement a échoué, et la garder
+ * ferait croire à un papier qui n'existe pas.
+ */
+export function fusionnerFeuilles(locales, serveur, maintenant = Date.now()) {
+  const connues = new Set((serveur || []).map(f => f.id))
+  const toute_fraiche = f =>
+    maintenant - new Date(f.imprime_le || 0).getTime() < 120000
+  return [
+    ...(serveur || []),
+    ...(locales || []).filter(f => !connues.has(f.id) && toute_fraiche(f)),
+  ]
+}
+
 /** Une feuille précise — ce que le QR ouvre. */
 export async function lireFeuille(id) {
   const r = await fetch('/api/fab-annexe?feuille=' + encodeURIComponent(id))
