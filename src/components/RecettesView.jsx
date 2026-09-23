@@ -140,10 +140,10 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
 
     return (
       <div className="min-h-screen bg-cream">
-        <div className="print:hidden"><AppHeader {...nav} /></div>
+        <AppHeader {...nav} />
         <div className="max-w-[620px] mx-auto px-4 py-4">
           <button onClick={() => (chemin.length > 1 ? setChemin(chemin.slice(0, -1)) : fermer())}
-            className="print:hidden text-[13px] text-bordeaux font-bold mb-3">
+            className="text-[13px] text-bordeaux font-bold mb-3">
             ← {chemin.length > 1 ? propre(chemin[chemin.length - 2]) : 'Toutes les recettes'}
           </button>
 
@@ -175,7 +175,7 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
                 <p className="text-[12px] text-ink-mute mt-1.5">
                   La recette d’Odoo est pour {qte(parOdoo, noeud.unite)} ·{' '}
                   <button onClick={() => poser(parOdoo)}
-                    className="print:hidden text-bordeaux font-bold underline">y revenir</button>
+                    className="text-bordeaux font-bold underline">y revenir</button>
                 </p>
               )}
 
@@ -211,12 +211,6 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
                     setClavier(null)
                   }} />
               )}
-
-              <button onClick={() => window.print()}
-                className="print:hidden w-full mt-4 rounded-2xl bg-bordeaux text-cream py-3
-                           text-[15px] font-extrabold active:scale-95 transition">
-                🖨 Imprimer cette recette
-              </button>
             </>
           )}
         </div>

@@ -136,6 +136,6 @@ describe('la fiche', () => {
   it('n’offre AUCUN moyen de déclarer ou de fabriquer', async () => {
     await ouvrirLaTarte()
     expect(document.body.textContent)
-      .not.toMatch(/C'est fait|Il en est sorti|Imprimer la cascade/)
+      .not.toMatch(/C'est fait|Il en est sorti|Imprimer/)
   })
 })
