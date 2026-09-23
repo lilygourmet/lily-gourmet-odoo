@@ -11,6 +11,27 @@ function DelayedFallback() {
   return <div style={{ padding: 30, textAlign: 'center', color: '#8a7a70' }}>Chargement…</div>
 }
 
+/**
+ * « Le morceau de code n'a pas pu être téléchargé » — presque toujours une page
+ * restée ouverte pendant un déploiement : le fichier qu'elle réclame a été
+ * renommé et n'existe plus.
+ *
+ * ⚠️ CHAQUE NAVIGATEUR LE DIT AUTREMENT, et n'en reconnaître qu'un revient à
+ * ne pas avoir de filet sur les autres. Safari (donc tout l'iPhone et l'iPad)
+ * dit « Importing a module script failed. » — cette phrase-là n'était pas dans
+ * la liste, alors le rechargement automatique ne partait jamais sur téléphone
+ * et Layla tombait sur « Chargement impossible » (2026-09-23).
+ *   Chrome / Edge : Failed to fetch dynamically imported module: …
+ *   Safari        : Importing a module script failed.
+ *   Firefox       : error loading dynamically imported module: …
+ *   Vite          : Unable to preload CSS for …
+ *   webpack       : Loading chunk 42 failed
+ */
+export function estPanneDeMorceau(message) {
+  return /dynamically imported module|module script failed|Loading chunk|Failed to fetch|error loading|Unable to preload/i
+    .test(String(message || ''))
+}
+
 // Entoure les écrans chargés à la demande (lazy).
 // - Affiche "Chargement…" pendant le téléchargement du morceau.
 // - Si le morceau échoue (souvent une version périmée après un déploiement),
@@ -30,8 +51,7 @@ export default class LazyBoundary extends Component {
 
   componentDidCatch(error) {
     const msg = String(error?.message || '')
-    const isChunkError = /dynamically imported module|Loading chunk|Failed to fetch|error loading/i.test(msg)
-    if (isChunkError) {
+    if (estPanneDeMorceau(msg)) {
       // Même garde et même minute que autoUpdate.js : deux filets qui se
       // déclenchent sur la même panne ne doivent pas recharger deux fois, et
       // 10 secondes suffisaient à peine à ouvrir un écran — d'où la tablette
