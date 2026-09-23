@@ -74,11 +74,6 @@ describe('la liste', () => {
     render(<RecettesView user={{ id: 'u1' }} />)
     expect(await screen.findByText('Tarte citron 23 cm')).toBeTruthy()
   })
-
-  it('dit en toutes lettres que rien n’est enregistré', async () => {
-    render(<RecettesView user={{ id: 'u1' }} />)
-    expect(await screen.findByText(/Pour regarder seulement/)).toBeTruthy()
-  })
 })
 
 describe('la fiche', () => {

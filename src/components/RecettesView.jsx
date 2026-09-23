@@ -264,8 +264,7 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
     <div className="min-h-screen bg-cream">
       <AppHeader {...nav} />
       <div className="max-w-[620px] mx-auto px-4 py-4">
-        <h1 className="font-fraunces italic text-[24px] text-ink">Recettes</h1>
-        <Bandeau />
+        <h1 className="font-fraunces italic text-[24px] text-ink mb-3">Recettes</h1>
 
         {erreur && (
           <p className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-2.5 rounded-xl
@@ -301,20 +300,5 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
         ))}
       </div>
     </div>
-  )
-}
-
-/**
- * ⚠️ IL DOIT ÊTRE IMPOSSIBLE DE CROIRE QU'ON A CHANGÉ LA RECETTE. C'est le
- * seul vrai risque de cet écran : deux écrans qui se ressemblent, un seul qui
- * engage la production.
- */
-function Bandeau() {
-  return (
-    <p className="bg-gold/15 border border-gold rounded-xl px-3 py-2 my-3 text-[12.5px] text-ink-soft">
-      <b className="text-ink">Pour regarder seulement.</b> Change la quantité d’un
-      ingrédient et toute la recette se remet à cette échelle — Odoo n’est pas
-      touché, et l’atelier continue avec la vraie recette.
-    </p>
   )
 }
