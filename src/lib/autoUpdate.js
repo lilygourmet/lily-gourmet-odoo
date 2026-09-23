@@ -7,8 +7,19 @@
 // Principe : on regarde le nom du bundle JS chargé (Vite y met un hash unique à
 // chaque déploiement). De temps en temps (et au retour sur l'app), on re-télécharge
 // la page d'accueil SANS cache et on compare. Si le hash a changé → nouvelle version
-// déployée → on PRÉVIENT (bannière « cliquer pour mettre à jour »). On ne recharge
-// JAMAIS tout seul : c'est l'utilisateur qui clique quand il veut.
+// déployée.
+//
+// ⚠️ ON RECHARGE MAINTENANT, TOUT SEUL (Layla, 2026-09-23 : « recharge toutes les
+// pages maintenant de tout le monde »). La bannière ne suffisait pas : le 23/09,
+// « À finir » a rejoué un bug corrigé la veille parce que l'écran tournait encore
+// sur l'ancien code. Du vieux code qui parle à Odoo, c'est une faute qu'on ne voit
+// pas passer.
+//
+// DEUX GARDE-FOUS, et ils comptent :
+//  • on ne coupe JAMAIS quelqu'un en train de taper (un champ au doigt = on
+//    attend, et la bannière prend le relais) ;
+//  • on ne recharge qu'UNE FOIS par version. Si après ça le navigateur ressert
+//    quand même l'ancien fichier, on repasse à la bannière — jamais une boucle.
 // ============================================================
 
 // Nom du bundle JS actuellement chargé (ex: /assets/main-Ab12Cd.js)
@@ -31,6 +42,31 @@ const MINE = loadedBundle()
 let busy = false
 let notified = false   // une fois la bannière prévenue, inutile de re-signaler
 
+// La version pour laquelle on a DÉJÀ tenté un rechargement, gardée le temps de
+// l'onglet. Sans mémoire (navigation privée), on s'en passe : on préviendra.
+const DEJA = 'lg:maj-rechargee'
+const lire = k => { try { return sessionStorage.getItem(k) } catch { return null } }
+const ecrire = (k, v) => { try { sessionStorage.setItem(k, v) } catch { /* tant pis */ } }
+
+/** Quelqu'un est-il en train d'écrire ? On ne lui arrache pas son champ. */
+function enTrainDeTaper() {
+  const el = document.activeElement
+  if (!el) return false
+  return /^(input|textarea|select)$/i.test(el.tagName) || el.isContentEditable === true
+}
+
+/**
+ * Que faire d'une version servie différente de la nôtre.
+ * Séparé du reste pour être vérifiable : c'est la règle, pas la plomberie.
+ */
+export function decisionMaj({ charge, servi, dejaRecharge, enTrainDeTaper: tape }) {
+  if (!charge || !servi) return 'rien'
+  if (charge.includes(servi)) return 'rien'          // déjà à jour
+  if (tape) return 'banniere'                        // on ne coupe pas une saisie
+  if (dejaRecharge === servi) return 'banniere'      // déjà essayé : pas de boucle
+  return 'recharger'
+}
+
 async function checkForUpdate() {
   if (busy || !MINE) return
   if (document.visibilityState !== 'visible') return
@@ -42,9 +78,16 @@ async function checkForUpdate() {
     const html = await res.text()
     const m = html.match(BUNDLE)
     if (!m) return
-    // Le bundle servi diffère de celui chargé → nouvelle version en ligne.
-    // On prévient la bannière (cliquer pour mettre à jour), SANS recharger.
-    if (!MINE.includes(m[0]) && !notified) {
+    const quoiFaire = decisionMaj({
+      charge: MINE, servi: m[0],
+      dejaRecharge: lire(DEJA), enTrainDeTaper: enTrainDeTaper(),
+    })
+    if (quoiFaire === 'recharger') {
+      ecrire(DEJA, m[0])
+      window.location.reload()
+      return
+    }
+    if (quoiFaire === 'banniere' && !notified) {
       notified = true
       window.dispatchEvent(new Event('lg:update-available'))
     }
