@@ -144,6 +144,19 @@ describe('la fiche', () => {
     expect(enFaceDe('Creme Citron')).toMatch(/3\s600 g/)
   })
 
+  // ⚠️ Le grand clavier montrait le nombre BRUT : « Sucre Granule
+  // 300.00000000000006 g, ça doit être 300 g » (Layla, 2026-09-23).
+  it('le clavier ne montre pas la poussière du calcul', async () => {
+    await ouvrirLaTarte()
+    // On met la recette à l'échelle, puis on rouvre la même ligne.
+    fireEvent.click(screen.getByLabelText('Quantité de Sucre Granule'))
+    taperAuClavier('1000')
+    await waitFor(() => expect(enFaceDe('Sucre Granule')).toMatch(/1\s000 g/))
+    fireEvent.click(screen.getByLabelText('Quantité de Sucre Granule'))
+    const clavier = await screen.findByLabelText('Valider le nombre')
+    expect(clavier.parentElement.textContent).not.toMatch(/\.\d{3}/)
+  })
+
   // ⚠️ LA FRONTIÈRE. Si un jour un bouton de déclaration apparaît ici, ce test
   // tombe — et c'est exactement ce qu'on veut.
   it('n’offre AUCUN moyen de déclarer ou de fabriquer', async () => {

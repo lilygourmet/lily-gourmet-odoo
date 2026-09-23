@@ -108,4 +108,13 @@ describe('qteRecette', () => {
   it('ce qui tombe à ,00 après arrondi s’écrit sans virgule', () => {
     expect(qteRecette(20.001, 'u')).toBe('20 u')
   })
+
+  // ⚠️ LE CHIFFRE EXACT QU'ELLE A VU : « Sucre Granule 300.00000000000006 g,
+  // ça doit être 300 g » (2026-09-23). Mettre une recette à l'échelle enchaîne
+  // les divisions, et le flottant laisse cette poussière derrière lui. Elle ne
+  // doit jamais atteindre l'écran.
+  it('la poussière du calcul ne se voit pas', () => {
+    expect(qteRecette(300.00000000000006, 'g')).toBe('300 g')
+    expect(qteRecette(1799.9999999999998, 'g')).toBe(`1${F}800 g`)
+  })
 })
