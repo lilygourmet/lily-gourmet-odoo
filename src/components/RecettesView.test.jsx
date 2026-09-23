@@ -52,6 +52,12 @@ const ouvrirLaTarte = async () => {
 /** Ce qui est écrit en face d'un ingrédient. */
 const enFaceDe = nom => screen.getByText(nom).parentElement.textContent
 
+/** Taper un nombre sur le clavier de Fabrication Annexe 2, puis valider. */
+const taperAuClavier = chiffres => {
+  for (const c of String(chiffres)) fireEvent.click(screen.getByText(c))
+  fireEvent.click(screen.getByLabelText('Valider le nombre'))
+}
+
 describe('la liste', () => {
   it('montre les recettes', async () => {
     render(<RecettesView user={{ id: 'u1' }} />)
@@ -72,27 +78,36 @@ describe('la fiche', () => {
   })
 
   // ⚠️ LE GESTE DE LAYLA : on part du sucre, tout le reste suit.
+  // ⚠️ ET ON TAPE AU CLAVIER DE FABRICATION ANNEXE 2, en grammes : « la manière
+  // d'insérer les chiffres n'est pas fluide, je veux que ce soit comme sur
+  // Fabrication Annexe 2 » (2026-09-23).
   it('1 000 g de sucre au lieu de 300 : TOUTE la recette suit', async () => {
     await ouvrirLaTarte()
-    fireEvent.click(screen.getByText('300 g'))
-    const champ = await screen.findByLabelText('Quantité de Sucre Granule')
-    fireEvent.change(champ, { target: { value: '1000' } })
-    fireEvent.click(screen.getByText('OK'))
+    fireEvent.click(screen.getByLabelText('Quantité de Sucre Granule'))
+    taperAuClavier('1000')
 
     await waitFor(() => expect(enFaceDe('Sucre Granule')).toMatch(/1\s000 g/))
     // 1 800 × (1 000 / 300) = 6 000
     expect(enFaceDe('Creme Citron')).toMatch(/6\s000 g/)
     // 6 × (1 000 / 300) = 20 tartes
-    expect(screen.getByLabelText?.('pour') ?? document.getElementById('qte')).toBeTruthy()
-    expect(document.getElementById('qte').value).toBe('20')
+    expect(document.getElementById('qte').textContent).toMatch(/^20/)
+  })
+
+  // ⚠️ Le premier chiffre tapé REMPLACE la valeur proposée : c'est le
+  // comportement du clavier de Fabrication Annexe 2, et c'est ce qui rend la
+  // saisie fluide. On le vérifie ici parce que c'est la demande de Layla.
+  it('le premier chiffre remplace, il ne rallonge pas', async () => {
+    await ouvrirLaTarte()
+    fireEvent.click(screen.getByLabelText('Quantité de Sucre Granule'))
+    // La valeur proposée est 300 ; on tape « 6 » → 6, pas 3006.
+    taperAuClavier('6')
+    await waitFor(() => expect(enFaceDe('Sucre Granule')).toMatch(/^Sucre Granule6 g/))
   })
 
   it('dit toujours d’où l’on est parti, et sait y revenir', async () => {
     await ouvrirLaTarte()
-    fireEvent.click(screen.getByText('300 g'))
-    fireEvent.change(await screen.findByLabelText('Quantité de Sucre Granule'),
-      { target: { value: '1000' } })
-    fireEvent.click(screen.getByText('OK'))
+    fireEvent.click(screen.getByLabelText('Quantité de Sucre Granule'))
+    taperAuClavier('1000')
 
     const revenir = await screen.findByText('y revenir')
     expect(revenir.parentElement.textContent).toMatch(/La recette d’Odoo est pour 6 u/)
@@ -103,11 +118,17 @@ describe('la fiche', () => {
 
   it('un chiffre impossible ne casse pas la recette', async () => {
     await ouvrirLaTarte()
-    fireEvent.click(screen.getByText('300 g'))
-    fireEvent.change(await screen.findByLabelText('Quantité de Sucre Granule'),
-      { target: { value: '0' } })
-    fireEvent.click(screen.getByText('OK'))
+    fireEvent.click(screen.getByLabelText('Quantité de Sucre Granule'))
+    taperAuClavier('0')
     await waitFor(() => expect(enFaceDe('Sucre Granule')).toMatch(/300 g/))
+  })
+
+  it('on peut aussi partir du nombre de gâteaux', async () => {
+    await ouvrirLaTarte()
+    fireEvent.click(screen.getByLabelText('Quantité à faire'))
+    taperAuClavier('12')                    // 12 tartes au lieu de 6
+    await waitFor(() => expect(enFaceDe('Sucre Granule')).toMatch(/600 g/))
+    expect(enFaceDe('Creme Citron')).toMatch(/3\s600 g/)
   })
 
   // ⚠️ LA FRONTIÈRE. Si un jour un bouton de déclaration apparaît ici, ce test

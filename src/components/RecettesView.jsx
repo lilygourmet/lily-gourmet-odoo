@@ -27,8 +27,9 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { loadToutFabAnnexe, loadArticleFabAnnexe, parGateauMere, noeudDuChemin,
   defautDe, ingredientsPour } from '../lib/fabAnnexe'
+import { Clavier } from './FabAnnexe2Simple'
 import { quantitePour } from '../lib/recettes'
-import { propre, qte, uniteAffichee } from '../lib/ecranSimple'
+import { propre, qte, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
 
 /** Une ligne de la liste : le nom, son unité, rien d'autre. */
 function LigneArticle({ a, onOuvrir }) {
@@ -50,51 +51,31 @@ function LigneArticle({ a, onOuvrir }) {
  * Une ligne d'ingrédient. Toucher sa quantité, c'est refaire TOUTE la recette
  * autour d'elle — pas corriger cette ligne-là.
  *
- * Le champ s'ouvre sur place : on reste dans la recette, et on voit du même
- * coup d'œil ce que le nouveau chiffre fait aux autres lignes.
+ * ⚠️ LE MÊME CLAVIER QUE FABRICATION ANNEXE 2 (Layla, 2026-09-23 : « la
+ * manière d'insérer les chiffres n'est pas fluide, je veux que ce soit comme
+ * sur Fabrication Annexe 2 »). Un champ de texte sur un téléphone, c'est le
+ * clavier du système qui monte, qui cache la moitié de l'écran et qui ne sait
+ * pas que le premier chiffre tapé doit REMPLACER la valeur proposée. On
+ * réutilise donc son clavier, tel quel : même geste partout, et une correction
+ * de comportement les corrige tous.
  */
-function LigneIngredient({ l, onEchelle, onDescendre }) {
-  const [edite, setEdite] = useState(false)
-  const [q, setQ] = useState('')
-
-  const ouvrir = () => { setQ(String(l.besoin ?? '')); setEdite(true) }
-  const garder = () => { onEchelle(q); setEdite(false) }
-
+function LigneIngredient({ l, onOuvrirClavier, onDescendre }) {
   return (
     <div className="flex items-center gap-2 bg-cream-warm border border-line rounded-xl
                     px-3 py-1.5 mb-1">
       <span className="flex-1 min-w-0 text-[13.5px] font-bold text-ink truncate">
         {propre(l.produit)}
       </span>
-
-      {edite ? (
-        <>
-          <input value={q} onChange={e => setQ(e.target.value)} inputMode="decimal"
-            aria-label={`Quantité de ${propre(l.produit)}`} autoFocus
-            onKeyDown={e => { if (e.key === 'Enter') garder() }}
-            className="w-24 bg-cream border border-bordeaux rounded-lg px-2 py-1
-                       text-[15px] font-black tabular-nums text-right" />
-          <span className="flex-none text-[11.5px] text-ink-mute">{uniteAffichee(l.unite)}</span>
-          <button onClick={garder}
-            className="flex-none rounded-lg bg-bordeaux text-cream px-2.5 py-1 text-[12.5px] font-extrabold">
-            OK
-          </button>
-          <button onClick={() => setEdite(false)} aria-label="Annuler"
-            className="flex-none text-[13px] text-ink-mute px-1">✕</button>
-        </>
-      ) : (
-        <>
-          <button onClick={ouvrir}
-            className="flex-none text-[14px] font-black tabular-nums text-ink
-                       border-b border-dashed border-ink-mute/50">
-            {qte(l.besoin, l.unite)}
-          </button>
-          {/* Une préparation se descend : sa recette à elle est un écran plus bas. */}
-          {l.fabrique && (
-            <button onClick={onDescendre} aria-label={`Voir la recette de ${propre(l.produit)}`}
-              className="flex-none text-[15px] text-bordeaux font-black px-1">›</button>
-          )}
-        </>
+      <button onClick={onOuvrirClavier}
+        aria-label={`Quantité de ${propre(l.produit)}`}
+        className="flex-none text-[14px] font-black tabular-nums text-ink
+                   border-b border-dashed border-ink-mute/50">
+        {qte(l.besoin, l.unite)}
+      </button>
+      {/* Une préparation se descend : sa recette à elle est un écran plus bas. */}
+      {l.fabrique && (
+        <button onClick={onDescendre} aria-label={`Voir la recette de ${propre(l.produit)}`}
+          className="flex-none text-[15px] text-bordeaux font-black px-1">›</button>
       )}
     </div>
   )
@@ -108,6 +89,9 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
   const [brut, setBrut] = useState(null)
   const [chemin, setChemin] = useState([])
   const [quantites, setQuantites] = useState({})
+  // Ce que le clavier est en train de régler : null, ou la ligne visée.
+  // `null` pour l'article de tête — c'est lui qu'on règle alors directement.
+  const [clavier, setClavier] = useState(null)
 
   useEffect(() => {
     loadToutFabAnnexe().then(setTout).catch(e => setErreur(e.message || String(e)))
@@ -131,7 +115,7 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
     }
   }, [])
 
-  const fermer = () => { setChemin([]); setBrut(null); setQuantites({}) }
+  const fermer = () => { setChemin([]); setBrut(null); setQuantites({}); setClavier(null) }
 
   const nav = { user, onLogout, onNavigate, activeView }
 
@@ -175,15 +159,13 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
               </h1>
 
               <div className="flex items-center gap-2 mt-3">
-                <label className="text-[12.5px] text-ink-soft" htmlFor="qte">pour</label>
-                <input id="qte" value={q} inputMode="decimal"
-                  onChange={e => {
-                    const v = Number(String(e.target.value).replace(',', '.'))
-                    poser(Number.isFinite(v) ? v : 0)
-                  }}
-                  className="w-24 bg-cream-warm border border-line rounded-lg px-2 py-1.5
-                             text-[16px] font-black tabular-nums" />
-                <span className="text-[12.5px] text-ink-soft">{uniteAffichee(noeud.unite)}</span>
+                <span className="text-[12.5px] text-ink-soft">pour</span>
+                <button onClick={() => setClavier({ tete: true })} id="qte"
+                  aria-label="Quantité à faire"
+                  className="bg-cream-warm border border-line rounded-lg px-3 py-1.5
+                             text-[17px] font-black tabular-nums">
+                  {qte(q, noeud.unite)}
+                </button>
               </div>
 
               {/* ⚠️ D'OÙ L'ON EST PARTI, TOUJOURS ÉCRIT. Une recette lue à une
@@ -208,9 +190,27 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
               )}
               {lignes.map((l, i) => (
                 <LigneIngredient key={l.produit + i} l={l}
-                  onEchelle={v => echelleDepuis(l, v)}
+                  onOuvrirClavier={() => setClavier({ l })}
                   onDescendre={() => setChemin([...chemin, l.produit])} />
               ))}
+
+              {/* ⚠️ TOUT SE TAPE EN GRAMMES, comme tout s'affiche en grammes
+                  (Layla, 2026-09-23). La recette d'Odoo écrit parfois des kilos ;
+                  les convertir de tête au-dessus d'une balance, c'est le facteur
+                  mille qui revient. La conversion ne vit donc qu'ici. */}
+              {clavier && (
+                <Clavier
+                  titre={clavier.tete ? 'À faire' : propre(clavier.l.produit)}
+                  valeur={enGrammes(clavier.tete ? q : clavier.l.besoin,
+                    clavier.tete ? noeud.unite : clavier.l.unite)}
+                  unite={uniteAffichee(clavier.tete ? noeud.unite : clavier.l.unite)}
+                  onFermer={() => setClavier(null)}
+                  onValider={n => {
+                    if (clavier.tete) poser(enUnite(n, noeud.unite))
+                    else echelleDepuis(clavier.l, enUnite(n, clavier.l.unite))
+                    setClavier(null)
+                  }} />
+              )}
 
               <button onClick={() => window.print()}
                 className="print:hidden w-full mt-4 rounded-2xl bg-bordeaux text-cream py-3
