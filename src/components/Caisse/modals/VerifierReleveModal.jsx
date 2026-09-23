@@ -37,11 +37,19 @@ export default function VerifierReleveModal({ onClose, onDone }) {
         const { transactions, bankLabel } = await parseStatement(f)
         for (const u of transactions) {
           if (u.credit == null || !u.dateIso || !ARGENT_RECU.has(u.type)) continue
-          rows.push({
+          const ligne = {
             key: cleDeLigne(u, vues),
             ligne_date: u.dateIso, amount: u.credit, label: (u.label || '').slice(0, 120),
             type: u.type, releve_url: null, banque: bankLabel || null,
-          })
+            _fichier: f.name,
+          }
+          // Deux DOCUMENTS chargés ensemble décrivent les mêmes opérations : le relevé
+          // écrit « BERRADA ABLA », l'extrait « BERRAYA ABLA », 500 dh le 2 mai — un seul
+          // virement. Aucune des deux n'étant en base, rien ne les comparait entre elles
+          // et les deux seraient ajoutées. On les rapproche donc AUSSI entre fichiers.
+          // Dans un MÊME fichier, deux lignes identiques sont deux vrais encaissements.
+          if (rows.some(r => r._fichier !== ligne._fichier && memeOperation(r, ligne))) continue
+          rows.push(ligne)
         }
       }
       // On NE compare PAS par clé : la clé a changé de forme au fil du temps, et les
@@ -73,10 +81,17 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       // différente, c'est une autre opération — il n'y a rien à comparer, et le demander
       // noyait le vrai doute sous des voisines sans rapport (« 300 dh le 2 mai » se voyait
       // opposer des lignes du 27 avril et du 11 mai).
-      const avecPreuve = manquantes.map(m => ({
+      const memeJourMemeMontant = (x, y) => x.ligne_date === y.ligne_date
+        && Math.abs(Number(x.amount) - Number(y.amount)) < 0.5
+      const avecPreuve = manquantes.map((m, i) => ({
         ...m,
-        proches: memeMontant.filter(x => x.ligne_date === m.ligne_date
-          && Math.abs(Number(x.amount) - Number(m.amount)) < 0.5),
+        // Ce qui existe déjà en base ce jour-là, PLUS les manquantes déjà listées au-dessus :
+        // deux lignes absentes du même montant et du même jour peuvent être la même
+        // opération, et personne ne les comparait entre elles.
+        proches: [
+          ...memeMontant.filter(x => memeJourMemeMontant(x, m)),
+          ...manquantes.slice(0, i).filter(x => memeJourMemeMontant(x, m)),
+        ],
       }))
       setExclues(new Set(avecPreuve.filter(m => m.proches.length).map(m => m.key)))
       setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes: avecPreuve })
@@ -91,6 +106,7 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       // `ailleurs` n'existe que pour l'affichage (la contre-preuve). L'envoyer en base la
       // faisait refuser TOUTE l'insertion : « Could not find the 'ailleurs' column ».
       // On n'écrit que les colonnes de la table.
+      // `_fichier` et `proches` ne servent qu'ici : la table n'a pas ces colonnes.
       await saveUnmatchedReleveLines(choisies.map(
         ({ key, ligne_date, amount, label, type, releve_url, banque }) =>
           ({ key, ligne_date, amount, label, type, releve_url, banque })))
