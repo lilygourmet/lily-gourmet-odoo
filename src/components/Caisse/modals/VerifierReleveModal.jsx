@@ -69,19 +69,15 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       // toute la base, sans limite de date. Aucune ligne de ce montant nulle part = elle
       // manque vraiment. Sinon on montre ce qui existe, et Layla juge sur pièce.
       const memeMontant = await loadReleveLinesByAmounts(manquantes.map(m => m.amount))
-      // Ce qui compte n'est pas « combien de lignes de 300 dh existent » — 300 dh est un
-      // montant courant, en citer 34 n'apprend rien. C'est : en existe-t-il une À UNE DATE
-      // PROCHE ? Si oui, on montre son libellé, et Layla compare les noms elle-même.
-      const jours = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000)
-      const avecPreuve = manquantes.map(m => {
-        const duMontant = memeMontant.filter(x => Math.abs(Number(x.amount) - Number(m.amount)) < 0.5)
-        return {
-          ...m,
-          proches: duMontant.filter(x => jours(x.ligne_date, m.ligne_date) <= 10)
-            .sort((x, y) => jours(x.ligne_date, m.ligne_date) - jours(y.ligne_date, m.ligne_date)),
-          loin: duMontant.length,
-        }
-      })
+      // Le seul cas qui mérite un coup d'œil : même montant, LE MÊME JOUR. Une date
+      // différente, c'est une autre opération — il n'y a rien à comparer, et le demander
+      // noyait le vrai doute sous des voisines sans rapport (« 300 dh le 2 mai » se voyait
+      // opposer des lignes du 27 avril et du 11 mai).
+      const avecPreuve = manquantes.map(m => ({
+        ...m,
+        proches: memeMontant.filter(x => x.ligne_date === m.ligne_date
+          && Math.abs(Number(x.amount) - Number(m.amount)) < 0.5),
+      }))
       setExclues(new Set(avecPreuve.filter(m => m.proches.length).map(m => m.key)))
       setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes: avecPreuve })
       setEtape('resultat')
@@ -149,17 +145,12 @@ export default function VerifierReleveModal({ onClose, onDone }) {
                       <span>
                       <b>{fmtMoney(l.amount)}</b> · {l.ligne_date}
                       <div style={{ fontSize: 11, color: '#8a7a70' }}>{l.label}</div>
-                      {(l.proches || []).length ? (
+                      {(l.proches || []).length > 0 && (
                         <div style={{ fontSize: 11, color: '#a9620a', marginTop: 2 }}>
-                          ⚠️ même montant à une date proche — est-ce la même ?
-                          {l.proches.slice(0, 3).map((x, i) => (
-                            <div key={i} style={{ color: '#8a7a70' }}>{x.ligne_date} · {(x.label || '').slice(0, 60)}</div>
+                          ⚠️ le même montant existe déjà CE JOUR-LÀ — sans doute la même, décochée :
+                          {l.proches.slice(0, 2).map((x, i) => (
+                            <div key={i} style={{ color: '#8a7a70' }}>{(x.label || '').slice(0, 60)}</div>
                           ))}
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 11, color: '#0a7d3d', marginTop: 2 }}>
-                          ✓ aucune ligne de {fmtMoney(l.amount)} autour de cette date — elle manque vraiment
-                          {l.loin ? <span style={{ color: '#8a7a70' }}> ({l.loin} à d'autres périodes, sans rapport)</span> : null}
                         </div>
                       )}
                       </span>
