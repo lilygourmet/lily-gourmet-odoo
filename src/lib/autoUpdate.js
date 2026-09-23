@@ -9,18 +9,23 @@
 // la page d'accueil SANS cache et on compare. Si le hash a changé → nouvelle version
 // déployée.
 //
-// ⚠️ ON RECHARGE MAINTENANT, TOUT SEUL (Layla, 2026-09-23 : « recharge toutes les
-// pages maintenant de tout le monde »). La bannière ne suffisait pas : le 23/09,
-// « À finir » a rejoué un bug corrigé la veille parce que l'écran tournait encore
-// sur l'ancien code. Du vieux code qui parle à Odoo, c'est une faute qu'on ne voit
-// pas passer.
+// ⚠️ UN SEUL RECHARGEMENT AUTOMATIQUE PAR JOUR, LE PREMIER (Layla, 2026-09-23 :
+// « recharge tout le matin au démarrage et après avec bannière »). La bannière
+// seule ne suffisait pas : le 23/09, « À finir » a rejoué un bug corrigé la
+// veille parce que l'écran tournait encore sur l'ancien code — et du vieux code
+// qui parle à Odoo, ça ne se voit pas passer.
+//
+// Mais recharger à toute heure, c'est couper l'atelier au milieu d'une fournée.
+// La journée démarre donc sur du neuf, et ensuite on se contente de PROPOSER.
 //
 // DEUX GARDE-FOUS, et ils comptent :
 //  • on ne coupe JAMAIS quelqu'un en train de taper (un champ au doigt = on
 //    attend, et la bannière prend le relais) ;
-//  • on ne recharge qu'UNE FOIS par version. Si après ça le navigateur ressert
-//    quand même l'ancien fichier, on repasse à la bannière — jamais une boucle.
+//  • une seule fois par jour. Si après ça le navigateur ressert quand même
+//    l'ancien fichier, on repasse à la bannière — jamais une boucle.
 // ============================================================
+
+import { todayISO } from './dates'
 
 // Nom du bundle JS actuellement chargé (ex: /assets/main-Ab12Cd.js)
 //
@@ -42,11 +47,13 @@ const MINE = loadedBundle()
 let busy = false
 let notified = false   // une fois la bannière prévenue, inutile de re-signaler
 
-// La version pour laquelle on a DÉJÀ tenté un rechargement, gardée le temps de
-// l'onglet. Sans mémoire (navigation privée), on s'en passe : on préviendra.
-const DEJA = 'lg:maj-rechargee'
-const lire = k => { try { return sessionStorage.getItem(k) } catch { return null } }
-const ecrire = (k, v) => { try { sessionStorage.setItem(k, v) } catch { /* tant pis */ } }
+// Le JOUR du dernier rechargement automatique. Dans `localStorage` : il doit
+// survivre à la fermeture de l'onglet, sinon rouvrir l'app en rouvrirait le
+// droit dix fois par matinée. Sans mémoire (navigation privée), on s'en passe :
+// on se contentera de la bannière.
+const DEJA = 'lg:maj-jour'
+const lire = k => { try { return localStorage.getItem(k) } catch { return null } }
+const ecrire = (k, v) => { try { localStorage.setItem(k, v) } catch { /* tant pis */ } }
 
 /** Quelqu'un est-il en train d'écrire ? On ne lui arrache pas son champ. */
 function enTrainDeTaper() {
@@ -59,11 +66,11 @@ function enTrainDeTaper() {
  * Que faire d'une version servie différente de la nôtre.
  * Séparé du reste pour être vérifiable : c'est la règle, pas la plomberie.
  */
-export function decisionMaj({ charge, servi, dejaRecharge, enTrainDeTaper: tape }) {
+export function decisionMaj({ charge, servi, jour, dernierJour, enTrainDeTaper: tape }) {
   if (!charge || !servi) return 'rien'
   if (charge.includes(servi)) return 'rien'          // déjà à jour
   if (tape) return 'banniere'                        // on ne coupe pas une saisie
-  if (dejaRecharge === servi) return 'banniere'      // déjà essayé : pas de boucle
+  if (dernierJour === jour) return 'banniere'        // déjà rechargé aujourd'hui
   return 'recharger'
 }
 
@@ -80,10 +87,10 @@ async function checkForUpdate() {
     if (!m) return
     const quoiFaire = decisionMaj({
       charge: MINE, servi: m[0],
-      dejaRecharge: lire(DEJA), enTrainDeTaper: enTrainDeTaper(),
+      jour: todayISO(), dernierJour: lire(DEJA), enTrainDeTaper: enTrainDeTaper(),
     })
     if (quoiFaire === 'recharger') {
-      ecrire(DEJA, m[0])
+      ecrire(DEJA, todayISO())
       window.location.reload()
       return
     }
