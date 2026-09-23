@@ -5,7 +5,7 @@
 // Tout l'écran tient sur ce calcul : il dit à quelle ÉCHELLE lire la recette.
 // ============================================================
 import { describe, it, expect } from 'vitest'
-import { quantitePour, ajouterAuCache } from './recettes'
+import { quantitePour, qteRecette, ajouterAuCache } from './recettes'
 
 describe('quantitePour', () => {
   // La recette d'Odoo : 6 tartes, 250 g de sucre.
@@ -78,5 +78,34 @@ describe('ajouterAuCache', () => {
 
   it('part d’un cache vide ou absent sans broncher', () => {
     expect(Object.keys(ajouterAuCache(null, 'A', noeud('A'), 1))).toEqual(['A'])
+  })
+})
+
+// ============================================================
+// « Ne pas montrer de chiffre après la virgule si ,00 ; sinon montrer max
+// 2 chiffres » (Layla, 2026-09-23).
+// ============================================================
+describe('qteRecette', () => {
+  // ⚠️ Le séparateur des milliers en français est une ESPACE FINE INSÉCABLE
+  // (U+202F), pas une espace ordinaire : l'écrire à la main dans un test, c'est
+  // le voir échouer sur une chaîne qui a pourtant l'air identique.
+  const F = '\u202f'
+
+  it('un compte rond n’a pas de virgule', () => {
+    expect(qteRecette(1800, 'g')).toBe(`1${F}800 g`)
+    expect(qteRecette(6, 'u')).toBe('6 u')
+  })
+
+  it('deux décimales au maximum, et pas une de plus', () => {
+    expect(qteRecette(4266.6666, 'g')).toBe(`4${F}266,67 g`)
+    expect(qteRecette(12.5, 'g')).toBe('12,5 g')
+  })
+
+  it('les kilos se lisent en grammes, comme partout', () => {
+    expect(qteRecette(1.755, 'kg')).toBe(`1${F}755 g`)
+  })
+
+  it('ce qui tombe à ,00 après arrondi s’écrit sans virgule', () => {
+    expect(qteRecette(20.001, 'u')).toBe('20 u')
   })
 })

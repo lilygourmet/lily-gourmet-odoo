@@ -14,6 +14,22 @@
 // ⚠️ RIEN N'EST ENREGISTRÉ. Odoo garde sa recette : on ne fait que la lire à
 // une autre échelle.
 // ============================================================
+import { nb, enGrammes, uniteAffichee } from './ecranSimple'
+
+/**
+ * UNE QUANTITÉ AVEC SES DÉCIMALES, mais seulement quand elles disent quelque
+ * chose. « Ne pas montrer de chiffre après la virgule si ,00 ; sinon montrer
+ * max 2 chiffres » (Layla, 2026-09-23).
+ *
+ * `qte()` arrondit à l'entier : c'est bien pour l'atelier, qui pèse au gramme.
+ * Ici on règle une recette à une autre échelle, et le tiers d'une fournée
+ * tombe rarement rond — 4 266,67 g arrondi à 4 267 fait perdre le compte quand
+ * on remonte la cascade. Comme partout, on lit en GRAMMES.
+ */
+export function qteRecette(v, u) {
+  const g = Math.round(enGrammes(v, u) * 100) / 100
+  return `${nb(g)} ${uniteAffichee(u)}`.trim()
+}
 
 const nombre = v => {
   if (v === '' || v === null || v === undefined) return null

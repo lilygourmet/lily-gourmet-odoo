@@ -29,9 +29,9 @@ import { loadToutFabAnnexe, loadArticleFabAnnexe, loadArticlesFabAnnexe, parGate
   noeudDuChemin, defautDe, ingredientsPour, relireRecettes } from '../lib/fabAnnexe'
 import { Clavier } from './FabAnnexe2Simple'
 import { toast } from '../lib/toast'
-import { quantitePour, recetteGardee, recettesGardees, garderLaRecette,
+import { quantitePour, qteRecette, recetteGardee, recettesGardees, garderLaRecette,
   garderDesRecettes, listeGardee, garderLaListe, toutOublier } from '../lib/recettes'
-import { propre, qte, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
+import { propre, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
 
 /** Une ligne de la liste : le nom, son unité, rien d'autre. */
 function LigneArticle({ a, onOuvrir }) {
@@ -72,7 +72,7 @@ function LigneIngredient({ l, onOuvrirClavier, onDescendre }) {
         aria-label={`Quantité de ${propre(l.produit)}`}
         className="flex-none text-[14px] font-black tabular-nums text-ink
                    border-b border-dashed border-ink-mute/50">
-        {qte(l.besoin, l.unite)}
+        {qteRecette(l.besoin, l.unite)}
       </button>
       {/* Une préparation se descend : sa recette à elle est un écran plus bas. */}
       {l.fabrique && (
@@ -241,7 +241,7 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
                   aria-label="Quantité à faire"
                   className="bg-cream-warm border border-line rounded-lg px-3 py-1.5
                              text-[17px] font-black tabular-nums">
-                  {qte(q, noeud.unite)}
+                  {qteRecette(q, noeud.unite)}
                 </button>
               </div>
 
@@ -250,7 +250,7 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
                   vient, c'est se tromper de moitié sans s'en apercevoir. */}
               {regle && (
                 <p className="text-[12px] text-ink-mute mt-1.5">
-                  La recette d’Odoo est pour {qte(parOdoo, noeud.unite)} ·{' '}
+                  La recette d’Odoo est pour {qteRecette(parOdoo, noeud.unite)} ·{' '}
                   <button onClick={() => poser(parOdoo)}
                     className="text-bordeaux font-bold underline">y revenir</button>
                 </p>
@@ -278,8 +278,8 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
               {clavier && (
                 <Clavier
                   titre={clavier.tete ? 'À faire' : propre(clavier.l.produit)}
-                  valeur={enGrammes(clavier.tete ? q : clavier.l.besoin,
-                    clavier.tete ? noeud.unite : clavier.l.unite)}
+                  valeur={Math.round(enGrammes(clavier.tete ? q : clavier.l.besoin,
+                    clavier.tete ? noeud.unite : clavier.l.unite) * 100) / 100}
                   unite={uniteAffichee(clavier.tete ? noeud.unite : clavier.l.unite)}
                   onFermer={() => setClavier(null)}
                   onValider={n => {
