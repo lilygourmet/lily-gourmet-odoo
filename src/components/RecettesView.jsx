@@ -25,12 +25,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
-import { loadToutFabAnnexe, loadArticleFabAnnexe, parGateauMere, noeudDuChemin,
-  defautDe, ingredientsPour, relireRecettes } from '../lib/fabAnnexe'
+import { loadToutFabAnnexe, loadArticleFabAnnexe, loadArticlesFabAnnexe, parGateauMere,
+  noeudDuChemin, defautDe, ingredientsPour, relireRecettes } from '../lib/fabAnnexe'
 import { Clavier } from './FabAnnexe2Simple'
 import { toast } from '../lib/toast'
-import { quantitePour, recetteGardee, garderLaRecette,
-  listeGardee, garderLaListe, toutOublier } from '../lib/recettes'
+import { quantitePour, recetteGardee, recettesGardees, garderLaRecette,
+  garderDesRecettes, listeGardee, garderLaListe, toutOublier } from '../lib/recettes'
 import { propre, qte, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
 
 /** Une ligne de la liste : le nom, son unité, rien d'autre. */
@@ -92,6 +92,8 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
   const [cherche, setCherche] = useState('')
   const [erreur, setErreur] = useState('')
   const [maj, setMaj] = useState(false)
+  // Le préchargement en fond : combien de recettes sont déjà prêtes.
+  const [pretes, setPretes] = useState(0)
   // L'article ouvert, sa cascade, et l'échelle à laquelle on la lit.
   const [brut, setBrut] = useState(null)
   const [chemin, setChemin] = useState([])
@@ -106,6 +108,41 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
 
   // Rien en mémoire : on va la chercher une fois. Ensuite, plus jamais tout seul.
   useEffect(() => { if (!listeGardee()) chargerLaListe() }, [chargerLaListe])
+
+  /**
+   * ⚠️ TOUT EST PRÊT AVANT QU'ELLE N'OUVRE (Layla, 2026-09-23 : « charge les
+   * recettes pour que dès que j'ouvre, ça s'affiche systématiquement »).
+   *
+   * On ne charge donc plus au clic : dès que la liste est là, on va chercher
+   * les recettes manquantes en fond, PAR PAQUETS DE DIX. Le serveur les calcule
+   * ensemble — même cache de nomenclatures, mêmes stocks lus une fois — donc
+   * dix d'un coup coûtent à peine plus qu'une seule ; cent une par une, c'était
+   * deux minutes d'attente répartie sur toute la matinée.
+   *
+   * Ça ne se voit pas : l'écran reste utilisable, et une recette ouverte avant
+   * son tour se charge toute seule, comme avant.
+   */
+  useEffect(() => {
+    if (!tout || maj) return
+    let vivant = true
+    const deja = new Set(recettesGardees())
+    const manquants = tout.map(a => a.produit).filter(p => p && !deja.has(p))
+    if (!manquants.length) { queueMicrotask(() => vivant && setPretes(tout.length)); return }
+    ;(async () => {
+      setPretes(tout.length - manquants.length)
+      for (let i = 0; i < manquants.length && vivant; i += 10) {
+        try {
+          const lot = await loadArticlesFabAnnexe(manquants.slice(i, i + 10))
+          if (!vivant) return
+          garderDesRecettes(lot)
+          setPretes(p => p + lot.length)
+        } catch {
+          return   // réseau coupé : on s'arrête là, le clic ira les chercher
+        }
+      }
+    })()
+    return () => { vivant = false }
+  }, [tout, maj])
 
   /**
    * ⚠️ LE BOUTON RÉPOND AU DOIGT (règle de Layla) : relire les recettes prend
@@ -123,6 +160,7 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
       await relireRecettes()
       toutOublier()
       setTout(null)
+      setPretes(0)
       await chargerLaListe()
       toast('Recettes relues.')
     } catch (e) {
@@ -284,6 +322,14 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
             {maj ? 'en cours…' : '🔄 Mettre à jour'}
           </button>
         </div>
+
+        {/* Ce qui se prépare en fond. Discret, et ça disparaît tout seul :
+            l'écran reste utilisable pendant ce temps-là. */}
+        {tout && pretes < tout.length && (
+          <p className="text-[11.5px] text-ink-mute mb-2">
+            Préparation des recettes… {pretes} / {tout.length}
+          </p>
+        )}
 
         {!tout && !erreur && <Skeleton />}
         {tout && !groupes.length && (

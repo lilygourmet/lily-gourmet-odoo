@@ -58,9 +58,11 @@ export function quantitePour({ quantite, besoinActuel, besoinVoulu }) {
 
 const CLE = 'lg:recettes'
 const CLE_LISTE = 'lg:recettes-liste'
-// Assez pour une matinée de vérifications, trop peu pour saturer le stockage :
-// une cascade pèse quelques dizaines de kilo-octets.
-const MAX = 40
+// Tout le catalogue tient dedans (une centaine d'articles) : c'est le but,
+// « que dès que j'ouvre ça s'affiche systématiquement ». Le plafond n'est plus
+// là que pour empêcher une dérive — un article retiré du catalogue, un
+// renommage — de faire grossir le stockage sans fin.
+const MAX = 300
 
 /**
  * Ranger une recette, en laissant partir les plus vieilles.
@@ -83,13 +85,31 @@ const lire = k => { try { return JSON.parse(localStorage.getItem(k) || 'null') }
 const ecrire = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* plein : tant pis */ } }
 const oublier = k => { try { localStorage.removeItem(k) } catch { /* rien à faire */ } }
 
-export const cacheDesRecettes = () => lire(CLE) || {}
-export const garderLaRecette = (produit, noeud) =>
-  ecrire(CLE, ajouterAuCache(cacheDesRecettes(), produit, noeud))
-export const recetteGardee = produit => cacheDesRecettes()[produit]?.noeud || null
+// ⚠️ UNE COPIE EN MÉMOIRE, relue une seule fois. Cent recettes, c'est un gros
+// JSON : le relire et le réécrire à chaque article préchargé, c'était geler
+// l'écran pendant le chargement. Le disque ne sert qu'à survivre à la
+// fermeture de l'app.
+let memo = null
+const toutes = () => (memo ||= lire(CLE) || {})
+
+export const recetteGardee = produit => toutes()[produit]?.noeud || null
+export const recettesGardees = () => Object.keys(toutes())
+
+export function garderLaRecette(produit, noeud) {
+  memo = ajouterAuCache(toutes(), produit, noeud)
+  ecrire(CLE, memo)
+}
+
+/** Un paquet d'un coup : une seule écriture sur le disque, pas cinquante. */
+export function garderDesRecettes(articles) {
+  let c = toutes()
+  for (const a of articles || []) if (a?.produit) c = ajouterAuCache(c, a.produit, a)
+  memo = c
+  ecrire(CLE, memo)
+}
 
 export const listeGardee = () => lire(CLE_LISTE)
 export const garderLaListe = l => ecrire(CLE_LISTE, l)
 
 /** Le bouton « Mettre à jour » : on oublie tout, on relira chez Odoo. */
-export const toutOublier = () => { oublier(CLE); oublier(CLE_LISTE) }
+export const toutOublier = () => { memo = {}; oublier(CLE); oublier(CLE_LISTE) }

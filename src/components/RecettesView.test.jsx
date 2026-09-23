@@ -29,7 +29,7 @@ const tarte = {
 
 // Combien de fois on est vraiment allé chez Odoo : c'est TOUT l'enjeu du
 // chargement « une fois pour toutes ».
-const appels = vi.hoisted(() => ({ liste: 0, fiche: 0, relire: 0 }))
+const appels = vi.hoisted(() => ({ liste: 0, fiche: 0, lot: 0, relire: 0 }))
 
 vi.mock('../lib/toast', () => ({
   toast: Object.assign(() => {}, { success: () => {}, error: () => {} }),
@@ -42,15 +42,22 @@ vi.mock('../lib/fabAnnexe', async importOriginal => {
     ...vrai,                                   // les VRAIES règles de calcul
     loadToutFabAnnexe: async () => { appels.liste++; return [tarte] },
     loadArticleFabAnnexe: async () => { appels.fiche++; return tarte },
+    loadArticlesFabAnnexe: async noms => { appels.lot++; return noms.map(() => tarte) },
     relireRecettes: async () => { appels.relire++ },
   }
 })
 
 const { default: RecettesView } = await import('./RecettesView')
+const { toutOublier } = await import('../lib/recettes')
 
 beforeEach(() => {
+  // ⚠️ `toutOublier()` et pas seulement `localStorage.clear()` : le cache garde
+  // aussi une copie EN MÉMOIRE, qui survit d'un test à l'autre. Sans ça, le
+  // premier test préchargeait pour tous les suivants — et ils ne testaient plus
+  // rien (ils passaient, ce qui est pire).
   localStorage.clear()
-  appels.liste = 0; appels.fiche = 0; appels.relire = 0
+  toutOublier()
+  appels.liste = 0; appels.fiche = 0; appels.lot = 0; appels.relire = 0
 })
 afterEach(() => cleanup())
 
@@ -152,36 +159,41 @@ describe('la fiche', () => {
 // 2026-09-23). Une seconde et demie par clic, c'était la moitié de l'écran.
 // ============================================================
 describe('charger une fois pour toutes', () => {
-  it('la deuxième ouverture ne redemande RIEN à Odoo', async () => {
-    await ouvrirLaTarte()
-    expect(appels.fiche).toBe(1)
-    cleanup()
-
-    await ouvrirLaTarte()
-    expect(appels.fiche).toBe(1)          // toujours un seul aller-retour
+  // ⚠️ « Charge les recettes pour que dès que j'ouvre, ça s'affiche
+  // systématiquement » (2026-09-23). L'écran ne charge plus au clic : il
+  // précharge tout en fond dès que la liste est là.
+  it('précharge les recettes sans qu’on ouvre quoi que ce soit', async () => {
+    render(<RecettesView user={{ id: 'u1' }} />)
+    await screen.findByText('Tarte citron 23 cm')
+    await waitFor(() => expect(appels.lot).toBe(1))
   })
 
-  it('la liste non plus ne se recharge pas à chaque visite', async () => {
+  it('une recette préchargée s’ouvre SANS aller-retour', async () => {
+    render(<RecettesView user={{ id: 'u1' }} />)
+    fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
+    await screen.findByText('Creme Citron')
+    expect(appels.fiche).toBe(0)
+  })
+
+  it('la visite suivante ne recharge rien du tout', async () => {
     render(<RecettesView user={{ id: 'u1' }} />)
     await screen.findByText('Tarte citron 23 cm')
-    expect(appels.liste).toBe(1)
+    await waitFor(() => expect(appels.lot).toBe(1))
     cleanup()
 
     render(<RecettesView user={{ id: 'u1' }} />)
     await screen.findByText('Tarte citron 23 cm')
+    await new Promise(r => setTimeout(r, 60))
     expect(appels.liste).toBe(1)
+    expect(appels.lot).toBe(1)
   })
 
   it('« Mettre à jour » fait tout relire — le serveur comme l’app', async () => {
-    await ouvrirLaTarte()
-    cleanup()
     render(<RecettesView user={{ id: 'u1' }} />)
+    await waitFor(() => expect(appels.lot).toBe(1))
     fireEvent.click(await screen.findByText('🔄 Mettre à jour'))
     await waitFor(() => expect(appels.relire).toBe(1))
     await waitFor(() => expect(appels.liste).toBe(2))
-
-    // Et la recette gardée a bien été oubliée : on y retourne.
-    fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
-    await waitFor(() => expect(appels.fiche).toBe(2))
+    await waitFor(() => expect(appels.lot).toBe(2))
   })
 })
