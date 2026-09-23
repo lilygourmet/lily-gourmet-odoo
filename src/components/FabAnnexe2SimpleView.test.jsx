@@ -69,7 +69,13 @@ vi.mock('../lib/feuilles', async importOriginal => {
 
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
-vi.mock('../lib/toast', () => ({ toast: Object.assign(() => {}, { success: () => {}, error: () => {} }) }))
+// Les messages qui passent à l'écran : on veut pouvoir vérifier qu'un message
+// N'EST PAS dit autant que l'inverse (voir « n'a pas pu s'ouvrir » plus bas).
+const DIT = vi.hoisted(() => ({ messages: [] }))
+vi.mock('../lib/toast', () => ({
+  toast: Object.assign(m => { DIT.messages.push(String(m)) },
+    { success: () => {}, error: () => {} }),
+}))
 vi.mock('../lib/auth', () => ({ canRebuts: () => false, hasValidJwt: () => true, isAdmin: () => true }))
 vi.mock('../lib/fabrication', () => ({ dernierEcran: () => null, garderEcran: () => {} }))
 vi.mock('../lib/fabAnnexe', async importOriginal => {
@@ -91,6 +97,7 @@ const { default: FabAnnexe2SimpleView } = await import('./FabAnnexe2SimpleView')
 
 beforeEach(() => {
   PRODUITS_IMPRIMES = [...PAPIERS_PAR_DEFAUT]
+  DIT.messages.length = 0
   localStorage.clear(); declarer.mockClear(); envoyerAValider.mockClear()
   relireRecettes.mockClear(); listesLues = 0
 })
@@ -236,6 +243,32 @@ describe('arriver par le scan', () => {
     poserLeScan({ chemin: ['SM. sirop Imbibage production KG', 'SM- Composant disparu'] })
     render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
     await waitFor(() => expect(screen.getByText("C'est fait")).toBeTruthy())
+  })
+
+  // ⚠️ « Pourquoi je reçois ces messages quand je marque comme fait ? »
+  // (Layla, 2026-09-23). Le chemin se vide AUSSI quand la fiche se referme
+  // après une déclaration réussie — l'écran annonçait donc « n'a pas pu
+  // s'ouvrir » juste après avoir déclaré l'article scanné.
+  it('ne dit PAS « n’a pas pu s’ouvrir » après une déclaration réussie', async () => {
+    await scannerLeGateau(true)
+    expect(envoyerAValider).toHaveBeenCalled()
+    expect(DIT.messages.join(' | ')).not.toMatch(/n'a pas pu s'ouvrir/)
+  })
+
+  // ⚠️ CONTRÔLE : se taire après une déclaration ne doit pas vouloir dire se
+  // taire tout court. Un article scanné qui n'existe plus au catalogue le dit
+  // toujours — par son propre message, en rouge, sur la liste.
+  it('CONTRÔLE : un article scanné qui n’existe plus le dit quand même', async () => {
+    const fab = await import('../lib/fabAnnexe')
+    const vrai = fab.loadArticlesFabAnnexe
+    fab.loadArticlesFabAnnexe = async () => []      // le catalogue ne le connaît plus
+    try {
+      const { poserLeScan } = await import('../lib/scanEntrant')
+      poserLeScan({ chemin: ['SM- Article qui n’existe pas'] })
+      render(<FabAnnexe2SimpleView user={{ id: 'u1' }} />)
+      await waitFor(() => expect(screen.getByText(/n'est plus suivi/)).toBeTruthy())
+      expect(DIT.messages.join(' | ')).not.toMatch(/n'a pas pu s'ouvrir/)
+    } finally { fab.loadArticlesFabAnnexe = vrai }
   })
 
   it('et va DROIT au chiffre quand le QR le demande', async () => {

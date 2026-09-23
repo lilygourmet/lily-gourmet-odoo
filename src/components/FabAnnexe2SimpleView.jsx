@@ -85,12 +85,20 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // c'est ce qui a fait croire trois fois de suite que le scan « ne faisait
   // rien ». Le chemin part plein : s'il se vide, c'est qu'on n'y est pas
   // arrivé.
+  //
+  // ⚠️ MAIS UNE FICHE QU'ON REFERME N'EST PAS UNE FICHE QUI N'A PAS OUVERT.
+  // Le chemin se vide AUSSI après « C'est fait » — et l'écran annonçait alors
+  // « Cheesecake Nature n'a pas pu s'ouvrir » juste après l'avoir déclaré
+  // (Layla, 2026-09-23). On ne se fie donc plus à « le chemin est vide » : le
+  // seul endroit qui sait que le scan est PERDU, c'est là où on a fini de peler
+  // les marches sans rien trouver. Lui seul allume `scanPerdu`.
   const vise = scan?.chemin?.[scan.chemin.length - 1]
+  const [scanPerdu, setScanPerdu] = useState(false)
   useEffect(() => {
-    if (vise && !chemin.length) {
+    if (vise && scanPerdu) {
       toast(`« ${propre(vise)} » n'a pas pu s'ouvrir : il n'est pas dans cette recette aujourd'hui.`)
     }
-  }, [vise, chemin.length])
+  }, [vise, scanPerdu])
   // Ce qu'on a décidé de faire. On part travailler, on revient — même le
   // lendemain — le chiffre est toujours là. Il ne part qu'avec
   // « réinitialiser », ou quand l'article est déclaré. (Layla, 2026-09-11.)
@@ -816,7 +824,13 @@ export default function FabAnnexe2SimpleView({ user, onLogout, onNavigate, activ
   // et on repartait à la liste d'accueil, comme si le scan n'avait rien dit.
   // On pèle une marche à la fois : au pire on arrive sur le gâteau, jamais
   // sur l'accueil.
-  if (!noeud) { setChemin(c => (c.length > 1 ? c.slice(0, -1) : [])); return null }
+  // ⚠️ C'EST ICI, ET NULLE PART AILLEURS, QUE LE SCAN SE PERD : quand il ne
+  // reste plus une seule marche à peler. Voir le garde-fou du toast plus haut.
+  if (!noeud) {
+    if (chemin.length > 1) setChemin(chemin.slice(0, -1))
+    else { setChemin([]); setScanPerdu(true) }
+    return null
+  }
 
   const estTete = noeud.produit === tete.produit
   const q = quantites[noeud.produit]
