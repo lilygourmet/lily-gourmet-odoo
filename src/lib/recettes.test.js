@@ -5,7 +5,7 @@
 // Tout l'écran tient sur ce calcul : il dit à quelle ÉCHELLE lire la recette.
 // ============================================================
 import { describe, it, expect } from 'vitest'
-import { quantitePour } from './recettes'
+import { quantitePour, ajouterAuCache } from './recettes'
 
 describe('quantitePour', () => {
   // La recette d'Odoo : 6 tartes, 250 g de sucre.
@@ -45,5 +45,38 @@ describe('quantitePour', () => {
 
   it('une fournée à zéro non plus', () => {
     expect(quantitePour({ quantite: 0, besoinActuel: 250, besoinVoulu: 1000 })).toBeNull()
+  })
+})
+
+// ============================================================
+// Le plafond du cache. Sans lui, `localStorage` finit plein — et il refuse
+// alors TOUTE écriture, en silence.
+// ============================================================
+describe('ajouterAuCache', () => {
+  const noeud = n => ({ produit: n })
+
+  it('range une recette', () => {
+    const c = ajouterAuCache({}, 'A', noeud('A'), 1)
+    expect(c.A.noeud).toEqual(noeud('A'))
+    expect(c.A.quand).toBe(1)
+  })
+
+  it('remplace la même recette au lieu d’en garder deux', () => {
+    let c = ajouterAuCache({}, 'A', noeud('vieux'), 1)
+    c = ajouterAuCache(c, 'A', noeud('neuf'), 2)
+    expect(Object.keys(c)).toEqual(['A'])
+    expect(c.A.noeud).toEqual(noeud('neuf'))
+  })
+
+  it('au-delà du plafond, ce sont les PLUS VIEILLES qui partent', () => {
+    let c = {}
+    c = ajouterAuCache(c, 'vieille', noeud('v'), 1, 2)
+    c = ajouterAuCache(c, 'moyenne', noeud('m'), 2, 2)
+    c = ajouterAuCache(c, 'neuve', noeud('n'), 3, 2)
+    expect(Object.keys(c).sort()).toEqual(['moyenne', 'neuve'])
+  })
+
+  it('part d’un cache vide ou absent sans broncher', () => {
+    expect(Object.keys(ajouterAuCache(null, 'A', noeud('A'), 1))).toEqual(['A'])
   })
 })

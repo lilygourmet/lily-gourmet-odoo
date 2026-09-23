@@ -27,20 +27,31 @@ const tarte = {
   ],
 }
 
+// Combien de fois on est vraiment allé chez Odoo : c'est TOUT l'enjeu du
+// chargement « une fois pour toutes ».
+const appels = vi.hoisted(() => ({ liste: 0, fiche: 0, relire: 0 }))
+
+vi.mock('../lib/toast', () => ({
+  toast: Object.assign(() => {}, { success: () => {}, error: () => {} }),
+}))
 vi.mock('./AppHeader', () => ({ default: () => null }))
 vi.mock('./Skeleton', () => ({ default: () => null }))
 vi.mock('../lib/fabAnnexe', async importOriginal => {
   const vrai = await importOriginal()
   return {
     ...vrai,                                   // les VRAIES règles de calcul
-    loadToutFabAnnexe: async () => [tarte],
-    loadArticleFabAnnexe: async () => tarte,
+    loadToutFabAnnexe: async () => { appels.liste++; return [tarte] },
+    loadArticleFabAnnexe: async () => { appels.fiche++; return tarte },
+    relireRecettes: async () => { appels.relire++ },
   }
 })
 
 const { default: RecettesView } = await import('./RecettesView')
 
-beforeEach(() => { localStorage.clear() })
+beforeEach(() => {
+  localStorage.clear()
+  appels.liste = 0; appels.fiche = 0; appels.relire = 0
+})
 afterEach(() => cleanup())
 
 const ouvrirLaTarte = async () => {
@@ -137,5 +148,45 @@ describe('la fiche', () => {
     await ouvrirLaTarte()
     expect(document.body.textContent)
       .not.toMatch(/C'est fait|Il en est sorti|Imprimer/)
+  })
+})
+
+// ============================================================
+// « Que les recettes se chargent une fois pour toutes ; si besoin de mise à
+// jour, bouton pour tout charger — comme ça c'est pas long » (Layla,
+// 2026-09-23). Une seconde et demie par clic, c'était la moitié de l'écran.
+// ============================================================
+describe('charger une fois pour toutes', () => {
+  it('la deuxième ouverture ne redemande RIEN à Odoo', async () => {
+    await ouvrirLaTarte()
+    expect(appels.fiche).toBe(1)
+    cleanup()
+
+    await ouvrirLaTarte()
+    expect(appels.fiche).toBe(1)          // toujours un seul aller-retour
+  })
+
+  it('la liste non plus ne se recharge pas à chaque visite', async () => {
+    render(<RecettesView user={{ id: 'u1' }} />)
+    await screen.findByText('Tarte citron 23 cm')
+    expect(appels.liste).toBe(1)
+    cleanup()
+
+    render(<RecettesView user={{ id: 'u1' }} />)
+    await screen.findByText('Tarte citron 23 cm')
+    expect(appels.liste).toBe(1)
+  })
+
+  it('« Mettre à jour » fait tout relire — le serveur comme l’app', async () => {
+    await ouvrirLaTarte()
+    cleanup()
+    render(<RecettesView user={{ id: 'u1' }} />)
+    fireEvent.click(await screen.findByText('🔄 Mettre à jour'))
+    await waitFor(() => expect(appels.relire).toBe(1))
+    await waitFor(() => expect(appels.liste).toBe(2))
+
+    // Et la recette gardée a bien été oubliée : on y retourne.
+    fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
+    await waitFor(() => expect(appels.fiche).toBe(2))
   })
 })

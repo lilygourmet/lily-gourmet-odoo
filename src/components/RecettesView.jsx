@@ -26,9 +26,11 @@ import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { loadToutFabAnnexe, loadArticleFabAnnexe, parGateauMere, noeudDuChemin,
-  defautDe, ingredientsPour } from '../lib/fabAnnexe'
+  defautDe, ingredientsPour, relireRecettes } from '../lib/fabAnnexe'
 import { Clavier } from './FabAnnexe2Simple'
-import { quantitePour } from '../lib/recettes'
+import { toast } from '../lib/toast'
+import { quantitePour, recetteGardee, garderLaRecette,
+  listeGardee, garderLaListe, toutOublier } from '../lib/recettes'
 import { propre, qte, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
 
 /** Une ligne de la liste : le nom, son unité, rien d'autre. */
@@ -82,9 +84,14 @@ function LigneIngredient({ l, onOuvrirClavier, onDescendre }) {
 }
 
 export default function RecettesView({ user, onLogout, onNavigate, activeView }) {
-  const [tout, setTout] = useState(null)
+  // ⚠️ ON PART DE CE QU'ON A DÉJÀ LU (Layla, 2026-09-23 : « que les recettes se
+  // chargent une fois pour toutes […] comme ça c'est pas long »). La liste et
+  // les recettes sont gardées dans le téléphone ; Odoo n'est rappelé que par le
+  // bouton « Mettre à jour ».
+  const [tout, setTout] = useState(listeGardee)
   const [cherche, setCherche] = useState('')
   const [erreur, setErreur] = useState('')
+  const [maj, setMaj] = useState(false)
   // L'article ouvert, sa cascade, et l'échelle à laquelle on la lit.
   const [brut, setBrut] = useState(null)
   const [chemin, setChemin] = useState([])
@@ -93,9 +100,37 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
   // `null` pour l'article de tête — c'est lui qu'on règle alors directement.
   const [clavier, setClavier] = useState(null)
 
-  useEffect(() => {
-    loadToutFabAnnexe().then(setTout).catch(e => setErreur(e.message || String(e)))
-  }, [])
+  const chargerLaListe = useCallback(() => loadToutFabAnnexe()
+    .then(l => { setTout(l); garderLaListe(l) })
+    .catch(e => setErreur(e.message || String(e))), [])
+
+  // Rien en mémoire : on va la chercher une fois. Ensuite, plus jamais tout seul.
+  useEffect(() => { if (!listeGardee()) chargerLaListe() }, [chargerLaListe])
+
+  /**
+   * ⚠️ LE BOUTON RÉPOND AU DOIGT (règle de Layla) : relire les recettes prend
+   * plusieurs secondes chez Odoo, et pendant ce temps-là il faut VOIR qu'il se
+   * passe quelque chose — sinon on appuie deux fois.
+   *
+   * On fait oublier au SERVEUR (il garde les nomenclatures une demi-heure), et
+   * à l'app tout ce qu'elle avait gardé : la prochaine ouverture relira du frais.
+   */
+  const toutRecharger = async () => {
+    if (maj) return
+    navigator.vibrate?.(15)
+    setMaj(true)
+    try {
+      await relireRecettes()
+      toutOublier()
+      setTout(null)
+      await chargerLaListe()
+      toast('Recettes relues.')
+    } catch (e) {
+      toast(e.message || String(e))
+    } finally {
+      setMaj(false)
+    }
+  }
 
   const ouvrir = useCallback(async produit => {
     navigator.vibrate?.(10)
@@ -105,10 +140,14 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
     // ⚠️ ON REPART DE LA RECETTE D'ODOO à chaque ouverture : le chef compare
     // toujours à elle, jamais à l'échelle qu'il avait réglée la veille.
     setQuantites({})
+    // Déjà lue : elle s'ouvre sans un aller-retour.
+    const gardee = recetteGardee(produit)
+    if (gardee) { setBrut(gardee); return }
     try {
       const a = await loadArticleFabAnnexe(produit)
       if (!a) { setErreur(`« ${propre(produit)} » n'a pas de recette lisible.`); setChemin([]); return }
       setBrut(a)
+      garderLaRecette(produit, a)
     } catch (e) {
       setErreur(e.message || String(e))
       setChemin([])
@@ -233,10 +272,19 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
                         mb-3 text-[12.5px]">{erreur}</p>
         )}
 
-        <input value={cherche} onChange={e => setCherche(e.target.value)}
-          placeholder="Chercher une recette" aria-label="Chercher une recette"
-          className="w-full bg-cream-warm border border-line rounded-xl px-3 py-2
-                     text-[14px] mb-3" />
+        <div className="flex items-center gap-2 mb-3">
+          <input value={cherche} onChange={e => setCherche(e.target.value)}
+            placeholder="Chercher une recette" aria-label="Chercher une recette"
+            className="flex-1 min-w-0 bg-cream-warm border border-line rounded-xl px-3 py-2
+                       text-[14px]" />
+          {/* Les recettes ne se relisent QUE d'ici : c'est le prix de
+              l'instantané, et c'est le choix de Layla. */}
+          <button onClick={toutRecharger} disabled={maj}
+            className={`flex-none rounded-xl px-3 py-2 text-[12.5px] font-extrabold
+              ${maj ? 'bg-cream-deep text-ink-mute' : 'bg-cream-warm border border-line text-ink-soft'}`}>
+            {maj ? 'en cours…' : '🔄 Mettre à jour'}
+          </button>
+        </div>
 
         {!tout && !erreur && <Skeleton />}
         {tout && !groupes.length && (
