@@ -129,3 +129,37 @@ export const garderLaListe = l => ecrire(CLE_LISTE, l)
 
 /** Le bouton « Mettre à jour » : on oublie tout, on relira chez Odoo. */
 export const toutOublier = () => { memo = {}; oublier(CLE); oublier(CLE_LISTE) }
+
+// ============================================================
+// CE QUE LE CHEF A RELU.
+//
+// « Recette vérifiée et validée par le chef : ça sort de la liste et va dans le
+// sous-onglet Validés. Donc onglet À vérifier et onglet Validés » (Layla,
+// 2026-09-23).
+//
+// ⚠️ ÇA NE SE GARDE PAS DANS LE TÉLÉPHONE, contrairement aux recettes. Deux
+// personnes regardent la même liste : si la marque du chef restait dans son
+// appareil, Layla ne verrait jamais où il en est. On la relit donc à chaque
+// ouverture de l'écran — c'est une lecture Supabase, elle ne coûte rien.
+// ============================================================
+
+/** Ce qui est validé aujourd'hui : [{ produit, valide_le, valide_par }]. */
+export async function loadValidees() {
+  const r = await fetch('/api/fab-annexe?validees=1&cb=' + Date.now())
+  if (!r.ok) throw new Error(`Serveur indisponible (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+  return d.validees || []
+}
+
+/** Poser la marque, ou la retirer (`valide: false`). */
+export async function marquerValidee(produit, userId, valide = true) {
+  const r = await fetch('/api/fab-annexe?validees=1', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ produit, userId: userId || null, valide }),
+  })
+  if (!r.ok) throw new Error(`Serveur indisponible (${r.status})`)
+  const d = await r.json()
+  if (d.error) throw new Error(d.error)
+}

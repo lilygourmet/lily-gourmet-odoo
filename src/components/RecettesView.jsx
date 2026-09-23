@@ -30,7 +30,8 @@ import { loadToutFabAnnexe, loadArticleFabAnnexe, loadArticlesFabAnnexe, parGate
 import { Clavier } from './FabAnnexe2Simple'
 import { toast } from '../lib/toast'
 import { quantitePour, qteRecette, recetteGardee, recettesGardees, garderLaRecette,
-  garderDesRecettes, listeGardee, garderLaListe, toutOublier } from '../lib/recettes'
+  garderDesRecettes, listeGardee, garderLaListe, toutOublier,
+  loadValidees, marquerValidee } from '../lib/recettes'
 import { propre, uniteAffichee, enGrammes, enUnite } from '../lib/ecranSimple'
 
 /** Une ligne de la liste : le nom, son unité, rien d'autre. */
@@ -83,6 +84,32 @@ function LigneIngredient({ l, onOuvrirClavier, onDescendre }) {
   )
 }
 
+/**
+ * Le geste du chef : « je l'ai relue, elle est bonne ».
+ *
+ * Elle quitte alors « À vérifier » pour « Validés ». Rien d'autre ne change —
+ * ni Odoo, ni la fabrication : c'est une marque de relecture, rien de plus.
+ */
+function Validation({ deja, onBasculer }) {
+  if (deja) {
+    return (
+      <div className="mt-4 rounded-2xl bg-success/10 border border-success px-3 py-2.5">
+        <p className="text-[13px] font-extrabold text-success">✅ Validée par le chef</p>
+        <button onClick={onBasculer} className="text-[12px] text-ink-mute underline mt-0.5">
+          la remettre à vérifier
+        </button>
+      </div>
+    )
+  }
+  return (
+    <button onClick={onBasculer}
+      className="w-full mt-4 rounded-2xl bg-success text-cream py-3
+                 text-[15px] font-extrabold active:scale-95 transition">
+      ✅ Vérifiée et validée
+    </button>
+  )
+}
+
 export default function RecettesView({ user, onLogout, onNavigate, activeView }) {
   // ⚠️ ON PART DE CE QU'ON A DÉJÀ LU (Layla, 2026-09-23 : « que les recettes se
   // chargent une fois pour toutes […] comme ça c'est pas long »). La liste et
@@ -92,6 +119,9 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
   const [cherche, setCherche] = useState('')
   const [erreur, setErreur] = useState('')
   const [maj, setMaj] = useState(false)
+  // Ce que le chef a relu, et sur quel onglet on est.
+  const [validees, setValidees] = useState(null)
+  const [onglet, setOnglet] = useState('averifier')
   // Le préchargement en fond : combien de recettes sont déjà prêtes.
   const [pretes, setPretes] = useState(0)
   // L'article ouvert, sa cascade, et l'échelle à laquelle on la lit.
@@ -108,6 +138,13 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
 
   // Rien en mémoire : on va la chercher une fois. Ensuite, plus jamais tout seul.
   useEffect(() => { if (!listeGardee()) chargerLaListe() }, [chargerLaListe])
+
+  // ⚠️ LA MARQUE DU CHEF SE RELIT TOUJOURS. Deux personnes regardent la même
+  // liste : gardée dans le téléphone, elle ne dirait qu'à lui où il en est.
+  const relireValidees = useCallback(() => loadValidees()
+    .then(v => setValidees(new Map(v.map(x => [x.produit, x]))))
+    .catch(() => setValidees(new Map())), [])
+  useEffect(() => { relireValidees() }, [relireValidees])
 
   /**
    * ⚠️ TOUT EST PRÊT AVANT QU'ELLE N'OUVRE (Layla, 2026-09-23 : « charge les
@@ -208,6 +245,15 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
     const lignes = noeud ? ingredientsPour(noeud, q) : []
     const regle = noeud && q !== parOdoo
 
+    const basculerValidation = async produit => {
+      navigator.vibrate?.(15)
+      try {
+        await marquerValidee(produit, user?.id, !validees?.get(produit))
+        await relireValidees()
+        toast(validees?.get(produit) ? 'Remise à vérifier.' : 'Validée.')
+      } catch (e) { toast(e.message || String(e)) }
+    }
+
     const poser = v => setQuantites(x => ({ ...x, [noeud.produit]: v }))
     // Toucher un ingrédient, c'est régler la recette entière sur lui.
     const echelleDepuis = (l, voulu) => {
@@ -271,6 +317,15 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
                   onDescendre={() => setChemin([...chemin, l.produit])} />
               ))}
 
+              {/* ⚠️ ON NE VALIDE QUE L'ARTICLE DE TÊTE. Descendre dans une
+                  préparation, c'est regarder un détail de la même recette : la
+                  valider là ferait croire qu'on a relu une autre fiche. Elle a
+                  la sienne dans la liste, avec son propre bouton. */}
+              {chemin.length === 1 && (
+                <Validation deja={validees?.get(chemin[0])}
+                  onBasculer={() => basculerValidation(chemin[0])} />
+              )}
+
               {/* ⚠️ TOUT SE TAPE EN GRAMMES, comme tout s'affiche en grammes
                   (Layla, 2026-09-23). La recette d'Odoo écrit parfois des kilos ;
                   les convertir de tête au-dessus d'une balance, c'est le facteur
@@ -296,13 +351,34 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
   }
 
   // ---------- LA LISTE ----------
-  const groupes = tout ? parGateauMere(tout, cherche, true) : []
+  // ⚠️ CE QUI EST VALIDÉ SORT DE LA LISTE (Layla, 2026-09-23). Tant qu'on ne
+  // sait pas encore ce qui est validé, on montre tout : mieux vaut une liste
+  // complète une seconde de trop qu'une liste qui se vide sous les yeux.
+  const estValidee = p => !!validees?.get(p)
+  const pourLOnglet = (tout || []).filter(a =>
+    (onglet === 'valides' ? estValidee(a.produit) : !estValidee(a.produit)))
+  const groupes = tout ? parGateauMere(pourLOnglet, cherche, true) : []
+  const nbValides = (tout || []).filter(a => estValidee(a.produit)).length
 
   return (
     <div className="min-h-screen bg-cream">
       <AppHeader {...nav} />
       <div className="max-w-[620px] mx-auto px-4 py-4">
         <h1 className="font-fraunces italic text-[24px] text-ink mb-3">Recettes</h1>
+
+        {/* Deux onglets, pas plus : ce qu'il reste à relire, et ce qui est fait. */}
+        <div className="flex gap-1.5 mb-3">
+          {[['averifier', 'À vérifier', (tout || []).length - nbValides],
+            ['valides', 'Validés', nbValides]].map(([cle, mot, n]) => (
+            <button key={cle} onClick={() => { setOnglet(cle); setCherche('') }}
+              className={`flex-1 rounded-xl py-2 text-[13px] font-extrabold border
+                ${onglet === cle
+      ? 'bg-bordeaux text-cream border-bordeaux'
+      : 'bg-cream-warm text-ink-soft border-line'}`}>
+              {mot} {tout ? `(${n})` : ''}
+            </button>
+          ))}
+        </div>
 
         {erreur && (
           <p className="bg-bordeaux/10 border border-bordeaux text-bordeaux p-2.5 rounded-xl
@@ -333,7 +409,11 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
 
         {!tout && !erreur && <Skeleton />}
         {tout && !groupes.length && (
-          <p className="text-[13.5px] text-ink-soft">Rien qui corresponde.</p>
+          <p className="text-[13.5px] text-ink-soft">
+            {cherche ? 'Rien qui corresponde.'
+              : onglet === 'valides' ? 'Aucune recette validée pour l’instant.'
+                : 'Tout est vérifié. 🎉'}
+          </p>
         )}
 
         {groupes.map(g => (

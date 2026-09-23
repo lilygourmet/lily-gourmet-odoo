@@ -50,6 +50,27 @@ vi.mock('../lib/fabAnnexe', async importOriginal => {
 const { default: RecettesView } = await import('./RecettesView')
 const { toutOublier } = await import('../lib/recettes')
 
+// Le serveur des validations, en miniature : l'écran passe par le vrai code de
+// `../lib/recettes`, donc par un vrai fetch. On répond à sa place.
+let VALIDEES = []
+const posts = []
+beforeEach(() => {
+  VALIDEES = []
+  posts.length = 0
+  globalThis.fetch = vi.fn(async (url, opts) => {
+    if (!String(url).includes('validees=1')) throw new Error('appel inattendu : ' + url)
+    if (opts?.method === 'POST') {
+      const b = JSON.parse(opts.body)
+      posts.push(b)
+      VALIDEES = b.valide === false
+        ? VALIDEES.filter(v => v.produit !== b.produit)
+        : [...VALIDEES, { produit: b.produit, valide_le: '2026-09-23T10:00:00Z' }]
+      return { ok: true, json: async () => ({ ok: true }) }
+    }
+    return { ok: true, json: async () => ({ validees: VALIDEES }) }
+  })
+})
+
 beforeEach(() => {
   // ⚠️ `toutOublier()` et pas seulement `localStorage.clear()` : le cache garde
   // aussi une copie EN MÉMOIRE, qui survit d'un test à l'autre. Sans ça, le
@@ -208,5 +229,47 @@ describe('charger une fois pour toutes', () => {
     await waitFor(() => expect(appels.relire).toBe(1))
     await waitFor(() => expect(appels.liste).toBe(2))
     await waitFor(() => expect(appels.lot).toBe(2))
+  })
+})
+
+// ============================================================
+// « Recette vérifiée et validée par le chef : ça sort de la liste et va dans le
+// sous-onglet Validés. Donc onglet À vérifier et onglet Validés » (Layla,
+// 2026-09-23).
+// ============================================================
+describe('vérifiée et validée', () => {
+  it('la recette quitte « À vérifier » pour « Validés »', async () => {
+    render(<RecettesView user={{ id: 'u1' }} />)
+    fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
+    fireEvent.click(await screen.findByText('✅ Vérifiée et validée'))
+    await screen.findByText('✅ Validée par le chef')
+    expect(posts[0]).toMatchObject({ produit: 'SM. Tarte Citron 23 cm', valide: true })
+
+    // Retour à la liste : elle n'est plus à vérifier, elle est dans l'autre onglet.
+    fireEvent.click(screen.getByText(/Toutes les recettes/))
+    await waitFor(() => expect(screen.getByText(/Tout est vérifié/)).toBeTruthy())
+    fireEvent.click(screen.getByText(/^Validés/))
+    expect(await screen.findByText('Tarte citron 23 cm')).toBeTruthy()
+  })
+
+  it('on peut la remettre à vérifier', async () => {
+    VALIDEES = [{ produit: 'SM. Tarte Citron 23 cm', valide_le: '2026-09-23T10:00:00Z' }]
+    render(<RecettesView user={{ id: 'u1' }} />)
+    fireEvent.click(await screen.findByText(/^Validés/))
+    fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
+    fireEvent.click(await screen.findByText('la remettre à vérifier'))
+    await screen.findByText('✅ Vérifiée et validée')
+    expect(posts[0]).toMatchObject({ valide: false })
+  })
+
+  // ⚠️ Une préparation ouverte par le chevron est un DÉTAIL de la même
+  // recette : la valider là ferait croire qu'on a relu une autre fiche.
+  it('on ne valide pas depuis une sous-recette', async () => {
+    render(<RecettesView user={{ id: 'u1' }} />)
+    fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
+    await screen.findByText('Creme Citron')
+    fireEvent.click(screen.getByLabelText('Voir la recette de Creme Citron'))
+    await waitFor(() =>
+      expect(screen.queryByText('✅ Vérifiée et validée')).toBeNull())
   })
 })

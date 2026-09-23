@@ -1354,6 +1354,42 @@ export default async function handler(req, res) {
       return res.status(200).json({ produits: (data || []).map(x => x.produit) })
     }
 
+    /**
+     * LES RECETTES VALIDÉES PAR LE CHEF.
+     *
+     * « Recette vérifiée et validée par le chef : ça sort de la liste et va
+     * dans le sous-onglet Validés » (Layla, 2026-09-23).
+     *
+     * ⚠️ ÇA NE TOUCHE NI ODOO NI LA FABRICATION. C'est une marque posée par le
+     * chef sur ce qu'il a relu — rien d'autre ne la regarde.
+     *
+     * ⚠️ ÉCRITURE PAR L'API, comme `annexe_mise_en_forme` : ouvrir cette table
+     * en écriture aux navigateurs rouvrirait la porte fermée le 2026-06-05.
+     */
+    if (req.query.validees) {
+      if (req.method === 'POST') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
+        const produit = String(body.produit || '').trim()
+        if (!produit) return res.status(400).json({ error: 'produit manquant' })
+        // Dévalider, c'est effacer : l'état du moment, pas un journal.
+        if (body.valide === false) {
+          const { error: e0 } = await sb.from('recettes_validees').delete().eq('produit', produit)
+          if (e0) return res.status(200).json({ error: e0.message })
+          return res.status(200).json({ ok: true })
+        }
+        const { error: e1 } = await sb.from('recettes_validees')
+          .upsert({ produit, valide_le: new Date().toISOString(), valide_par: body.userId || null },
+            { onConflict: 'produit' })
+        if (e1) return res.status(200).json({ error: e1.message })
+        return res.status(200).json({ ok: true })
+      }
+      const { data, error: e2 } = await sb.from('recettes_validees')
+        .select('produit, valide_le, valide_par').limit(2000)
+      if (e2) return res.status(200).json({ error: e2.message })
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({ validees: data || [] })
+    }
+
     // Ce qui reste à mettre en forme — l'onglet « À finir ».
     //
     // ⚠️ LA PASTILLE NE PAIE PAS LE PRIX FORT. Ce calcul demande six secondes à
