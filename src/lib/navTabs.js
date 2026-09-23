@@ -14,6 +14,7 @@ import {
   canStockProdVitrine, canStockProdAnnexe, canSeeInventaire,
   canSeeMinMaxCd, canSeeMinMaxAnnexe,
   canDeclarer,
+  canRecettes,
   canVoirDonne,
   canRebuts,
 } from './auth'
@@ -33,6 +34,11 @@ const TAB_DEFS = [
   // Sa propre permission : déclarer ce qu'on a fait n'oblige plus à ouvrir
   // tout Fabrication Annexe 2. (Layla, 2026-09-21.)
   { view: 'a-declarer',          emoji: '✍️', label: 'À déclarer',           can: u => !isLivreur(u) && canDeclarer(u) },
+  // ⚠️ LIRE N'EST PAS FABRIQUER. « Recettes » montre tout ce que la maison sait
+  // faire, pour le vérifier avant de le lancer — et rien d'autre : pas de
+  // déclaration, pas d'ordre, pas d'écriture chez Odoo. Sa permission est à
+  // elle, « à partager avec lui seul » (Layla, 2026-09-23).
+  { view: 'recettes',           emoji: '📖', label: 'Recettes',            can: u => !isLivreur(u) && canRecettes(u) },
   // « À finir, c'est un autre onglet avec badge du nombre d'articles »
   // (Layla, 2026-09-20) : ce qui est sorti de la cuve et attend d'être coulé,
   // pipé, découpé.

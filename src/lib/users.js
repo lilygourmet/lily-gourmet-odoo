@@ -12,7 +12,7 @@ import { PERM_KEYS } from './permsList'
 async function _loadUsers() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_etiquettes_boites, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_photoshop, perm_valider_of, perm_valider_annexe, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod, perm_fabrication_annexe, perm_stock_poly, perm_simu_gateaux, perm_transfert_annexe, perm_transfert_boutique, perm_transfert_produits, perm_facture_ocp, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_besoins_achat, perm_achat, perm_check_cd, perm_inventaire, perm_minmax_cd, perm_minmax_annexe, perm_declarer, perm_donne, perm_rebuts, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
+    .select('id, username, full_name, role, active, perm_sync, perm_check, perm_polys, perm_delete, perm_patissier, perm_print_batch, perm_print_single, perm_recaps, perm_define_gm, prod_category, perm_prod, perm_sales, team_id, perm_calendar, perm_labels, perm_freezer, perm_messages, perm_etiquettes, perm_etiquettes_boites, perm_cake_vision, perm_cake_vision_edit, perm_checklist, perm_stock_patissier, perm_stock_cafe, perm_stock_audit, perm_stock_gs, perm_caisse, perm_caisse_admin, perm_hr, perm_admin_users, perm_conversations, perm_devis, perm_commande, perm_ai_tools, perm_photoshop, perm_valider_of, perm_valider_annexe, perm_fabrication_cd, perm_fabrication_glacage, perm_fabrication_pate_sucre, perm_fabrication_prod, perm_fabrication_annexe, perm_stock_poly, perm_simu_gateaux, perm_transfert_annexe, perm_transfert_boutique, perm_transfert_produits, perm_facture_ocp, perm_notif_modif, perm_notif_ocp, perm_modification, perm_mark_payment_proof, perm_view_payments, perm_validate_payments, economat_profil, perm_econome, perm_vitrine_sale, perm_stock_prod_vitrine, perm_stock_prod_annexe, perm_stock_minmax, perm_livraisons_dispatch, perm_livreur_defaut, perm_livreur_assigne, perm_besoins_achat, perm_achat, perm_check_cd, perm_inventaire, perm_minmax_cd, perm_minmax_annexe, perm_declarer, perm_donne, perm_rebuts, perm_recettes, whatsapp, employe_id, created_at, navbar_config, groupe, livreur_defaut')
     .order('created_at', { ascending: true })
 
   if (error) throw error
@@ -64,7 +64,7 @@ export async function createUser({
   perm_check_cd = false,
   perm_simu_gateaux = false,
   perm_transfert_annexe = false, perm_transfert_boutique = false, perm_transfert_produits = false,
-  perm_declarer = false, perm_donne = false, perm_rebuts = false,
+  perm_declarer = false, perm_donne = false, perm_rebuts = false, perm_recettes = false,
   perm_inventaire = false,
   perm_minmax_cd = false, perm_minmax_annexe = false,
   perm_facture_ocp = false,
@@ -128,6 +128,7 @@ export async function createUser({
           perm_declarer,
           perm_donne,
           perm_rebuts,
+          perm_recettes,
           perm_inventaire,
           perm_minmax_cd,
           perm_minmax_annexe,
@@ -300,6 +301,7 @@ export async function updateUser(userId, {
   perm_simu_gateaux,
   perm_transfert_annexe, perm_transfert_boutique, perm_transfert_produits, perm_declarer, perm_donne,
   perm_rebuts,
+  perm_recettes,
   perm_inventaire,
   perm_minmax_cd, perm_minmax_annexe,
   perm_facture_ocp,
@@ -372,6 +374,7 @@ export async function updateUser(userId, {
   if (perm_declarer !== undefined) updates.perm_declarer = perm_declarer
   if (perm_donne !== undefined) updates.perm_donne = perm_donne
   if (perm_rebuts !== undefined) updates.perm_rebuts = perm_rebuts
+  if (perm_recettes !== undefined) updates.perm_recettes = perm_recettes
   if (perm_inventaire !== undefined) updates.perm_inventaire = perm_inventaire
   if (perm_minmax_cd !== undefined) updates.perm_minmax_cd = perm_minmax_cd
   if (perm_minmax_annexe !== undefined) updates.perm_minmax_annexe = perm_minmax_annexe

@@ -10,6 +10,7 @@ const FabricationView = lazy(() => import('./components/FabricationView'))
 const PrepaView = lazy(() => import('./components/PrepaView'))
 const FabricationProdView = lazy(() => import('./components/FabricationProdView'))
 const FabAnnexe2View = lazy(() => import('./components/FabAnnexe2SimpleView'))
+const RecettesView = lazy(() => import('./components/RecettesView'))
 const ADeclarerView = lazy(() => import('./components/ADeclarerView'))
 const AFinirView = lazy(() => import('./components/AFinirView'))
 const RebutView = lazy(() => import('./components/RebutView'))
@@ -407,6 +408,7 @@ function App() {
     if (activeView === 'fabrication-pate-sucre') return <PrepaView key="pate-sucre" quoi="pate-sucre" {...navProps} />
     if (activeView === 'fabrication-prod') return <FabricationProdView {...navProps} />
     if (activeView === 'fabrication-annexe-2') return <FabAnnexe2View {...navProps} />
+    if (activeView === 'recettes') return <RecettesView {...navProps} />
     if (activeView === 'a-declarer') return <ADeclarerView {...navProps} />
     if (activeView === 'a-finir') return <AFinirView {...navProps} />
     if (activeView === 'donne') return <DonneView {...navProps} />
