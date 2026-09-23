@@ -1,3 +1,4 @@
+import { FUSEAU_MAROC } from './fuseauMaroc'
 // « Vendredi 29 août · Aujourd'hui » — le repère de jour de l'équipe, partagé
 // par CD Négatif et Check CD- pour que les deux écrans parlent pareil.
 const JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
@@ -31,7 +32,7 @@ export function quandFait(t) {
   if (!t) return ''
   const d = new Date(t)
   if (isNaN(d.getTime())) return ''
-  const CASA = { timeZone: 'Africa/Casablanca' }
+  const CASA = { timeZone: FUSEAU_MAROC }
   const jour = d.toLocaleDateString('fr-FR', { ...CASA, day: '2-digit', month: '2-digit' })
   const heure = d.toLocaleTimeString('fr-FR', { ...CASA, hour: '2-digit', minute: '2-digit' })
   return `${jour} à ${heure.replace(':', 'h')}`

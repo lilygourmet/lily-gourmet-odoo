@@ -14,6 +14,7 @@ import { ganachesParJour, ditLeGateau, ditLePoids } from '../lib/ganaches'
 import { quandFait } from '../lib/jourLisible'
 import { toast } from '../lib/toast'
 import { supabase } from '../lib/supabase'
+import { FUSEAU_MAROC } from '../lib/fuseauMaroc'
 
 // ====== « Ce matin » : ce qu'il y a à fabriquer en cakedesign ======
 // Déroulé pensé pour la personne qui arrive le matin (validé avec Layla) :
@@ -52,7 +53,7 @@ const BASES = [/cr[eè]me au beurre nature/i, /craquant/i, /sirop/i, /amandes\s*
 // Bases ajoutées par Layla depuis l'écran, en plus de celles reconnues au nom.
 // Variable de module : les petits composants d'affichage s'en servent aussi.
 let basesEnPlus = []
-const CASA = { timeZone: 'Africa/Casablanca' }   // Odoo renvoie de l'UTC
+const CASA = { timeZone: FUSEAU_MAROC }   // Odoo renvoie de l'UTC
 
 const dt = q => new Date(String(q || '').replace(' ', 'T') + 'Z')
 const jourCourt = q => dt(q).toLocaleDateString('fr-FR', { ...CASA, day: '2-digit', month: '2-digit' })

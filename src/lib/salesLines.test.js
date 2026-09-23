@@ -1,12 +1,31 @@
 import { describe, it, expect } from 'vitest'
 import { sumQty, stripOdooPrefix, groupDeliveriesWithFullOrder, groupByHourThenClient } from './salesLines'
+import { decalageMaroc } from './fuseauMaroc'
 
+// ⚠️ CE TEST DISAIT « (Maroc UTC+1) », ET C'ÉTAIT LUI LE PROBLÈME.
+//
+// « On est passé à GMT 0 — c'est surtout pour les commandes » (Layla,
+// 2026-09-23). Mesuré le soir même : son téléphone 20:02, UTC 20:02, et
+// `Africa/Casablanca` 21:02. La base de fuseaux du serveur avait une heure
+// d'avance, et treize conversions la croyaient — dont celle-ci.
+//
+// Le décalage du Maroc vit maintenant dans un seul réglage
+// (`src/lib/fuseauMaroc.js`) ; ce test suit ce réglage au lieu de figer une
+// valeur qui change deux fois par an.
 describe('groupByHourThenClient — heure du Maroc', () => {
-  it('10h UTC en juin → tranche 11h-12h (Maroc UTC+1)', () => {
+  it('10 h UTC tombe dans la tranche du Maroc, quel que soit le décalage', () => {
     const res = groupByHourThenClient([
       { order_num: 'S1', client_name: 'X', delivery_at: '2026-06-05T10:00:00Z' },
     ])
-    expect([...res.keys()]).toContain('11h-12h')
+    const h = 10 + decalageMaroc(new Date('2026-06-05T10:00:00Z'))
+    expect([...res.keys()]).toContain(`${h}h-${h + 1}h`)
+  })
+
+  it('et aujourd’hui, le Maroc étant à GMT+0, c’est bien 10h-11h', () => {
+    const res = groupByHourThenClient([
+      { order_num: 'S1', client_name: 'X', delivery_at: '2026-06-05T10:00:00Z' },
+    ])
+    expect([...res.keys()]).toContain('10h-11h')
   })
 })
 

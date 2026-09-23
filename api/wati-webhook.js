@@ -25,6 +25,7 @@ import { sendPushToTargets } from './push.js'
 import { generateText } from 'ai'
 import crypto from 'crypto'
 import { waitUntil } from '@vercel/functions'
+import { FUSEAU_MAROC } from '../src/lib/fuseauMaroc.js'
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -506,7 +507,7 @@ Pour une commande urgente, merci de nous appeler à partir de 10h, nous serons h
 📞 0667-873258, 0670-055833 ou au 0537-653186`
 
 function moroccoHour() {
-  const h = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Casablanca', hour: '2-digit', hourCycle: 'h23' }).format(new Date())
+  const h = new Intl.DateTimeFormat('en-GB', { timeZone: FUSEAU_MAROC, hour: '2-digit', hourCycle: 'h23' }).format(new Date())
   return parseInt(h, 10)
 }
 
@@ -953,14 +954,14 @@ async function prepareSuggestedReply(supabase, conversationId) {
   }).join('\n')
 
   // Salutation selon l'heure locale au Maroc : Bonsoir de 18h à 5h, Bonjour sinon.
-  const hourPart = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Casablanca', hour: '2-digit', hour12: false })
+  const hourPart = new Intl.DateTimeFormat('en-GB', { timeZone: FUSEAU_MAROC, hour: '2-digit', hour12: false })
     .formatToParts(new Date()).find(p => p.type === 'hour')?.value
   const hour = Number(hourPart)
   const greeting = (Number.isFinite(hour) && (hour >= 18 || hour < 5)) ? 'Bonsoir' : 'Bonjour'
 
   // « Bonjour » une seule fois par jour : si on a déjà écrit à la cliente
   // aujourd'hui (réponse agent ou auto-réponse), on ne la re-salue pas.
-  const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca' })
+  const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: FUSEAU_MAROC })
   const today = dayFmt.format(new Date())
   const alreadyGreetedToday = ordered.some(m =>
     (m.sender_type === 'agent' || m.sender_type === 'system') &&
@@ -3286,7 +3287,10 @@ function fmtAmount(n) {
     .format(Number(n) || 0) + ' DH'
 }
 // "24/05/2026 15:00" depuis le format Odoo "YYYY-MM-DD HH:MM:SS" (stocké en UTC).
-// Converti à l'heure du Maroc (Africa/Casablanca gère aussi le Ramadan/UTC+0).
+// Converti à l'heure du Maroc — voir `src/lib/fuseauMaroc.js`.
+// ⚠️ On ne demande PLUS le décalage à `Africa/Casablanca` : le 2026-09-23, le
+// pays était à GMT+0 et la base de fuseaux du serveur croyait encore UTC+1.
+// Toutes les livraisons saisies partaient donc avec une heure d'avance.
 // Convertit une date + heure LOCALE (Maroc) en datetime UTC "YYYY-MM-DD HH:MM:SS" pour Odoo.
 // Odoo stocke en UTC ; sans ça, "19:00" saisi s'affichait "20:00" (Maroc = UTC+1).
 function moroccoLocalToUtc(dateStr, timeStr) {
@@ -3294,7 +3298,7 @@ function moroccoLocalToUtc(dateStr, timeStr) {
   const [hh, mm] = String(timeStr || '00:00').split(':').map(Number)
   // Décalage Maroc (UTC+1, ou UTC+0 pendant le Ramadan) calculé pour CETTE date.
   const probe = new Date(Date.UTC(Y, M - 1, D, 12, 0, 0))
-  const loc = new Date(probe.toLocaleString('en-US', { timeZone: 'Africa/Casablanca' }))
+  const loc = new Date(probe.toLocaleString('en-US', { timeZone: FUSEAU_MAROC }))
   const utc = new Date(probe.toLocaleString('en-US', { timeZone: 'UTC' }))
   const offsetH = Math.round((loc - utc) / 3600000)
   const dt = new Date(Date.UTC(Y, M - 1, D, (hh || 0) - offsetH, mm || 0, 0))
@@ -3351,7 +3355,7 @@ async function majCreneauApresLigne(uid, orderId) {
       // l'heure de CUISINE change : on la recule de 30 min, et seulement sur un
       // devis (sur une commande confirmée, c'est l'écran qui le demande).
       const promis = new Date(String(o.commitment_date).replace(' ', 'T') + 'Z')
-      const hh = m => m.toLocaleString('fr-FR', { timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      const hh = m => m.toLocaleString('fr-FR', { timeZone: FUSEAU_MAROC, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
       const lisible = t => { const [h, m] = hh(t).split(':'); return `${parseInt(h, 10)}h${m !== '00' ? m : ''}` }
       await garderCreneau(o.name, `${lisible(promis)}-${lisible(new Date(promis.getTime() + 120 * 60000))}`)
       if (brouillon) {
@@ -3403,7 +3407,7 @@ function fmtPickup(s) {
   const d = new Date(String(s).replace(' ', 'T') + 'Z')
   if (isNaN(d)) return String(s)
   return d.toLocaleString('fr-FR', {
-    timeZone: 'Africa/Casablanca',
+    timeZone: FUSEAU_MAROC,
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
@@ -3499,7 +3503,7 @@ function moroccoHourFromUtc(utcStr) {
   if (!utcStr) return null
   const d = new Date(String(utcStr).replace(' ', 'T') + 'Z')
   if (isNaN(d)) return null
-  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Casablanca', hour: '2-digit', hourCycle: 'h23' }).format(d))
+  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: FUSEAU_MAROC, hour: '2-digit', hourCycle: 'h23' }).format(d))
 }
 
 // Charge CAKE DESIGN (CD-) par créneau horaire d'un jour donné (pour guider le planning).
@@ -3611,7 +3615,7 @@ async function handleCdDay(req, res) {
   const endUtc = moroccoLocalToUtc(date, '23:59')
   const startIso = startUtc.replace(' ', 'T') + 'Z'
   const endIso = endUtc.replace(' ', 'T') + 'Z'
-  const hourMaroc = (d) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Casablanca', hour: '2-digit', hourCycle: 'h23' }).format(d))
+  const hourMaroc = (d) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: FUSEAU_MAROC, hour: '2-digit', hourCycle: 'h23' }).format(d))
   // « Ganache Cakedesign » = supplément, PAS un gâteau → exclu du planning.
   const firstReal = (name) => String(name || '').split('\n').map(s => s.trim().replace(/^\[\s*\d+\s*\]\s*/, '')).find(Boolean) || ''
   const isGanache = (s) => /^ganache/i.test(String(s || '').trim().replace(/^\[\s*\d+\s*\]\s*/, '').replace(/^(CD-|GM-|GMD-)\s*/i, '').replace(/^\[\s*\d+\s*\]\s*/, ''))
@@ -3880,7 +3884,7 @@ async function handleOcpFactureData(req, res) {
 function utcToMarocDate(s) {
   if (!s) return { iso: '', fr: '—' }
   const d = new Date(String(s).replace(' ', 'T') + 'Z')
-  const p = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Casablanca', day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(d)
+  const p = new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU_MAROC, day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(d)
   const g = t => p.find(x => x.type === t)?.value
   return { iso: `${g('year')}-${g('month')}-${g('day')}`, fr: `${g('day')}/${g('month')}/${g('year')}` }
 }

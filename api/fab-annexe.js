@@ -14,6 +14,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { waitUntil } from '@vercel/functions'
 import { versUnite, enGrammes } from '../src/lib/unites.js'
+import { FUSEAU_MAROC } from '../src/lib/fuseauMaroc.js'
 
 const LIEU_ANNEXE = 62          // stock.location « WHPDX/Stock Prod annexe »
 // ⚠️ ODOO A DÉJÀ SA PLACE POUR LES REBUTS, et l'équipe s'en sert tous les jours
@@ -1819,7 +1820,7 @@ export default async function handler(req, res) {
     // autres. En file indienne, c'était trois allers-retours ajoutés bout à
     // bout avant même de commencer. (Layla, 2026-09-10 : « fais un effort ».)
     const cache = creerCache()
-    const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
+    const jour = new Date().toLocaleDateString('sv-SE', { timeZone: FUSEAU_MAROC })
     const stocksAmorces = stocksDe([1], cache)
     stocksAmorces.catch(() => { /* l'erreur ressortira au vrai `await` */ })
     // Tout le catalogue : même un article qu'on n'affiche pas y donne la taille

@@ -23,14 +23,28 @@ describe('l’heure', () => {
   // ⚠️ Les tâches de Vercel tournent en UTC ; Casablanca est à UTC+1.
   // 23 h ici = 22 h là-bas. Se tromper d'une heure, c'est clôturer pendant
   // que le café compte encore.
-  it('tourne à 22 h UTC, soit 23 h à Casablanca', () => {
+  // ⚠️ L'HEURE NE SE FIXE PLUS EN UTC (Layla, 2026-09-23 : « on est passé à
+  // GMT 0 »). Elle partait à 22 h UTC, parce que le Maroc était à UTC+1 et que
+  // ça faisait 23 h chez elle. Le pays passé à GMT+0, ce même 22 h UTC devient
+  // 22 h locales : la clôture tomberait pendant que le café compte encore.
+  //
+  // Le cron réveille donc la fonction CHAQUE HEURE du soir, et elle ne
+  // travaille que s'il est vraiment 23 h au Maroc. Le prochain changement
+  // d'heure ne demandera rien.
+  it('se réveille plusieurs fois le soir, au lieu d’une heure fixe', () => {
     const c = vercel.crons.find(x => x.path === '/api/stock-cloture-auto')
     expect(c).toBeTruthy()
-    expect(c.schedule).toBe('0 22 * * *')
+    expect(c.schedule).toBe('0 21,22,23 * * *')
   })
 
-  it('et le JOUR se calcule à Casablanca, pas en UTC', () => {
-    expect(src).toContain("timeZone: 'Africa/Casablanca'")
+  it('et ne travaille qu’à 23 h au Maroc', () => {
+    expect(src).toContain('const HEURE_DE_CLOTURE = 23')
+    expect(src).toMatch(/heureLocale\(\) !== HEURE_DE_CLOTURE/)
+  })
+
+  it('le jour ET l’heure passent par le réglage du Maroc, pas par UTC', () => {
+    expect(src).toContain('FUSEAU_MAROC')
+    expect(src).toContain("from '../src/lib/fuseauMaroc.js'")
   })
 })
 

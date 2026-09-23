@@ -13,6 +13,7 @@ import { confirmDialog } from '../lib/confirmDialog'
 import { sendTemplate } from '../lib/conversations'
 import { canSeeWatiInfo } from '../lib/auth'
 import { filePhoto } from '../lib/photoCompress'
+import { FUSEAU_MAROC } from '../lib/fuseauMaroc'
 
 // Fenêtre « ✏️ Articles » : modifie les articles d'une commande Odoo (ajouter /
 // modifier quantité-prix / supprimer). Écrit directement dans Odoo via l'API.
@@ -726,7 +727,7 @@ function moroccoParts(s) {
   if (!s) return { date: '', time: '16:00' }
   const dt = new Date(String(s).replace(' ', 'T') + 'Z')
   if (isNaN(dt)) return { date: String(s).slice(0, 10), time: String(s).slice(11, 16) || '16:00' }
-  const f = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  const f = new Intl.DateTimeFormat('en-CA', { timeZone: FUSEAU_MAROC, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
   const p = Object.fromEntries(f.formatToParts(dt).map(x => [x.type, x.value]))
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` }
 }

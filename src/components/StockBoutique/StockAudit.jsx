@@ -27,6 +27,7 @@ import {
 } from '../../lib/stockBoutique'
 import { toast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirmDialog'
+import { FUSEAU_MAROC } from '../../lib/fuseauMaroc'
 
 const STATUS_LABELS = {
   open: { label: '… En cours', color: 'bg-amber-100 text-amber-900' },
@@ -1030,7 +1031,7 @@ export default function StockAudit({ user, activeView, onNavigate, onLogout }) {
                         (() => {
                           if (!d.submitted_at) return <span className="text-ink-mute">—</span>
                           const q = new Date(d.submitted_at)
-                          const opt = { timeZone: 'Africa/Casablanca' }
+                          const opt = { timeZone: FUSEAU_MAROC }
                           const h = q.toLocaleTimeString('fr-FR', { ...opt, hour: '2-digit', minute: '2-digit' })
                           // ⚠️ CLÔTURÉE LE LENDEMAIN = RAPPORT DOUTEUX. La photo
                           // du stock Odoo est prise à la clôture : le lendemain

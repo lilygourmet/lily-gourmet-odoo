@@ -26,9 +26,29 @@
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js'
+import { FUSEAU_MAROC } from '../src/lib/fuseauMaroc.js'
 
-/** Le jour, à Casablanca — pas en UTC : à 22 h UTC il est 23 h ici. */
-const jourLocal = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
+/** Le jour au Maroc — jamais le jour UTC. */
+const jourLocal = () => new Date().toLocaleDateString('sv-SE', { timeZone: FUSEAU_MAROC })
+
+/** L'heure au Maroc, en nombre : 23. */
+const heureLocale = () => Number(new Intl.DateTimeFormat('en-GB',
+  { timeZone: FUSEAU_MAROC, hour: '2-digit', hourCycle: 'h23' }).format(new Date()))
+
+/**
+ * ⚠️ L'HEURE DE CLÔTURE NE SE FIXE PLUS EN UTC (Layla, 2026-09-23 : « on est
+ * passé à GMT 0 »).
+ *
+ * La tâche partait à 22 h UTC, parce que le Maroc était à UTC+1 et que ça
+ * faisait 23 h chez elle. Le pays passé à GMT+0, ce même 22 h UTC devient 22 h
+ * locales : la clôture tomberait une heure trop tôt, pendant que le café
+ * compte encore.
+ *
+ * Alors on ne devine plus : le cron réveille la fonction CHAQUE HEURE du soir,
+ * et elle ne travaille que s'il est vraiment 23 h au Maroc. Le prochain
+ * changement d'heure ne demandera rien.
+ */
+const HEURE_DE_CLOTURE = 23
 
 export default async function handler(req, res) {
   // Même garde que les autres tâches : le cron de Vercel, ou le secret.
@@ -43,6 +63,13 @@ export default async function handler(req, res) {
   }
   const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false } })
+
+  // ⚠️ `?force=1` (avec le secret) pour clôturer à la main hors de l'heure —
+  // c'est ce qui a sauvé la journée du 22/09, créée après 23 h.
+  const force = req.query?.force === '1'
+  if (!force && heureLocale() !== HEURE_DE_CLOTURE) {
+    return res.status(200).json({ ignore: true, heureMaroc: heureLocale(), attendu: HEURE_DE_CLOTURE })
+  }
 
   const jour = jourLocal()
   try {

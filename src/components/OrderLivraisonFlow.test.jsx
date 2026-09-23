@@ -14,6 +14,7 @@
 // ============================================================
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { decalageMaroc } from '../lib/fuseauMaroc'
 
 const updateOrderDate = vi.fn(async () => ({}))
 const addOrderLine = vi.fn(async () => ({}))
@@ -60,6 +61,17 @@ const { default: OrderEditModal } = await import('./OrderEditModal')
 const commande = {
   id: 42, name: 'S52797', state: 'sale', clientName: 'Mme Alaoui',
   clientPhone: '212661234567', deliveryAt: '2026-09-16 14:00:00',
+}
+// ⚠️ CES TESTS FIGEAIENT « UTC+1 », ET C'ÉTAIT LE BUG (Layla, 2026-09-23 :
+// « on est passé à GMT 0 — c'est surtout pour les commandes »). Le créneau se
+// calcule maintenant DEPUIS le réglage : ils diront la vérité au prochain
+// changement d'heure sans qu'on y touche.
+const DEC = decalageMaroc(new Date('2026-09-16T14:00:00Z'))
+const H = 14 + DEC                      // l'heure de retrait, vue du Maroc
+const CRENEAU = `entre ${H}h et ${H + 2}h`
+const PREPA = `${H - 1}h30`             // la cuisine prépare 30 min avant
+
+const RIEN = {
   slotText: '', amountText: '450 MAD', productLines: [],
 }
 const user = { id: 'u1', role: 'admin' }
@@ -136,8 +148,8 @@ describe('la commande contient une livraison', () => {
     await waitFor(() => expect(confirmDialog).toHaveBeenCalled())
     const texte = confirmDialog.mock.calls[0][0]
     expect(texte).toContain('devient une livraison')
-    expect(texte).toContain('entre 15h et 17h')   // retrait 15h → créneau 15h-17h
-    expect(texte).toContain('14h30')              // la cuisine prépare 30 min avant
+    expect(texte).toContain(CRENEAU)              // le créneau de 2 h, depuis le retrait
+    expect(texte).toContain(PREPA)                // la cuisine prépare 30 min avant
     expect(texte).toContain('ne sera pas prévenu')
   })
 
@@ -159,7 +171,8 @@ describe('la commande contient une livraison', () => {
     toucherUneQuantite()
     fireEvent.click(boutonEnregistrer())
     await waitFor(() => expect(updateOrderDate).toHaveBeenCalled())
-    expect(updateOrderDate).toHaveBeenCalledWith(42, '2026-09-16', '15:00')
+    // ⚠️ L'heure renvoyée à Odoo suit le même décalage : elle est LOCALE.
+    expect(updateOrderDate).toHaveBeenCalledWith(42, '2026-09-16', `${H}:00`)
     expect(confirmDialog.mock.calls[1][0]).toContain('Prévenir le client')
     expect(sendTemplate).not.toHaveBeenCalled()   // ⚠️ elle a dit non
   })
@@ -177,7 +190,7 @@ describe('la commande contient une livraison', () => {
     const texte = envoi.parameters[0].value
     expect(texte).toContain('S52797')
     expect(texte).toContain('16/09/2026')
-    expect(texte).toContain('entre 15h et 17h')
+    expect(texte).toContain(CRENEAU)
     // ⚠️ WATI refuse tout retour à la ligne dans une variable de modèle.
     expect(texte).not.toContain('\n')
   })
@@ -195,8 +208,8 @@ describe('le créneau se voit TOUT DE SUITE', () => {
   it('dès qu’il y a une ligne Livraison, le créneau s’affiche', async () => {
     lignes.push(ligneLivraison)
     await ouvrir()
-    expect(screen.getByText(/entre 15h et 17h/)).toBeTruthy()
-    expect(screen.getByText(/14h30/)).toBeTruthy()
+    expect(screen.getByText(new RegExp(CRENEAU))).toBeTruthy()
+    expect(screen.getByText(new RegExp(PREPA))).toBeTruthy()
     expect(screen.getByText('Livraison — début du créneau')).toBeTruthy()
   })
 
@@ -209,7 +222,7 @@ describe('le créneau se voit TOUT DE SUITE', () => {
   it('⚠️ sans ligne Livraison, pas de créneau : c’est un retrait', async () => {
     lignes.push(gateau)
     await ouvrir()
-    expect(screen.queryByText(/entre 15h et 17h/)).toBeNull()
+    expect(screen.queryByText(new RegExp(CRENEAU))).toBeNull()
     expect(screen.getByText('Date / heure de retrait-livraison')).toBeTruthy()
   })
 })
@@ -290,7 +303,7 @@ describe('choisir le créneau', () => {
   it('en choisir un change le créneau annoncé au client', async () => {
     lignes.push(ligneLivraison)
     await ouvrir()
-    expect(screen.getByText(/entre 15h et 17h/)).toBeTruthy()   // heure d'origine
+    expect(screen.getByText(new RegExp(CRENEAU))).toBeTruthy()   // heure d'origine
     fireEvent.click(creneau('10h – 12h'))
     expect(screen.getByText(/entre 10h et 12h/)).toBeTruthy()
     expect(screen.getByText(/9h30/)).toBeTruthy()               // cuisine 30 min avant

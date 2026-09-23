@@ -1,3 +1,4 @@
+import { FUSEAU_MAROC } from '../src/lib/fuseauMaroc.js'
 // ============================================================
 // CE QUI A ÉTÉ VENDU, ET À QUELLES HEURES.
 //
@@ -90,7 +91,7 @@ export default async function handler(req, res) {
       // ⚠️ `en-GB` et pas `fr-FR` : le français rend « 10 h 07 », avec un « h »
       // au milieu. Ici on veut « 10:07 », tout court.
       const h = d ? new Date(d.replace(' ', 'T') + 'Z').toLocaleTimeString('en-GB',
-        { timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit', hour12: false })
+        { timeZone: FUSEAU_MAROC, hour: '2-digit', minute: '2-digit', hour12: false })
         : null
       const e = par[k] || (par[k] = { produit: nom, total: 0, moments: [] })
       const q = Number(l.qty) || 0

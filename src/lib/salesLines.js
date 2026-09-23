@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { FUSEAU_MAROC } from './fuseauMaroc'
 
 // ============================================================
 // CATEGORIES (dropdown Recap Ventes)
@@ -242,7 +243,7 @@ export function filterLinesForProdCategory(lines, category) {
 // Évite le décalage si le navigateur n'est pas réglé sur l'heure du Maroc.
 function hourRangeKey(dateLike) {
   const d = dateLike instanceof Date ? dateLike : new Date(dateLike)
-  const h = isNaN(d) ? 0 : Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Casablanca', hour: '2-digit', hour12: false }).format(d)) % 24
+  const h = isNaN(d) ? 0 : Number(new Intl.DateTimeFormat('en-US', { timeZone: FUSEAU_MAROC, hour: '2-digit', hour12: false }).format(d)) % 24
   return `${String(h).padStart(2, '0')}h-${String(h + 1).padStart(2, '0')}h`
 }
 

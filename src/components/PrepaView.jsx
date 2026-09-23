@@ -3,6 +3,7 @@ import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { toast } from '../lib/toast'
 import { loadPrepa, lancerPrepa, setFait, loadFaits, loadManques, reserverOrdres, annulerOfPrepa, dernierEcran, garderEcran } from '../lib/fabrication'
+import { FUSEAU_MAROC } from '../lib/fuseauMaroc'
 
 // ====== Fabrication d'une préparation (glaçage royal, pâte à sucre) ======
 // Ces articles n'ont ni règle mini/maxi ni ordre dans Odoo : c'est l'équipe qui
@@ -45,7 +46,7 @@ export default function PrepaView({ quoi, user, onLogout, onNavigate, activeView
     // n'est pas validée.
     loadFaits().then(f => {
       if (!vivant) return
-      const jour = new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' })
+      const jour = new Date().toLocaleDateString('sv-SE', { timeZone: FUSEAU_MAROC })
       const liste = Object.entries(f)
         .filter(([n, i]) => /^WH.*\/MO\//i.test(n) && String(i.fait_le || '').slice(0, 10) >= jour)
         .map(([name, i]) => ({ name, produit: i.produit, qty: i.qty, heure: new Date(i.fait_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }))

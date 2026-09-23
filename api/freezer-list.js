@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 import { waitUntil } from '@vercel/functions'
 import { versUnite, enGrammes } from '../src/lib/unites.js'
 import { manqueTolerable } from '../src/lib/tolerance.js'
+import { FUSEAU_MAROC } from '../src/lib/fuseauMaroc.js'
 
 // Ce que Check CD- a déjà contrôlé. Sans la base (SQL pas lancé, variables
 // absentes), on renvoie null : la chaîne stricte se met alors en veille plutôt
@@ -365,7 +366,7 @@ async function etagesDesGateauxEnAttente(uid, jours) {
       // « Lundi 31/08/26 12:30 » : le jour de la semaine d'abord, c'est ce qu'on
       // lit en premier au frigo. La majuscule, elle, n'est pas dans le format fr.
       const txt = d.toLocaleString('fr-FR', {
-        timeZone: 'Africa/Casablanca',
+        timeZone: FUSEAU_MAROC,
         weekday: 'long', day: '2-digit', month: '2-digit', year: '2-digit',
         hour: '2-digit', minute: '2-digit',
       })
