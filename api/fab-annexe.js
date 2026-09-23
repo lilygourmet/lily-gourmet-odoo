@@ -626,7 +626,7 @@ export function aProduire(manque, besoin, unite) {
     ? Math.ceil(q) : Math.round(q * 1000) / 1000
 }
 
-export async function composantsDe(cache, produit, quantite, figes, profondeur = 0, vus = [], lots = {}, achetes = new Set(), declare = {}) {
+export async function composantsDe(cache, produit, quantite, figes, profondeur = 0, vus = [], lots = {}, achetes = new Set(), declare = {}, vracsAFinir = new Set()) {
   const bom = await bomDe(cache, produit)
   // Une recette qui se contiendrait elle-même tournerait sans fin : on ne
   // redescend jamais dans un article déjà croisé plus haut.
@@ -687,6 +687,8 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
     // L'écran s'en sert pour savoir s'il propose « juste ce qu'il manque » ou
     // le bloc entier (Layla, 2026-09-10).
     const c = { produit: nom, unite: uniteDe(p), besoin, stock, dejaFait, fabrique, fige, ok,
+      // Un vrac de la liste « À finir » : il se coule, il ne se découpe pas.
+      aFinir: vracsAFinir.has(nom),
       entier: /\b(cadres?|plaques?|biscuits?)\b/i.test(nom) }
 
     // Tout ce qui se fabrique porte sa recette et sa descendance, MÊME en
@@ -768,7 +770,7 @@ export async function composantsDe(cache, produit, quantite, figes, profondeur =
       // ses composants : le fond annonçait 2 tournées (28 u) au-dessus de
       // « 1 960 g de biscuit », la dose d'une seule (Layla, 2026-09-09).
       c.pourQuantite = c.produira
-      c.enfants = await composantsDe(cache, p, c.produira, [], profondeur + 1, chemin, lots, achetes, declare)
+      c.enfants = await composantsDe(cache, p, c.produira, [], profondeur + 1, chemin, lots, achetes, declare, vracsAFinir)
     }
     return c
   }))
@@ -1850,9 +1852,10 @@ export default async function handler(req, res) {
       const sans = await ou('article, qty, ordre')
       return sans.data
     }
-    const [{ data: tout, error }, faits] = await Promise.all([
+    const [{ data: tout, error }, faits, { data: enForme }] = await Promise.all([
       sb.from('fab_annexe_articles').select('*').order('produit'),
       lireFaits(),
+      sb.from('annexe_mise_en_forme').select('produit').eq('actif', true),
     ])
     if (error) throw new Error(`Catalogue illisible : ${error.message}`)
 
@@ -1869,6 +1872,16 @@ export default async function handler(req, res) {
     // Ce qu'on achète, même si Odoo lui connaît une recette : la framboise
     // congelée bloquait le confit sans qu'on puisse rien y faire.
     const achetes = new Set((tout || []).filter(a => a.achete).map(a => a.produit))
+    // ⚠️ UN VRAC QU'ON COULE N'EST PAS UNE PLAQUE QU'ON DÉCOUPE.
+    // « Mousse Meringue Citron Indiv : combien d'unités ? combien de mousse kg
+    // à faire ? » (Layla, 2026-09-23). L'écran répondait à côté : un individuel
+    // coche par hasard les trois signes de la découpe (un seul composant qui se
+    // fabrique, compté à la pièce, une recette d'une ligne), et se voyait
+    // proposer « à cuire 0 » avec la gélatine et le citron de la mousse — alors
+    // que ce qu'on verse dans le moule, c'est LA MOUSSE.
+    // La liste « À finir » dit exactement ça : ces vracs-là se coulent, se
+    // pipent, se foncent. Ils restent donc l'ingrédient de la fiche.
+    const vracsAFinir = new Set((enForme || []).map(x => x.produit))
 
     const articles = []
 
@@ -1967,7 +1980,7 @@ export default async function handler(req, res) {
       // Ses composants, eux, ne voient QUE ce qui est libre et ce qui lui est
       // réservé : la ganache faite pour le 23 cm ne dispense pas le 18 cm.
       const composants = await composantsDe(cache, p, fournee, a.figes || [], 0, [], lots, achetes,
-        disponiblePour(declare, a.produit))
+        disponiblePour(declare, a.produit), vracsAFinir)
       // Une CUVE, c'est ce qui ne se divise pas : les figés réglés pour
       // l'article, ou n'importe quelle mousse — même quand elle a son propre
       // article et qu'on ne l'a jamais cochée. (Layla, 2026-09-10 : « branche-la

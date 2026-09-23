@@ -44,6 +44,18 @@ describe('decoupeDe', () => {
     expect(decoupeDe(enNoeud({ ...cinqPers, composants: [achete] }))).toBeNull()
   })
 
+  it('n’est pas une découpe quand le vrac est « à finir » — il se coule', () => {
+    // Mousse Meringue Citron Indiv : 120 unités coulées dans 800 g de mousse.
+    const mousse = {
+      produit: 'SM. Mousse Meringue Citron (kg)', unite: 'kg', fabrique: true,
+      aFinir: true, besoin: 0.8, stock: 0, tourneeTaille: 1, produira: 1, tournees: 1,
+      recette: [{ produit: 'SM. Masse Gelatine', qty: 0.14, unite: 'kg' }],
+    }
+    const indiv = { produit: 'SM. Mousse Meringue Citron Indiv', unite: 'u',
+      tournee: 120, composants: [mousse] }
+    expect(decoupeDe(enNoeud(indiv))).toBeNull()
+  })
+
   it('n’est pas une découpe quand il y a deux ingrédients', () => {
     const deux = { ...cinqPers, composants: [plaque, { ...plaque, produit: 'autre' }] }
     expect(decoupeDe(enNoeud(deux))).toBeNull()

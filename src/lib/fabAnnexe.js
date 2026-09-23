@@ -835,6 +835,13 @@ export function decoupeDe(noeud) {
   if (enfants.length !== 1) return null
   const enfant = enfants[0]
   if (!enfant.fabrique) return null
+  // ⚠️ UN VRAC DE LA LISTE « À FINIR » NE SE DÉCOUPE PAS : il se coule, il se
+  // pipe, il se fonce. « Mousse Meringue Citron Indiv : combien d'unités ?
+  // combien de mousse kg à faire ? » (Layla, 2026-09-23). L'individuel cochait
+  // les trois signes de la découpe par hasard et affichait « à cuire 0 » avec
+  // la gélatine et le citron de la mousse. Ce qu'on met dans le moule, c'est LA
+  // MOUSSE : elle redevient l'ingrédient, et son chevron ouvre sa recette.
+  if (enfant.aFinir) return null
   // C'est l'ARTICLE qui doit se compter en pièces : c'est lui qu'on portionne.
   if (!/^u$/i.test(String(noeud?.unite || '').trim())) return null
   const ligne = (noeud?.recette || [])[0]
