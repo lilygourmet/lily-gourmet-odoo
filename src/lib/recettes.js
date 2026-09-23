@@ -1,17 +1,18 @@
 // ============================================================
-// LES ESSAIS DU CHEF.
+// REFAIRE LA RECETTE AUTOUR D'UN INGRÉDIENT.
 //
-// « Le chef veut vérifier les recettes si elles sont bonnes avant de les
-// faire […] juste il va changer un ingrédient ou une quantité pour lui sortir
-// la recette » (Layla, 2026-09-23).
+// « Les recettes s'affichent, je ne change rien. Je vois les quantités de
+// chaque chose. Si j'ai l'habitude de bosser avec 1 000 g de sucre, je vais
+// modifier ça et la suite suit, pour voir le ratio avec les autres »
+// (Layla, 2026-09-23).
 //
-// ⚠️ RIEN N'EST ENREGISTRÉ. Ces changements ne vivent que dans son écran, le
-// temps qu'il regarde : Odoo garde sa recette, l'atelier fabrique avec elle.
-// C'est la règle que Layla a choisie, et c'est ce qui rend l'écran sans danger.
+// C'est le geste du pâtissier, pas celui d'un tableur : on ne corrige pas une
+// ligne, on RÈGLE LA RECETTE ENTIÈRE à partir de celle qu'on connaît. Mettre
+// 1 000 g de sucre là où Odoo en écrit 250, c'est multiplier toute la recette
+// par quatre — la farine, les œufs, et le nombre de gâteaux qui en sortent.
 //
-// Un essai se range sous le nom D'ORIGINE de l'ingrédient — c'est lui la clé,
-// même quand l'essai le remplace par un autre nom. Sinon, renommer une fois
-// ferait perdre la trace de ce qu'on avait changé.
+// ⚠️ RIEN N'EST ENREGISTRÉ. Odoo garde sa recette : on ne fait que la lire à
+// une autre échelle.
 // ============================================================
 
 const nombre = v => {
@@ -21,28 +22,22 @@ const nombre = v => {
 }
 
 /**
- * La recette telle que le chef la regarde : la vraie, plus ses essais.
+ * La nouvelle quantité de l'ARTICLE quand on impose celle d'un ingrédient.
  *
- * `essais` : { [nom d'origine]: { nom?: string, qty?: number } }
+ * `quantite`     : ce qu'on fabrique aujourd'hui (6 tartes)
+ * `besoinActuel` : ce que la recette demande alors (250 g de sucre)
+ * `besoinVoulu`  : ce qu'on veut y mettre (1 000 g)
+ *   → 6 × (1 000 / 250) = 24 tartes, et tout le reste suit.
  *
- * Une ligne touchée porte `essai: { produit, besoin }` — ce qu'elle valait
- * AVANT. L'écran s'en sert pour montrer la vraie valeur à côté : sans ça, le
- * chef ne saurait plus ce qu'il a changé, et c'est précisément la question
- * qu'il vient se poser.
+ * Rend `null` quand le calcul n'a pas de sens — un ingrédient à zéro ne donne
+ * aucune échelle, et une quantité vide n'est pas une demande.
  */
-export function recetteEssai(lignes, essais = {}) {
-  return (lignes || []).map(l => {
-    const e = essais[l.produit]
-    if (!e) return l
-    const nom = String(e.nom ?? '').trim() || l.produit
-    const q = nombre(e.qty)
-    const besoin = q === null ? l.besoin : q
-    if (nom === l.produit && besoin === l.besoin) return l
-    return { ...l, produit: nom, besoin, essai: { produit: l.produit, besoin: l.besoin } }
-  })
-}
-
-/** Combien de lignes ne sont plus celles d'Odoo. Zéro = on lit la vraie recette. */
-export function nbEssais(lignes, essais = {}) {
-  return recetteEssai(lignes, essais).filter(l => l.essai).length
+export function quantitePour({ quantite, besoinActuel, besoinVoulu }) {
+  const q = nombre(quantite)
+  const a = nombre(besoinActuel)
+  const v = nombre(besoinVoulu)
+  if (q === null || a === null || v === null) return null
+  if (!(q > 0) || !(a > 0) || !(v > 0)) return null
+  // Trois décimales : au-delà, c'est du bruit sur une balance de labo.
+  return Math.round(q * (v / a) * 1000) / 1000
 }

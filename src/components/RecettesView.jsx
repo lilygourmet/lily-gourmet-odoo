@@ -2,27 +2,32 @@
 // RECETTES — l'écran du chef.
 //
 // « Le chef veut vérifier les recettes si elles sont bonnes avant de les
-// faire. Crée un nouvel onglet qui liste toutes les recettes […] et que le
-// pâtissier ne peut pas [en] faire : juste il va changer un ingrédient ou une
-// quantité pour lui sortir la recette » (Layla, 2026-09-23).
+// faire » (Layla, 2026-09-23). Puis, quand je lui avais fait un écran où l'on
+// corrigeait chaque ligne séparément : « non, les recettes s'affichent, je ne
+// change rien. Je vois les quantités de chaque chose. Si j'ai l'habitude de
+// bosser avec 1 000 g de sucre, je vais modifier ça et la suite suit, pour
+// voir le ratio avec les autres. »
+//
+// ⚠️ C'EST UNE ÉCHELLE, PAS UNE CORRECTION. On ne touche pas à une ligne : on
+// RÈGLE LA RECETTE ENTIÈRE à partir de celle qu'on connaît par cœur. Mettre
+// 1 000 g de sucre là où Odoo en écrit 250, c'est lire toute la recette fois
+// quatre — et voir d'un coup ce que ça fait aux autres ingrédients.
 //
 // ⚠️ ON NE DÉCLARE RIEN ICI, ET ON N'ÉCRIT RIEN DANS ODOO. Pas de bouton
-// « c'est fait », pas de feuille, pas d'ordre de fabrication. Ses changements
-// vivent dans son écran et s'effacent quand il referme : c'est exactement ce
-// qui rend cet écran sans danger, et c'est le choix de Layla.
+// « c'est fait », pas de feuille, pas d'ordre de fabrication. C'est ce qui
+// rend cet écran sans danger, et c'est le choix de Layla.
 //
 // ⚠️ ET IL NE DOIT PAS RESSEMBLER À FABRICATION ANNEXE 2 (Layla : « des
 // fenêtres plus petites, un affichage différent, sans photo comme À
 // déclarer »). Deux écrans jumeaux dont un seul engage la production, c'est
-// une faute qui finit par arriver. D'où : pas de photo, des lignes serrées,
-// pas de gros chiffre au milieu.
+// une faute qui finit par arriver.
 // ============================================================
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader from './AppHeader'
 import Skeleton from './Skeleton'
 import { loadToutFabAnnexe, loadArticleFabAnnexe, parGateauMere, noeudDuChemin,
   defautDe, ingredientsPour } from '../lib/fabAnnexe'
-import { recetteEssai, nbEssais } from '../lib/recettes'
+import { quantitePour } from '../lib/recettes'
 import { propre, qte, uniteAffichee } from '../lib/ecranSimple'
 
 /** Une ligne de la liste : le nom, son unité, rien d'autre. */
@@ -42,71 +47,54 @@ function LigneArticle({ a, onOuvrir }) {
 }
 
 /**
- * Une ligne d'ingrédient, qui s'ouvre sur place quand on la touche.
+ * Une ligne d'ingrédient. Toucher sa quantité, c'est refaire TOUTE la recette
+ * autour d'elle — pas corriger cette ligne-là.
  *
- * Pas de fenêtre par-dessus : on reste dans la recette, et on voit tout de
- * suite ce que le changement donne au milieu des autres lignes.
+ * Le champ s'ouvre sur place : on reste dans la recette, et on voit du même
+ * coup d'œil ce que le nouveau chiffre fait aux autres lignes.
  */
-function LigneIngredient({ l, onEssai, onDescendre }) {
+function LigneIngredient({ l, onEchelle, onDescendre }) {
   const [edite, setEdite] = useState(false)
-  const [nom, setNom] = useState('')
   const [q, setQ] = useState('')
 
-  const ouvrir = () => {
-    setNom(l.produit)
-    setQ(String(l.besoin ?? ''))
-    setEdite(true)
-  }
-  const garder = () => { onEssai({ nom, qty: q }); setEdite(false) }
-
-  if (edite) {
-    return (
-      <div className="bg-cream-warm border border-bordeaux rounded-xl px-2.5 py-2 mb-1">
-        <input value={nom} onChange={e => setNom(e.target.value)} aria-label="Ingrédient"
-          className="w-full bg-cream border border-line rounded-lg px-2 py-1.5 text-[13.5px]" />
-        <div className="flex items-center gap-2 mt-1.5">
-          <input value={q} onChange={e => setQ(e.target.value)} inputMode="decimal"
-            aria-label="Quantité"
-            className="flex-1 min-w-0 bg-cream border border-line rounded-lg px-2 py-1.5
-                       text-[15px] font-bold tabular-nums" />
-          <span className="text-[12px] text-ink-mute">{uniteAffichee(l.unite)}</span>
-          <button onClick={garder}
-            className="rounded-lg bg-bordeaux text-cream px-3 py-1.5 text-[13px] font-extrabold">
-            OK
-          </button>
-          <button onClick={() => setEdite(false)}
-            className="rounded-lg border border-line text-ink-mute px-2.5 py-1.5 text-[13px]">
-            ✕
-          </button>
-        </div>
-      </div>
-    )
-  }
+  const ouvrir = () => { setQ(String(l.besoin ?? '')); setEdite(true) }
+  const garder = () => { onEchelle(q); setEdite(false) }
 
   return (
-    <div className={`flex items-center gap-2 border rounded-xl px-3 py-1.5 mb-1
-                     ${l.essai ? 'bg-gold/10 border-gold' : 'bg-cream-warm border-line'}`}>
-      <button onClick={ouvrir} className="flex-1 min-w-0 text-left">
-        <span className="block text-[13.5px] font-bold text-ink truncate">
-          {propre(l.produit)}
-        </span>
-        {/* Ce que dit Odoo, gardé sous les yeux : c'est la question qu'il vient
-            se poser, il ne peut pas y répondre sans la vraie valeur. */}
-        {l.essai && (
-          <span className="block text-[11px] text-ink-mute truncate">
-            Odoo dit : {propre(l.essai.produit)} · {qte(l.essai.besoin, l.unite)}
-          </span>
-        )}
-      </button>
-      <button onClick={ouvrir}
-        className="flex-none text-[14px] font-black tabular-nums text-ink">
-        {qte(l.besoin, l.unite)}
-      </button>
-      <span aria-hidden="true" className="flex-none text-[12px] text-ink-mute">✏️</span>
-      {/* Une préparation se descend : sa recette à elle est un écran plus bas. */}
-      {l.fabrique && (
-        <button onClick={onDescendre} aria-label="Voir sa recette"
-          className="flex-none text-[15px] text-bordeaux font-black px-1">›</button>
+    <div className="flex items-center gap-2 bg-cream-warm border border-line rounded-xl
+                    px-3 py-1.5 mb-1">
+      <span className="flex-1 min-w-0 text-[13.5px] font-bold text-ink truncate">
+        {propre(l.produit)}
+      </span>
+
+      {edite ? (
+        <>
+          <input value={q} onChange={e => setQ(e.target.value)} inputMode="decimal"
+            aria-label={`Quantité de ${propre(l.produit)}`} autoFocus
+            onKeyDown={e => { if (e.key === 'Enter') garder() }}
+            className="w-24 bg-cream border border-bordeaux rounded-lg px-2 py-1
+                       text-[15px] font-black tabular-nums text-right" />
+          <span className="flex-none text-[11.5px] text-ink-mute">{uniteAffichee(l.unite)}</span>
+          <button onClick={garder}
+            className="flex-none rounded-lg bg-bordeaux text-cream px-2.5 py-1 text-[12.5px] font-extrabold">
+            OK
+          </button>
+          <button onClick={() => setEdite(false)} aria-label="Annuler"
+            className="flex-none text-[13px] text-ink-mute px-1">✕</button>
+        </>
+      ) : (
+        <>
+          <button onClick={ouvrir}
+            className="flex-none text-[14px] font-black tabular-nums text-ink
+                       border-b border-dashed border-ink-mute/50">
+            {qte(l.besoin, l.unite)}
+          </button>
+          {/* Une préparation se descend : sa recette à elle est un écran plus bas. */}
+          {l.fabrique && (
+            <button onClick={onDescendre} aria-label={`Voir la recette de ${propre(l.produit)}`}
+              className="flex-none text-[15px] text-bordeaux font-black px-1">›</button>
+          )}
+        </>
       )}
     </div>
   )
@@ -116,11 +104,10 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
   const [tout, setTout] = useState(null)
   const [cherche, setCherche] = useState('')
   const [erreur, setErreur] = useState('')
-  // L'article ouvert, sa cascade, et où l'on en est dedans.
+  // L'article ouvert, sa cascade, et l'échelle à laquelle on la lit.
   const [brut, setBrut] = useState(null)
   const [chemin, setChemin] = useState([])
   const [quantites, setQuantites] = useState({})
-  const [essais, setEssais] = useState({})
 
   useEffect(() => {
     loadToutFabAnnexe().then(setTout).catch(e => setErreur(e.message || String(e)))
@@ -131,9 +118,8 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
     setErreur('')
     setBrut(null)
     setChemin([produit])
-    // ⚠️ ON REPART DE LA VRAIE RECETTE à chaque ouverture (choix assumé) : le
-    // chef compare toujours à Odoo, jamais à ce qu'il avait tapé la veille.
-    setEssais({})
+    // ⚠️ ON REPART DE LA RECETTE D'ODOO à chaque ouverture : le chef compare
+    // toujours à elle, jamais à l'échelle qu'il avait réglée la veille.
     setQuantites({})
     try {
       const a = await loadArticleFabAnnexe(produit)
@@ -145,17 +131,28 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
     }
   }, [])
 
-  const fermer = () => { setChemin([]); setBrut(null); setEssais({}); setQuantites({}) }
+  const fermer = () => { setChemin([]); setBrut(null); setQuantites({}) }
 
   const nav = { user, onLogout, onNavigate, activeView }
 
   // ---------- LA FICHE ----------
   if (chemin.length) {
     const { noeud } = brut ? noeudDuChemin(brut, chemin, quantites) : { noeud: null }
-    const q = noeud ? (quantites[noeud.produit] ?? defautDe(noeud)) : 0
-    const vraies = noeud ? ingredientsPour(noeud, q) : []
-    const lignes = recetteEssai(vraies, essais)
-    const changees = nbEssais(vraies, essais)
+    // ⚠️ CE QUE DIT ODOO SE LIT SUR LA RECETTE NON RÉGLÉE. Le prendre sur le
+    // nœud courant, c'était le voir suivre l'échelle : « la recette d'Odoo est
+    // pour 20 u » juste après avoir demandé 20 — et plus moyen d'y revenir.
+    const { noeud: origine } = brut ? noeudDuChemin(brut, chemin, {}) : { noeud: null }
+    const parOdoo = origine ? defautDe(origine) : 0
+    const q = noeud ? (quantites[noeud.produit] ?? parOdoo) : 0
+    const lignes = noeud ? ingredientsPour(noeud, q) : []
+    const regle = noeud && q !== parOdoo
+
+    const poser = v => setQuantites(x => ({ ...x, [noeud.produit]: v }))
+    // Toucher un ingrédient, c'est régler la recette entière sur lui.
+    const echelleDepuis = (l, voulu) => {
+      const n = quantitePour({ quantite: q, besoinActuel: l.besoin, besoinVoulu: voulu })
+      if (n !== null) poser(n)
+    }
 
     return (
       <div className="min-h-screen bg-cream">
@@ -177,30 +174,41 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
                 {propre(noeud.libelle || noeud.produit)}
               </h1>
 
-              <div className="flex items-center gap-2 mt-3 mb-3">
+              <div className="flex items-center gap-2 mt-3">
                 <label className="text-[12.5px] text-ink-soft" htmlFor="qte">pour</label>
                 <input id="qte" value={q} inputMode="decimal"
                   onChange={e => {
                     const v = Number(String(e.target.value).replace(',', '.'))
-                    setQuantites(x => ({ ...x, [noeud.produit]: Number.isFinite(v) ? v : 0 }))
+                    poser(Number.isFinite(v) ? v : 0)
                   }}
                   className="w-24 bg-cream-warm border border-line rounded-lg px-2 py-1.5
                              text-[16px] font-black tabular-nums" />
                 <span className="text-[12.5px] text-ink-soft">{uniteAffichee(noeud.unite)}</span>
-                {changees > 0 && (
-                  <button onClick={() => setEssais({})}
-                    className="print:hidden ml-auto text-[12px] text-bordeaux font-bold underline">
-                    Remettre la vraie recette
-                  </button>
-                )}
               </div>
 
+              {/* ⚠️ D'OÙ L'ON EST PARTI, TOUJOURS ÉCRIT. Une recette lue à une
+                  autre échelle reste juste ; oublier de quelle fournée elle
+                  vient, c'est se tromper de moitié sans s'en apercevoir. */}
+              {regle && (
+                <p className="text-[12px] text-ink-mute mt-1.5">
+                  La recette d’Odoo est pour {qte(parOdoo, noeud.unite)} ·{' '}
+                  <button onClick={() => poser(parOdoo)}
+                    className="print:hidden text-bordeaux font-bold underline">y revenir</button>
+                </p>
+              )}
+
+              <p className="text-[11.5px] text-ink-mute mt-3 mb-1.5">
+                Touche une quantité : toute la recette se remet à cette échelle.
+              </p>
+
               {!lignes.length && (
-                <p className="text-[13.5px] text-ink-soft">Aucun ingrédient : Odoo n’a pas de recette pour ça.</p>
+                <p className="text-[13.5px] text-ink-soft">
+                  Aucun ingrédient : Odoo n’a pas de recette pour ça.
+                </p>
               )}
               {lignes.map((l, i) => (
                 <LigneIngredient key={l.produit + i} l={l}
-                  onEssai={e => setEssais(x => ({ ...x, [(l.essai?.produit) || l.produit]: e }))}
+                  onEchelle={v => echelleDepuis(l, v)}
                   onDescendre={() => setChemin([...chemin, l.produit])} />
               ))}
 
@@ -262,9 +270,9 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
 function Bandeau() {
   return (
     <p className="bg-gold/15 border border-gold rounded-xl px-3 py-2 my-3 text-[12.5px] text-ink-soft">
-      <b className="text-ink">Essai seulement.</b> Tu peux changer un ingrédient ou une
-      quantité pour voir ce que ça donne — Odoo n’est pas touché, et l’atelier
-      continue avec la vraie recette.
+      <b className="text-ink">Pour regarder seulement.</b> Change la quantité d’un
+      ingrédient et toute la recette se remet à cette échelle — Odoo n’est pas
+      touché, et l’atelier continue avec la vraie recette.
     </p>
   )
 }
