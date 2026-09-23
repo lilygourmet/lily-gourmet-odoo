@@ -115,13 +115,22 @@ function App() {
   // La barre latérale n'apparaît qu'à partir de 1024 px, donc sur ORDINATEUR.
   // En dessous — téléphone et tablette — c'est la barre du bas qui navigue :
   // avoir les deux en même temps sur la tablette n'avait pas de sens.
+  //
+  // ⚠️ SAUF POUR CELLES QUI TRAVAILLENT SUR TABLETTE. « Zineb et Hanane sont sur
+  // tablette, elles veulent leurs onglets en fixe / auto ou Rail, pas avec la
+  // barre en bas de l'écran » (Layla, 2026-09-23). Une tablette en portrait fait
+  // 768 px : la barre latérale ne leur apparaissait jamais. Leur réglage
+  // `nav_lateral` descend le seuil POUR ELLES SEULES — personne d'autre ne voit
+  // son écran changer.
+  const seuilLateral = user?.nav_lateral ? 700 : 1024
   const [isWide, setIsWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)')   // même seuil que ci-dessus, sinon la barre revient au premier pivotement
-    const h = e => setIsWide(e.matches)
+    const mq = window.matchMedia(`(min-width: ${seuilLateral}px)`)
+    const h = () => setIsWide(mq.matches)
+    queueMicrotask(h)        // s'aligner tout de suite quand le seuil change
     mq.addEventListener?.('change', h)
     return () => mq.removeEventListener?.('change', h)
-  }, [])
+  }, [seuilLateral])
 
   // Wrapper pour setActiveView : persiste dans localStorage pour que Cmd+R
   // ramene l'utilisateur sur la meme page
@@ -533,7 +542,11 @@ function App() {
           </>
         )
       })()}
-      <MobileBottomNav user={user} activeView={activeView} onNavigate={handleNavigate} />
+      {/* ⚠️ JAMAIS LES DEUX À LA FOIS. Dès que la barre latérale est là, celle du
+          bas n'a plus lieu d'être — c'était déjà vrai sur ordinateur (par le
+          CSS), ça doit l'être aussi sur la tablette de Zineb et Hanane. */}
+      <MobileBottomNav user={user} activeView={activeView} onNavigate={handleNavigate}
+        masquer={isWide && !isLivreur(user)} />
       {showSearch && (
         <GlobalSearch
           onClose={() => setShowSearch(false)}

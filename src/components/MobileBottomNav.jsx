@@ -9,6 +9,8 @@ import { countLivraisonsARelancer } from '../lib/deliveries'
 // Barre de navigation en bas, sur téléphone ET tablette (lg:hidden). Au-delà,
 // c'est la barre latérale qui prend le relais — avoir les deux en même temps sur
 // la tablette n'avait pas de sens (demandé par Layla le 2026-09-04).
+// `masquer` : la latérale a pris le relais plus tôt que 1024 px, pour celles qui
+// l'ont demandée sur leur tablette (2026-09-23).
 // Additive : ne remplace pas le menu du haut. Montée une fois dans App.
 // Ces deux « onglets » ouvrent un site, ils n'ont pas d'écran dans l'app : depuis
 // ce tiroir ils ne menaient nulle part.
@@ -17,7 +19,7 @@ const LIENS_EXTERNES = {
   'ai-chatgpt': 'https://chatgpt.com',
 }
 
-export default function MobileBottomNav({ user, activeView, onNavigate }) {
+export default function MobileBottomNav({ user, activeView, onNavigate, masquer }) {
   // Chiffres rouges de notification (comme le menu du haut).
   const [convCount, setConvCount] = useState(0)
   const [tasksCount, setTasksCount] = useState(0)
@@ -91,6 +93,11 @@ export default function MobileBottomNav({ user, activeView, onNavigate }) {
   const showMore = allTabs.length > primary.length
   const items = showMore ? primary : dest.slice(0, 5)
   if (items.length < 2 && !showMore) return null // pas la peine d'une barre pour 1 onglet
+  // ⚠️ La barre latérale est là : celle du bas n'a plus lieu d'être. Le `lg:hidden`
+  // ne suffit plus depuis que la latérale peut apparaître dès 700 px, pour celles
+  // qui travaillent sur tablette (Layla, 2026-09-23).
+  // ⚠️ APRÈS tous les hooks : sortir plus haut casserait leur ordre.
+  if (masquer) return null
 
   return (
     <>
