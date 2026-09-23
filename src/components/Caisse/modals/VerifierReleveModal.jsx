@@ -20,6 +20,11 @@ export default function VerifierReleveModal({ onClose, onDone }) {
   const [etape, setEtape] = useState('pick')   // pick | lecture | resultat | fini
   const [erreur, setErreur] = useState('')
   const [res, setRes] = useState(null)         // { lues, manquantes: [row] }
+  // Lignes décochées : celles que Layla ne veut PAS ajouter. Celles dont une voisine du
+  // même montant existe déjà partent décochées — c'est le cas douteux, et le doute se
+  // tranche toujours du même côté : ne rien ajouter. Vécu : « CHLIH WUDANE », lu par
+  // l'extrait là où le relevé écrit « CHLIH WIJDANE », le même jour et pour 3 000 dh.
+  const [exclues, setExclues] = useState(new Set())
 
   async function lire(fileList) {
     const files = [...(fileList || [])]
@@ -77,6 +82,7 @@ export default function VerifierReleveModal({ onClose, onDone }) {
           loin: duMontant.length,
         }
       })
+      setExclues(new Set(avecPreuve.filter(m => m.proches.length).map(m => m.key)))
       setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes: avecPreuve })
       setEtape('resultat')
     } catch (e) { setErreur(e?.message || String(e)); setEtape('pick') }
@@ -89,12 +95,15 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       // `ailleurs` n'existe que pour l'affichage (la contre-preuve). L'envoyer en base la
       // faisait refuser TOUTE l'insertion : « Could not find the 'ailleurs' column ».
       // On n'écrit que les colonnes de la table.
-      await saveUnmatchedReleveLines(res.manquantes.map(
+      await saveUnmatchedReleveLines(choisies.map(
         ({ key, ligne_date, amount, label, type, releve_url, banque }) =>
           ({ key, ligne_date, amount, label, type, releve_url, banque })))
       setEtape('fini'); onDone && onDone()
     } catch (e) { setErreur(e?.message || String(e)); setEtape('resultat') }
   }
+
+  const choisies = (res?.manquantes || []).filter(m => !exclues.has(m.key))
+  const basculer = k => setExclues(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
@@ -135,7 +144,9 @@ export default function VerifierReleveModal({ onClose, onDone }) {
               <>
                 <div style={{ maxHeight: 220, overflowY: 'auto', marginBottom: 12 }}>
                   {res.manquantes.map(l => (
-                    <div key={l.key} style={{ fontSize: 12, color: '#4a3a30', padding: '5px 0', borderBottom: '1px solid #F4F0EA' }}>
+                    <label key={l.key} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, color: '#4a3a30', padding: '5px 0', borderBottom: '1px solid #F4F0EA', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!exclues.has(l.key)} onChange={() => basculer(l.key)} style={{ marginTop: 3 }} />
+                      <span>
                       <b>{fmtMoney(l.amount)}</b> · {l.ligne_date}
                       <div style={{ fontSize: 11, color: '#8a7a70' }}>{l.label}</div>
                       {(l.proches || []).length ? (
@@ -151,11 +162,13 @@ export default function VerifierReleveModal({ onClose, onDone }) {
                           {l.loin ? <span style={{ color: '#8a7a70' }}> ({l.loin} à d'autres périodes, sans rapport)</span> : null}
                         </div>
                       )}
-                    </div>
+                      </span>
+                    </label>
                   ))}
                 </div>
-                <button onClick={recuperer} style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #D6C3EA', background: '#F9F6F1', color: '#5b2a86', cursor: 'pointer', fontSize: 13, marginBottom: 8 }}>
-                  Ajouter ces {res.manquantes.length} ligne(s) aux « Reçus banque non liés »
+                <button onClick={recuperer} disabled={!choisies.length}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #D6C3EA', background: '#F9F6F1', color: '#5b2a86', cursor: choisies.length ? 'pointer' : 'default', opacity: choisies.length ? 1 : 0.5, fontSize: 13, marginBottom: 8 }}>
+                  Ajouter les {choisies.length} ligne(s) cochée(s) aux « Reçus banque non liés »
                 </button>
                 <div style={{ fontSize: 11, color: '#8a7a70', marginBottom: 10 }}>
                   Elles sont ajoutées comme <b>libres</b>, rien d'autre. Aucune caisse ne change — tu lanceras
