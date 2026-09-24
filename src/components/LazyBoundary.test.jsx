@@ -8,7 +8,7 @@
 // Safari — donc jamais sur iPhone ni iPad.
 // ============================================================
 import { describe, it, expect } from 'vitest'
-import { estPanneDeMorceau, urlSansCache } from './LazyBoundary'
+import { estPanneDeMorceau, urlSansCache, doitRecharger } from './LazyBoundary'
 
 describe('reconnaître « le morceau n’a pas pu être chargé »', () => {
   it.each([
@@ -65,5 +65,48 @@ describe('recharger sans reprendre la page du cache', () => {
 
   it('rend l’adresse telle quelle si elle est illisible', () => {
     expect(urlSansCache('pas-une-url', 1)).toBe('pas-une-url')
+  })
+})
+
+// ============================================================
+// RECHARGER D'APRÈS LA VERSION, PAS D'APRÈS UN CHRONOMÈTRE.
+//
+// « Ça marche sauf pour quelques onglets — réfléchis pourquoi » (Layla,
+// 2026-09-24). Chaque écran est téléchargé au clic, dans un fichier renommé à
+// chaque mise en ligne : les écrans déjà ouverts marchent, ceux ouverts après
+// un déploiement réclament un fichier disparu. L'ancien garde-fou refusait de
+// recharger deux fois en 60 s, donc en cliquant sur plusieurs onglets
+// d'affilée le message revenait.
+// ============================================================
+describe('décider s’il faut recharger', () => {
+  it('page périmée → on recharge', () => {
+    expect(doitRecharger({ versionPage: '100', versionServeur: '200', dejaRechargePour: null }))
+      .toBe(true)
+  })
+
+  // ⚠️ La page est à jour : le morceau manque pour une AUTRE raison. Recharger
+  // n'y changerait rien et ferait perdre ce qui est en train d'être tapé.
+  it('page à jour → on montre l’erreur, on ne recharge pas', () => {
+    expect(doitRecharger({ versionPage: '200', versionServeur: '200', dejaRechargePour: null }))
+      .toBe(false)
+  })
+
+  it('déjà rechargé pour cette version → pas de boucle', () => {
+    expect(doitRecharger({ versionPage: '100', versionServeur: '200', dejaRechargePour: '200' }))
+      .toBe(false)
+  })
+
+  // ⚠️ Une NOUVELLE mise en ligne après un rechargement doit repartir : sinon
+  // un déploiement de plus laisserait l'écran mort.
+  it('une version encore plus récente → on recharge à nouveau', () => {
+    expect(doitRecharger({ versionPage: '100', versionServeur: '300', dejaRechargePour: '200' }))
+      .toBe(true)
+  })
+
+  it.each([
+    ['serveur injoignable', { versionPage: '100', versionServeur: null }],
+    ['en local, pas de numéro', { versionPage: null, versionServeur: '200' }],
+  ])('%s → on ne tranche pas, repli sur le délai', (_, args) => {
+    expect(doitRecharger({ ...args, dejaRechargePour: null })).toBe(null)
   })
 })

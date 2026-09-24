@@ -1,3 +1,4 @@
+/* global __BUILD_ID__ */
 import { Component, Suspense, useState, useEffect } from 'react'
 
 // N'affiche "Chargement…" qu'après 250ms : un chargement rapide ne clignote pas.
@@ -59,6 +60,46 @@ function rechargerSansCache() {
   catch { window.location.reload() }
 }
 
+// Le numéro de build avec lequel CETTE page a démarré (posé par Vite, comme
+// dans UpdateBanner.jsx). `/version.json` dit celui qui est EN LIGNE.
+const VERSION_PAGE = typeof __BUILD_ID__ !== 'undefined' ? String(__BUILD_ID__) : null
+
+/**
+ * Faut-il recharger ? On le demande à la VERSION, plus à un chronomètre.
+ *
+ * ⚠️ POURQUOI ON A CHANGÉ (Layla, 2026-09-24 : « ça marche sauf pour quelques
+ * onglets — réfléchis pourquoi »). Chaque écran n'est téléchargé qu'au clic,
+ * dans un fichier dont le nom change à CHAQUE mise en ligne. Les écrans déjà
+ * ouverts restent en mémoire et marchent ; ceux ouverts pour la première fois
+ * après un déploiement réclament un fichier qui n'existe plus — d'où « certains
+ * oui, certains non ». Avec 27 commits poussés en une journée, ça arrivait sans
+ * cesse. L'ancien garde-fou refusait de recharger deux fois en 60 secondes :
+ * en cliquant sur plusieurs onglets d'affilée, le message revenait quand même.
+ *
+ * Renvoie `true` (page périmée, on recharge), `false` (page à jour : c'est une
+ * VRAIE erreur, on la montre) ou `null` (on ne sait pas — hors ligne, en local :
+ * l'appelant retombe sur le garde-fou au temps).
+ */
+export function doitRecharger({ versionPage, versionServeur, dejaRechargePour }) {
+  if (!versionPage || !versionServeur) return null
+  if (versionServeur === versionPage) return false
+  // Déjà rechargé pour cette version-là : si ça casse encore, c'est autre
+  // chose — recharger en boucle ferait perdre ce qui est en train d'être tapé.
+  if (dejaRechargePour && dejaRechargePour === versionServeur) return false
+  return true
+}
+
+async function versionEnLigne() {
+  try {
+    const r = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
+    if (!r.ok) return null
+    return String((await r.json()).id || '') || null
+  } catch { return null }
+}
+
+const litSession = c => { try { return sessionStorage.getItem(c) } catch { return null } }
+const ecritSession = (c, v) => { try { sessionStorage.setItem(c, v) } catch { /* indispo */ } }
+
 // Entoure les écrans chargés à la demande (lazy).
 // - Affiche "Chargement…" pendant le téléchargement du morceau.
 // - Si le morceau échoue (souvent une version périmée après un déploiement),
@@ -77,19 +118,30 @@ export default class LazyBoundary extends Component {
   }
 
   componentDidCatch(error) {
-    const msg = String(error?.message || '')
-    if (estPanneDeMorceau(msg)) {
-      // Même garde et même minute que autoUpdate.js : deux filets qui se
-      // déclenchent sur la même panne ne doivent pas recharger deux fois, et
-      // 10 secondes suffisaient à peine à ouvrir un écran — d'où la tablette
-      // qui « sautait, se remettait et sautait » (Layla, 2026-09-09).
-      try {
-        const last = Number(sessionStorage.getItem('lg:recharge') || 0)
-        if (Date.now() - last > 60000) {
-          sessionStorage.setItem('lg:recharge', String(Date.now()))
-          rechargerSansCache()
-        }
-      } catch { /* sessionStorage indispo : on laisse le bouton manuel */ }
+    if (estPanneDeMorceau(String(error?.message || ''))) this.reparer()
+  }
+
+  async reparer() {
+    const versionServeur = await versionEnLigne()
+    const decision = doitRecharger({
+      versionPage: VERSION_PAGE,
+      versionServeur,
+      dejaRechargePour: litSession('lg:recharge-version'),
+    })
+    if (decision === true) {
+      ecritSession('lg:recharge-version', versionServeur)
+      rechargerSansCache()
+      return
+    }
+    if (decision === false) return        // vraie erreur : le bouton reste
+    // On n'a pas pu savoir (hors ligne, en local) : l'ancien garde-fou au
+    // temps, qui vaut mieux que rien. Même minute que autoUpdate.js — deux
+    // filets sur la même panne ne doivent pas recharger deux fois, et 10
+    // secondes suffisaient à peine à ouvrir un écran (Layla, 2026-09-09).
+    const last = Number(litSession('lg:recharge') || 0)
+    if (Date.now() - last > 60000) {
+      ecritSession('lg:recharge', String(Date.now()))
+      rechargerSansCache()
     }
   }
 
