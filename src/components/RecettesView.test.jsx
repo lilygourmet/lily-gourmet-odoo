@@ -62,9 +62,8 @@ beforeEach(() => {
     if (opts?.method === 'POST') {
       const b = JSON.parse(opts.body)
       posts.push(b)
-      VALIDEES = b.valide === false
-        ? VALIDEES.filter(v => v.produit !== b.produit)
-        : [...VALIDEES, { produit: b.produit, valide_le: '2026-09-23T10:00:00Z' }]
+      VALIDEES = VALIDEES.filter(v => v.produit !== b.produit)
+      if (b.statut) VALIDEES.push({ produit: b.produit, statut: b.statut, valide_le: '2026-09-23T10:00:00Z' })
       return { ok: true, json: async () => ({ ok: true }) }
     }
     return { ok: true, json: async () => ({ validees: VALIDEES }) }
@@ -237,39 +236,70 @@ describe('charger une fois pour toutes', () => {
 // sous-onglet Validés. Donc onglet À vérifier et onglet Validés » (Layla,
 // 2026-09-23).
 // ============================================================
-describe('vérifiée et validée', () => {
-  it('la recette quitte « À vérifier » pour « Validés »', async () => {
+describe('la marque du chef', () => {
+  const marque = (produit, statut) =>
+    [{ produit, statut, valide_le: '2026-09-23T10:00:00Z' }]
+
+  it('validée : elle quitte « À vérifier » pour « Validés »', async () => {
     render(<RecettesView user={{ id: 'u1' }} />)
     fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
-    fireEvent.click(await screen.findByText('✅ Vérifiée et validée'))
+    fireEvent.click(await screen.findByText('✅ Validée'))
     await screen.findByText('✅ Validée par le chef')
-    expect(posts[0]).toMatchObject({ produit: 'SM. Tarte Citron 23 cm', valide: true })
+    expect(posts[0]).toMatchObject({ produit: 'SM. Tarte Citron 23 cm', statut: 'valide' })
 
-    // Retour à la liste : elle n'est plus à vérifier, elle est dans l'autre onglet.
     fireEvent.click(screen.getByText(/Toutes les recettes/))
     await waitFor(() => expect(screen.getByText(/Tout est vérifié/)).toBeTruthy())
     fireEvent.click(screen.getByText(/^Validés/))
     expect(await screen.findByText('Tarte citron 23 cm')).toBeTruthy()
   })
 
+  // ⚠️ « Cocher les recettes à problème aussi, et les mettre dans Non validé »
+  // (Layla, 2026-09-23). Une recette à problème ne doit surtout pas rester
+  // mélangée à celles qui restent à regarder.
+  it('à problème : elle va dans « Non validés »', async () => {
+    render(<RecettesView user={{ id: 'u1' }} />)
+    fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
+    fireEvent.click(await screen.findByText('⚠️ Problème'))
+    await screen.findByText('⚠️ Recette à problème')
+    expect(posts[0]).toMatchObject({ statut: 'probleme' })
+
+    fireEvent.click(screen.getByText(/Toutes les recettes/))
+    await waitFor(() => expect(screen.getByText(/Tout est vérifié/)).toBeTruthy())
+    // Elle n'est pas non plus chez les validées.
+    fireEvent.click(screen.getByText(/^Validés/))
+    await waitFor(() => expect(screen.getByText(/Aucune recette validée/)).toBeTruthy())
+    fireEvent.click(screen.getByText(/^Non validés/))
+    expect(await screen.findByText('Tarte citron 23 cm')).toBeTruthy()
+  })
+
+  it('un problème réglé devient une validation', async () => {
+    VALIDEES = marque('SM. Tarte Citron 23 cm', 'probleme')
+    render(<RecettesView user={{ id: 'u1' }} />)
+    fireEvent.click(await screen.findByText(/^Non validés/))
+    fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
+    fireEvent.click(await screen.findByText('c’est réglé, la valider'))
+    await screen.findByText('✅ Validée par le chef')
+    expect(posts[0]).toMatchObject({ statut: 'valide' })
+  })
+
   it('on peut la remettre à vérifier', async () => {
-    VALIDEES = [{ produit: 'SM. Tarte Citron 23 cm', valide_le: '2026-09-23T10:00:00Z' }]
+    VALIDEES = marque('SM. Tarte Citron 23 cm', 'valide')
     render(<RecettesView user={{ id: 'u1' }} />)
     fireEvent.click(await screen.findByText(/^Validés/))
     fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
     fireEvent.click(await screen.findByText('la remettre à vérifier'))
-    await screen.findByText('✅ Vérifiée et validée')
-    expect(posts[0]).toMatchObject({ valide: false })
+    await screen.findByText('✅ Validée')
+    expect(posts[0]).toMatchObject({ statut: null })
   })
 
   // ⚠️ Une préparation ouverte par le chevron est un DÉTAIL de la même
-  // recette : la valider là ferait croire qu'on a relu une autre fiche.
-  it('on ne valide pas depuis une sous-recette', async () => {
+  // recette : la marquer là ferait croire qu'on a relu une autre fiche.
+  it('on ne marque rien depuis une sous-recette', async () => {
     render(<RecettesView user={{ id: 'u1' }} />)
     fireEvent.click(await screen.findByText('Tarte citron 23 cm'))
     await screen.findByText('Creme Citron')
     fireEvent.click(screen.getByLabelText('Voir la recette de Creme Citron'))
-    await waitFor(() =>
-      expect(screen.queryByText('✅ Vérifiée et validée')).toBeNull())
+    await waitFor(() => expect(screen.queryByText('✅ Validée')).toBeNull())
+    expect(screen.queryByText('⚠️ Problème')).toBeNull()
   })
 })

@@ -135,7 +135,8 @@ export const toutOublier = () => { memo = {}; oublier(CLE); oublier(CLE_LISTE) }
 //
 // « Recette vérifiée et validée par le chef : ça sort de la liste et va dans le
 // sous-onglet Validés. Donc onglet À vérifier et onglet Validés » (Layla,
-// 2026-09-23).
+// 2026-09-23). Puis : « cocher les recettes à problème aussi, et les mettre
+// dans Non validé. » Trois états : pas de marque, 'valide', 'probleme'.
 //
 // ⚠️ ÇA NE SE GARDE PAS DANS LE TÉLÉPHONE, contrairement aux recettes. Deux
 // personnes regardent la même liste : si la marque du chef restait dans son
@@ -143,7 +144,7 @@ export const toutOublier = () => { memo = {}; oublier(CLE); oublier(CLE_LISTE) }
 // ouverture de l'écran — c'est une lecture Supabase, elle ne coûte rien.
 // ============================================================
 
-/** Ce qui est validé aujourd'hui : [{ produit, valide_le, valide_par }]. */
+/** Où en est la relecture : [{ produit, statut, valide_le, valide_par }]. */
 export async function loadValidees() {
   const r = await fetch('/api/fab-annexe?validees=1&cb=' + Date.now())
   if (!r.ok) throw new Error(`Serveur indisponible (${r.status})`)
@@ -152,12 +153,15 @@ export async function loadValidees() {
   return d.validees || []
 }
 
-/** Poser la marque, ou la retirer (`valide: false`). */
-export async function marquerValidee(produit, userId, valide = true) {
+/**
+ * Poser la marque du chef : `'valide'`, `'probleme'`, ou `null` pour la
+ * retirer — la recette retourne alors dans « À vérifier ».
+ */
+export async function marquerValidee(produit, userId, statut) {
   const r = await fetch('/api/fab-annexe?validees=1', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ produit, userId: userId || null, valide }),
+    body: JSON.stringify({ produit, userId: userId || null, statut: statut || null }),
   })
   if (!r.ok) throw new Error(`Serveur indisponible (${r.status})`)
   const d = await r.json()

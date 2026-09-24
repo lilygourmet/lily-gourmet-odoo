@@ -1358,7 +1358,10 @@ export default async function handler(req, res) {
      * LES RECETTES VALIDÉES PAR LE CHEF.
      *
      * « Recette vérifiée et validée par le chef : ça sort de la liste et va
-     * dans le sous-onglet Validés » (Layla, 2026-09-23).
+     * dans le sous-onglet Validés » (Layla, 2026-09-23). Puis : « cocher les
+     * recettes à problème aussi, et les mettre dans Non validé. »
+     *
+     * Trois états — pas de ligne = à vérifier, 'valide', 'probleme'.
      *
      * ⚠️ ÇA NE TOUCHE NI ODOO NI LA FABRICATION. C'est une marque posée par le
      * chef sur ce qu'il a relu — rien d'autre ne la regarde.
@@ -1371,20 +1374,25 @@ export default async function handler(req, res) {
         const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {})
         const produit = String(body.produit || '').trim()
         if (!produit) return res.status(400).json({ error: 'produit manquant' })
-        // Dévalider, c'est effacer : l'état du moment, pas un journal.
-        if (body.valide === false) {
+        // Trois états, et le troisième est l'ABSENCE de ligne : remettre une
+        // recette « à vérifier », c'est l'effacer. C'est un état, pas un journal.
+        const statut = String(body.statut || '').trim()
+        if (!statut) {
           const { error: e0 } = await sb.from('recettes_validees').delete().eq('produit', produit)
           if (e0) return res.status(200).json({ error: e0.message })
           return res.status(200).json({ ok: true })
         }
+        if (statut !== 'valide' && statut !== 'probleme') {
+          return res.status(400).json({ error: 'statut inconnu' })
+        }
         const { error: e1 } = await sb.from('recettes_validees')
-          .upsert({ produit, valide_le: new Date().toISOString(), valide_par: body.userId || null },
+          .upsert({ produit, statut, valide_le: new Date().toISOString(), valide_par: body.userId || null },
             { onConflict: 'produit' })
         if (e1) return res.status(200).json({ error: e1.message })
         return res.status(200).json({ ok: true })
       }
       const { data, error: e2 } = await sb.from('recettes_validees')
-        .select('produit, valide_le, valide_par').limit(2000)
+        .select('produit, statut, valide_le, valide_par').limit(2000)
       if (e2) return res.status(200).json({ error: e2.message })
       res.setHeader('Cache-Control', 'no-store')
       return res.status(200).json({ validees: data || [] })

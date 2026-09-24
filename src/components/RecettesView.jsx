@@ -85,28 +85,59 @@ function LigneIngredient({ l, onOuvrirClavier, onDescendre }) {
 }
 
 /**
- * Le geste du chef : « je l'ai relue, elle est bonne ».
+ * Ce que le chef dit de la recette qu'il vient de relire.
  *
- * Elle quitte alors « À vérifier » pour « Validés ». Rien d'autre ne change —
- * ni Odoo, ni la fabrication : c'est une marque de relecture, rien de plus.
+ * Trois états, parce qu'il y a trois réponses possibles : pas encore regardée,
+ * relue et bonne, relue et il y a un problème. « Cocher les recettes à problème
+ * aussi, et les mettre dans Non validé » (Layla, 2026-09-23).
+ *
+ * Rien d'autre ne change — ni Odoo, ni la fabrication : c'est une marque de
+ * relecture, rien de plus.
  */
-function Validation({ deja, onBasculer }) {
-  if (deja) {
+function Validation({ statut, onMarquer }) {
+  if (statut === 'valide') {
     return (
       <div className="mt-4 rounded-2xl bg-success/10 border border-success px-3 py-2.5">
         <p className="text-[13px] font-extrabold text-success">✅ Validée par le chef</p>
-        <button onClick={onBasculer} className="text-[12px] text-ink-mute underline mt-0.5">
-          la remettre à vérifier
-        </button>
+        <div className="flex gap-3 mt-1">
+          <button onClick={() => onMarquer('probleme')} className="text-[12px] text-warn-ink underline">
+            finalement, il y a un problème
+          </button>
+          <button onClick={() => onMarquer(null)} className="text-[12px] text-ink-mute underline">
+            la remettre à vérifier
+          </button>
+        </div>
+      </div>
+    )
+  }
+  if (statut === 'probleme') {
+    return (
+      <div className="mt-4 rounded-2xl bg-gold/15 border border-gold px-3 py-2.5">
+        <p className="text-[13px] font-extrabold text-warn-ink">⚠️ Recette à problème</p>
+        <div className="flex gap-3 mt-1">
+          <button onClick={() => onMarquer('valide')} className="text-[12px] text-success underline">
+            c’est réglé, la valider
+          </button>
+          <button onClick={() => onMarquer(null)} className="text-[12px] text-ink-mute underline">
+            la remettre à vérifier
+          </button>
+        </div>
       </div>
     )
   }
   return (
-    <button onClick={onBasculer}
-      className="w-full mt-4 rounded-2xl bg-success text-cream py-3
-                 text-[15px] font-extrabold active:scale-95 transition">
-      ✅ Vérifiée et validée
-    </button>
+    <div className="flex gap-2 mt-4">
+      <button onClick={() => onMarquer('valide')}
+        className="flex-1 rounded-2xl bg-success text-cream py-3
+                   text-[14px] font-extrabold active:scale-95 transition">
+        ✅ Validée
+      </button>
+      <button onClick={() => onMarquer('probleme')}
+        className="flex-1 rounded-2xl bg-cream-warm border border-gold text-warn-ink py-3
+                   text-[14px] font-extrabold active:scale-95 transition">
+        ⚠️ Problème
+      </button>
+    </div>
   )
 }
 
@@ -245,12 +276,13 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
     const lignes = noeud ? ingredientsPour(noeud, q) : []
     const regle = noeud && q !== parOdoo
 
-    const basculerValidation = async produit => {
+    const MOT = { valide: 'Validée.', probleme: 'Marquée « à problème ».' }
+    const marquer = async (produit, statut) => {
       navigator.vibrate?.(15)
       try {
-        await marquerValidee(produit, user?.id, !validees?.get(produit))
+        await marquerValidee(produit, user?.id, statut)
         await relireValidees()
-        toast(validees?.get(produit) ? 'Remise à vérifier.' : 'Validée.')
+        toast(MOT[statut] || 'Remise à vérifier.')
       } catch (e) { toast(e.message || String(e)) }
     }
 
@@ -322,8 +354,8 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
                   valider là ferait croire qu'on a relu une autre fiche. Elle a
                   la sienne dans la liste, avec son propre bouton. */}
               {chemin.length === 1 && (
-                <Validation deja={validees?.get(chemin[0])}
-                  onBasculer={() => basculerValidation(chemin[0])} />
+                <Validation statut={validees?.get(chemin[0])?.statut}
+                  onMarquer={st => marquer(chemin[0], st)} />
               )}
 
               {/* ⚠️ TOUT SE TAPE EN GRAMMES, comme tout s'affiche en grammes
@@ -354,11 +386,11 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
   // ⚠️ CE QUI EST VALIDÉ SORT DE LA LISTE (Layla, 2026-09-23). Tant qu'on ne
   // sait pas encore ce qui est validé, on montre tout : mieux vaut une liste
   // complète une seconde de trop qu'une liste qui se vide sous les yeux.
-  const estValidee = p => !!validees?.get(p)
-  const pourLOnglet = (tout || []).filter(a =>
-    (onglet === 'valides' ? estValidee(a.produit) : !estValidee(a.produit)))
+  const statutDe = p => validees?.get(p)?.statut || null
+  const pourLOnglet = (tout || []).filter(a => statutDe(a.produit)
+    === (onglet === 'valides' ? 'valide' : onglet === 'probleme' ? 'probleme' : null))
   const groupes = tout ? parGateauMere(pourLOnglet, cherche, true) : []
-  const nbValides = (tout || []).filter(a => estValidee(a.produit)).length
+  const compte = st => (tout || []).filter(a => statutDe(a.produit) === st).length
 
   return (
     <div className="min-h-screen bg-cream">
@@ -368,10 +400,11 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
 
         {/* Deux onglets, pas plus : ce qu'il reste à relire, et ce qui est fait. */}
         <div className="flex gap-1.5 mb-3">
-          {[['averifier', 'À vérifier', (tout || []).length - nbValides],
-            ['valides', 'Validés', nbValides]].map(([cle, mot, n]) => (
+          {[['averifier', 'À vérifier', compte(null)],
+            ['valides', 'Validés', compte('valide')],
+            ['probleme', 'Non validés', compte('probleme')]].map(([cle, mot, n]) => (
             <button key={cle} onClick={() => { setOnglet(cle); setCherche('') }}
-              className={`flex-1 rounded-xl py-2 text-[13px] font-extrabold border
+              className={`flex-1 rounded-xl py-2 text-[12.5px] font-extrabold border
                 ${onglet === cle
       ? 'bg-bordeaux text-cream border-bordeaux'
       : 'bg-cream-warm text-ink-soft border-line'}`}>
@@ -412,7 +445,8 @@ export default function RecettesView({ user, onLogout, onNavigate, activeView })
           <p className="text-[13.5px] text-ink-soft">
             {cherche ? 'Rien qui corresponde.'
               : onglet === 'valides' ? 'Aucune recette validée pour l’instant.'
-                : 'Tout est vérifié. 🎉'}
+                : onglet === 'probleme' ? 'Aucun problème signalé. 👍'
+                  : 'Tout est vérifié. 🎉'}
           </p>
         )}
 
