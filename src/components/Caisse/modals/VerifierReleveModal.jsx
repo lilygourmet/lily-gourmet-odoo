@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { FileSearch, X } from 'lucide-react'
 import { parseStatement } from '../../../lib/releveBmci'
-import { cleDeLigne, memeOperation, memeEncaissement } from '../../../lib/releveDoublons'
-import { loadReleveLinesBetween, loadReleveLinesByAmounts, saveUnmatchedReleveLines } from '../../../lib/caisse'
+import { cleDeLigne, memeOperation, memeVirement } from '../../../lib/releveDoublons'
+import { loadReleveLinesBetween, saveUnmatchedReleveLines } from '../../../lib/caisse'
 import { fmtMoney } from '../_helpers'
 
 // Contrôle d'un relevé SANS rien réimporter.
@@ -43,12 +43,10 @@ export default function VerifierReleveModal({ onClose, onDone }) {
             type: u.type, releve_url: null, banque: bankLabel || null,
             _fichier: f.name,
           }
-          // Deux DOCUMENTS chargés ensemble décrivent les mêmes opérations : le relevé
-          // écrit « BERRADA ABLA », l'extrait « BERRAYA ABLA », 500 dh le 2 mai — un seul
-          // virement. Aucune des deux n'étant en base, rien ne les comparait entre elles
-          // et les deux seraient ajoutées. On les rapproche donc AUSSI entre fichiers.
-          // Dans un MÊME fichier, deux lignes identiques sont deux vrais encaissements.
-          if (rows.some(r => r._fichier !== ligne._fichier && memeOperation(r, ligne))) continue
+          // Deux DOCUMENTS chargés ensemble décrivent les mêmes opérations, écrites
+          // autrement. Dans un MÊME fichier, deux lignes identiques sont deux vrais
+          // encaissements : on ne rapproche qu'entre fichiers différents.
+          if (rows.some(r => r._fichier !== ligne._fichier && memeVirement(r, ligne))) continue
           rows.push(ligne)
         }
       }
@@ -62,39 +60,11 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       const dates = rows.map(r => r.ligne_date).sort()
       const jour = (d, n) => new Date(new Date(d).getTime() + n * 86400000).toISOString().slice(0, 10)
       const enBase = await loadReleveLinesBetween(jour(dates[0], -4), jour(dates[dates.length - 1], 4))
-      // Une même opération s'écrit DIFFÉREMMENT selon le document : le relevé intercale ses
-      // références (« VIR INST RECU M 2118940 000011400383 … MAROUANE »), l'extrait tronque
-      // à 30 caractères (« VIR INST RECU M MAROUANE MOUTA »). Ni le n° ni le nom ne
-      // permettent alors de les rapprocher, et le contrôle criait « manquante » sur une
-      // ligne déjà présente.
-      // Ici on ne cherche pas à prouver que c'est la même : on cherche à ne JAMAIS faire de
-      // doublon. Même montant à 3 jours près = on considère que c'est déjà là. Le prix à
-      // payer est connu et assumé : un VRAI second versement du même montant le même jour
-      // passera pour déjà présent. Mieux vaut le rater que le dupliquer.
-      const dejaLa = (r) => enBase.some(b => memeOperation(b, r) || memeEncaissement(b, r))
+      const dejaLa = (r) => enBase.some(b => memeVirement(b, r) || memeOperation(b, r))
       const manquantes = rows.filter(r => !dejaLa(r))
-      // Contre-preuve : pour chaque ligne déclarée manquante, on cherche SON MONTANT dans
-      // toute la base, sans limite de date. Aucune ligne de ce montant nulle part = elle
-      // manque vraiment. Sinon on montre ce qui existe, et Layla juge sur pièce.
-      const memeMontant = await loadReleveLinesByAmounts(manquantes.map(m => m.amount))
-      // Le seul cas qui mérite un coup d'œil : même montant, LE MÊME JOUR. Une date
-      // différente, c'est une autre opération — il n'y a rien à comparer, et le demander
-      // noyait le vrai doute sous des voisines sans rapport (« 300 dh le 2 mai » se voyait
-      // opposer des lignes du 27 avril et du 11 mai).
-      const memeJourMemeMontant = (x, y) => x.ligne_date === y.ligne_date
-        && Math.abs(Number(x.amount) - Number(y.amount)) < 0.5
-      const avecPreuve = manquantes.map((m, i) => ({
-        ...m,
-        // Ce qui existe déjà en base ce jour-là, PLUS les manquantes déjà listées au-dessus :
-        // deux lignes absentes du même montant et du même jour peuvent être la même
-        // opération, et personne ne les comparait entre elles.
-        proches: [
-          ...memeMontant.filter(x => memeJourMemeMontant(x, m)),
-          ...manquantes.slice(0, i).filter(x => memeJourMemeMontant(x, m)),
-        ],
-      }))
-      setExclues(new Set(avecPreuve.filter(m => m.proches.length).map(m => m.key)))
-      setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes: avecPreuve })
+      // Plus rien à comparer : memeVirement a tranché. Ce qui reste manque vraiment.
+      setExclues(new Set())
+      setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes })
       setEtape('resultat')
     } catch (e) { setErreur(e?.message || String(e)); setEtape('pick') }
   }
@@ -106,7 +76,7 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       // `ailleurs` n'existe que pour l'affichage (la contre-preuve). L'envoyer en base la
       // faisait refuser TOUTE l'insertion : « Could not find the 'ailleurs' column ».
       // On n'écrit que les colonnes de la table.
-      // `_fichier` et `proches` ne servent qu'ici : la table n'a pas ces colonnes.
+      // `_fichier` ne sert qu'ici : la table n'a pas cette colonne.
       await saveUnmatchedReleveLines(choisies.map(
         ({ key, ligne_date, amount, label, type, releve_url, banque }) =>
           ({ key, ligne_date, amount, label, type, releve_url, banque })))
@@ -161,14 +131,6 @@ export default function VerifierReleveModal({ onClose, onDone }) {
                       <span>
                       <b>{fmtMoney(l.amount)}</b> · {l.ligne_date}
                       <div style={{ fontSize: 11, color: '#8a7a70' }}>{l.label}</div>
-                      {(l.proches || []).length > 0 && (
-                        <div style={{ fontSize: 11, color: '#a9620a', marginTop: 2 }}>
-                          ⚠️ le même montant existe déjà CE JOUR-LÀ — sans doute la même, décochée :
-                          {l.proches.slice(0, 2).map((x, i) => (
-                            <div key={i} style={{ color: '#8a7a70' }}>{(x.label || '').slice(0, 60)}</div>
-                          ))}
-                        </div>
-                      )}
                       </span>
                     </label>
                   ))}

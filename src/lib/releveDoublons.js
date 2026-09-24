@@ -346,3 +346,43 @@ export function memeEncaissement(a, b, joursMax = 3) {
   if (!na || !nb) return true              // rien à comparer : on suppose le même
   return memePersonne(na, nb)
 }
+
+// ============================================================
+// EST-CE LE MÊME VIREMENT, ÉCRIT DEUX FOIS ?
+// ============================================================
+//
+// La banque décrit une opération différemment selon le document, et le lecteur de PDF
+// ajoute ses propres approximations. Tous ces couples sont UN SEUL virement :
+//
+//   VIR INST RECU IBN 2194929 … ATTYA ANDALOUSSI   /  VIR INST RECU IBN ATTYA ANDALO
+//   VIRT RECU MLLE AATIYAD LAAMOURI                /  VIRT RECU MLLE AATIYAD LAAMOUR
+//   VIR INST RECU CHLIH 2085718 … WIJDAN           /  VIR INST RECU CHLIH WUDANE
+//   VIR INST RECU BERRADA ABLA                     /  VIR INST RECU BERRAYA ABLA
+//   VIR INST RECU M 2118940 … MAROUANE             /  VIR INST RECU M MAROUANE MOUTA
+//
+// Ni le n° d'opération (l'extrait n'en porte pas), ni le libellé entier (le relevé
+// intercale ses références), ni la ressemblance d'ensemble (« ANDALOUSSI ATTYA IBN »
+// contre « ANDALO ATTYA IBN » tombe sous le seuil) ne les rapprochent.
+//
+// Ce qui marche sur TOUS ces cas, et sépare les autres : même montant, MÊME JOUR, et au
+// moins un mot du nom en commun — à la troncature et à une lettre près.
+//
+// Le même jour est exigé : une date différente, c'est une autre opération. C'est ce qui
+// distingue ZOUBIDA EL BOUSS (1 000 dh le 4 juin) de MAROUANE (1 000 dh le 1er juin).
+//
+// Sans nom lisible d'aucun côté, on répond OUI : on ne peut rien affirmer, et le doute se
+// tranche du côté de ne pas dupliquer.
+//
+// ⚠️ Cette fonction dit « c'est la même OPÉRATION ». Elle ne dit pas s'il faut fusionner :
+// deux lignes identiques d'un MÊME document sont deux vrais encaissements. C'est à
+// l'appelant d'exiger deux documents différents.
+const motsDuNom = label => nomDeLigne(label).split(' ').filter(m => m.length >= 4).map(translitterer)
+
+export function memeVirement(a, b) {
+  if (!(Math.abs(Number(a.amount) - Number(b.amount)) < ECART_MINI)) return false
+  if (!a.ligne_date || a.ligne_date !== b.ligne_date) return false
+  const ma = motsDuNom(a.label), mb = motsDuNom(b.label)
+  if (!ma.length || !mb.length) return true
+  return ma.some(x => mb.some(y =>
+    x === y || x.startsWith(y) || y.startsWith(x) || similarite(x, y) >= 0.85))
+}
