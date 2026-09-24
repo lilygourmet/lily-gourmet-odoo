@@ -32,6 +32,33 @@ export function estPanneDeMorceau(message) {
     .test(String(message || ''))
 }
 
+/**
+ * L'URL à recharger pour être SÛR de ne pas reprendre la même page morte.
+ *
+ * ⚠️ `location.reload()` NE SUFFIT PAS SUR SAFARI : il a le droit de resservir
+ * la page depuis son propre cache. On retombe alors sur le même index, qui
+ * réclame les mêmes fichiers disparus — donc le même « Chargement impossible »,
+ * indéfiniment. Chrome, lui, revalide et se répare tout seul : d'où « toujours
+ * sur Safari, pas sur Chrome » (Layla, 2026-09-24).
+ * Un paramètre qui change à chaque fois force le téléchargement. Les autres
+ * paramètres sont conservés : un lien profond (?conv=, ?devis=…) doit survivre
+ * au rechargement.
+ */
+export function urlSansCache(href, maintenant = Date.now()) {
+  try {
+    const u = new URL(href)
+    u.searchParams.set('v', String(maintenant))   // `set` : jamais deux `v`
+    return u.toString()
+  } catch {
+    return href
+  }
+}
+
+function rechargerSansCache() {
+  try { window.location.replace(urlSansCache(window.location.href)) }
+  catch { window.location.reload() }
+}
+
 // Entoure les écrans chargés à la demande (lazy).
 // - Affiche "Chargement…" pendant le téléchargement du morceau.
 // - Si le morceau échoue (souvent une version périmée après un déploiement),
@@ -60,7 +87,7 @@ export default class LazyBoundary extends Component {
         const last = Number(sessionStorage.getItem('lg:recharge') || 0)
         if (Date.now() - last > 60000) {
           sessionStorage.setItem('lg:recharge', String(Date.now()))
-          window.location.reload()
+          rechargerSansCache()
         }
       } catch { /* sessionStorage indispo : on laisse le bouton manuel */ }
     }
@@ -72,7 +99,7 @@ export default class LazyBoundary extends Component {
         <div style={{ padding: 30, textAlign: 'center', color: '#4a3a30' }}>
           <div style={{ marginBottom: 12 }}>
             Chargement impossible.{' '}
-            <button onClick={() => window.location.reload()} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }}>
+            <button onClick={rechargerSansCache} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #993556', background: '#993556', color: 'white', cursor: 'pointer' }}>
               Recharger
             </button>
           </div>
