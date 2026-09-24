@@ -25,6 +25,16 @@ export default defineConfig({
   // Deux pages : l'app interne, et l'annuaire public (page à part, avec son
   // propre manifeste pour que le raccourci du téléphone rouvre l'annuaire).
   build: {
+    // ⚠️ POUR QUEL NAVIGATEUR ON COMPILE. Par défaut Vite vise Safari 14, et
+    // laisse donc passer des écritures modernes (`a &&= b`, `a ||= b`,
+    // `a ??= b` : 295 fois dans le build). Un Safari plus ancien ne sait pas
+    // les LIRE : il refuse le fichier entier avec « Importing a module script
+    // failed » — le même message que pour un fichier manquant, d'où la
+    // confusion. Chrome, lui, se met à jour tout seul et n'a jamais le
+    // problème (Layla, 2026-09-24 : « toujours sur Safari, pas sur Chrome »).
+    // es2019 fait convertir ces écritures ; c'est de la SYNTAXE seulement,
+    // aucun comportement ne change.
+    target: 'es2019',
     rollupOptions: {
       input: { main: './index.html', annuaire: './annuaire.html' },
     },
