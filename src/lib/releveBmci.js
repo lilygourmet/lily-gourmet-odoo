@@ -378,6 +378,13 @@ async function ocrStatement(file) {
   return out
 }
 
+// Encaissement carte (TPE Lanacash) plutôt qu'enveloppe cliente. La banque l'écrit de
+// plusieurs façons : « VIRT RECU Lanacash... », « VIRT RECU LNC.9900887663.00325 »,
+// « VIR INST RECU LNC 2302795 » (sans point) et même « VIRT RECU LNC » tout court, et
+// l'extrait BMCI tronque encore autrement. Même règle qu'en base (loadAllFreeReleveLines),
+// sinon une forme non couverte se retrouve dans « Reçus banque non liés ».
+export const estLigneTpe = label => /lanacash|\bLNC\b|\bTPE\b/i.test(label || '')
+
 // Lit le PDF et renvoie { format, bankLabel, transactions }
 export async function parseStatement(file) {
   const items = await extractItems(file)
@@ -402,10 +409,9 @@ export async function parseStatement(file) {
     else if (format === 'awb_mvt') transactions = parseAwbMvt(items)
     bankLabel = BANK_LABEL[format] || format
   }
-  // Exclure les lignes TPE (« Lanacash » ou sa forme abrégée « VIRT RECU LNC. ») :
-  // ce sont des encaissements carte/TPE, pas des enveloppes (espèces/chèque/virement)
-  // → on ne les rapproche pas.
-  transactions = transactions.filter(t => !/lanacash|\bLNC\.\d/i.test(t.label || ''))
+  // Exclure les lignes TPE : ce sont des encaissements carte, pas des enveloppes
+  // (espèces/chèque/virement) → on ne les rapproche pas.
+  transactions = transactions.filter(t => !estLigneTpe(t.label))
   transactions = transactions.map(t => ({ ...t, label: flatLabel(t.label) }))
   // `nonReconnu` n'est renseigné que si le lecteur a dû se rabattre sur l'IA : il porte de
   // quoi ajouter le format manquant (combien de texte le PDF contient, et ce qu'il y a en
