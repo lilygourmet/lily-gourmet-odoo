@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { FileSearch, X } from 'lucide-react'
 import { parseStatement, controleLecture } from '../../../lib/releveBmci'
 import { cleDeLigne, memeOperation, memeVirement } from '../../../lib/releveDoublons'
-import { loadReleveLinesBetween, saveUnmatchedReleveLines } from '../../../lib/caisse'
+import { loadReleveLinesBetween, lignesDesCaissesVertes, saveUnmatchedReleveLines } from '../../../lib/caisse'
 import { fmtMoney } from '../_helpers'
 
 // Contrôle d'un relevé SANS rien réimporter.
@@ -63,7 +63,13 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       // celle qui sert déjà partout ailleurs.
       const dates = rows.map(r => r.ligne_date).sort()
       const jour = (d, n) => new Date(new Date(d).getTime() + n * 86400000).toISOString().slice(0, 10)
-      const enBase = await loadReleveLinesBetween(jour(dates[0], -4), jour(dates[dates.length - 1], 4))
+      // Ce que l'app connaît déjà, des DEUX côtés : les lignes enregistrées, et celles que
+      // les caisses vertes citent sans qu'elles aient été enregistrées.
+      const [lignes, vertes] = await Promise.all([
+        loadReleveLinesBetween(jour(dates[0], -4), jour(dates[dates.length - 1], 4)),
+        lignesDesCaissesVertes(jour(dates[0], -4), jour(dates[dates.length - 1], 4)),
+      ])
+      const enBase = [...lignes, ...vertes]
       const dejaLa = (r) => enBase.some(b => memeVirement(b, r) || memeOperation(b, r))
       const manquantes = rows.filter(r => !dejaLa(r))
       // Plus rien à comparer : memeVirement a tranché. Ce qui reste manque vraiment.
