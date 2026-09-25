@@ -391,6 +391,36 @@ export async function loadReleveLinesBetween(dMin, dMax) {
   return data || []
 }
 
+// Les lignes que les caisses VERTES disent tenir, reconstituées depuis le libellé gardé
+// sur la caisse (« AAAA-MM-JJ · libellé »).
+//
+// Une caisse rapprochée cite sa ligne, mais cette ligne n'est pas toujours enregistrée
+// dans la table : les imports d'avant le correctif « lignes réservées » n'écrivaient pas
+// tout. Le contrôle d'un relevé ne comparait qu'à la table — il annonçait donc
+// « manquante » une ligne déjà consommée par une caisse verte, et l'ajouter aurait remis
+// dans « non liés » de l'argent déjà rapproché. Vécu : « VIR INST RECU MLLE OUMAIMA ASK »,
+// 100 dh du 3 mai, au texte IDENTIQUE.
+export async function lignesDesCaissesVertes(dMin, dMax) {
+  const { data } = await supabase
+    .from('caisse_enveloppes')
+    .select('amount_cash, amount_proof, note_proof')
+    .eq('releve_status', 'trouve')
+    .not('note_proof', 'is', null)
+    .limit(5000)
+  const out = []
+  for (const e of (data || [])) {
+    // Une caisse peut citer PLUSIEURS lignes (remise splittée par la banque).
+    for (const part of String(e.note_proof).split('  |  ')) {
+      const sep = part.indexOf(' · ')
+      if (sep < 0) continue
+      const d = part.slice(0, sep).trim().slice(0, 10)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < dMin || d > dMax) continue
+      out.push({ ligne_date: d, label: part.slice(sep + 3), amount: e.amount_proof ?? e.amount_cash })
+    }
+  }
+  return out
+}
+
 // Toutes les lignes du relevé de ces montants, SANS limite de date. Sert de contre-preuve
 // au contrôle d'un relevé : dire « cette ligne manque » est une affirmation forte, et elle
 // se vérifie — si aucune ligne de ce montant n'existe nulle part dans la base, le doute
