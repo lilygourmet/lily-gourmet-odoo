@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FileSearch, X } from 'lucide-react'
-import { parseStatement } from '../../../lib/releveBmci'
+import { parseStatement, controleLecture } from '../../../lib/releveBmci'
 import { cleDeLigne, memeOperation, memeVirement } from '../../../lib/releveDoublons'
 import { loadReleveLinesBetween, saveUnmatchedReleveLines } from '../../../lib/caisse'
 import { fmtMoney } from '../_helpers'
@@ -33,8 +33,12 @@ export default function VerifierReleveModal({ onClose, onDone }) {
     try {
       const vues = new Set()
       const rows = []
+      const controles = []
       for (const f of files) {
         const { transactions, bankLabel } = await parseStatement(f)
+        // D'abord : ce relevé a-t-il été lu EN ENTIER ? Tant qu'on ne le sait pas, parler
+        // de « lignes manquantes » n'a aucun sens.
+        controles.push({ fichier: f.name, banque: bankLabel, ...controleLecture(transactions) })
         for (const u of transactions) {
           if (u.credit == null || !u.dateIso || !ARGENT_RECU.has(u.type)) continue
           const ligne = {
@@ -64,7 +68,7 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       const manquantes = rows.filter(r => !dejaLa(r))
       // Plus rien à comparer : memeVirement a tranché. Ce qui reste manque vraiment.
       setExclues(new Set())
-      setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes })
+      setRes({ lues: rows.length, retrouvees: rows.length - manquantes.length, manquantes, controles })
       setEtape('resultat')
     } catch (e) { setErreur(e?.message || String(e)); setEtape('pick') }
   }
@@ -115,6 +119,27 @@ export default function VerifierReleveModal({ onClose, onDone }) {
 
         {etape === 'resultat' && res && (
           <>
+            {(res.controles || []).map((c, i) => (
+              <div key={i} style={{ fontSize: 12, marginBottom: 10, padding: '10px 12px', borderRadius: 10, lineHeight: 1.5,
+                background: !c.possible ? '#F4F0EA' : c.ok ? '#e6f6ec' : '#FBF0F3',
+                color: !c.possible ? '#4a3a30' : c.ok ? '#0a6b35' : '#99201E' }}>
+                <b>{c.banque || c.fichier}</b> — contrôle de lecture<br />
+                {!c.possible ? (
+                  <>Les soldes ne sont pas repérables dans ce relevé : je ne peux pas prouver
+                    que tout a été lu. À vérifier à la main.</>
+                ) : (
+                  <>
+                    ancien solde {fmtMoney(c.depart)} + {c.nbCredits} entrée(s) {fmtMoney(c.credits)}
+                    {' '}− {c.nbDebits} sortie(s) {fmtMoney(c.debits)} = <b>{fmtMoney(c.attendu)}</b><br />
+                    nouveau solde du relevé : <b>{fmtMoney(c.arrivee)}</b><br />
+                    {c.ok
+                      ? <>✅ ça tombe juste — <b>tout le relevé a été lu</b>.</>
+                      : <>⚠️ écart de <b>{fmtMoney(Math.abs(c.ecart))}</b> — des lignes n'ont
+                          pas été lues. Ne te fie pas à la liste ci-dessous tant que ce n'est pas réglé.</>}
+                  </>
+                )}
+              </div>
+            ))}
             <div style={{ fontSize: 13, color: '#4a3a30', marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: res.manquantes.length ? '#FDF0DF' : '#e6f6ec' }}>
               Ce relevé contient <b>{res.lues}</b> encaissement(s).<br />
               ✅ <b>{res.retrouvees}</b> sont déjà dans l'app.<br />
