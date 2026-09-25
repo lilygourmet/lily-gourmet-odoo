@@ -35,10 +35,10 @@ export default function VerifierReleveModal({ onClose, onDone }) {
       const rows = []
       const controles = []
       for (const f of files) {
-        const { transactions, bankLabel } = await parseStatement(f)
+        const { transactions, bankLabel, nonReconnu } = await parseStatement(f)
         // D'abord : ce relevé a-t-il été lu EN ENTIER ? Tant qu'on ne le sait pas, parler
         // de « lignes manquantes » n'a aucun sens.
-        controles.push({ fichier: f.name, banque: bankLabel, ...controleLecture(transactions) })
+        controles.push({ fichier: f.name, banque: bankLabel, nonReconnu, ...controleLecture(transactions) })
         for (const u of transactions) {
           if (u.credit == null || !u.dateIso || !ARGENT_RECU.has(u.type)) continue
           const ligne = {
@@ -121,10 +121,23 @@ export default function VerifierReleveModal({ onClose, onDone }) {
           <>
             {(res.controles || []).map((c, i) => (
               <div key={i} style={{ fontSize: 12, marginBottom: 10, padding: '10px 12px', borderRadius: 10, lineHeight: 1.5,
-                background: !c.possible ? '#F4F0EA' : c.ok ? '#e6f6ec' : '#FBF0F3',
-                color: !c.possible ? '#4a3a30' : c.ok ? '#0a6b35' : '#99201E' }}>
+                background: c.nonReconnu ? '#FBF0F3' : !c.possible ? '#F4F0EA' : c.ok ? '#e6f6ec' : '#FBF0F3',
+                color: c.nonReconnu ? '#99201E' : !c.possible ? '#4a3a30' : c.ok ? '#0a6b35' : '#99201E' }}>
                 <b>{c.banque || c.fichier}</b> — contrôle de lecture<br />
-                {!c.possible ? (
+                {c.nonReconnu ? (
+                  <>
+                    ⚠️ <b>Le format de ce relevé n'est pas reconnu.</b> L'app l'a donc fait relire par
+                    une IA — et une IA ne relit jamais deux fois pareil (« BERRADA », « BERRAYA »,
+                    « BERRRADA » sur trois lectures du même PDF). Les lignes ci-dessous ne sont
+                    pas fiables : <b>ne les ajoute pas</b>.
+                    <div style={{ marginTop: 6, color: '#8a7a70' }}>
+                      Envoie cette ligne à Claude pour qu'il ajoute le format :<br />
+                      <code style={{ fontSize: 11, wordBreak: 'break-all' }}>
+                        {c.nonReconnu.nbItems} morceaux · {c.nonReconnu.entete}
+                      </code>
+                    </div>
+                  </>
+                ) : !c.possible ? (
                   <>Les soldes ne sont pas repérables dans ce relevé : je ne peux pas prouver
                     que tout a été lu. À vérifier à la main.</>
                 ) : (

@@ -383,6 +383,12 @@ export async function parseStatement(file) {
   const items = await extractItems(file)
   const detected = detectFormat(items)
   let format = detected, transactions = [], bankLabel
+  // Ce que le PDF porte comme texte, en tête. Sert à comprendre POURQUOI un relevé n'est
+  // pas reconnu : « Relevé scanné (IA) » ne veut pas dire que c'est un scan, mais que le
+  // lecteur n'a pas identifié le format — et alors il relit par IA, qui ne rend jamais
+  // deux fois le même texte (BERRADA / BERRAYA / BERRRADA sur trois lectures du MÊME PDF).
+  // Sans cet aperçu, impossible d'ajouter le format sans deviner.
+  const entete = items.slice(0, 120).map(i => i.str).join(' ').slice(0, 300)
   // PDF sans texte (scanné/photo) OU banque non reconnue → lecture par IA (OCR).
   if (items.length < 20 || detected === 'inconnu') {
     format = 'ocr'
@@ -401,7 +407,11 @@ export async function parseStatement(file) {
   // → on ne les rapproche pas.
   transactions = transactions.filter(t => !/lanacash|\bLNC\.\d/i.test(t.label || ''))
   transactions = transactions.map(t => ({ ...t, label: flatLabel(t.label) }))
-  return { format, bankLabel, transactions }
+  // `nonReconnu` n'est renseigné que si le lecteur a dû se rabattre sur l'IA : il porte de
+  // quoi ajouter le format manquant (combien de texte le PDF contient, et ce qu'il y a en
+  // tête) sans que Layla ait à envoyer son relevé.
+  const nonReconnu = format === 'ocr' ? { nbItems: items.length, entete } : null
+  return { format, bankLabel, transactions, nonReconnu }
 }
 
 const norm = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ')
