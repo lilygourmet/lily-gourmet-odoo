@@ -52,6 +52,52 @@ function classify(label) {
   return 'autre'
 }
 
+// ============================================================
+// CONTRÔLE DE LECTURE
+// ============================================================
+//
+// Un relevé bancaire se vérifie comme un compte : ancien solde + tout ce qui est entré
+// − tout ce qui est sorti = nouveau solde. Si ça tombe juste, c'est que RIEN n'a été
+// oublié à la lecture du PDF. Si ça ne tombe pas, l'écart dit combien il manque.
+//
+// C'est la seule preuve qui ne dépende ni du nom des clientes, ni de ce que l'app a
+// enregistré autrefois : elle se lit dans le relevé lui-même. Sans elle, « 41 lignes
+// manquantes » n'était qu'une affirmation — ni Layla ni moi ne pouvions la vérifier.
+//
+// Quand les deux soldes ne sont pas trouvés, on ne conclut RIEN : on le dit. Un contrôle
+// qui invente une réponse est pire que pas de contrôle.
+const SOLDE_DEPART = /ANCIEN\s+SOLDE|SOLDE\s+(PRECEDENT|DEPART|INITIAL|ANTERIEUR)|^REPORT/
+const SOLDE_ARRIVEE = /NOUVEAU\s+SOLDE|SOLDE\s+(FINAL|FIN|AU|ACTUEL|CREDITEUR|DEBITEUR)/
+
+export function controleLecture(transactions) {
+  const tx = transactions || []
+  // Un solde est un état du compte, pas un mouvement : il est rangé en crédit quand il
+  // est positif, en débit quand le compte est à découvert.
+  const montantSolde = t => (t.credit != null ? Number(t.credit) : -Number(t.debit || 0))
+  const soldes = tx.filter(t => t.type === 'solde')
+  const trouver = motif => soldes.find(t => motif.test((t.label || '').toUpperCase()))
+  const depart = trouver(SOLDE_DEPART)
+  const arrivee = [...soldes].reverse().find(t => SOLDE_ARRIVEE.test((t.label || '').toUpperCase()))
+  if (!depart || !arrivee) {
+    return { possible: false, soldes: soldes.map(t => (t.label || '').slice(0, 60)) }
+  }
+  const mouvements = tx.filter(t => t.type !== 'solde')
+  const credits = mouvements.reduce((s, t) => s + Number(t.credit || 0), 0)
+  const debits = mouvements.reduce((s, t) => s + Number(t.debit || 0), 0)
+  const attendu = montantSolde(depart) + credits - debits
+  const ecart = montantSolde(arrivee) - attendu
+  return {
+    possible: true,
+    depart: montantSolde(depart), arrivee: montantSolde(arrivee),
+    credits, debits, attendu, ecart,
+    nbCredits: mouvements.filter(t => t.credit != null).length,
+    nbDebits: mouvements.filter(t => t.debit != null).length,
+    // Au dirham près : la banque arrondit, et un écart de quelques centimes ne veut pas
+    // dire qu'une ligne manque.
+    ok: Math.abs(ecart) < ECART_MINI,
+  }
+}
+
 async function extractItems(file) {
   const buf = await file.arrayBuffer()
   const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf).slice() }).promise
